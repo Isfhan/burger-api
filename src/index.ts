@@ -19,6 +19,7 @@ import type {
 } from '@burgerTypes';
 import type { HTMLBundle } from 'bun';
 import { normalizePath } from '@utils';
+import { CreateLoggingMiddleware } from '@middleware/logger.js';
 
 export class Burger {
     private server: Server;
@@ -97,7 +98,6 @@ export class Burger {
                     const url = new URL(req.url);
                     const pathname = url.pathname; // Use pre-extracted pathname
                     const method = req.method.toUpperCase(); // Use pre-extracted method
-
                     // Check if the request is for /openapi.json
                     if (pathname === '/openapi.json') {
                         if (this.apiRouter) {
@@ -156,6 +156,7 @@ export class Burger {
                     const middlewaresToRun: Middleware[] = [
                         // Global middleware first
                         ...this.globalMiddleware,
+                        ...[CreateLoggingMiddleware()],
                         // Validation middleware next (if schema exists)
                         ...(route.schema
                             ? [createValidationMiddleware(route.schema)]
@@ -189,7 +190,11 @@ export class Burger {
                         } else {
                             // If no middleware left, call the final API handler
                             try {
-                                return await handler(req, res);
+                                const response =  await handler(req, res);
+                                req.logger.debug(`body = ${await response.text()}`)
+                                req.logger.info(`${response.status}`)
+                                return response
+                    
                             } catch (handlerError) {
                                 console.error(
                                     'Error caught in API handler:',

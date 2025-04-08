@@ -70,6 +70,8 @@
   },
   "homepage": "https://burger-api-docs.vercel.app",
   "dependencies": {
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0",
     "zod": "^3.24.2",
     "zod-to-json-schema": "^3.24.5"
   },
