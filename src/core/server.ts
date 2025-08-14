@@ -56,7 +56,9 @@ export class Server {
             cb();
         } else {
             console.log(
-                `🍔 BurgerAPI is running at: http://${this.options.hostname || 'localhost'}:${port}`
+                `🍔 BurgerAPI is running at: http://${
+                    this.options.hostname || 'localhost'
+                }:${port}`
             );
         }
     }
