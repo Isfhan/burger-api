@@ -12,9 +12,10 @@ const burger = new Burger({
     apiDir: setDir(__dirname, 'api'),
     globalMiddleware: [globalLogger],
     version: '1.0.0',
+    debug: true,
 });
 
 // Start the server on port 4000, with a callback to log the startup.
 burger.serve(4000, () => {
     console.log(`🚀 Server is running on port 4000`);
-});
+}); 

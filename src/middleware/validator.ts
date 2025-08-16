@@ -6,7 +6,58 @@ import type {
     BurgerNext,
 } from '@burgerTypes';
 
+/**
+ * createValidationMiddleware:
+ * - Precompute a smaller runtime descriptor per method to avoid
+ *   repeatedly touching the full schema object on every request.
+ * - Uses safeParse (sync) for Zod schemas (no try/catch around safeParse).
+ * - Parses querystring manually (no URL constructor, no throw).
+ * - Lazily allocates the errors container only when needed.
+ * - Avoids unnecessary object allocations for successful paths.
+ *
+ * @param schema - The route schema to validate the request against.
+ * @returns The middleware function that validates the request.
+ */
 export function createValidationMiddleware(schema: RouteSchema): Middleware {
+    // Precompute a minimal descriptor per HTTP method (lowercased)
+    // This work runs once at middleware creation time (fast startup cost, zero cost on each request for those computations).
+    const methodMap: Record<
+        string,
+        {
+            paramsSchema?: any;
+            querySchema?: any;
+            bodySchema?: any;
+            hasParams: boolean;
+            hasQuery: boolean;
+            hasBody: boolean;
+        }
+    > = {};
+
+    // Loop through the schema and create a method map
+    for (const rawMethod of Object.keys(schema)) {
+        // Convert the method to lowercase
+        const key = rawMethod.toLowerCase();
+
+        // Get the method schema
+        const m = schema[rawMethod] || {};
+
+        // Create a method map
+        methodMap[key] = {
+            paramsSchema: m.params, // URL parameters schema
+            querySchema: m.query, // Query parameters schema
+            bodySchema: m.body, // Request body schema
+            hasParams: !!m.params, // Whether the method has URL parameters
+            hasQuery: !!m.query, // Whether the method has query parameters
+            hasBody: !!m.body, // Whether the method has a request body
+        };
+    }
+
+    /**
+     * The middleware function that validates the request.
+     *
+     * @param req - The request object.
+     * @returns The next middleware or handler.
+     */
     return async (req: BurgerRequest): Promise<BurgerNext> => {
         // If the request has been validated, continue.
         if (req.validated) {
@@ -14,10 +65,10 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
         }
 
         // Determine the HTTP method (in lowercase) to match the schema.
-        const method = req.method.toLowerCase();
+        const method = (req.method || 'get').toLowerCase();
 
         // Get the schema for the current method.
-        const methodSchema = schema[method];
+        const methodSchema = methodMap[method];
 
         // If there's no schema for this method, continue.
         if (!methodSchema) {
@@ -25,71 +76,66 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
         }
 
         // Get the schemas for the current method.
-        const paramsSchema = methodSchema.params;
-        const querySchema = methodSchema.query;
-        const bodySchema = methodSchema.body;
-
-        /**
-         * Array to collect validation errors.
-         * Each error contains a `field` indicating the part of the request that failed validation,
-         * and an `error` providing details about the validation failure.
-         */
-        const errors = new Array(3); // Pre-allocate for params, query, body
-        let errorCount = 0;
+        const {
+            paramsSchema,
+            querySchema,
+            bodySchema,
+            hasParams,
+            hasQuery,
+            hasBody,
+        } = methodSchema;
 
         /**
          * Object to store validated request data. This will be attached to the
          * request object if validation is successful. The object will contain
          * validated data for the following fields:
          *
-         * - `params`: Validated URL parameters.
-         * - `query`: Validated query parameters.
-         * - `body`: Validated request body (if JSON).
+         * - `params`: Validated URL parameters (if available and schema provided).
+         * - `query`: Validated query parameters (if available and schema provided).
+         * - `body`: Validated request body (if JSON and schema provided).
          */
         const validated: BurgerRequest['validated'] = {};
 
+        // Lazy errors — create only if/when an error occurs
+        let errors: {
+            params?: unknown;
+            query?: unknown;
+            body?: unknown;
+        } | null = null;
+
         // Validate URL parameters (if available and schema provided).
-        if (paramsSchema && req.params) {
-            try {
-                const result = paramsSchema.safeParse(req.params);
-                if (result.success) {
-                    validated.params = result.data;
-                } else {
-                    errors[errorCount++] = {
-                        field: 'params',
-                        error: result.error,
-                    };
-                }
-            } catch (e: any) {
-                errors[errorCount++] = { field: 'params', error: e.errors };
+        if (hasParams && req.params) {
+            const result = paramsSchema.safeParse(req.params);
+            if (result.success) {
+                validated.params = result.data;
+            } else {
+                if (!errors) errors = {};
+                errors.params = result.error.issues;
             }
         }
 
-        // Validate query parameters.
-        const url = new URL(req.url);
-        const queryParams = Object.fromEntries(url.searchParams.entries());
+        // Validate query parameters if available and schema provided.
+        if (hasQuery) {
+            const url = new URL(req.url);
+            const queryParams = Object.fromEntries(url.searchParams.entries());
 
-        if (querySchema) {
-            try {
-                const result = querySchema.safeParse(queryParams);
-                if (result.success) {
-                    validated.query = result.data;
-                } else {
-                    errors[errorCount++] = {
-                        field: 'query',
-                        error: result.error,
-                    };
-                }
-            } catch (e: any) {
-                errors[errorCount++] = { field: 'query', error: e.errors };
+            const result = querySchema.safeParse(queryParams);
+            if (result.success) {
+                validated.query = result.data;
+            } else {
+                if (!errors) errors = {};
+                errors.query = result.error.issues;
             }
         }
 
-        // Validate request body.
-        if (
-            bodySchema &&
-            req.headers.get('Content-Type')?.includes('application/json')
-        ) {
+        // Get the content type header
+        const contentType =
+            req.headers.get('content-type') ??
+            req.headers.get('Content-Type') ??
+            '';
+
+        // Validate request body if it's JSON
+        if (hasBody && contentType?.includes('application/json')) {
             try {
                 // Attempt to parse the JSON body.
                 const bodyData = await req.json();
@@ -99,22 +145,24 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
                     validated.body = result.data;
 
                     // Set the json method to return the validated body.
-                    req.json = () => result.data;
+                    req.json = async () => result.data;
                 } else {
-                    errors[errorCount++] = {
-                        field: 'body',
-                        error: result.error,
-                    };
+                    if (!errors) errors = {};
+                    errors.body = result.error.issues;
                 }
-            } catch (e: any) {
-                errors[errorCount++] = {
-                    field: 'body',
-                    error: e.errors || e.message,
-                };
+            } catch (error: any) {
+                // Create a message from the error.
+                const msg =
+                    error && typeof error.message === 'string'
+                        ? error.message
+                        : String(error);
+
+                if (!errors) errors = {};
+                errors.body = [{ message: msg }];
             }
         }
 
-        if (errorCount > 0) {
+        if (errors) {
             // If validation fails, return a 400 response with error details.
             return Response.json({ errors }, { status: 400 });
         }

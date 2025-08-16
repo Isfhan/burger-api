@@ -1,33 +1,72 @@
-import { zodToJsonSchema } from 'zod-to-json-schema';
+// Import stuff from Zod 4.x
+import {
+    toJSONSchema,
+    ZodArray,
+    ZodBoolean,
+    ZodNumber,
+    ZodObject,
+    ZodOptional,
+    ZodString,
+    ZodType,
+} from 'zod';
 
 // Import types
 import type { ServerOptions, RouteDefinition } from '@burgerTypes';
+
+/**
+ * Maps a Zod type to an OpenAPI schema type.
+ * @param zodType - The Zod type to map.
+ * @returns The OpenAPI schema type.
+ */
+function mapZodTypeToOpenAPIType(zodType: ZodType<unknown, unknown>): string {
+    if (zodType instanceof ZodOptional) {
+        return mapZodTypeToOpenAPIType(
+            zodType.unwrap() as ZodType<unknown, unknown>
+        );
+    }
+    if (zodType instanceof ZodString) return 'string';
+    if (zodType instanceof ZodNumber) return 'number';
+    if (zodType instanceof ZodBoolean) return 'boolean';
+    if (zodType instanceof ZodArray) return 'array';
+    if (zodType instanceof ZodObject) return 'object';
+    return 'string'; // fallback
+}
 
 /**
  * Builds an array of OpenAPI 3.0 parameters based on the Zod schema.
  * For each property in the Zod schema, an OpenAPI parameter is constructed
  * with the same name and required flag. The schema of the parameter is set
  * to a string type.
- * @param zodSchema - The Zod schema to construct parameters from.
+ * @param zodSchema - The Zod schema to construct parameters from. Can be undefined.
  * @param location - The location of the parameter. Must be either "path" or "query".
- * @returns An array of OpenAPI 3.0 parameter objects.
+ * @returns An array of OpenAPI 3.0 parameter objects or an empty array if the Zod schema is undefined.
  */
-function buildParameters(zodSchema: any, location: 'path' | 'query'): any[] {
+function buildParameters(
+    zodSchema: ZodObject<any, any> | undefined,
+    location: 'path' | 'query'
+): any[] {
     const parameters: any[] = [];
-    if (
-        zodSchema &&
-        zodSchema._def &&
-        typeof zodSchema._def.shape === 'function'
-    ) {
+    if (zodSchema && typeof zodSchema.shape === 'object') {
         // Get the shape of the Zod schema
-        const shape = zodSchema._def.shape();
+        const shape: Record<
+            string,
+            ZodType<unknown, unknown>
+        > = zodSchema.shape;
 
         for (const key in shape) {
             // Get the definition of the field
             const fieldDef = shape[key];
 
             // Determine if the field is optional
-            const isOptional = fieldDef._def.typeName === 'ZodOptional';
+            const isOptional = fieldDef instanceof ZodOptional;
+
+            // Map the Zod type to an OpenAPI schema type
+            const type = mapZodTypeToOpenAPIType(fieldDef) as
+                | 'string'
+                | 'number'
+                | 'boolean'
+                | 'array'
+                | 'object';
 
             parameters.push({
                 // Set the name of the parameter
@@ -37,7 +76,7 @@ function buildParameters(zodSchema: any, location: 'path' | 'query'): any[] {
                 // Set the required flag
                 required: !isOptional,
                 // Set the schema type
-                schema: { type: 'string' },
+                schema: { type },
                 // Description of the parameter
                 description: `${location} parameter ${key}`,
             });
@@ -55,8 +94,11 @@ function buildParameters(zodSchema: any, location: 'path' | 'query'): any[] {
  * @returns An OpenAPI requestBody object, or undefined if no schema is provided.
  */
 function buildRequestBody(zodSchema: any): any {
+    // If no schema is provided, return undefined
     if (!zodSchema) return undefined;
-    const jsonSchema = zodToJsonSchema(zodSchema);
+    // Convert the Zod schema to a JSON schema
+    const jsonSchema = toJSONSchema(zodSchema);
+    // Return the OpenAPI requestBody object
     return {
         content: {
             'application/json': {

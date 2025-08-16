@@ -1,5 +1,13 @@
 ## 📣 Release Notes
 
+### Version 0.3.0 (August 15, 2025)
+
+-   🔧 **Updated Zod to version 4:**
+    -   Updated Zod version from 3.x to 4.x
+    -   Updated built-in request validation middleware to use Zod 4
+    -   Updated and better request validation middleware error handling
+    -   Removed Zod-to-json-schema dependency and use Zod 4 directly
+
 ### Version 0.2.3 (May 2, 2025)
 
 -   ⚡ **Core Improvements:**

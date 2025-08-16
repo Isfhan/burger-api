@@ -4,8 +4,8 @@
 
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.2.4-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
+[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -59,19 +59,13 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.2.3 (May 2, 2025)
+### Latest Version: 0.3.0 (August 15, 2025)
 
--   ⚡ **Core Improvements:**
-    -   Removed custom request/response classes for simpler API
-    -   Enhanced type safety and error handling
-
-### Latest Version: 0.2.0 (April 26, 2025)
-
--   ⚡ **Performance & Core Improvements:**
-    -   Optimized framework core and improved middleware handling
-    -   Enhanced OpenAPI documentation and route tracking
-    -   Updated ID preprocessing logic in schema validation
-    -   Improved type definitions across the framework
+-   🔧 **Updated Zod to version 4:**
+    -   Updated Zod version from 3.x to 4.x
+    -   Updated built-in request validation middleware to use Zod 4
+    -   Updated and better request validation middleware error handling
+    -   Removed Zod-to-json-schema dependency and use Zod 4 directly
 
 For a complete list of changes, please check the [Changelog](CHANGELOG.md) file.
 
