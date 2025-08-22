@@ -1,0 +1,17 @@
+import { z } from 'zod';
+import type { BurgerRequest } from '@src';
+
+export const schema = {
+    get: {
+        params: z.object({
+            userId: z.string().min(1, 'User ID is required'),
+        }),
+    },
+};
+
+export async function GET(
+    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+) {
+    const { userId } = req.validated.params;
+    return Response.json({ message: 'User details', userId, level: 'user' });
+}
