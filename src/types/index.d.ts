@@ -80,15 +80,6 @@ export interface BurgerRequest<
     RequestValidatedProperties extends DefaultRequestProperties = DefaultRequestProperties
 > extends Omit<BunRequest<string>, 'params'> {
     /**
-     * Provides helper to access query parameters as URLSearchParams.
-     * This is a convenience property that allows you to access the query
-     * parameters of the request as a URLSearchParams object, which provides
-     * methods for working with the query parameters like `get(key)`,
-     * `getAll(key)`, `has(key)`, `keys()`, `values()`, `entries()`, and more.
-     */
-    // query: URLSearchParams;
-
-    /**
      * Contains URL parameters extracted from the request path.
      * This property is only present if the request path matches a route
      * with dynamic parameters.
@@ -110,6 +101,15 @@ export interface BurgerRequest<
      * - `body`: Validated request body (if JSON).
      */
     validated: RequestValidatedProperties;
+
+    /**
+     * Contains the wildcard parameters.
+     * This is an optional property that will only be present if
+     * the request path matches a route with a wildcard parameter.
+     * For example, if the route is `/users/[...]`, and the request path is
+     * `/users/123/456`, then the `wildcardParams` property will be `['123', '456']`.
+     */
+    wildcardParams?: string[];
 }
 
 /**
@@ -195,6 +195,13 @@ export interface RouteDefinition {
      * containing the OpenAPI metadata for that method.
      */
     openapi?: openapi;
+
+    /**
+     * Indicates if this route is a wildcard route.
+     * True for routes using the `[...]` syntax.
+     * This property is used internally to identify wildcard routes.
+     */
+    isWildcard?: boolean;
 }
 
 /**
@@ -245,8 +252,10 @@ export interface PageDefinition {
 }
 
 export interface TrieNode {
-    children: Map<string, TrieNode>; // Normal path pieces, like "users"
-    paramChild?: TrieNode; // For dynamic pieces, like ":id"
-    paramName?: string; // Name of the dynamic piece, like "id"
-    route?: RouteDefinition; // The route definition for the node
+    children: Map<string, TrieNode>; // Static path segments, like "users"
+    paramChild?: TrieNode; // Dynamic segments, like ":id"
+    paramName?: string; // Name of dynamic parameter, like "id"
+    wildcardChild?: TrieNode; // Wildcard segments, like "*"
+    isWildcard?: boolean; // True for wildcard routes [...]
+    route?: RouteDefinition; // Route definition at leaf node
 }

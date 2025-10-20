@@ -112,13 +112,27 @@ function buildRequestBody(zodSchema: any): any {
 
 /**
  * Converts a route path from colon-based dynamic segments to OpenAPI's curly brace syntax.
+ * Also handles  wildcard routes.
  *
- * @param routePath The original route path with colon-based dynamic segments (e.g., "/user/:id").
- * @returns The converted route path with curly brace syntax (e.g., "/user/{id}").
+ * @param routePath The original route path with colon-based dynamic segments (e.g., "/user/:id") or wildcards (e.g., "/files/*").
+ * @returns The converted route path with curly brace syntax (e.g., "/user/{id}") or wildcard format (e.g., "/files/*").
  */
 function convertPathForOpenAPI(routePath: string): string {
+    // Fast path: if no special chars, return as-is
+    if (routePath.indexOf(':') === -1 && routePath.indexOf('*') === -1) {
+        return routePath;
+    }
+
     // Replace occurrences of :param with {param}
-    return routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
+    let converted = routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
+
+    // Handle wildcard routes
+    // OpenAPI 3.0 doesn't have official wildcard syntax, so we keep /* as-is
+    // This will display in Swagger as /api/files/* which is intuitive and common
+    // Alternative: convert to {path*} format if preferred
+    // converted = converted.replace(/\/\*$/g, '/{path*}');
+
+    return converted;
 }
 
 export function generateOpenAPIDocument(

@@ -4,13 +4,21 @@ import type { PageDefinition, RouteDefinition, TrieNode } from '@burgerTypes';
  * Constants for route handling.
  */
 export const ROUTE_CONSTANTS = {
+    // Supported page extensions
     SUPPORTED_PAGE_EXTENSIONS: ['.tsx', '.html'],
+    // Page index files
     PAGE_INDEX_FILES: ['index.tsx', 'index.html'],
+    // Dynamic route constants
     DYNAMIC_SEGMENT_PREFIX: ':',
     DYNAMIC_FOLDER_START: '[',
     DYNAMIC_FOLDER_END: ']',
+    // Grouping folder constants
     GROUPING_FOLDER_START: '(',
     GROUPING_FOLDER_END: ')',
+    // Wildcard route constants
+    WILDCARD_SEGMENT_PREFIX: '*',
+    WILDCARD_SIMPLE: '[...]',
+    WILDCARD_START: '[...',
 };
 
 /**
@@ -29,20 +37,25 @@ export const HTTP_METHODS = [
 /**
  * Calculates the specificity of a route path based on the number of static segments.
  * Static segments increase the score, while dynamic segments (:param) do not.
+ * Wildcard segments (*) have the lowest specificity (highest penalty).
  * @param path The route path to evaluate.
- * @returns The specificity score (higher means more static segments).
+ * @returns The specificity score (higher means more static segments, lower priority for wildcard).
  */
 export const getRouteSpecificity = (path: string): number => {
     const segments = path.split('/').filter(Boolean);
     return segments.reduce((score, segment) => {
+        if (segment.startsWith(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX)) {
+            return score + 1000; // Wildcard routes get highest penalty (lowest priority)
+        }
         return segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)
-            ? score
-            : score + 1;
+            ? score + 100 // Dynamic routes get medium penalty
+            : score + 1; // Static routes get minimal penalty
     }, 0);
 };
 
 /**
  * Compares two routes for sorting, prioritizing those with higher specificity (more static segments).
+ * Route prioritization: Static > Dynamic > Wildcard.
  * If specificity is equal, sorts alphabetically by path.
  * @param a The first route to compare.
  * @param b The second route to compare.
@@ -89,6 +102,13 @@ export function collectRoutes(
     if (node.paramChild) {
         const paramPath = `${currentPath}/:${node.paramChild.paramName}`;
         collectRoutes(node.paramChild, paramPath, routes);
+    }
+
+    // Traverse wildcard child if exists (lowest priority)
+    if (node.wildcardChild) {
+        // const wildcardPath = `${currentPath}/${node.wildcardChild.wildcardParamName}`;
+        const wildcardPath = `${currentPath}/${ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX}`;
+        collectRoutes(node.wildcardChild, wildcardPath, routes);
     }
 
     return routes;

@@ -1,5 +1,16 @@
 ## 📣 Release Notes
 
+### Version 0.4.0 (October 21, 2025)
+
+-   🎯 **Wildcard Routes:**
+    -   Added wildcard routes using `[...]` folder name - matches any path after it
+    -   Create routes that handle multiple path segments automatically
+    -   Access all matched path parts through `wildcardParams` in your request
+    -   Routes are matched in order: exact paths first, then dynamic routes (like `[id]`), then wildcards last
+    -   Works inside dynamic routes too (example: `/api/users/[userId]/[...]`)
+    -   View wildcard routes in OpenAPI docs and Swagger UI
+    -   Added easy-to-follow examples showing different ways to use wildcard routes
+
 ### Version 0.3.0 (August 15, 2025)
 
 -   🔧 **Updated Zod to version 4:**
