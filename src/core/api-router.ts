@@ -21,8 +21,8 @@ import type {
 /**
  * ApiRouter class for handling file-based routing.
  * Loads routes from a directory structure and matches requests to the appropriate route handlers.
- * Supports dynamic segments (e.g., [id]) and HTTP method handlers.
- * Routes are sorted to prioritize static routes over dynamic ones to prevent overlapping route issues.
+ * Supports dynamic segments (e.g., [id] ,(group),[...]) and HTTP method handlers.
+ * Routes are sorted to prioritize static routes over dynamic and wildcard ones to prevent overlapping route issues.
  */
 export class ApiRouter {
     /** The root of the trie where all routes will begin*/
@@ -73,12 +73,21 @@ export class ApiRouter {
         const segments = routeDef.path.split('/').filter(Boolean);
         for (const segment of segments) {
             if (segment.startsWith(':')) {
+                // Handle dynamic segments (:param)
                 if (!node.paramChild) {
                     node.paramChild = { children: new Map() };
                 }
                 node = node.paramChild;
                 node.paramName = segment.slice(1);
+            } else if (segment.startsWith('*')) {
+                // Handle wildcard segments (*param)
+                if (!node.wildcardChild) {
+                    node.wildcardChild = { children: new Map() };
+                }
+                node = node.wildcardChild;
+                node.isWildcard = true; // Mark as wildcard route
             } else {
+                // Handle static segments
                 if (!node.children.has(segment)) {
                     node.children.set(segment, { children: new Map() });
                 }
@@ -99,8 +108,9 @@ export class ApiRouter {
         dir: string,
         basePath: string = ''
     ): Promise<void> {
-        // Track if a dynamic folder has been found at this directory level
+        // Track route types at this directory level to prevent conflicts
         let dynamicFolderFound = false;
+        let wildcardFolderFound = false;
 
         try {
             const entries = await readdir(dir, { withFileTypes: true });
@@ -109,20 +119,52 @@ export class ApiRouter {
                 const relativePath = path.join(basePath, entry.name);
 
                 if (entry.isDirectory()) {
-                    // Handle dynamic directories (e.g., [id])
-                    if (
+                    // Check if this is a dynamic or wildcard directory
+                    const isDynamic =
                         entry.name.startsWith(
                             ROUTE_CONSTANTS.DYNAMIC_FOLDER_START
                         ) &&
-                        entry.name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
-                    ) {
-                        if (dynamicFolderFound) {
-                            throw new Error(
-                                `Multiple dynamic route folders found in the same directory: '${entry.name}' conflicts with another dynamic folder in '${dir}'.`
-                            );
-                        }
-                        dynamicFolderFound = true;
+                        entry.name.endsWith(
+                            ROUTE_CONSTANTS.DYNAMIC_FOLDER_END
+                        ) &&
+                        entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE;
+
+                    const isWildcard =
+                        entry.name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
+
+                    // Prevent conflicts between dynamic and wildcard routes
+                    if (isDynamic && wildcardFolderFound) {
+                        throw new Error(
+                            `Cannot mix dynamic and wildcard route folders in the same directory. ` +
+                                `Found dynamic folder '${entry.name}' but wildcard folder already exists in '${dir}'.`
+                        );
                     }
+
+                    if (isWildcard && dynamicFolderFound) {
+                        throw new Error(
+                            `Cannot mix wildcard and dynamic route folders in the same directory. ` +
+                                `Found wildcard folder '${entry.name}' but dynamic folder already exists in '${dir}'.`
+                        );
+                    }
+
+                    if (isDynamic && dynamicFolderFound) {
+                        throw new Error(
+                            `Multiple dynamic route folders found in the same directory: ` +
+                                `'${entry.name}' conflicts with another dynamic folder in '${dir}'.`
+                        );
+                    }
+
+                    if (isWildcard && wildcardFolderFound) {
+                        throw new Error(
+                            `Multiple wildcard route folders found in the same directory: ` +
+                                `'${entry.name}' conflicts with another wildcard folder in '${dir}'.`
+                        );
+                    }
+
+                    // Update flags
+                    if (isDynamic) dynamicFolderFound = true;
+                    if (isWildcard) wildcardFolderFound = true;
+
                     await this.scanDirectory(entryPath, relativePath);
                 } else if (entry.isFile() && entry.name === 'route.ts') {
                     await this.loadRouteModule(entryPath, relativePath);
@@ -176,6 +218,9 @@ export class ApiRouter {
                 middleware: routeModule.middleware as Middleware[],
                 schema: routeModule.schema,
                 openapi: routeModule.openapi,
+                isWildcard: routePath.includes(
+                    ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
+                ),
             };
 
             this.insertRoute(routeDef);
@@ -187,9 +232,9 @@ export class ApiRouter {
     }
 
     /**
-     * Converts a file path to a route path by processing dynamic segments and applying the prefix.
-     * @param filePath The file path to convert (e.g., "users/[id]/route.ts").
-     * @returns {string} The converted route path (e.g., "/users/:id").
+     * Converts a file path to a route path by processing dynamic segments and wildcard segments applying the prefix.
+     * @param filePath The file path to convert (e.g., "users/[id]/route.ts" , "users/[...slug]/route.ts").
+     * @returns {string} The converted route path (e.g., "/users/:id" , "/users/*slug").
      */
     private convertFilePathToRoute(filePath: string): string {
         // Remove the "route.ts" suffix
@@ -208,18 +253,25 @@ export class ApiRouter {
             if (
                 segment.startsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_START) &&
                 segment.endsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_END)
-            )
+            ) {
                 continue;
+            }
 
             // Convert dynamic segments from [param] to :param
             if (
                 segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
-                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
+                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&
+                !segment.startsWith(ROUTE_CONSTANTS.WILDCARD_START)
             ) {
                 const param = segment.slice(1, -1);
+
                 resultSegments.push(
                     ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + param
                 );
+            }
+            // Convert wildcard segments from [...] to *
+            else if (segment === ROUTE_CONSTANTS.WILDCARD_SIMPLE) {
+                resultSegments.push(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX);
             } else {
                 resultSegments.push(segment);
             }
@@ -246,7 +298,7 @@ export class ApiRouter {
      * Resolves a request to a route definition and its parameters.
      * @param pathname  The normalized request pathname.
      * @param method The uppercase HTTP method.
-     * @returns {{ route?: RouteDefinition; params: Record<string, string> }} An object containing the matched route (if any) and extracted parameters.
+     * @returns {{ route?: RouteDefinition; params: Record<string, string>; wildcardParams?: string[] }} An object containing the matched route (if any), extracted parameters, and wildcard segments (if applicable).
      * @throws {Error} If the request URL is malformed.
      */
     public resolve(
@@ -255,27 +307,52 @@ export class ApiRouter {
     ): {
         route?: RouteDefinition;
         params: Record<string, string>;
+        wildcardParams?: string[];
     } {
         try {
             const segments = pathname.split('/').filter(Boolean);
-
             let node = this.root;
             const params: Record<string, string> = {};
+            let wildcardSegments: string[] = [];
 
-            for (const segment of segments) {
+            // Traverse the trie with proper prioritization
+            for (let i = 0; i < segments.length; i++) {
+                const segment = segments[i];
+
+                // Priority 1: Exact static match (highest priority)
                 if (node.children.has(segment)) {
                     node = node.children.get(segment)!;
-                } else if (node.paramChild) {
+                }
+                // Priority 2: Dynamic parameter match (medium priority)
+                else if (node.paramChild) {
                     node = node.paramChild;
                     params[node.paramName!] = segment;
-                } else {
-                    return { params: {} };
+                }
+                // Priority 3: Collect remaining segments for wildcard (lowest priority)
+                else {
+                    wildcardSegments = segments.slice(i);
+                    break;
                 }
             }
 
-            if (node.route && node.route.handlers[method]) {
+            // Check if we have a route at the current node
+            if (node.route?.handlers[method]) {
                 return { route: node.route, params };
             }
+
+            // If no route found but we have wildcard segments, check for wildcard route
+            if (
+                wildcardSegments.length > 0 &&
+                node.wildcardChild?.route?.handlers[method]
+            ) {
+                // Return wildcard segments so they can be added to req.wildcardParams
+                return {
+                    route: node.wildcardChild.route,
+                    params,
+                    wildcardParams: wildcardSegments,
+                };
+            }
+
             return { params: {} };
         } catch (error) {
             // Log the error for better debugging

@@ -5,7 +5,7 @@
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -59,7 +59,17 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.3.0 (August 15, 2025)
+### Latest Version: 0.4.0 (October 21, 2025)
+
+-   🎯 **Wildcard Routes:**
+    -   Added wildcard routes using `[...]` folder name - matches any path after it
+    -   Create routes that handle multiple path segments automatically
+    -   Access all matched path parts through `wildcardParams` in your request
+    -   Routes are matched in order: exact paths first, then dynamic routes (like `[id]`), then wildcards last
+    -   Works inside dynamic routes too (example: `/api/users/[userId]/[...]`)
+    -   View wildcard routes in OpenAPI docs and Swagger UI
+
+### Version 0.3.0 (August 15, 2025)
 
 -   🔧 **Updated Zod to version 4:**
     -   Updated Zod version from 3.x to 4.x
