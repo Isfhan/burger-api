@@ -1,6 +1,6 @@
 {
   "name": "burger-api",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": "Isfhan Ahmed",
   "type": "module",
   "module": "dist/src/index.js",
@@ -11,6 +11,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "prepare": "bun run build",
     "test": "bun test",
     "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
   },
