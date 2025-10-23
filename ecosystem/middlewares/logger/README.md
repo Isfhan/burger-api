@@ -370,7 +370,7 @@ const app = new Burger({
 ```typescript
 // api/admin/route.ts
 import { createLogger } from '../../middleware/logger/logger';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 // Detailed logging for admin routes
 const adminLogger = createLogger({
@@ -381,15 +381,11 @@ const adminLogger = createLogger({
     }
 });
 
-export default {
-    path: '/admin',
-    middleware: [adminLogger],
-    handlers: {
-        GET: async (req) => {
-            return Response.json({ admin: true });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [adminLogger];
+
+export async function GET(req: BurgerRequest) {
+    return Response.json({ admin: true });
+}
 ```
 
 ## Performance Notes

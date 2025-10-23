@@ -81,22 +81,19 @@ const app = new Burger({
 ```typescript
 // api/reports/generate/route.ts
 import { requestTimeout } from '../../../middleware/timeout/timeout';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 // Longer timeout for report generation
 const reportTimeout = requestTimeout({ ms: 120000 }); // 2 minutes
 
-export default {
-    path: '/reports/generate',
-    middleware: [reportTimeout],
-    handlers: {
-        POST: async (req) => {
-            // Long-running report generation
-            const report = await generateReport();
-            return Response.json({ report });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [reportTimeout];
+
+export async function POST(req: BurgerRequest) {
+    // Long-running report generation
+    const report = await generateReport();
+    return Response.json({ report });
+}
+```
 ```
 
 ## Configuration Options
@@ -154,18 +151,20 @@ Then override in specific routes:
 
 ```typescript
 // api/search/route.ts - Quick operation
-export default {
-    path: '/search',
-    middleware: [quickTimeout],
-    handlers: { /* ... */ }
-};
+export const middleware = [quickTimeout];
+
+export async function GET(req: BurgerRequest) {
+    // Quick search logic
+    return Response.json({ results: [] });
+}
 
 // api/analytics/report/route.ts - Slow operation
-export default {
-    path: '/analytics/report',
-    middleware: [longTimeout],
-    handlers: { /* ... */ }
-};
+export const middleware = [longTimeout];
+
+export async function POST(req: BurgerRequest) {
+    // Slow analytics logic
+    return Response.json({ report: {} });
+}
 ```
 
 ### Progressive Timeout Warnings

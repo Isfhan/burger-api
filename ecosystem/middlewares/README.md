@@ -192,16 +192,14 @@ Apply to specific routes:
 ```typescript
 // api/admin/route.ts
 import { apiKey } from '../../middlewares/api-key-auth/api-key-auth';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/admin',
-    middleware: [apiKey({ keys: ['admin-key'] })],
-    handlers: {
-        GET: async (req) => {
-            return Response.json({ admin: true });
-        }
-    }
-};
+export const middleware = [apiKey({ keys: ['admin-key'] })];
+
+export async function GET(req: BurgerRequest) {
+    return Response.json({ admin: true });
+}
+```
 ```
 
 ### Conditional Middleware

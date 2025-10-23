@@ -112,23 +112,20 @@ const limiter = bodySizeLimiter({
 ```typescript
 // api/upload/route.ts
 import { bodySizeLimiter } from '../../middleware/body-size-limiter/body-size-limiter';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 // Higher limit for file upload endpoint
 const uploadLimit = bodySizeLimiter({
     maxSize: 50 * 1024 * 1024 // 50MB
 });
 
-export default {
-    path: '/upload',
-    middleware: [uploadLimit],
-    handlers: {
-        POST: async (req) => {
-            // Handle file upload
-            return Response.json({ success: true });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [uploadLimit];
+
+export async function POST(req: BurgerRequest) {
+    // Handle file upload
+    return Response.json({ success: true });
+}
+```
 ```
 
 ## Configuration Options
@@ -223,11 +220,12 @@ const app = new Burger({
 
 // Then override for specific routes:
 // api/upload/route.ts
-export default {
-    path: '/upload',
-    middleware: [largePayloadLimit()], // Override with larger limit
-    handlers: { /* ... */ }
-};
+export const middleware = [largePayloadLimit()]; // Override with larger limit
+
+export async function POST(req: BurgerRequest) {
+    // Upload logic
+    return Response.json({ success: true });
+}
 ```
 
 ### Conditional Limits Based on User

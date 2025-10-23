@@ -209,31 +209,28 @@ Cache-Control: public, max-age=300, s-maxage=3600, must-revalidate
 ```typescript
 // api/products/route.ts - Cache product list
 import { publicCache } from '../../middleware/cache/cache';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/products',
-    middleware: [publicCache(600)], // 10 minutes
-    handlers: {
-        GET: async () => {
-            const products = await db.getProducts();
-            return Response.json({ products });
-        }
-    }
-};
+export const middleware = [publicCache(600)]; // 10 minutes
 
+export async function GET(req: BurgerRequest) {
+    const products = await db.getProducts();
+    return Response.json({ products });
+}
+```
+
+```typescript
 // api/users/profile/route.ts - Don't cache user data
 import { noCache } from '../../../middleware/cache/cache';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/users/profile',
-    middleware: [noCache()],
-    handlers: {
-        GET: async (req) => {
-            const user = await getUserFromToken(req);
-            return Response.json({ user });
-        }
-    }
-};
+export const middleware = [noCache()];
+
+export async function GET(req: BurgerRequest) {
+    const user = await getUserFromToken(req);
+    return Response.json({ user });
+}
+```
 ```
 
 ### Content-Based Caching

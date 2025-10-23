@@ -99,22 +99,18 @@ const app = new Burger({
 ```typescript
 // api/products/route.ts
 import { cors } from '../../middleware/cors/cors';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/products',
-    middleware: [
-        cors({
-            origin: 'https://shop.example.com',
-            methods: ['GET', 'POST']
-        })
-    ],
-    handlers: {
-        GET: async (req) => {
-            return Response.json({ products: [] });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [
+    cors({
+        origin: 'https://shop.example.com',
+        methods: ['GET', 'POST']
+    })
+];
+
+export async function GET(req: BurgerRequest) {
+    return Response.json({ products: [] });
+}
 ```
 
 ## Configuration Options

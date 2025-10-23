@@ -77,26 +77,23 @@ app.serve(3000);
 Create `api/test/route.ts`:
 
 ```typescript
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/test',
-    handlers: {
-        GET: async (req) => {
-            return Response.json({
-                message: 'Test route working!',
-                timestamp: new Date().toISOString()
-            });
-        },
-        POST: async (req) => {
-            const body = await req.json();
-            return Response.json({
-                message: 'POST received',
-                received: body
-            });
-        }
-    }
-} satisfies RouteDefinition;
+export async function GET(req: BurgerRequest) {
+    return Response.json({
+        message: 'Test route working!',
+        timestamp: new Date().toISOString()
+    });
+}
+
+export async function POST(req: BurgerRequest) {
+    const body = await req.json();
+    return Response.json({
+        message: 'POST received',
+        received: body
+    });
+}
+```
 ```
 
 ### Step 5: Run Test Server
@@ -248,18 +245,14 @@ const app = new Burger({
 Create `api/large/route.ts`:
 
 ```typescript
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/large',
-    handlers: {
-        GET: async () => {
-            // Generate large response
-            const data = Array(1000).fill('x').join('');
-            return Response.json({ data });
-        }
-    }
-} satisfies RouteDefinition;
+export async function GET(req: BurgerRequest) {
+    // Generate large response
+    const data = Array(1000).fill('x').join('');
+    return Response.json({ data });
+}
+```
 ```
 
 **Test Commands:**
@@ -335,30 +328,26 @@ const app = new Burger({
 **Create a login route** (to get tokens) - `api/login/route.ts`:
 
 ```typescript
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 import { createJWT } from '../../middleware/jwt-auth/jwt-auth';
 
 const SECRET = 'test-secret-key-12345';
 
-export default {
-    path: '/login',
-    handlers: {
-        POST: async () => {
-            // Create a test token
-            const token = await createJWT(
-                {
-                    sub: 'user-123',
-                    email: 'test@example.com',
-                    exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour
-                },
-                SECRET,
-                'HS256'
-            );
+export async function POST(req: BurgerRequest) {
+    // Create a test token
+    const token = await createJWT(
+        {
+            sub: 'user-123',
+            email: 'test@example.com',
+            exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour
+        },
+        SECRET,
+        'HS256'
+    );
 
-            return Response.json({ token });
-        }
-    }
-} satisfies RouteDefinition;
+    return Response.json({ token });
+}
+```
 ```
 
 **Test Commands:**
@@ -445,18 +434,14 @@ const app = new Burger({
 **Create slow route** - `api/slow/route.ts`:
 
 ```typescript
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
-export default {
-    path: '/slow',
-    handlers: {
-        GET: async () => {
-            // Simulate slow operation
-            await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds
-            return Response.json({ message: 'Done' });
-        }
-    }
-} satisfies RouteDefinition;
+export async function GET(req: BurgerRequest) {
+    // Simulate slow operation
+    await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds
+    return Response.json({ message: 'Done' });
+}
+```
 ```
 
 **Test Commands:**

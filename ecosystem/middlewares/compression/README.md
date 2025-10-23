@@ -259,7 +259,7 @@ const app = new Burger({
 ```typescript
 // api/large-data/route.ts
 import { compress } from '../../middleware/compression/compression';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 // Aggressive compression for large data endpoints
 const dataCompression = compress({
@@ -267,16 +267,13 @@ const dataCompression = compress({
     encodings: ['br', 'gzip'] // Prefer maximum compression
 });
 
-export default {
-    path: '/large-data',
-    middleware: [dataCompression],
-    handlers: {
-        GET: async (req) => {
-            // Return large dataset
-            return Response.json({ data: largeDataset });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [dataCompression];
+
+export async function GET(req: BurgerRequest) {
+    // Return large dataset
+    return Response.json({ data: largeDataset });
+}
+```
 ```
 
 ### Conditional Compression

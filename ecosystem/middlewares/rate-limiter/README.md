@@ -107,7 +107,7 @@ const limiter = rateLimit({
 ```typescript
 // api/auth/login/route.ts
 import { rateLimit } from '../../../middleware/rate-limiter/rate-limiter';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 // Stricter rate limit for login endpoint
 const loginRateLimit = rateLimit({
@@ -121,16 +121,12 @@ const loginRateLimit = rateLimit({
     }
 });
 
-export default {
-    path: '/auth/login',
-    middleware: [loginRateLimit],
-    handlers: {
-        POST: async (req) => {
-            // Login logic here
-            return Response.json({ success: true });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [loginRateLimit];
+
+export async function POST(req: BurgerRequest) {
+    // Login logic here
+    return Response.json({ success: true });
+}
 ```
 
 ## Configuration Options
@@ -231,15 +227,12 @@ Then in specific routes:
 
 ```typescript
 // api/posts/route.ts
-export default {
-    path: '/posts',
-    middleware: [writeLimit], // Additional rate limit for this route
-    handlers: {
-        POST: async (req) => {
-            // Create post
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [writeLimit]; // Additional rate limit for this route
+
+export async function POST(req: BurgerRequest) {
+    // Create post
+    return Response.json({ success: true });
+}
 ```
 
 ### Skip Failed Login Attempts

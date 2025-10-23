@@ -296,22 +296,19 @@ function flexibleAuth(): Middleware[] {
 ```typescript
 // api/admin/route.ts
 import { apiKey } from '../../middleware/api-key-auth/api-key-auth';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 const adminKeyAuth = apiKey({
     keys: ['admin-key-only'],
     onError: () => Response.json({ error: 'Admin access required' }, { status: 403 })
 });
 
-export default {
-    path: '/admin',
-    middleware: [adminKeyAuth],
-    handlers: {
-        GET: async (req) => {
-            return Response.json({ admin: true });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [adminKeyAuth];
+
+export async function GET(req: BurgerRequest) {
+    return Response.json({ admin: true });
+}
+```
 ```
 
 ### Logging and Analytics

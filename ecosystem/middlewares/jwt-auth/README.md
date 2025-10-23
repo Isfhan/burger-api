@@ -128,21 +128,18 @@ const jwtAuth = jwt({
 ```typescript
 // api/users/profile/route.ts
 import { jwt } from '../../../middleware/jwt-auth/jwt-auth';
-import type { RouteDefinition } from 'burger-api';
+import type { BurgerRequest } from 'burger-api';
 
 const jwtAuth = jwt({ secret: process.env.JWT_SECRET! });
 
-export default {
-    path: '/users/profile',
-    middleware: [jwtAuth], // Only protect this route
-    handlers: {
-        GET: async (req) => {
-            // Access decoded user data
-            const user = (req as any).user;
-            return Response.json({ user });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [jwtAuth]; // Only protect this route
+
+export async function GET(req: BurgerRequest) {
+    // Access decoded user data
+    const user = (req as any).user;
+    return Response.json({ user });
+}
+```
 ```
 
 ### Accessing User Data in Handlers
@@ -301,19 +298,15 @@ function requireRole(role: string): Middleware {
 }
 
 // Use it in routes
-export default {
-    path: '/admin/users',
-    middleware: [
-        jwt({ secret: process.env.JWT_SECRET! }),
-        requireRole('admin')
-    ],
-    handlers: {
-        GET: async (req) => {
-            // Only admins can access this
-            return Response.json({ users: [] });
-        }
-    }
-} satisfies RouteDefinition;
+export const middleware = [
+    jwt({ secret: process.env.JWT_SECRET! }),
+    requireRole('admin')
+];
+
+export async function GET(req: BurgerRequest) {
+    // Only admins can access this
+    return Response.json({ users: [] });
+}
 ```
 
 ### Environment-Specific Configuration
