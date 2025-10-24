@@ -17,13 +17,14 @@ Security headers middleware for burger-api framework. This middleware adds vario
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add security-headers
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the security-headers.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -32,7 +33,7 @@ burger-api add security-headers
 
 ```typescript
 import { Burger } from 'burger-api';
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -41,13 +42,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Strict Security (Production Recommended)
 
 ```typescript
-import { strictSecurity } from './middleware/security-headers/security-headers';
+import { strictSecurity } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -60,7 +61,7 @@ const app = new Burger({
 ### Relaxed Security (Development)
 
 ```typescript
-import { relaxedSecurity } from './middleware/security-headers/security-headers';
+import { relaxedSecurity } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -73,7 +74,7 @@ const app = new Burger({
 ### Custom Content Security Policy
 
 ```typescript
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -95,7 +96,7 @@ const app = new Burger({
 ### Custom HSTS Configuration
 
 ```typescript
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -114,7 +115,7 @@ const app = new Burger({
 ### Disable Specific Headers
 
 ```typescript
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -254,7 +255,7 @@ Controls which browser features and APIs can be used.
 ### Strict Security (Production)
 
 ```typescript
-import { strictSecurity } from './middleware/security-headers/security-headers';
+import { strictSecurity } from './ecosystem/middlewares/security-headers/security-headers';
 
 strictSecurity();
 ```
@@ -269,7 +270,7 @@ strictSecurity();
 ### Relaxed Security (Development)
 
 ```typescript
-import { relaxedSecurity } from './middleware/security-headers/security-headers';
+import { relaxedSecurity } from './ecosystem/middlewares/security-headers/security-headers';
 
 relaxedSecurity();
 ```
@@ -285,7 +286,7 @@ relaxedSecurity();
 ### API with External Resources
 
 ```typescript
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 const app = new Burger({
     apiDir: './api',
@@ -330,7 +331,7 @@ const app = new Burger({
 ### Environment-Specific Security
 
 ```typescript
-import { strictSecurity, relaxedSecurity } from './middleware/security-headers/security-headers';
+import { strictSecurity, relaxedSecurity } from './ecosystem/middlewares/security-headers/security-headers';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -345,7 +346,7 @@ const app = new Burger({
 ### API-Only Application
 
 ```typescript
-import { securityHeaders } from './middleware/security-headers/security-headers';
+import { securityHeaders } from './ecosystem/middlewares/security-headers/security-headers';
 
 // Minimal headers for JSON API
 const app = new Burger({

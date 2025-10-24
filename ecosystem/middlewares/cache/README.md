@@ -13,13 +13,14 @@ HTTP caching middleware for burger-api framework. This middleware sets Cache-Con
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add cache
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the cache.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -28,7 +29,7 @@ burger-api add cache
 
 ```typescript
 import { Burger } from 'burger-api';
-import { noCache } from './middleware/cache/cache';
+import { noCache } from './ecosystem/middlewares/cache/cache';
 
 const app = new Burger({
     apiDir: './api',
@@ -37,13 +38,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Public Cache (1 hour)
 
 ```typescript
-import { publicCache } from './middleware/cache/cache';
+import { publicCache } from './ecosystem/middlewares/cache/cache';
 
 const app = new Burger({
     apiDir: './api',
@@ -56,7 +57,7 @@ const app = new Burger({
 ### Private Cache (User-Specific Data)
 
 ```typescript
-import { privateCache } from './middleware/cache/cache';
+import { privateCache } from './ecosystem/middlewares/cache/cache';
 
 const app = new Burger({
     apiDir: './api',
@@ -69,7 +70,7 @@ const app = new Burger({
 ### Immutable Assets
 
 ```typescript
-import { immutableCache } from './middleware/cache/cache';
+import { immutableCache } from './ecosystem/middlewares/cache/cache';
 
 // For static assets with content-based filenames (e.g., app.a1b2c3d4.js)
 const assetCache = immutableCache(); // Cache for 1 year, immutable
@@ -78,7 +79,7 @@ const assetCache = immutableCache(); // Cache for 1 year, immutable
 ### CDN Cache
 
 ```typescript
-import { cdnCache } from './middleware/cache/cache';
+import { cdnCache } from './ecosystem/middlewares/cache/cache';
 
 const app = new Burger({
     apiDir: './api',
@@ -91,7 +92,7 @@ const app = new Burger({
 ### Custom Configuration
 
 ```typescript
-import { cacheControl } from './middleware/cache/cache';
+import { cacheControl } from './ecosystem/middlewares/cache/cache';
 
 const customCache = cacheControl({
     directive: 'public',
@@ -236,7 +237,7 @@ export async function GET(req: BurgerRequest) {
 ### Content-Based Caching
 
 ```typescript
-import { cacheControl } from './middleware/cache/cache';
+import { cacheControl } from './ecosystem/middlewares/cache/cache';
 
 // Different caching based on content type
 handlers: {
@@ -262,7 +263,7 @@ handlers: {
 ### With Vary Header
 
 ```typescript
-import { cacheControl } from './middleware/cache/cache';
+import { cacheControl } from './ecosystem/middlewares/cache/cache';
 
 // Cache varies by Accept and Authorization headers
 const apiCache = cacheControl({
@@ -275,7 +276,7 @@ const apiCache = cacheControl({
 ### Conditional Requests with ETag
 
 ```typescript
-import { cacheControl } from './middleware/cache/cache';
+import { cacheControl } from './ecosystem/middlewares/cache/cache';
 
 const cacheWithETag = cacheControl({
     directive: 'public',
@@ -290,7 +291,7 @@ const cacheWithETag = cacheControl({
 ### Environment-Specific Caching
 
 ```typescript
-import { noCache, publicCache } from './middleware/cache/cache';
+import { noCache, publicCache } from './ecosystem/middlewares/cache/cache';
 
 const cacheMiddleware = process.env.NODE_ENV === 'production'
     ? publicCache(3600)  // 1 hour in production
@@ -429,7 +430,7 @@ cacheControl({
 ### Check Cache Headers
 
 ```bash
-curl -I http://localhost:3000/api/data
+curl -I http://localhost:4000/api/data
 
 # Look for:
 # Cache-Control: public, max-age=3600
@@ -441,10 +442,10 @@ curl -I http://localhost:3000/api/data
 
 ```bash
 # First request
-ETAG=$(curl -I http://localhost:3000/api/data | grep -i etag | cut -d' ' -f2)
+ETAG=$(curl -I http://localhost:4000/api/data | grep -i etag | cut -d' ' -f2)
 
 # Second request with If-None-Match
-curl -I http://localhost:3000/api/data \
+curl -I http://localhost:4000/api/data \
   -H "If-None-Match: $ETAG"
 
 # Should return 304 Not Modified if unchanged

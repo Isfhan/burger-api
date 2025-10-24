@@ -12,13 +12,14 @@ Request timeout middleware for burger-api framework. This middleware aborts requ
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add timeout
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the timeout.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -27,7 +28,7 @@ burger-api add timeout
 
 ```typescript
 import { Burger } from 'burger-api';
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 const app = new Burger({
     apiDir: './api',
@@ -36,13 +37,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Custom Timeout Duration
 
 ```typescript
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 const app = new Burger({
     apiDir: './api',
@@ -55,7 +56,7 @@ const app = new Burger({
 ### Custom Error Response
 
 ```typescript
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 const app = new Burger({
     apiDir: './api',
@@ -130,7 +131,7 @@ Custom error message for timeout response.
 
 ```typescript
 import { Burger } from 'burger-api';
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 // Short timeout for quick endpoints
 const quickTimeout = requestTimeout({ ms: 5000 });
@@ -170,7 +171,7 @@ export async function POST(req: BurgerRequest) {
 ### Progressive Timeout Warnings
 
 ```typescript
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 // You can implement this in your handlers
 handlers: {
@@ -201,7 +202,7 @@ handlers: {
 ### Environment-Specific Timeouts
 
 ```typescript
-import { requestTimeout } from './middleware/timeout/timeout';
+import { requestTimeout } from './ecosystem/middlewares/timeout/timeout';
 
 const timeout = requestTimeout({
     ms: process.env.NODE_ENV === 'development'
@@ -432,7 +433,7 @@ handlers: {
 
 ```bash
 # This will timeout if operation takes > 30s
-curl http://localhost:3000/api/slow-endpoint -v
+curl http://localhost:4000/api/slow-endpoint -v
 
 # Expected response
 # HTTP/1.1 408 Request Timeout

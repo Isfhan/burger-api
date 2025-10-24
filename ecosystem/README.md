@@ -2,6 +2,89 @@
 
 This folder contains official extensions and tools for the Burger API framework.
 
+## 📁 Standardized Project Structure
+
+To maintain consistency and organization across all Burger API projects, we
+recommend the following folder structure:
+
+```
+my-burger-app/
+├── ecosystem/           # Official middleware collection (copy from burger-api)
+│   └── middlewares/
+│       ├── cors/
+│       ├── logger/
+│       ├── rate-limiter/
+│       └── ...
+├── middleware/          # Your middleware configuration
+│   ├── global/
+│   │   └── index.ts     # Export array of global middleware
+│   ├── route-specific/  #  Route-specific middleware
+│   │   └── auth.ts
+│   └── custom/         # Your custom middleware
+│       └── my-middleware.ts
+└── index.ts            # Main app entry
+```
+
+## 🚀 Quick Setup
+
+### Step 1: Copy Ecosystem
+
+```bash
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
+```
+
+### Step 2: Create Middleware Structure
+
+```bash
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
+```
+
+### Step 3: Configure Global Middleware
+
+Create `middleware/global/index.ts`:
+
+```typescript
+import { cors } from '../../ecosystem/middlewares/cors/cors';
+import { logger } from '../../ecosystem/middlewares/logger/logger';
+import { rateLimit } from '../../ecosystem/middlewares/rate-limiter/rate-limiter';
+
+export const globalMiddleware = [
+    logger({
+        level: 'info',
+        format: 'combined',
+    }),
+    cors({
+        origin:
+            process.env.NODE_ENV === 'production'
+                ? ['https://example.com']
+                : '*',
+        credentials: true,
+        debug: process.env.NODE_ENV !== 'production',
+    }),
+    rateLimit({
+        windowMs: 60000,
+        maxRequests: 100,
+    }),
+];
+```
+
+### Step 4: Use in Your App
+
+```typescript
+// index.ts
+import { Burger } from 'burger-api';
+import { globalMiddleware } from './middleware/global';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware, // Clean and organized!
+});
+
+app.serve(4000);
+```
+
 ## 📦 Available Packages
 
 ### Middleware Collection
@@ -11,42 +94,32 @@ middleware for Burger API applications.
 
 **Features:**
 
--   ✅ 10 production-ready middleware (CORS, Rate Limiter, Logger, etc.)
+-   ✅ Production-ready middleware (CORS, Rate Limiter, Logger, etc.)
 -   ✅ Optimized for Bun.js v1.3.1+ with automatic fallbacks
 -   ✅ Comprehensive documentation and testing guides
 -   ✅ Copy & paste approach for easy customization
 
-**Quick Start:**
+## 🎯 Benefits of This Structure
 
-```bash
-# Copy middleware to your project
-cp -r ecosystem/middlewares/cors ./middleware/
-cp -r ecosystem/middlewares/logger ./middleware/
+### **Organization**
 
-# Use in your Burger API app
-import { cors } from './middleware/cors/cors';
-import { logger } from './middleware/logger/logger';
+-   ✅ **Clean separation** of ecosystem vs custom middleware
+-   ✅ **Easy management** of global middleware in one place
+-   ✅ **Scalable** for large applications
+-   ✅ **Consistent** across all Burger API projects
 
-const app = new Burger({
-    globalMiddleware: [logger(), cors()]
-});
-```
+### **Development Experience**
 
-## 🚀 Future Plans
+-   ✅ **Easy to enable/disable** middleware by editing one file
+-   ✅ **Clear separation** of concerns
+-   ✅ **Future CLI-ready** structure
+-   ✅ **Easy to maintain** and update
 
-### CLI Tool (Coming Soon)
+### **Performance**
 
-```bash
-# Easy installation
-burger-api add cors
-burger-api add rate-limiter
-
-# List available middleware
-burger-api list
-
-# Update middleware
-burger-api update cors
-```
+-   ✅ **Pre-computed optimizations** in all middleware
+-   ✅ **Minimal overhead** with efficient implementations
+-   ✅ **Production-ready** configurations
 
 ## 📚 Documentation
 
@@ -60,10 +133,11 @@ burger-api update cors
 
 Want to contribute to the ecosystem? Follow these guidelines:
 
-1. Each package in its own folder
+1. Each package in its own folder within `./middlewares/`
 2. Include implementation files and comprehensive README.md
 3. Follow the established patterns and conventions
 4. Include tests and examples
+5. Use the standardized folder structure
 
 ## 📄 License
 

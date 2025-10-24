@@ -17,13 +17,14 @@ JWT (JSON Web Token) authentication middleware for burger-api framework. This mi
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add jwt-auth
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the jwt-auth.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -32,7 +33,7 @@ burger-api add jwt-auth
 
 ```typescript
 import { Burger } from 'burger-api';
-import { jwt } from './middleware/jwt-auth/jwt-auth';
+import { jwt } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const app = new Burger({
     apiDir: './api',
@@ -41,7 +42,7 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 **Client Request:**
@@ -53,7 +54,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Cookie-Based Authentication
 
 ```typescript
-import { jwt } from './middleware/jwt-auth/jwt-auth';
+import { jwt } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const jwtAuth = jwt({
     secret: 'your-secret-key',
@@ -70,7 +71,7 @@ Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Query Parameter Authentication
 
 ```typescript
-import { jwt } from './middleware/jwt-auth/jwt-auth';
+import { jwt } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const jwtAuth = jwt({
     secret: 'your-secret-key',
@@ -86,7 +87,7 @@ GET /api/protected?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Custom Token Extraction
 
 ```typescript
-import { jwt } from './middleware/jwt-auth/jwt-auth';
+import { jwt } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const jwtAuth = jwt({
     secret: 'your-secret-key',
@@ -105,7 +106,7 @@ const jwtAuth = jwt({
 ### Custom Error Handling
 
 ```typescript
-import { jwt } from './middleware/jwt-auth/jwt-auth';
+import { jwt } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const jwtAuth = jwt({
     secret: 'your-secret-key',
@@ -239,7 +240,7 @@ Property name to attach decoded user data to the request object.
 ### Creating JWTs
 
 ```typescript
-import { createJWT } from './middleware/jwt-auth/jwt-auth';
+import { createJWT } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 // Create a JWT token
 const token = await createJWT(
@@ -465,20 +466,20 @@ const user = (req as any).yourCustomProperty; // If using requestProperty option
 
 ```bash
 # Get a token first
-TOKEN=$(curl -X POST http://localhost:3000/api/login \
+TOKEN=$(curl -X POST http://localhost:4000/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"user","password":"pass"}' \
   | jq -r '.token')
 
 # Use the token
-curl http://localhost:3000/api/protected \
+curl http://localhost:4000/api/protected \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### In Tests
 
 ```typescript
-import { createJWT } from './middleware/jwt-auth/jwt-auth';
+import { createJWT } from './ecosystem/middlewares/jwt-auth/jwt-auth';
 
 const token = await createJWT(
     { sub: 'test-user-id', email: 'test@example.com' },
@@ -486,7 +487,7 @@ const token = await createJWT(
     'HS256'
 );
 
-const response = await fetch('http://localhost:3000/api/protected', {
+const response = await fetch('http://localhost:4000/api/protected', {
     headers: { 'Authorization': `Bearer ${token}` }
 });
 ```

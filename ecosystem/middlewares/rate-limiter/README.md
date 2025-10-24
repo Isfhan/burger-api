@@ -16,13 +16,14 @@ Rate limiting middleware for burger-api framework. This middleware helps prevent
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add rate-limiter
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the rate-limiter.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -31,7 +32,7 @@ burger-api add rate-limiter
 
 ```typescript
 import { Burger } from 'burger-api';
-import { rateLimit } from './middleware/rate-limiter/rate-limiter';
+import { rateLimit } from './ecosystem/middlewares/rate-limiter/rate-limiter';
 
 const app = new Burger({
     apiDir: './api',
@@ -40,13 +41,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Custom Limits
 
 ```typescript
-import { rateLimit } from './middleware/rate-limiter/rate-limiter';
+import { rateLimit } from './ecosystem/middlewares/rate-limiter/rate-limiter';
 
 const app = new Burger({
     apiDir: './api',
@@ -62,7 +63,7 @@ const app = new Burger({
 ### Rate Limiting by API Key
 
 ```typescript
-import { rateLimit } from './middleware/rate-limiter/rate-limiter';
+import { rateLimit } from './ecosystem/middlewares/rate-limiter/rate-limiter';
 
 const app = new Burger({
     apiDir: './api',
@@ -84,7 +85,7 @@ const app = new Burger({
 ### Custom Error Response
 
 ```typescript
-import { rateLimit } from './middleware/rate-limiter/rate-limiter';
+import { rateLimit } from './ecosystem/middlewares/rate-limiter/rate-limiter';
 
 const limiter = rateLimit({
     windowMs: 60000,
@@ -203,7 +204,7 @@ Unix timestamp (seconds) when the rate limit window resets.
 ### Multiple Rate Limits
 
 ```typescript
-import { rateLimit } from './middleware/rate-limiter/rate-limiter';
+import { rateLimit } from './ecosystem/middlewares/rate-limiter/rate-limiter';
 
 // Global rate limit: 1000 requests per hour
 const globalLimit = rateLimit({

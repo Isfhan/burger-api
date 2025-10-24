@@ -15,13 +15,14 @@ API key authentication middleware for burger-api framework. This middleware prot
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add api-key-auth
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the api-key-auth.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -30,7 +31,7 @@ burger-api add api-key-auth
 
 ```typescript
 import { Burger } from 'burger-api';
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const app = new Burger({
     apiDir: './api',
@@ -41,7 +42,7 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 **Client Request:**
@@ -53,7 +54,7 @@ X-API-Key: key-1
 ### With Database Validation
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: async (key) => {
@@ -70,7 +71,7 @@ const apiKeyAuth = apiKey({
 ### Query Parameter Authentication
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: ['key-1', 'key-2'],
@@ -86,7 +87,7 @@ GET /api/data?api_key=key-1 HTTP/1.1
 ### Custom Header Name
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: ['key-1', 'key-2'],
@@ -102,7 +103,7 @@ const apiKeyAuth = apiKey({
 ### With Rate Limiting Per Key
 
 ```typescript
-import { apiKeyWithRateLimit } from './middleware/api-key-auth/api-key-auth';
+import { apiKeyWithRateLimit } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKeyWithRateLimit(
     {
@@ -118,7 +119,7 @@ const apiKeyAuth = apiKeyWithRateLimit(
 ### Custom Error Messages
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: ['key-1', 'key-2'],
@@ -206,7 +207,7 @@ Whether to include the API key in error messages. Set to `false` in production.
 ### Tiered API Access
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const freeKeys = new Set(['free-key-1', 'free-key-2']);
 const premiumKeys = new Set(['premium-key-1', 'premium-key-2']);
@@ -227,7 +228,7 @@ const premiumAuth = apiKey({
 ### Database with Metadata
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: async (key) => {
@@ -314,7 +315,7 @@ export async function GET(req: BurgerRequest) {
 ### Logging and Analytics
 
 ```typescript
-import { apiKey } from './middleware/api-key-auth/api-key-auth';
+import { apiKey } from './ecosystem/middlewares/api-key-auth/api-key-auth';
 
 const apiKeyAuth = apiKey({
     keys: async (key) => {
@@ -465,21 +466,21 @@ handlers: {
 
 ```bash
 # Header-based
-curl http://localhost:3000/api/data \
+curl http://localhost:4000/api/data \
   -H "X-API-Key: your-api-key"
 
 # Query parameter
-curl "http://localhost:3000/api/data?api_key=your-api-key"
+curl "http://localhost:4000/api/data?api_key=your-api-key"
 
 # Custom header
-curl http://localhost:3000/api/data \
+curl http://localhost:4000/api/data \
   -H "Authorization: ApiKey your-api-key"
 ```
 
 ### In Tests
 
 ```typescript
-const response = await fetch('http://localhost:3000/api/protected', {
+const response = await fetch('http://localhost:4000/api/protected', {
     headers: {
         'X-API-Key': 'test-api-key'
     }

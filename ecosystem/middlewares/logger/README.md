@@ -17,13 +17,14 @@ Request logging middleware for burger-api framework. This middleware logs HTTP r
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add logger
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the logger.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -32,7 +33,7 @@ burger-api add logger
 
 ```typescript
 import { Burger } from 'burger-api';
-import { logger } from './middleware/logger/logger';
+import { logger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -41,7 +42,7 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 **Output:**
@@ -54,7 +55,7 @@ app.serve(3000);
 ### With Additional Options
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -71,7 +72,7 @@ const app = new Burger({
 ### Skip Health Check Endpoints
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -86,7 +87,7 @@ const app = new Burger({
 ### Skip Multiple Paths with Regex
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -101,7 +102,7 @@ const app = new Burger({
 ### Custom Skip Function
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -119,7 +120,7 @@ const app = new Burger({
 ### Custom Formatter
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -137,7 +138,7 @@ const app = new Burger({
 ### JSON Logging
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -166,7 +167,7 @@ const app = new Burger({
 ### Log to File
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 import fs from 'fs';
 
 const logStream = fs.createWriteStream('app.log', { flags: 'a' });
@@ -187,7 +188,7 @@ const app = new Burger({
 ### Detailed Logging (Development)
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -300,7 +301,7 @@ The logger automatically color-codes output for better readability:
 ### Production Logging Setup
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 import fs from 'fs';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -335,7 +336,7 @@ const app = new Burger({
 ### Integration with External Logging Services
 
 ```typescript
-import { createLogger } from './middleware/logger/logger';
+import { createLogger } from './ecosystem/middlewares/logger/logger';
 
 // Example: Send logs to external service
 async function sendToLoggingService(logData: any) {

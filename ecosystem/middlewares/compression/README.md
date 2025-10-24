@@ -15,13 +15,14 @@ HTTP compression middleware for burger-api framework. This middleware compresses
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add compression
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the compression.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -30,7 +31,7 @@ burger-api add compression
 
 ```typescript
 import { Burger } from 'burger-api';
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -39,13 +40,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Custom Threshold
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -62,7 +63,7 @@ const app = new Burger({
 **Important**: Bun's `CompressionStream` currently supports `gzip` and `deflate` only. Brotli (`br`) is not yet supported and will be skipped if specified.
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -77,7 +78,7 @@ const app = new Burger({
 ### Compress Specific Content Types
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -100,7 +101,7 @@ const app = new Burger({
 ### Use Regex for Content Types
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -115,7 +116,7 @@ const app = new Burger({
 ### Custom Exclusions
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -215,7 +216,7 @@ Content types to exclude from compression. By default, excludes media types that
 ### Production Configuration
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -241,7 +242,7 @@ const app = new Burger({
 ### API-Only Compression
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const apiCompression = compress({
     contentTypes: ['application/json'],
@@ -279,7 +280,7 @@ export async function GET(req: BurgerRequest) {
 ### Conditional Compression
 
 ```typescript
-import { compress } from './middleware/compression/compression';
+import { compress } from './ecosystem/middlewares/compression/compression';
 
 const app = new Burger({
     apiDir: './api',
@@ -410,13 +411,13 @@ Test compression with curl:
 
 ```bash
 # Request with gzip
-curl -H "Accept-Encoding: gzip" http://localhost:3000/api/data -v
+curl -H "Accept-Encoding: gzip" http://localhost:4000/api/data -v
 
 # Request with brotli
-curl -H "Accept-Encoding: br" http://localhost:3000/api/data -v
+curl -H "Accept-Encoding: br" http://localhost:4000/api/data -v
 
 # Request without compression
-curl http://localhost:3000/api/data -v
+curl http://localhost:4000/api/data -v
 ```
 
 ## Security Notes

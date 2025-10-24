@@ -14,13 +14,14 @@ Request body size limiting middleware for burger-api framework. This middleware 
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add body-size-limiter
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the body-size-limiter.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
@@ -29,7 +30,7 @@ burger-api add body-size-limiter
 
 ```typescript
 import { Burger } from 'burger-api';
-import { bodySizeLimiter } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 const app = new Burger({
     apiDir: './api',
@@ -38,13 +39,13 @@ const app = new Burger({
     ]
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Custom Size Limit
 
 ```typescript
-import { bodySizeLimiter } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 const app = new Burger({
     apiDir: './api',
@@ -64,7 +65,7 @@ import {
     mediumPayloadLimit,
     largePayloadLimit,
     extraLargePayloadLimit
-} from './middleware/body-size-limiter/body-size-limiter';
+} from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 // Small (100KB) - for text-based APIs
 const app1 = new Burger({
@@ -90,7 +91,7 @@ const app4 = new Burger({
 ### Custom Error Response
 
 ```typescript
-import { bodySizeLimiter, formatBytes } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter, formatBytes } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 const limiter = bodySizeLimiter({
     maxSize: 5 * 1024 * 1024,
@@ -210,7 +211,7 @@ extraLargePayloadLimit()
 ### Different Limits per Route
 
 ```typescript
-import { smallPayloadLimit, largePayloadLimit } from './middleware/body-size-limiter/body-size-limiter';
+import { smallPayloadLimit, largePayloadLimit } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 // Global: small limit for APIs
 const app = new Burger({
@@ -231,7 +232,7 @@ export async function POST(req: BurgerRequest) {
 ### Conditional Limits Based on User
 
 ```typescript
-import { bodySizeLimiter } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 function userBasedLimit(): Middleware {
     return async (req: BurgerRequest): Promise<BurgerNext> => {
@@ -256,7 +257,7 @@ function userBasedLimit(): Middleware {
 ### With File Type Validation
 
 ```typescript
-import { bodySizeLimiter } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 const uploadLimit = bodySizeLimiter({
     maxSize: 10 * 1024 * 1024,
@@ -292,7 +293,7 @@ handlers: {
 ### Logging Rejected Requests
 
 ```typescript
-import { bodySizeLimiter } from './middleware/body-size-limiter/body-size-limiter';
+import { bodySizeLimiter } from './ecosystem/middlewares/body-size-limiter/body-size-limiter';
 
 const limiter = bodySizeLimiter({
     maxSize: 5 * 1024 * 1024,
@@ -509,7 +510,7 @@ globalMiddleware: [
 dd if=/dev/zero of=large.dat bs=1M count=2  # 2MB file
 
 # Test upload
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:4000/api/upload \
   -H "Content-Type: application/octet-stream" \
   --data-binary @large.dat
 
@@ -520,7 +521,7 @@ curl -X POST http://localhost:3000/api/upload \
 
 ```bash
 # Fake large Content-Length
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:4000/api/upload \
   -H "Content-Length: 10485760" \
   -d "small data"
 

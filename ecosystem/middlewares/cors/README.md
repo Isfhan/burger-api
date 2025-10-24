@@ -24,22 +24,58 @@ features.
 
 ## Installation
 
-Copy this middleware into your project:
+Copy this middleware into your project following the standardized ecosystem structure:
 
 ```bash
-# Using the burger-api CLI (coming soon)
-burger-api add cors
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
 
-# Or manually copy the cors.ts file to your middleware folder
+# Create the recommended middleware folder structure
+mkdir -p middleware/{global,route-specific,custom}
 ```
 
 ## Usage
+
+### Recommended: Global Middleware Approach
+
+For better organization, we recommend using a centralized global middleware configuration:
+
+```typescript
+// middleware/global/index.ts
+import { cors } from '../../ecosystem/middlewares/cors/cors';
+import { logger } from '../../ecosystem/middlewares/logger/logger';
+
+export const globalMiddleware = [
+    logger({
+        level: 'info',
+        format: 'combined'
+    }),
+    cors({
+        origin: process.env.NODE_ENV === 'production' 
+            ? ['https://example.com'] 
+            : '*',
+        credentials: true,
+        debug: process.env.NODE_ENV !== 'production'
+    })
+];
+
+// index.ts
+import { Burger } from 'burger-api';
+import { globalMiddleware } from './middleware/global';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware
+});
+
+app.serve(4000);
+```
 
 ### Basic Usage (Allow All Origins)
 
 ```typescript
 import { Burger } from 'burger-api';
-import { cors } from './middleware/cors/cors';
+import { cors } from './ecosystem/middlewares/cors/cors';
 
 const app = new Burger({
     apiDir: './api',
@@ -48,13 +84,13 @@ const app = new Burger({
     ],
 });
 
-app.serve(3000);
+app.serve(4000);
 ```
 
 ### Allow Specific Origin
 
 ```typescript
-import { cors } from './middleware/cors/cors';
+import { cors } from './ecosystem/middlewares/cors/cors';
 
 const app = new Burger({
     apiDir: './api',
@@ -70,7 +106,7 @@ const app = new Burger({
 ### Allow Multiple Origins
 
 ```typescript
-import { cors } from './middleware/cors/cors';
+import { cors } from './ecosystem/middlewares/cors/cors';
 
 const app = new Burger({
     apiDir: './api',
@@ -90,7 +126,7 @@ const app = new Burger({
 ### Custom Origin Validation
 
 ```typescript
-import { cors } from './middleware/cors/cors';
+import { cors } from './ecosystem/middlewares/cors/cors';
 
 const app = new Burger({
     apiDir: './api',
@@ -107,7 +143,7 @@ const app = new Burger({
 ### Production Configuration with Security Features
 
 ```typescript
-import { cors } from './middleware/cors/cors';
+import { cors } from './ecosystem/middlewares/cors/cors';
 
 const app = new Burger({
     apiDir: './api',
@@ -133,7 +169,7 @@ const app = new Burger({
 
 ```typescript
 // api/products/route.ts
-import { cors } from '../../middleware/cors/cors';
+import { cors } from '../../ecosystem/middlewares/cors/cors';
 import type { BurgerRequest } from 'burger-api';
 
 export const middleware = [
