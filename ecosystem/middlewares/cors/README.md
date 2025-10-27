@@ -7,7 +7,8 @@ features.
 
 ## Features
 
--   ✅ **Ultra-fast performance** with micro-level optimizations
+-   ✅ **Vary header support** for proper browser/CDN caching behavior
+-   ✅ **HEAD method support** out of the box for standard HTTP operations
 -   ✅ **Strict origin validation** with explicit rejection of invalid origins
 -   ✅ **Header whitelist filtering** for enhanced security
 -   ✅ **HTTPS enforcement** for production environments

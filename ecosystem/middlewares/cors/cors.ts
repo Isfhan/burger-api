@@ -3,6 +3,7 @@ import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
 // Allowed HTTP methods for type safety
 export type HttpMethod =
     | 'GET'
+    | 'HEAD'
     | 'POST'
     | 'PUT'
     | 'DELETE'
@@ -25,7 +26,7 @@ export interface CorsOptions {
      * Configures the Access-Control-Allow-Methods header.
      * Specifies which HTTP methods are allowed when accessing the resource.
      *
-     * @default ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+     * @default ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
      */
     methods?: HttpMethod[];
 
@@ -111,7 +112,7 @@ export interface CorsOptions {
 export function cors(options: CorsOptions = {}): Middleware {
     const {
         origin = '*',
-        methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        methods = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders = [
             'Content-Type',
             'Authorization',
@@ -178,6 +179,11 @@ export function cors(options: CorsOptions = {}): Middleware {
         ? { 'Access-Control-Expose-Headers': exposedHeadersString }
         : {};
 
+    // Pre-compute Vary header for non-wildcard origins
+    const varyHeader: Record<string, string> = !isWildcard
+        ? { Vary: 'Origin' }
+        : {};
+
     // Pre-compute regex for HTTPS enforcement (faster than startsWith)
     const httpRegex =
         enforceHttps && process.env.NODE_ENV === 'production' ? /^http:/ : null;
@@ -204,6 +210,7 @@ export function cors(options: CorsOptions = {}): Middleware {
                     preflightHeadersBase,
                     credentialsHeader,
                     exposedHeadersHeader,
+                    varyHeader,
                     debug
                 );
             }
@@ -223,6 +230,7 @@ export function cors(options: CorsOptions = {}): Middleware {
                 preflightHeadersBase,
                 credentialsHeader,
                 exposedHeadersHeader,
+                varyHeader,
                 debug
             );
         }
@@ -272,6 +280,7 @@ export function cors(options: CorsOptions = {}): Middleware {
             preflightHeadersBase,
             credentialsHeader,
             exposedHeadersHeader,
+            varyHeader,
             debug
         );
     };
@@ -283,6 +292,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         preflightHeadersBase: Record<string, string>,
         credentialsHeader: Record<string, string>,
         exposedHeadersHeader: Record<string, string>,
+        varyHeader: Record<string, string>,
         debug: boolean
     ): BurgerNext {
         // ⚡ Preflight request optimization
@@ -309,9 +319,13 @@ export function cors(options: CorsOptions = {}): Middleware {
                     }
                 }
 
-                // Fallback to default if no valid headers found
+                // Echo requested headers if none match allowed headers (Hono-style)
                 if (requestedHeaders.length === 0) {
-                    requestedHeaders = allowedHeaders;
+                    requestedHeaders = [];
+                    for (let i = 0; i < headers.length; i++) {
+                        const trimmed = headers[i].trim();
+                        if (trimmed) requestedHeaders.push(trimmed);
+                    }
                 }
             } else {
                 requestedHeaders = allowedHeaders;
@@ -326,15 +340,19 @@ export function cors(options: CorsOptions = {}): Middleware {
             }
 
             // ⚡ Build response headers efficiently
-            const headers = {
+            const preflightHeaders = {
                 'Access-Control-Allow-Origin': allowedOrigin,
                 'Access-Control-Allow-Headers': requestedHeaders.join(', '),
                 ...preflightHeadersBase,
                 ...credentialsHeader,
                 ...exposedHeadersHeader,
+                ...varyHeader,
             };
 
-            return new Response(null, { status: 204, headers });
+            return new Response(null, {
+                status: 204,
+                headers: preflightHeaders,
+            });
         }
 
         // ⚡ Normal request - optimized response transformation
@@ -345,6 +363,11 @@ export function cors(options: CorsOptions = {}): Middleware {
             headers.set('Access-Control-Allow-Origin', allowedOrigin);
             headers.set('Access-Control-Allow-Methods', methodsString);
             headers.set('Access-Control-Allow-Headers', allowedHeadersString);
+
+            // Add Vary header using pre-computed object (empty if wildcard)
+            if (varyHeader.Vary) {
+                headers.set('Vary', varyHeader.Vary);
+            }
 
             if (credentials) {
                 headers.set('Access-Control-Allow-Credentials', 'true');
@@ -374,17 +397,4 @@ export function cors(options: CorsOptions = {}): Middleware {
             });
         };
     }
-}
-
-/**
- * Creates a JSON error response with the given message and status code.
- * @param message - The error message to include in the response.
- * @param status - The HTTP status code to include in the response.
- * @returns A Response object with the JSON error response.
- */
-function createJsonError(message: string, status = 403): Response {
-    return new Response(JSON.stringify({ success: false, error: message }), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-    });
 }
