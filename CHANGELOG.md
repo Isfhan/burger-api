@@ -1,5 +1,14 @@
 ## 📣 Release Notes
 
+### Version 0.5.0 (October 28, 2025)
+
+-   🔧 **Auto-injected OPTIONS handler for CORS preflight:**
+    -   Automatically injects an OPTIONS handler for CORS preflight when needed
+    -   Only injects if the route defines any preflight-triggering methods and lacks an OPTIONS handler
+    -   Injects a minimal OPTIONS handler that returns a 204 No Content response
+    -   Works for all HTTP methods that trigger CORS preflight (POST, PUT, DELETE, PATCH)
+    -   Does not inject if the route already has an OPTIONS handler
+
 ### Version 0.4.0 (October 21, 2025)
 
 -   🎯 **Wildcard Routes:**
