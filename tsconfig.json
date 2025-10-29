@@ -39,6 +39,7 @@
       "@utils": ["src/utils/index.js"],
       "@middleware": ["src/middleware/index.js"],
       "@burgerTypes": ["src/types/index.js"],
+      "@ecosystem/*": ["ecosystem/*"],
     }
   },
   "include": ["src/**/*", "tests/**/*", "examples/**/*"],
