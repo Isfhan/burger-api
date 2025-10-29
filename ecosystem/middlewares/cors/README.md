@@ -22,10 +22,10 @@ features.
 -   ✅ **Credentials support with security checks**
 -   ✅ **Max-age caching for preflight requests**
 
-
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this middleware into your project following the standardized ecosystem
+structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
@@ -39,7 +39,8 @@ mkdir -p middleware/{global,route-specific,custom}
 
 ### Recommended: Global Middleware Approach
 
-For better organization, we recommend using a centralized global middleware configuration:
+For better organization, we recommend using a centralized global middleware
+configuration:
 
 ```typescript
 // middleware/global/index.ts
@@ -49,15 +50,16 @@ import { logger } from '../../ecosystem/middlewares/logger/logger';
 export const globalMiddleware = [
     logger({
         level: 'info',
-        format: 'combined'
+        format: 'combined',
     }),
     cors({
-        origin: process.env.NODE_ENV === 'production' 
-            ? ['https://example.com'] 
-            : '*',
+        origin:
+            process.env.NODE_ENV === 'production'
+                ? ['https://example.com']
+                : '*',
         credentials: true,
-        debug: process.env.NODE_ENV !== 'production'
-    })
+        debug: process.env.NODE_ENV !== 'production',
+    }),
 ];
 
 // index.ts
@@ -66,7 +68,7 @@ import { globalMiddleware } from './middleware/global';
 
 const app = new Burger({
     apiDir: './api',
-    globalMiddleware
+    globalMiddleware,
 });
 
 app.serve(4000);
@@ -404,6 +406,33 @@ For each request:
 -   Adds CORS headers to response using response transformation
 -   Optimized header setting order
 -   Reuses response body stream for memory efficiency
+
+### Preflight and error responses (simple)
+
+-   OPTIONS preflight is handled automatically (returns 204 with CORS headers).
+-   With BurgerAPI’s core runner, CORS headers are also added to error responses
+    (like a 400 from validation), so browsers don’t block them.
+
+Recommended order:
+
+```ts
+// index.ts
+import { Burger } from 'burger-api';
+import { cors } from '../../ecosystem/middlewares/cors/cors';
+import { otherMiddleware } from '../../ecosystem/middlewares/other-middleware/';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware: [
+        cors(), // Put CORS first
+        otherMiddleware(), // Put other middleware after CORS
+    ], // Global middleware run for all routes
+});
+```
+
+Note: You don’t need per-route `OPTIONS` handlers. If your route has
+POST/PUT/DELETE/PATCH and no `OPTIONS`, BurgerAPI auto-adds a minimal `OPTIONS`
+handler.
 
 ## Security Features
 
