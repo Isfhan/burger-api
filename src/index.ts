@@ -491,9 +491,22 @@ export class Burger {
             // Get the current middleware
             const result = await middlewares[i](request);
 
-            // If the result is a response, return it
+            // If the result is a response
             if (result instanceof Response) {
-                return result; // Short-circuit with a response
+                // Short-circuit with a response, but still run collected after middlewares (e.g., CORS)
+                let response = result;
+                // Fast paths for after functions
+                if (afterCount === 0) {
+                    return response;
+                }
+                if (afterCount === 1) {
+                    return afterStack[0](response);
+                }
+                // Apply after middlewares in reverse order (LIFO)
+                for (let j = afterCount - 1; j >= 0; j--) {
+                    response = await afterStack[j](response);
+                }
+                return response;
             }
             // If the result is a function, save it to the afterStack
             else if (typeof result === 'function') {

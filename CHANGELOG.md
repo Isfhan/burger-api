@@ -1,24 +1,36 @@
 ## 📣 Release Notes
 
-### Version 0.5.0 (October 28, 2025)
+### Version 0.5.0 (October 30, 2025)
 
 -   🔧 **Auto-injected OPTIONS handler for CORS preflight:**
+
     -   Automatically injects an OPTIONS handler for CORS preflight when needed
-    -   Only injects if the route defines any preflight-triggering methods and lacks an OPTIONS handler
+    -   Only injects if the route defines any preflight-triggering methods and
+        lacks an OPTIONS handler
     -   Injects a minimal OPTIONS handler that returns a 204 No Content response
-    -   Works for all HTTP methods that trigger CORS preflight (POST, PUT, DELETE, PATCH)
+    -   Works for all HTTP methods that trigger CORS preflight (POST, PUT,
+        DELETE, PATCH)
     -   Does not inject if the route already has an OPTIONS handler
+
+-   🔄 **Improved response handling in middleware (after middlewares):**
+    -   After middlewares now run even if the current middleware already
+        returned a response
+    -   After middlewares run in reverse order to make changing the response
+        easier and to help with CORS
 
 ### Version 0.4.0 (October 21, 2025)
 
 -   🎯 **Wildcard Routes:**
-    -   Added wildcard routes using `[...]` folder name - matches any path after it
+    -   Added wildcard routes using `[...]` folder name - matches any path after
+        it
     -   Create routes that handle multiple path segments automatically
     -   Access all matched path parts through `wildcardParams` in your request
-    -   Routes are matched in order: exact paths first, then dynamic routes (like `[id]`), then wildcards last
+    -   Routes are matched in order: exact paths first, then dynamic routes
+        (like `[id]`), then wildcards last
     -   Works inside dynamic routes too (example: `/api/users/[userId]/[...]`)
     -   View wildcard routes in OpenAPI docs and Swagger UI
-    -   Added easy-to-follow examples showing different ways to use wildcard routes
+    -   Added easy-to-follow examples showing different ways to use wildcard
+        routes
 
 ### Version 0.3.0 (August 15, 2025)
 
