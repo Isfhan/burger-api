@@ -8,10 +8,10 @@ import {
     normalizePath,
     compareRoutes,
     ROUTE_CONSTANTS,
-} from '@utils';
+} from '../utils/index';
 
 // Import types
-import type { PageDefinition } from '@burgerTypes';
+import type { PageDefinition } from '../types/index';
 
 /**
  * PageRouter class for handling file-based page routing.

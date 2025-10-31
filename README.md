@@ -5,7 +5,7 @@
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -66,9 +66,9 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.5.0 (October 30, 2025)
+### Latest Version: 0.5.0 (November 1, 2025)
 
--   🔧 **Auto-injected OPTIONS handler for CORS preflight:**
+-   🌟 **Feature:** Auto-injected OPTIONS handler for CORS preflight:
 
     -   Automatically injects an OPTIONS handler for CORS preflight when needed
     -   Only injects if the route defines any preflight-triggering methods and
@@ -78,15 +78,21 @@ burger-api is built to offer a robust developer experience through:
         DELETE, PATCH)
     -   Does not inject if the route already has an OPTIONS handler
 
--   🔄 **Improved response handling in middleware (after middlewares):**
+-   🌟 **Feature:** Improved response handling in middleware (after
+    middlewares):
+
     -   After middlewares now run even if the current middleware already
         returned a response
     -   After middlewares run in reverse order to make changing the response
         easier and to help with CORS
 
+-   🐛 **Bug Fix:** Fixed TypeScript type resolution for package consumers:
+    -   Users now get full IntelliSense, autocomplete, and type safety out of
+        the box
+
 ### Previous Version: 0.4.0 (October 21, 2025)
 
--   🎯 **Wildcard Routes:**
+-   🌟 **Feature:** Wildcard Routes:
     -   Added wildcard routes using `[...]` folder name - matches any path after
         it
     -   Create routes that handle multiple path segments automatically
@@ -98,7 +104,7 @@ burger-api is built to offer a robust developer experience through:
 
 ### Previous Version: 0.3.0 (August 15, 2025)
 
--   🔧 **Updated Zod to version 4:**
+-   🌟 **Feature:** Updated Zod to version 4:
     -   Updated Zod version from 3.x to 4.x
     -   Updated built-in request validation middleware to use Zod 4
     -   Updated and better request validation middleware error handling

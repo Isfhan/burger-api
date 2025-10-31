@@ -1,4 +1,4 @@
-import type { PageDefinition, RouteDefinition, TrieNode } from '@burgerTypes';
+import type { PageDefinition, RouteDefinition, TrieNode } from '../types/index';
 
 /**
  * Constants for route handling.

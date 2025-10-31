@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerNext, BurgerRequest, Middleware } from '@src';
+import type { BurgerNext, BurgerRequest, Middleware } from '../../../../../src/index';
 
 // Export a schema for GET requests.
 export const schema = {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../../src/index';
 
 // Dummy users data
 const users = [

@@ -213,9 +213,9 @@ export interface RouteDefinition {
  */
 export type RouteSchema = {
     [method: string]: {
-        params?: z.ZodObject<unknown, unknown>;
-        query?: z.ZodObject<unknown, unknown>;
-        body?: z.ZodObject<unknown, unknown>;
+        params?: z.ZodObject<any, any>;
+        query?: z.ZodObject<any, any>;
+        body?: z.ZodObject<any, any>;
     };
 };
 

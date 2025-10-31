@@ -8,7 +8,7 @@ import {
     normalizePath,
     ROUTE_CONSTANTS,
     HTTP_METHODS,
-} from '@utils';
+} from '../utils/index';
 
 // Import types
 import type {
@@ -16,7 +16,7 @@ import type {
     RequestHandler,
     RouteDefinition,
     TrieNode,
-} from '@burgerTypes';
+} from '../types/index';
 
 /**
  * ApiRouter class for handling file-based routing.

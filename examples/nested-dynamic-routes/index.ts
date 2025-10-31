@@ -1,4 +1,4 @@
-import { Burger, setDir } from '@src';
+import { Burger, setDir } from '../../src/index';
 
 // Simple test example for nested dynamic routes with Zod validation
 const burger = new Burger({

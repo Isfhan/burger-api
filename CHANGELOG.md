@@ -1,8 +1,8 @@
 ## 📣 Release Notes
 
-### Version 0.5.0 (October 30, 2025)
+### Version 0.5.0 (November 1, 2025)
 
--   🔧 **Auto-injected OPTIONS handler for CORS preflight:**
+-   🌟 **Feature:** Auto-injected OPTIONS handler for CORS preflight:
 
     -   Automatically injects an OPTIONS handler for CORS preflight when needed
     -   Only injects if the route defines any preflight-triggering methods and
@@ -12,11 +12,23 @@
         DELETE, PATCH)
     -   Does not inject if the route already has an OPTIONS handler
 
--   🔄 **Improved response handling in middleware (after middlewares):**
+-   🌟 **Feature:** Improved response handling in middleware (after
+    middlewares):
+
     -   After middlewares now run even if the current middleware already
         returned a response
     -   After middlewares run in reverse order to make changing the response
         easier and to help with CORS
+
+-   🐛 **Bug Fix:** Fixed TypeScript type resolution for package consumers:
+    -   Users now get full IntelliSense, autocomplete, and type safety out of
+        the box
+    -   Improved build process by removing `tsc-alias` dependency
+    -   Converted `src/types/index.d.ts` to `src/types/index.ts` for proper
+        emission
+    -   Updated all 49 files across `src/` and `examples/` folders
+    -   Build is now faster and more reliable
+    -   Universal compatibility across Bun
 
 ### Version 0.4.0 (October 21, 2025)
 
