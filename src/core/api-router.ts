@@ -8,7 +8,7 @@ import {
     normalizePath,
     ROUTE_CONSTANTS,
     HTTP_METHODS,
-} from '@utils';
+} from '../utils/index';
 
 // Import types
 import type {
@@ -16,7 +16,7 @@ import type {
     RequestHandler,
     RouteDefinition,
     TrieNode,
-} from '@burgerTypes';
+} from '../types/index';
 
 /**
  * ApiRouter class for handling file-based routing.
@@ -210,6 +210,26 @@ export class ApiRouter {
                 if (typeof routeModule[method] === 'function') {
                     handlers[method] = routeModule[method];
                 }
+            }
+
+            // Auto-inject minimal OPTIONS handler for CORS preflight when needed
+            // Only if route defines any preflight-triggering methods and lacks an OPTIONS handler
+            const PREFLIGHT_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'] as const;
+            let hasPreflightMethods = false;
+            // Manual loop is slightly faster than Array.prototype.some in tight paths
+            for (let i = 0; i < PREFLIGHT_METHODS.length; i++) {
+                if (handlers[PREFLIGHT_METHODS[i]]) {
+                    hasPreflightMethods = true;
+                    break;
+                }
+            }
+
+            // If the route defines any preflight-triggering methods and lacks an OPTIONS handler, auto-add an OPTIONS handler
+            if (hasPreflightMethods && typeof handlers.OPTIONS !== 'function') {
+                // if (process.env.NODE_ENV !== 'production') {
+                //     console.debug('Auto-added OPTIONS handler for route:', routePath);
+                // }
+                handlers.OPTIONS = () => new Response(null, { status: 204 });
             }
 
             const routeDef: RouteDefinition = {

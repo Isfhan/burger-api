@@ -4,7 +4,7 @@ import type {
     Middleware,
     BurgerRequest,
     BurgerNext,
-} from '@burgerTypes';
+} from '../types/index';
 
 /**
  * createValidationMiddleware:

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerRequest, BurgerNext, Middleware } from '@src';
+import type { BurgerRequest, BurgerNext, Middleware } from '../../../../src/index';
 
 // OpenAPI Metadata
 // Developers can provide custom metadata to enrich the docs.

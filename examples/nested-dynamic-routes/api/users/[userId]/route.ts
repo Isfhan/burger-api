@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../../src/index';
 
 export const schema = {
     get: {

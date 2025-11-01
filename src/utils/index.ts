@@ -7,7 +7,7 @@ export {
     compareRoutes,
     getRouteSpecificity,
     collectRoutes,
-} from '@utils/routing.js';
+} from './routing';
 
 /**
  * Resolves the given path to the specified directory.

@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../src/index';
 
 export async function GET(req: BurgerRequest) {
     return Response.json({
