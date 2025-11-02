@@ -127,7 +127,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         enforceHttps = false,
     } = options;
 
-    // 🔒 --- Configuration Validation (compile-time) ---
+    // --- Configuration Validation (compile-time) ---
     if (credentials && origin === '*') {
         throw new Error(
             '[CORS] Invalid config: cannot use credentials with "*" origin.'
@@ -144,7 +144,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         );
     }
 
-    // ⚡ --- Pre-compute expensive operations ---
+    // --- Pre-compute expensive operations ---
     const isWildcard = origin === '*';
     const isStringOrigin = typeof origin === 'string';
     const isArrayOrigin = Array.isArray(origin);
@@ -201,28 +201,16 @@ export function cors(options: CorsOptions = {}): Middleware {
     return (req: BurgerRequest): BurgerNext => {
         const requestOrigin = req.headers.get('Origin');
 
-        // ⚡ Fast path: no origin header
+        /**
+         * Fast path: no origin header (same-origin request)
+         * Same-origin requests don't need CORS headers - let them pass through
+         */
         if (!requestOrigin) {
-            if (isWildcard) {
-                return handlePreflightOrResponse(
-                    req,
-                    '*',
-                    preflightHeadersBase,
-                    credentialsHeader,
-                    exposedHeadersHeader,
-                    varyHeader,
-                    debug
-                );
-            }
-            // No origin but not wildcard - reject
-            if (debug) console.warn('[CORS] Rejected: no origin header');
-            return new Response(originNotAllowedError, {
-                status: 403,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            // Return undefined to pass through without CORS headers
+            return undefined;
         }
 
-        // ⚡ Fast path: wildcard origin
+        // Fast path: wildcard origin
         if (isWildcard) {
             return handlePreflightOrResponse(
                 req,
@@ -235,7 +223,7 @@ export function cors(options: CorsOptions = {}): Middleware {
             );
         }
 
-        // ⚡ HTTPS enforcement check (early exit)
+        // HTTPS enforcement check (early exit)
         if (httpRegex && httpRegex.test(requestOrigin)) {
             if (debug)
                 console.warn(
@@ -247,27 +235,51 @@ export function cors(options: CorsOptions = {}): Middleware {
             });
         }
 
-        // ⚡ Determine allowed origin with optimized branching
+        // Validate origin is not empty (after trimming)
+        const trimmedOrigin = requestOrigin.trim();
+        if (!trimmedOrigin) {
+            if (debug) console.warn('[CORS] Rejected: empty origin header');
+            return new Response(originNotAllowedError, {
+                status: 403,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Determine allowed origin with optimized branching
         let allowedOrigin: string | null = null;
-        const requestOriginLower = requestOrigin.toLowerCase();
+        const requestTrimmedOriginLower = trimmedOrigin.toLowerCase();
 
         if (isStringOrigin) {
             // Single string origin - direct comparison
             allowedOrigin =
-                stringOriginLower === requestOriginLower ? requestOrigin : null;
+                stringOriginLower === requestTrimmedOriginLower
+                    ? trimmedOrigin
+                    : null;
         } else if (isArrayOrigin) {
             // Array origin - use pre-computed lowercase array
-            allowedOrigin = originArrayLower!.includes(requestOriginLower)
-                ? requestOrigin
+            // Safe assertion: isArrayOrigin guarantees originArrayLower is non-null
+            allowedOrigin = originArrayLower!.includes(
+                requestTrimmedOriginLower
+            )
+                ? trimmedOrigin
                 : null;
         } else if (isFunctionOrigin) {
-            // Function origin - call once
-            allowedOrigin = origin(requestOrigin) ? requestOrigin : null;
+            // Function origin - call once with error handling
+            try {
+                allowedOrigin = origin(trimmedOrigin) ? trimmedOrigin : null;
+            } catch (error) {
+                if (debug) {
+                    console.warn(
+                        `[CORS] Origin validation function threw error: ${error}`
+                    );
+                }
+                allowedOrigin = null;
+            }
         }
 
-        // ⚡ Reject invalid origins
+        // Reject invalid origins
         if (!allowedOrigin) {
-            if (debug) console.warn(`[CORS] Rejected origin: ${requestOrigin}`);
+            if (debug) console.warn(`[CORS] Rejected origin: ${trimmedOrigin}`);
             return new Response(originNotAllowedError, {
                 status: 403,
                 headers: { 'Content-Type': 'application/json' },
@@ -285,7 +297,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         );
     };
 
-    // ⚡ --- Optimized preflight and response handler ---
+    // --- Optimized preflight and response handler ---
     function handlePreflightOrResponse(
         req: BurgerRequest,
         allowedOrigin: string,
@@ -295,7 +307,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         varyHeader: Record<string, string>,
         debug: boolean
     ): BurgerNext {
-        // ⚡ Preflight request optimization
+        // --- Preflight request optimization ---
         if (req.method === 'OPTIONS') {
             // Optimize header parsing - avoid unnecessary operations
             const requestedHeadersRaw = req.headers.get(
@@ -339,7 +351,7 @@ export function cors(options: CorsOptions = {}): Middleware {
                 });
             }
 
-            // ⚡ Build response headers efficiently
+            // Build response headers efficiently
             const preflightHeaders = {
                 'Access-Control-Allow-Origin': allowedOrigin,
                 'Access-Control-Allow-Headers': requestedHeaders.join(', '),
@@ -355,11 +367,11 @@ export function cors(options: CorsOptions = {}): Middleware {
             });
         }
 
-        // ⚡ Normal request - optimized response transformation
+        // Normal request - optimized response transformation
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
 
-            // ⚡ Set headers in optimal order (most common first)
+            // Set headers in optimal order (most common first)
             headers.set('Access-Control-Allow-Origin', allowedOrigin);
             headers.set('Access-Control-Allow-Methods', methodsString);
             headers.set('Access-Control-Allow-Headers', allowedHeadersString);
@@ -389,7 +401,7 @@ export function cors(options: CorsOptions = {}): Middleware {
                 });
             }
 
-            // ⚡ Reuse response body stream for better memory efficiency
+            // Reuse response body stream for better memory efficiency
             return new Response(response.body, {
                 status: response.status,
                 statusText: response.statusText,

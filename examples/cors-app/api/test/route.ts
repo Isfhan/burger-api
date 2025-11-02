@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../src/index';
 
 // OpenAPI Metadata
 export const openapi = {

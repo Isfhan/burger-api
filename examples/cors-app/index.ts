@@ -1,8 +1,8 @@
 // Import stuff from burger-api
-import { Burger, setDir } from '@src';
+import { Burger, setDir } from '../../src/index';
 
 // Import middleware
-import { cors } from '@ecosystem/middlewares/cors/cors';
+import { cors } from '../../ecosystem/middlewares/cors/cors';
 
 // Create Burger instance
 const burger = new Burger({
