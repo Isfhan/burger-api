@@ -11,7 +11,7 @@ import {
 } from 'zod';
 
 // Import types
-import type { ServerOptions, RouteDefinition } from '@burgerTypes';
+import type { ServerOptions, RouteDefinition } from '../types/index';
 
 /**
  * Maps a Zod type to an OpenAPI schema type.

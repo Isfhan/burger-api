@@ -2,9 +2,9 @@
 import { serve } from 'bun';
 
 // Import stuff from utils
-import { errorResponse } from '@utils/error.js';
+import { errorResponse } from '../utils/error';
 
-import type { ServerOptions, FetchHandler } from '@burgerTypes';
+import type { ServerOptions, FetchHandler } from '../types/index';
 
 export class Server {
     private options: ServerOptions;

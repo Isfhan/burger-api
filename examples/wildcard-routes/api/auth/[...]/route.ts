@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../../src/index';
 
 /**
  * Documentation wildcard route (no static sibling)

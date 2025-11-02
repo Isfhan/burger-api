@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../../src/index';
 
 /**
  * Admin wildcard route example

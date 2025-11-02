@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../../../src/index';
 
 export function GET(req: BurgerRequest) {
     const query = new URL(req.url).searchParams;

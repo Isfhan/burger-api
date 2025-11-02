@@ -27,20 +27,7 @@
     // Project settings
     "rootDir": ".",
     "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "@src/*": ["src/*"],
-      "@core/*": ["src/core/*"],
-      "@utils/*": ["src/utils/*"],  
-      "@middleware/*": ["src/middleware/*"],
-      "@burgerTypes/*": ["src/types/*"],
-      "@src": ["src/index.js"],
-      "@core": ["src/core/index.js"],
-      "@utils": ["src/utils/index.js"],
-      "@middleware": ["src/middleware/index.js"],
-      "@burgerTypes": ["src/types/index.js"],
-      "@ecosystem/*": ["ecosystem/*"],
-    }
+    "baseUrl": "."
   },
   "include": ["src/**/*", "tests/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist"]

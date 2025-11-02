@@ -1,4 +1,4 @@
-import type { BurgerRequest, Middleware, BurgerNext } from '@src';
+import type { BurgerRequest, Middleware, BurgerNext } from '../../../src/index';
 
 // Global middleware example: a simple logger.
 export const globalLogger: Middleware = (

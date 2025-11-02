@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '@src';
+import type { BurgerRequest } from '../../../../src/index';
 
 /**
  * Static admin route example

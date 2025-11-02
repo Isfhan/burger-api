@@ -1,5 +1,5 @@
 // Import stuff from burger-api
-import { Burger, setDir } from '@src';
+import { Burger, setDir } from '../../src/index';
 
 // Import middleware
 import { globalLogger } from './middleware/logger';

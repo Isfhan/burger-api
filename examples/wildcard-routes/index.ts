@@ -1,5 +1,5 @@
 // Wildcard Routes Example
-import { Burger, setDir } from '@src';
+import { Burger, setDir } from '../../src/index';
 
 // Create a new burger instance with wildcard routing
 const burger = new Burger({

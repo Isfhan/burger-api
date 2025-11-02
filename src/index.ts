@@ -1,16 +1,16 @@
 // Import stuff  from core
-import { Server } from '@core/server.js';
-import { ApiRouter } from '@core/api-router.js';
-import { PageRouter } from '@core/page-router.js';
-import { generateOpenAPIDocument } from '@core/openapi.js';
-import { swaggerHtml } from '@core/swagger-ui.js';
+import { Server } from './core/server';
+import { ApiRouter } from './core/api-router';
+import { PageRouter } from './core/page-router';
+import { generateOpenAPIDocument } from './core/openapi';
+import { swaggerHtml } from './core/swagger-ui';
 
 // Import utils
-import { collectRoutes } from '@utils';
-import { METHOD_NOT_ALLOWED, NOT_FOUND, OPENAPI_ERROR } from '@utils/response';
+import { collectRoutes } from './utils/index';
+import { METHOD_NOT_ALLOWED, NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 
 // Import middleware
-import { createValidationMiddleware } from '@middleware/validator.js';
+import { createValidationMiddleware } from './middleware/validator';
 
 // Import types
 import type {
@@ -18,7 +18,7 @@ import type {
     Middleware,
     BurgerRequest,
     RequestHandler,
-} from '@burgerTypes';
+} from './types/index';
 import type { HTMLBundle } from 'bun';
 
 export class Burger {
@@ -491,9 +491,22 @@ export class Burger {
             // Get the current middleware
             const result = await middlewares[i](request);
 
-            // If the result is a response, return it
+            // If the result is a response
             if (result instanceof Response) {
-                return result; // Short-circuit with a response
+                // Short-circuit with a response, but still run collected after middlewares (e.g., CORS)
+                let response = result;
+                // Fast paths for after functions
+                if (afterCount === 0) {
+                    return response;
+                }
+                if (afterCount === 1) {
+                    return afterStack[0](response);
+                }
+                // Apply after middlewares in reverse order (LIFO)
+                for (let j = afterCount - 1; j >= 0; j--) {
+                    response = await afterStack[j](response);
+                }
+                return response;
             }
             // If the result is a function, save it to the afterStack
             else if (typeof result === 'function') {
@@ -561,7 +574,7 @@ export class Burger {
 }
 
 // Export utils
-export { setDir } from '@utils';
+export { setDir } from './utils/index';
 
 // Export types
 export type {
@@ -571,4 +584,4 @@ export type {
     BurgerNext,
     Middleware,
     openapi,
-} from '@burgerTypes';
+} from './types/index';
