@@ -170,6 +170,18 @@ export function jwt(options: JWTAuthOptions): Middleware {
 }
 
 /**
+ * Decode a base64url-encoded string to a UTF-8 string.
+ * Uses Bun's native base64url decoding support.
+ */
+function decodeBase64URL(base64url: string): string {
+    // Decode the Base64URL string into a Uint8Array using Bun's native support
+    const uint8Array = Uint8Array.fromBase64(base64url, { alphabet: 'base64url' });
+    
+    // Convert the Uint8Array to a UTF-8 string
+    return new TextDecoder('utf-8').decode(uint8Array);
+}
+
+/**
  * Verify and decode a JWT token.
  * This is a simplified implementation. For production, consider using a library like `jose`.
  */
@@ -185,14 +197,14 @@ async function verifyJWT(
 
     const [headerB64, payloadB64, signatureB64] = parts;
 
-    // Decode header
-    const header = JSON.parse(atob(headerB64));
+    // Decode header (base64url to JSON)
+    const header = JSON.parse(decodeBase64URL(headerB64));
     if (header.alg !== algorithm) {
         throw new Error(`Algorithm mismatch: expected ${algorithm}, got ${header.alg}`);
     }
 
-    // Decode payload
-    const payload: JWTPayload = JSON.parse(atob(payloadB64));
+    // Decode payload (base64url to JSON)
+    const payload: JWTPayload = JSON.parse(decodeBase64URL(payloadB64));
 
     // Verify signature
     const data = `${headerB64}.${payloadB64}`;
