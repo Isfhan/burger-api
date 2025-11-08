@@ -6,7 +6,7 @@
     "declaration": true,
     "declarationDir": "./dist",
     "outDir": "./dist",
-    "removeComments": true
+    // "removeComments": true
   },
   "include": ["src/**/*"]
 }

@@ -66,11 +66,10 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.5.1 (December 2025)
+### Latest Version: 0.5.2 (November 9, 2025)
 
 -   🔧 **Internal Improvements:**
     -   Refactored wildcard parameter extraction logic into reusable utility functions
-    -   Enabled `removeComments` in build configuration to reduce bundle size
     -   Added test suites and README files for all example projects
 
 ### Previous Version: 0.5.0 (November 1, 2025)
