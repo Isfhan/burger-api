@@ -1,5 +1,11 @@
 ## 📣 Release Notes
 
+### Version 0.5.2 (November 9, 2025)
+
+-   🔧 **Internal Improvements:**
+    -   Refactored wildcard parameter extraction logic into reusable utility functions
+    -   Added test suites and README files for all example projects
+
 ### Version 0.5.0 (November 1, 2025)
 
 -   🌟 **Feature:** Auto-injected OPTIONS handler for CORS preflight:

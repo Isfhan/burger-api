@@ -5,7 +5,7 @@
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.5.1-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -66,7 +66,13 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.5.0 (November 1, 2025)
+### Latest Version: 0.5.2 (November 9, 2025)
+
+-   🔧 **Internal Improvements:**
+    -   Refactored wildcard parameter extraction logic into reusable utility functions
+    -   Added test suites and README files for all example projects
+
+### Previous Version: 0.5.0 (November 1, 2025)
 
 -   🌟 **Feature:** Auto-injected OPTIONS handler for CORS preflight:
 
