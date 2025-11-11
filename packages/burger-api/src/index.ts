@@ -194,82 +194,127 @@ export class Burger {
             const totalMiddlewareCount =
                 globalMiddlewareLen + (hasSchema ? 1 : 0) + routeMiddlewareLen;
 
-            // Create optimized route handler
+            // Pre-compute wildcard info once (used in all paths)
+            const isWildcard = route.isWildcard;
+            const baseSegmentCount = isWildcard
+                ? path.split('/').filter(Boolean).length - 1
+                : 0;
+
+            // Create optimized route handler based on middleware count
             if (totalMiddlewareCount === 0) {
-                // Ultra-fast path: no middleware
-                // Pre-compute wildcard segment count for faster extraction
-                const isWildcard = route.isWildcard;
-                // Calculate how many segments come before the wildcard
-                // E.g., "/api/users/:userId/*" has 3 segments before wildcard (api, users, :userId)
-                const baseSegmentCount = isWildcard
-                    ? path.split('/').filter(Boolean).length - 1 // Subtract 1 for the * itself
-                    : 0;
-
-                routes[path] = (request: BurgerRequest) => {
-                    // Extract wildcard params if this is a wildcard route
-                    if (isWildcard) {
+                // Ultra-fast path: no middleware at all
+                // Inline everything for maximum speed
+                if (isWildcard) {
+                    // Wildcard route with no middleware
+                    routes[path] = (request: BurgerRequest) => {
                         const pathname = extractPathnameFromUrl(request.url);
-                        extractWildcardParams(request, pathname, baseSegmentCount);
-                    }
-
-                    const handler = handlers[request.method];
-                    return handler ? handler(request) : this.METHOD_NOT_ALLOWED;
-                };
+                        extractWildcardParams(
+                            request,
+                            pathname,
+                            baseSegmentCount
+                        );
+                        const handler = handlers[request.method];
+                        return handler
+                            ? handler(request)
+                            : this.METHOD_NOT_ALLOWED;
+                    };
+                } else {
+                    // Regular route with no middleware (most common case)
+                    routes[path] = (request: BurgerRequest) => {
+                        const handler = handlers[request.method];
+                        return handler
+                            ? handler(request)
+                            : this.METHOD_NOT_ALLOWED;
+                    };
+                }
             } else {
-                // Pre-compute middleware array with known size
+                // Pre-compute middleware array with exact size (AOT optimization)
                 const middlewares = new Array<Middleware>(totalMiddlewareCount);
+                let idx = 0;
 
-                // Initialize index to track the current middleware
-                let index = 0;
-
-                // Copy global middleware (most common case)
+                // Copy global middleware (manual loop is faster than spread/concat)
                 for (let j = 0; j < globalMiddlewareLen; j++) {
-                    middlewares[index++] = globalMiddleware[j];
+                    middlewares[idx++] = globalMiddleware[j];
                 }
 
                 // Add validation middleware if needed
                 if (hasSchema) {
-                    middlewares[index++] = createValidationMiddleware(schema);
+                    middlewares[idx++] = createValidationMiddleware(schema);
                 }
 
                 // Add route-specific middlewares
                 if (routeMiddleware) {
                     for (let j = 0; j < routeMiddlewareLen; j++) {
-                        middlewares[index++] = routeMiddleware[j];
+                        middlewares[idx++] = routeMiddleware[j];
                     }
                 }
 
-                /**
-                 * ================================================
-                 * Pre-compute the required functionality end
-                 * ================================================
-                 */
+                // Create specialized handler based on middleware count
+                if (totalMiddlewareCount === 1) {
+                    // Single middleware fast path (common: just CORS or just auth)
+                    const singleMiddleware = middlewares[0];
 
-                // Pre-compute wildcard segment count for faster extraction
-                const isWildcard = route.isWildcard;
-                // Calculate how many segments come before the wildcard
-                // E.g., "/api/users/:userId/*" has 3 segments before wildcard (api, users, :userId)
-                const baseSegmentCount = isWildcard
-                    ? path.split('/').filter(Boolean).length - 1 // Subtract 1 for the * itself
-                    : 0;
-
-                // Create handler with middleware
-                routes[path] = (request: BurgerRequest) => {
-                    // Extract wildcard params if this is a wildcard route
                     if (isWildcard) {
-                        const pathname = extractPathnameFromUrl(request.url);
-                        extractWildcardParams(request, pathname, baseSegmentCount);
+                        routes[path] = (request: BurgerRequest) => {
+                            const pathname = extractPathnameFromUrl(
+                                request.url
+                            );
+                            extractWildcardParams(
+                                request,
+                                pathname,
+                                baseSegmentCount
+                            );
+                            const handler = handlers[request.method];
+                            if (!handler) return this.METHOD_NOT_ALLOWED;
+                            return this.processSingleMiddleware(
+                                request,
+                                singleMiddleware,
+                                handler
+                            );
+                        };
+                    } else {
+                        routes[path] = (request: BurgerRequest) => {
+                            const handler = handlers[request.method];
+                            if (!handler) return this.METHOD_NOT_ALLOWED;
+                            return this.processSingleMiddleware(
+                                request,
+                                singleMiddleware,
+                                handler
+                            );
+                        };
                     }
-
-                    const handler = handlers[request.method];
-                    if (!handler) return this.METHOD_NOT_ALLOWED;
-
-                    return this.processMiddleware(
-                        request,
-                        middlewares,
-                        handler
-                    );
-                };
+                } else {
+                    // Multiple middlewares (general case)
+                    if (isWildcard) {
+                        routes[path] = (request: BurgerRequest) => {
+                            const pathname = extractPathnameFromUrl(
+                                request.url
+                            );
+                            extractWildcardParams(
+                                request,
+                                pathname,
+                                baseSegmentCount
+                            );
+                            const handler = handlers[request.method];
+                            if (!handler) return this.METHOD_NOT_ALLOWED;
+                            return this.processMiddleware(
+                                request,
+                                middlewares,
+                                handler
+                            );
+                        };
+                    } else {
+                        routes[path] = (request: BurgerRequest) => {
+                            const handler = handlers[request.method];
+                            if (!handler) return this.METHOD_NOT_ALLOWED;
+                            return this.processMiddleware(
+                                request,
+                                middlewares,
+                                handler
+                            );
+                        };
+                    }
+                }
             }
 
             // For wildcard routes, also register the base path
@@ -303,93 +348,137 @@ export class Burger {
     }
 
     /**
-     * Process the middleware and handler
+     * Process single middleware
      * @param request - The request object
-     * @param middlewares - The middleware array
+     * @param middleware - The middleware function
      * @param handler - The handler function
      * @returns A promise that resolves to a response
+     */
+    private async processSingleMiddleware(
+        request: BurgerRequest,
+        middleware: Middleware,
+        handler: RequestHandler
+    ): Promise<Response> {
+        const result = await middleware(request);
+
+        // Short-circuit with Response
+        if (result instanceof Response) {
+            return result;
+        }
+
+        // Transform response after handler
+        if (typeof result === 'function') {
+            return result(await handler(request));
+        }
+
+        // Continue to handler
+        return handler(request);
+    }
+
+    /**
+     * Process middleware and handler
+     *
+     * How it works:
+     * 1. Run each middleware in order
+     * 2. If middleware returns Response → stop and send that response (but still apply "after" functions)
+     * 3. If middleware returns undefined → continue to next middleware
+     * 4. If middleware returns function → save it to transform the final response later
+     * 5. After all middlewares, run the handler
+     * 6. Apply all saved "after" functions to the response (in reverse order)
+     *
+     * Performance optimizations:
+     * - Pre-allocated array for "after" functions (avoids dynamic resizing)
+     * - Fast paths for 0, 1, and 2 middlewares (most common cases)
+     * - Manual loop unrolling for small counts
+     * - Minimal branching in hot path
      */
     private async processMiddleware(
         request: BurgerRequest,
         middlewares: Middleware[],
         handler: RequestHandler
     ): Promise<Response> {
-        // Get the length of the middleware array
-        const middlewareLen = middlewares.length;
+        const len = middlewares.length;
 
-        // Fast path: single middleware with no after functions
-        if (middlewareLen === 1) {
-            // Get the first middleware
-            const result = await middlewares[0](request);
-            // If the result is a response, return it
-            if (result instanceof Response) {
-                return result;
+        // Fast path: two middlewares (common: CORS + logger, or auth + logger)
+        if (len === 2) {
+            // First middleware
+            const result1 = await middlewares[0](request);
+            if (result1 instanceof Response) {
+                return result1;
             }
-            // If the result is not a function, return the handler
-            if (typeof result !== 'function') {
-                return handler(request);
+
+            // Second middleware
+            const result2 = await middlewares[1](request);
+            if (result2 instanceof Response) {
+                // Apply first middleware's after function if exists
+                if (typeof result1 === 'function') {
+                    return result1(result2);
+                }
+                return result2;
             }
-            // If the result is a function, return the result of the handler
-            return result(await handler(request));
+
+            // Run handler
+            let response = await handler(request);
+
+            // Apply after functions in reverse order (manual unroll)
+            if (typeof result2 === 'function') {
+                response = await result2(response);
+            }
+            if (typeof result1 === 'function') {
+                response = await result1(response);
+            }
+
+            return response;
         }
 
-        // Stack to store "after" functions
-        // Regular path with pre-allocated afterStack
-        const afterStack = new Array<(response: Response) => Promise<Response>>(
-            middlewareLen
-        );
-
-        // Initialize the after middleware counter
+        // General path: 3+ middlewares (less common)
+        // Pre-allocate array with exact size to avoid dynamic resizing
+        const afterStack = new Array(len);
         let afterCount = 0;
 
-        // Process "before" logic
-        for (let i = 0; i < middlewareLen; i++) {
-            // Get the current middleware
+        // Run each middleware
+        for (let i = 0; i < len; i++) {
             const result = await middlewares[i](request);
 
-            // If the result is a response
+            // Short-circuit with Response (check first - most common early exit)
             if (result instanceof Response) {
-                // Short-circuit with a response, but still run collected after middlewares (e.g., CORS)
+                // Apply collected "after" functions in reverse
+                if (afterCount === 0) return result;
+                if (afterCount === 1) return afterStack[0](result);
+
+                // Multiple after functions
                 let response = result;
-                // Fast paths for after functions
-                if (afterCount === 0) {
-                    return response;
-                }
-                if (afterCount === 1) {
-                    return afterStack[0](response);
-                }
-                // Apply after middlewares in reverse order (LIFO)
                 for (let j = afterCount - 1; j >= 0; j--) {
                     response = await afterStack[j](response);
                 }
                 return response;
             }
-            // If the result is a function, save it to the afterStack
-            else if (typeof result === 'function') {
+
+            // Save function for later (check once, no double typeof check)
+            if (typeof result === 'function') {
                 afterStack[afterCount++] = result;
             }
-            // If undefined, proceed to next middleware
+
+            // undefined - continue (implicit, no check needed)
         }
 
-        // Get response from handler
+        // All middlewares passed - run handler
         let response = await handler(request);
 
-        // Fast path: no after functions
-        if (afterCount === 0) {
-            return response;
-        }
-
-        // Fast path: single after function
-        if (afterCount === 1) {
+        // Apply "after" functions in reverse order
+        // Fast paths for common cases
+        if (afterCount === 0) return response;
+        if (afterCount === 1) return afterStack[0](response);
+        if (afterCount === 2) {
+            response = await afterStack[1](response);
             return afterStack[0](response);
         }
 
-        // Process "after" logic in reverse order
+        // General case: 3+ after functions
         for (let i = afterCount - 1; i >= 0; i--) {
             response = await afterStack[i](response);
         }
 
-        // Return the response
         return response;
     }
 

@@ -114,9 +114,9 @@ export interface BurgerRequest<
 
 /**
  * Represents what a middleware can return to control the request flow:
- * - Response: Immediately send this response back to the client
- * - Function: Continue processing, but transform the final response
- * - undefined: Continue to the next middleware or handler
+ * - Response: Stop here, send this response back to the client
+ * - Function(Response): Continue processing, but transform the final response after handler runs
+ * - undefined: I'm done, continue to the next middleware or handler
  */
 export type BurgerNext =
     | Response
@@ -124,11 +124,10 @@ export type BurgerNext =
     | undefined;
 
 /**
- * A middleware function that processes HTTP requests before they reach the final handler.
+ * A middleware function that processes HTTP requests.
  *
  * What middleware can do:
- * - Change the request (add data, modify headers, etc.)
- * - Check if the request is valid
+ * - Check if the request is valid (auth, validation, etc.)
  * - Stop the request by returning a Response
  * - Let the request continue by returning undefined
  * - Transform the final response by returning a function
@@ -136,8 +135,8 @@ export type BurgerNext =
  * @param request - The HTTP request with Burger framework enhancements
  * @returns One of three things:
  *          - Response: Stop here, send this response back
- *          - Function: Continue processing, but transform the final response
- *          - undefined: I'm done, continue to the next step
+ *          - Function: Transform the final response after handler runs
+ *          - undefined: Continue to the next middleware or handler
  */
 export type Middleware =
     | ((request: BurgerRequest) => Promise<BurgerNext>)
