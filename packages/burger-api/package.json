@@ -1,0 +1,89 @@
+{
+  "name": "burger-api",
+  "version": "0.5.2",
+  "author": "Isfhan Ahmed",
+  "type": "module",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --project tsconfig.build.json",
+    "prepare": "bun run build",
+    "test": "bun test",
+    "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
+  },
+  "keywords": [
+    "burger-api",
+    "burger-api-framework",
+    "bun",
+    "bunjs",
+    "bun-framework",
+    "fast-backend",
+    "javascript-backend",
+    "high-performance",
+    "esm",
+    "typescript",
+    "openapi",
+    "swagger-ui",
+    "declarative-routing",
+    "api-framework",
+    "modern-backend",
+    "backend-framework",
+    "server",
+    "bun-native",
+    "js-backend",
+    "fast-api",
+    "scalable-backend",
+    "backend-development",
+    "modern-api",
+    "api-development",
+    "backend-engine",
+    "efficient",
+    "minimalist-backend",
+    "bun-powered",
+    "open-source",
+    "typescript-backend",
+    "performance",
+    "rapid-development",
+    "web-framework",
+    "api-server",
+    "dynamic-routing",
+    "backend-routing",
+    "extensible",
+    "modular",
+    "declarative-api",
+    "lightweight",
+    "contemporary-backend",
+    "fast-javascript",
+    "bun-js-framework",
+    "bun-backend",
+    "bun-api-framework",
+    "pakistan-backend",
+    "pakistan-api-framework",
+    "pakistan-api-server",
+    "pakistan-backend-framework",
+    "pakistan-bunjs-framework",
+    "pakistan-javascript-framework"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isfhan/burger-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/isfhan/burger-api/issues"
+  },
+  "homepage": "https://burger-api.com",
+  "dependencies": {
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

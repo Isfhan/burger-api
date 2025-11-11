@@ -1,140 +1,182 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI logo"/>
+  <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI logo" width="200"/>
 </p>
 
-[![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.5.1-green.svg)](https://github.com/isfhan/burger-api/releases)
+<p align="center">
+  <strong>A modern, high-performance API framework built on Bun.js</strong>
+</p>
 
-**burger-api** is a modern, open source API framework built on
-[Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
-powerful features like built-in middleware, Zod-based schema validation, and
-automatic OpenAPI generation. Designed for high performance and ease-of-use,
-burger-api leverages Bun's native modules to deliver blazing-fast API responses
-while keeping your codebase clean and maintainable.
+<p align="center">
+  <a href="https://github.com/isfhan/burger-api">
+    <img src="https://img.shields.io/badge/under%20development-red.svg" alt="Under Development" />
+  </a>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+  </a>
+  <a href="https://bun.sh">
+    <img src="https://img.shields.io/badge/Bun-1.2.20-black?logo=bun" alt="Bun" />
+  </a>
+  <a href="https://burger-api.com">
+    <img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" />
+  </a>
+</p>
 
-**This project is under active development and should not be used in production
-yet.**
 
-## 📚 Table of Contents
+## 📖 About
 
--   [Overview](#-overview)
--   [Changelog](#-changelog)
--   [What's Coming Next](#-whats-coming-next)
--   [Contributing](#-contributing)
--   [License](#-license)
+This monorepo contains the **burger-api** ecosystem - a modern, open-source API framework built on [Bun.js](https://bun.sh). The framework combines the simplicity of file-based routing with powerful features like built-in middleware, Zod-based schema validation, and automatic OpenAPI generation.
 
-## 📖 Documentation
+**This project is under active development and should not be used in production yet.**
 
-For detailed documentation and examples, visit the
-[BurgerAPI official docs](https://burger-api.com/).
+---
 
-## 🚀 Overview
+## 📦 Packages
 
-burger-api is built to offer a robust developer experience through:
+This monorepo is organized into the following packages:
 
--   ⚡ **Bun-Native Performance:**  
-    Leverages Bun's high-performance HTTP server.
+### 🚀 [`packages/burger-api`](./packages/burger-api)
 
--   📁 **File-Based Routing:**  
-    Automatically registers API routes from your file structure using a clear
-    naming convention.
+The core **burger-api** framework package. This is the main framework that gets published to npm.
 
--   🔄 **Middleware Architecture:**  
-    Supports both global and route-specific middleware.
+#### ✨ Key Features
 
-    -   After middlewares (functions returned by a middleware) run after the
-        route handler.
-    -   They now run even if an earlier middleware returned a Response, so
-        post-processing is reliable.
-    -   They run in reverse order and are useful for adding CORS headers,
-        logging, or tweaking the final Response.
+- ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
+- 📁 **File-Based Routing** - Automatically registers API routes from your file structure
+- 🔄 **Middleware Architecture** - Supports both global and route-specific middleware
+- ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full type safety
+- 📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0 specifications
+- 🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for interactive API docs
 
--   ✅ **Type-Safe Validation:**  
-    Utilizes Zod for request validation, ensuring full type safety and automatic
-    error reporting.
+#### 📚 Documentation
 
--   📚 **Automatic OpenAPI Generation:**  
-    Generates a complete OpenAPI 3.0 specification (with support for tags,
-    summaries, descriptions, operationId, deprecated status, externalDocs, and
-    more) directly from your routes and Zod schemas.
+- **Package README:** [`packages/burger-api/README.md`](./packages/burger-api/README.md)
+- **Official Docs:** [burger-api.com](https://burger-api.com/)
+- **Changelog:** [`packages/burger-api/CHANGELOG.md`](./packages/burger-api/CHANGELOG.md)
 
--   🔍 **Swagger UI Integration:**  
-    Provides an out-of-the-box Swagger UI endpoint for interactive API
-    documentation.
+---
 
-## 📣 Changelog
+### 🛠️ [`packages/cli`](./packages/cli)
 
-### Latest Version: 0.5.2 (November 9, 2025)
+The **Burger API CLI** tool for scaffolding new burger-api projects and providing development utilities.
 
--   🔧 **Internal Improvements:**
-    -   Refactored wildcard parameter extraction logic into reusable utility functions
-    -   Added test suites and README files for all example projects
+**Status:** 🚧 Under development
 
-### Previous Version: 0.5.0 (November 1, 2025)
+**Planned Features:**
+- 🎯 Project scaffolding
+- 📦 Middleware template generation
+- 🔧 Development utilities
+- 📝 Code generation tools
 
--   🌟 **Feature:** Auto-injected OPTIONS handler for CORS preflight:
+---
 
-    -   Automatically injects an OPTIONS handler for CORS preflight when needed
-    -   Only injects if the route defines any preflight-triggering methods and
-        lacks an OPTIONS handler
-    -   Injects a minimal OPTIONS handler that returns a 204 No Content response
-    -   Works for all HTTP methods that trigger CORS preflight (POST, PUT,
-        DELETE, PATCH)
-    -   Does not inject if the route already has an OPTIONS handler
+## 🚀 Quick Start
 
--   🌟 **Feature:** Improved response handling in middleware (after
-    middlewares):
+### Prerequisites
 
-    -   After middlewares now run even if the current middleware already
-        returned a response
-    -   After middlewares run in reverse order to make changing the response
-        easier and to help with CORS
+- [Bun](https://bun.sh) installed (version 1.2.20 or later)
 
--   🐛 **Bug Fix:** Fixed TypeScript type resolution for package consumers:
-    -   Users now get full IntelliSense, autocomplete, and type safety out of
-        the box
+### Installation
 
-### Previous Version: 0.4.0 (October 21, 2025)
+Install dependencies for all packages:
 
--   🌟 **Feature:** Wildcard Routes:
-    -   Added wildcard routes using `[...]` folder name - matches any path after
-        it
-    -   Create routes that handle multiple path segments automatically
-    -   Access all matched path parts through `wildcardParams` in your request
-    -   Routes are matched in order: exact paths first, then dynamic routes
-        (like `[id]`), then wildcards last
-    -   Works inside dynamic routes too (example: `/api/users/[userId]/[...]`)
-    -   View wildcard routes in OpenAPI docs and Swagger UI
+```bash
+bun install
+```
 
-### Previous Version: 0.3.0 (August 15, 2025)
+### Development
 
--   🌟 **Feature:** Updated Zod to version 4:
-    -   Updated Zod version from 3.x to 4.x
-    -   Updated built-in request validation middleware to use Zod 4
-    -   Updated and better request validation middleware error handling
-    -   Removed Zod-to-json-schema dependency and use Zod 4 directly
+#### Work on Individual Packages
 
-For a complete list of changes, please check the [Changelog](CHANGELOG.md) file.
+```bash
+# Work on burger-api framework
+cd packages/burger-api
+bun run dev
 
-## 🎯 What's Coming Next?
+# Work on CLI
+cd packages/cli
+bun run dev
+```
 
-We're actively enhancing burger-api with powerful new features Stay tuned for
-updates as we continue to build and improve burger-api! We're committed to
-making it the best API framework for Bun.js.
+#### Use Workspace Commands from Root
+
+```bash
+# Typecheck burger-api
+bun run typecheck
+
+# Build burger-api
+bun run build
+
+# Test burger-api
+bun run test
+
+# Run burger-api dev server
+bun run dev
+```
+
+---
+
+## 📚 Documentation
+
+- **Framework Documentation:** [`packages/burger-api/README.md`](./packages/burger-api/README.md)
+- **Official Website:** [burger-api.com](https://burger-api.com/)
+- **Publishing Guide:** [`packages/burger-api/PUBLISHING.md`](./packages/burger-api/PUBLISHING.md)
+
+---
+
+## 🏗️ Project Structure
+
+```
+burger-api/
+├── packages/
+│   ├── burger-api/          # Core framework (published to npm)
+│   │   ├── src/             # Source code
+│   │   ├── examples/        # Example projects
+│   │   ├── ecosystem/       # Middleware templates
+│   │   └── dist/            # Build output
+│   └── cli/                 # CLI tool (under development)
+│       └── src/             # CLI source code
+├── package.json              # Workspace root configuration
+└── README.md                 # This file
+```
+
+---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! If you have suggestions or
-improvements, please open an issue or submit a pull request. Let's build
-something amazing together.
+We welcome contributions from the community! Whether it's:
+
+- 🐛 Reporting bugs
+- 💡 Suggesting features
+- 📝 Improving documentation
+- 🔧 Submitting pull requests
+
+Please feel free to open an issue or submit a pull request. Let's build something amazing together!
+
+**Contributing Guidelines:**
+- Check existing issues before creating new ones
+- Follow the existing code style
+- Add tests for new features
+- Update documentation as needed
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
-for details.
+This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE) file for details.
 
-The MIT License is a permissive license that is short and to the point. It lets
-people do anything they want with your code as long as they provide attribution
-back to you and don't hold you liable.
+The MIT License is a permissive license that allows people to do anything with your code as long as they provide attribution back to you and don't hold you liable.
+
+---
+
+## 🔗 Links
+
+- **Website:** [burger-api.com](https://burger-api.com/)
+- **GitHub:** [github.com/isfhan/burger-api](https://github.com/isfhan/burger-api)
+- **Issues:** [github.com/isfhan/burger-api/issues](https://github.com/isfhan/burger-api/issues)
+- **Bun.js:** [bun.sh](https://bun.sh)
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/isfhan">Isfhan Ahmed</a>
+</p>

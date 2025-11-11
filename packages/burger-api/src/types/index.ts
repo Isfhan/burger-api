@@ -159,7 +159,7 @@ export type RequestHandler = (
  */
 export type FetchHandler = (
     request: Request,
-    server?: Server
+    server?: Server<{}>
 ) => Promise<Response> | Response;
 
 export interface RouteDefinition {

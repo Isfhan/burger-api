@@ -2,7 +2,7 @@
 import { Burger, setDir } from '../../src/index';
 
 // Import middleware
-import { cors } from '../../ecosystem/middlewares/cors/cors';
+import { cors } from '../../../../ecosystem/middlewares/cors/cors';
 
 // Create Burger instance
 const burger = new Burger({
@@ -11,7 +11,7 @@ const burger = new Burger({
     apiDir: setDir(__dirname, 'api'),
     globalMiddleware: [
         cors({
-            origin: ['http://localhost:3000'], // Allow only requests from http://localhost:3000
+            origin: ['http://localhost:3000','https://hoppscotch.io'], // Allow only requests from http://localhost:3000
             debug: true,
         }),
     ],
