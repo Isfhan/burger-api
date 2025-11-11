@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI logo" width="200"/>
+  <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI logo"/>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@ This monorepo contains the **burger-api** ecosystem - a modern, open-source API 
 
 **This project is under active development and should not be used in production yet.**
 
----
+
 
 ## 📦 Packages
 
@@ -40,12 +40,13 @@ The core **burger-api** framework package. This is the main framework that gets 
 
 #### ✨ Key Features
 
-- ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
+- ⚡ **Blazing Fast Performance** - Micro-optimized middleware system with AOT compilation
 - 📁 **File-Based Routing** - Automatically registers API routes from your file structure
-- 🔄 **Middleware Architecture** - Supports both global and route-specific middleware
+- 🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+ middlewares
 - ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full type safety
 - 📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0 specifications
 - 🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for interactive API docs
+- 🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy to understand
 
 #### 📚 Documentation
 
@@ -131,12 +132,12 @@ burger-api/
 │   ├── burger-api/          # Core framework (published to npm)
 │   │   ├── src/             # Source code
 │   │   ├── examples/        # Example projects
-│   │   ├── ecosystem/       # Middleware templates
 │   │   └── dist/            # Build output
 │   └── cli/                 # CLI tool (under development)
 │       └── src/             # CLI source code
-├── package.json              # Workspace root configuration
-└── README.md                 # This file
+├── ecosystem/               # Middleware templates (ready-to-use)
+├── package.json             # Workspace root configuration
+└── README.md                # This file
 ```
 
 ---
@@ -162,7 +163,7 @@ Please feel free to open an issue or submit a pull request. Let's build somethin
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](./packages/burger-api/LICENSE) file for details.
 
 The MIT License is a permissive license that allows people to do anything with your code as long as they provide attribution back to you and don't hold you liable.
 
@@ -178,5 +179,5 @@ The MIT License is a permissive license that allows people to do anything with y
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/isfhan">Isfhan Ahmed</a>
+  Made with ❤️ for the Bun.js community by <a href="https://github.com/isfhan">Isfhan Ahmed</a>
 </p>

@@ -5,7 +5,7 @@
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.5.1-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.6.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -42,34 +42,62 @@ burger-api is built to offer a robust developer experience through:
     naming convention.
 
 -   🔄 **Middleware Architecture:**  
-    Supports both global and route-specific middleware.
+    Supports both global and route-specific middleware. Simple, powerful
+    middleware system with three return types:
 
-    -   After middlewares (functions returned by a middleware) run after the
-        route handler.
-    -   They now run even if an earlier middleware returned a Response, so
-        post-processing is reliable.
-    -   They run in reverse order and are useful for adding CORS headers,
-        logging, or tweaking the final Response.
+    -   `Response` - Stop here, send this response
+    -   `Function` - Transform the final response after handler runs
+    -   `undefined` - Continue to next middleware
 
 -   ✅ **Type-Safe Validation:**  
     Utilizes Zod for request validation, ensuring full type safety and automatic
     error reporting.
 
 -   📚 **Automatic OpenAPI Generation:**  
-    Generates a complete OpenAPI 3.0 specification (with support for tags,
-    summaries, descriptions, operationId, deprecated status, externalDocs, and
-    more) directly from your routes and Zod schemas.
+    Generates a complete OpenAPI 3.0 specification directly from your routes and
+    Zod schemas.
 
 -   🔍 **Swagger UI Integration:**  
-    Provides an out-of-the-box Swagger UI endpoint for interactive API
-    documentation.
+    Out-of-the-box Swagger UI endpoint for interactive API documentation.
 
 ## 📣 Changelog
 
-### Latest Version: 0.5.2 (November 9, 2025)
+### Latest Version: 0.6.0 (November 11, 2025)
+
+### Version 0.6.0 (November 11, 2025)
+
+-   ⚡ **Major Performance Improvements:**
+
+    -   middleware execution with specialized fast paths
+    -   AOT compilation with pre-computed middleware arrays
+    -   Zero runtime allocations (pre-allocated arrays)
+    -   Manual loop unrolling for 2-middleware case
+    -   Reduced code from ~110 to ~80 lines
+
+-   🎯 **Simplified Middleware System:**
+
+    -   Clearer return types: Response, Function, or undefined
+    -   Removed complex "around" middleware pattern
+    -   Dedicated fast paths for 0, 1, and 2 middlewares
+    -   Better JIT optimization
+
+-   📦 **Monorepo Structure:**
+
+    -   Converted to Bun workspace monorepo
+    -   Core framework in `packages/burger-api`
+    -   CLI tool in `packages/cli` (under development)
+    -   Ecosystem middleware at root level
+
+-   🔧 **Developer Experience:**
+    -   100% backward compatible
+    -   Clearer documentation
+    -   Easier to understand codebase
+
+### Previous Version: 0.5.2 (November 9, 2025)
 
 -   🔧 **Internal Improvements:**
-    -   Refactored wildcard parameter extraction logic into reusable utility functions
+    -   Refactored wildcard parameter extraction logic into reusable utility
+        functions
     -   Added test suites and README files for all example projects
 
 ### Previous Version: 0.5.0 (November 1, 2025)
