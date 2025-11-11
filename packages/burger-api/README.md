@@ -62,7 +62,7 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.6.0 (November 11, 2025)
+### Latest Version: 0.6.0 (November 12, 2025)
 
 ### Version 0.6.0 (November 11, 2025)
 
