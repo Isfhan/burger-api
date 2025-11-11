@@ -26,18 +26,22 @@ export interface TimeoutOptions {
 }
 
 /**
- * Creates a timeout middleware that aborts requests exceeding a time limit.
+ * Creates a timeout middleware that detects slow requests.
  *
- * This middleware uses AbortSignal to properly cancel requests that take too long.
- * It prevents slow requests from tying up server resources and provides better
- * user experience with predictable response times.
+ * This middleware measures how long the handler takes to complete.
+ * If it takes longer than the timeout, it returns a 408 response.
+ *
+ * Note: This detects timeouts AFTER the handler completes.
+ * The handler will still run to completion even if it exceeds the timeout.
+ * For true timeout enforcement that stops handlers mid-execution,
+ * implement timeout logic inside your handlers using AbortSignal.
  *
  * @param options - Configuration options for timeout behavior
- * @returns A middleware function that enforces request timeouts
+ * @returns A middleware function that detects slow requests
  *
  * @example
  * ```typescript
- * // Basic usage: 30 second timeout
+ * // Basic usage: detect requests taking longer than 30 seconds
  * const timeout = requestTimeout();
  *
  * // Custom timeout duration
@@ -61,23 +65,15 @@ export function requestTimeout(options: TimeoutOptions = {}): Middleware {
     } = options;
 
     return (req: BurgerRequest): BurgerNext => {
-        // Create an AbortController for this request
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-            controller.abort();
-        }, ms);
+        // Start timer when middleware runs
+        const startTime = Date.now();
 
-        // Attach abort signal to request (if possible)
-        // Note: BurgerRequest might not support signal directly,
-        // but handlers can check for aborted state
-
-        // Transform response to clean up timeout
+        // Return function to check timeout after handler completes
         return async (response: Response): Promise<Response> => {
-            // Clear the timeout since request completed
-            clearTimeout(timeoutId);
+            const duration = Date.now() - startTime;
 
-            // Check if request was aborted due to timeout
-            if (controller.signal.aborted) {
+            // If handler took too long, return timeout response
+            if (duration > ms) {
                 if (onTimeout) {
                     return onTimeout();
                 }
@@ -94,36 +90,8 @@ export function requestTimeout(options: TimeoutOptions = {}): Middleware {
                 );
             }
 
+            // Handler completed in time, return normal response
             return response;
         };
     };
 }
-
-/**
- * Creates a timeout middleware with race condition handling.
- * This version uses Promise.race to properly abort long-running requests.
- */
-export function requestTimeoutWithRace(options: TimeoutOptions = {}): Middleware {
-    const {
-        ms = 30000,
-        onTimeout,
-        message = 'Request timeout',
-    } = options;
-
-    return (req: BurgerRequest): BurgerNext => {
-        // We need to wrap the actual handler execution in a race condition
-        // This requires returning a function that will be called with the response
-        
-        // Create timeout promise
-        const timeoutPromise = new Promise<Response>((_, reject) => {
-            setTimeout(() => {
-                reject(new Error('TIMEOUT'));
-            }, ms);
-        });
-
-        // This approach requires modifying how we handle the middleware
-        // For now, we'll use the simpler approach above
-        return undefined;
-    };
-}
-
