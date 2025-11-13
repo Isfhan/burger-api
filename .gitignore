@@ -175,7 +175,7 @@ dist
 .DS_Store
 .vscode/settings.json
 
-# Dependencies
+# Dependencies (includes workspace packages)
 node_modules/
 .pnp/
 .pnp.js

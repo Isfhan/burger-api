@@ -1,4 +1,15 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type {
+    BurgerNext,
+    BurgerRequest,
+    Middleware,
+} from '../../../../src/index';
+
+export const middleware: Middleware[] = [
+    (req: BurgerRequest): BurgerNext => {
+        console.log('Route middleware executed');
+        return undefined;
+    },
+];
 
 /**
  * Static route example

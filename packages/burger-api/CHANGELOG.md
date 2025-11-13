@@ -1,9 +1,39 @@
 ## 📣 Release Notes
 
+### Version 0.6.0 (November 12, 2025)
+
+-   ⚡ **Major Performance Improvements:**
+
+    -   middleware execution with specialized fast paths
+    -   AOT compilation with pre-computed middleware arrays
+    -   Zero runtime allocations (pre-allocated arrays)
+    -   Manual loop unrolling for 2-middleware case
+    -   Reduced code from ~110 to ~80 lines
+
+-   🎯 **Simplified Middleware System:**
+
+    -   Clearer return types: Response, Function, or undefined
+    -   Removed complex "around" middleware pattern
+    -   Dedicated fast paths for 0, 1, and 2 middlewares
+    -   Better JIT optimization
+
+-   📦 **Monorepo Structure:**
+
+    -   Converted to Bun workspace monorepo
+    -   Core framework in `packages/burger-api`
+    -   CLI tool in `packages/cli` (under development)
+    -   Ecosystem middleware at root level
+
+-   🔧 **Developer Experience:**
+    -   100% backward compatible
+    -   Clearer documentation
+    -   Easier to understand codebase
+
 ### Version 0.5.2 (November 9, 2025)
 
 -   🔧 **Internal Improvements:**
-    -   Refactored wildcard parameter extraction logic into reusable utility functions
+    -   Refactored wildcard parameter extraction logic into reusable utility
+        functions
     -   Added test suites and README files for all example projects
 
 ### Version 0.5.0 (November 1, 2025)
