@@ -1,6 +1,6 @@
 ## 📣 Release Notes
 
-### Version 0.6.1 (November 13, 2025)
+### Version 0.6.2 (November 13, 2025)
 
 -   ⚡ **Major Performance Improvements:**
 

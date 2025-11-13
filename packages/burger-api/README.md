@@ -3,9 +3,9 @@
 </p>
 
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.6.0-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.6.2-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -62,7 +62,7 @@ burger-api is built to offer a robust developer experience through:
 
 ## 📣 Changelog
 
-### Latest Version: 0.6.1 (November 12, 2025)
+### Latest Version: 0.6.2 (November 13, 2025)
 
 -   ⚡ **Major Performance Improvements:**
 
@@ -142,7 +142,7 @@ burger-api is built to offer a robust developer experience through:
     -   Updated and better request validation middleware error handling
     -   Removed Zod-to-json-schema dependency and use Zod 4 directly
 
-For a complete list of changes, please check the [Changelog](CHANGELOG.md) file.
+For a complete list of changes, please check the [Changelog](./packages/burger-api/CHANGELOG.md) file.
 
 ## 🎯 What's Coming Next?
 
@@ -158,7 +158,7 @@ something amazing together.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
+This project is licensed under the MIT License - see the [LICENSE](./packages/burger-api/LICENSE) file
 for details.
 
 The MIT License is a permissive license that is short and to the point. It lets
