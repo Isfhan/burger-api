@@ -182,7 +182,8 @@ describe('My Burger API App - Production Ready Example', () => {
                 body: 'invalid json',
             });
 
-            expect([400, 500]).toContain(response.status);
+            // POST is not supported on /api route, so we get 405 Method Not Allowed
+            expect(response.status).toBe(405);
         });
     });
 
