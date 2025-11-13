@@ -40,7 +40,7 @@ The core **burger-api** framework package. This is the main framework that gets 
 
 #### ✨ Key Features
 
-- ⚡ **Blazing Fast Performance** - Micro-optimized middleware system with AOT compilation
+- ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
 - 📁 **File-Based Routing** - Automatically registers API routes from your file structure
 - 🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+ middlewares
 - ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full type safety
@@ -48,13 +48,7 @@ The core **burger-api** framework package. This is the main framework that gets 
 - 🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for interactive API docs
 - 🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy to understand
 
-#### 📚 Documentation
 
-- **Package README:** [`packages/burger-api/README.md`](./packages/burger-api/README.md)
-- **Official Docs:** [burger-api.com](https://burger-api.com/)
-- **Changelog:** [`packages/burger-api/CHANGELOG.md`](./packages/burger-api/CHANGELOG.md)
-
----
 
 ### 🛠️ [`packages/cli`](./packages/cli)
 
@@ -68,7 +62,7 @@ The **Burger API CLI** tool for scaffolding new burger-api projects and providin
 - 🔧 Development utilities
 - 📝 Code generation tools
 
----
+
 
 ## 🚀 Quick Start
 
@@ -114,7 +108,7 @@ bun run test
 bun run dev
 ```
 
----
+
 
 ## 📚 Documentation
 
@@ -122,7 +116,7 @@ bun run dev
 - **Official Website:** [burger-api.com](https://burger-api.com/)
 - **Publishing Guide:** [`packages/burger-api/PUBLISHING.md`](./packages/burger-api/PUBLISHING.md)
 
----
+
 
 ## 🏗️ Project Structure
 
@@ -140,7 +134,7 @@ burger-api/
 └── README.md                # This file
 ```
 
----
+
 
 ## 🤝 Contributing
 
@@ -159,7 +153,7 @@ Please feel free to open an issue or submit a pull request. Let's build somethin
 - Add tests for new features
 - Update documentation as needed
 
----
+
 
 ## 📄 License
 
@@ -167,7 +161,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](./package
 
 The MIT License is a permissive license that allows people to do anything with your code as long as they provide attribution back to you and don't hold you liable.
 
----
+
 
 ## 🔗 Links
 
