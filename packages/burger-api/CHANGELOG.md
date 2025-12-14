@@ -1,4 +1,4 @@
-## 📣 Release Notes
+## 📣 Release Notes - Burger API Framework
 
 ### Version 0.6.2 (November 13, 2025)
 
