@@ -3,7 +3,7 @@
 # This script installs the Burger API CLI on Windows.
 # It downloads the executable and adds it to your PATH.
 #
-# Usage: irm https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.ps1 | iex
+# Usage: irm https://burger-api.com/install.ps1 | iex
 #
 
 # Make sure we stop on errors

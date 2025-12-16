@@ -169,7 +169,7 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('});');
     lines.push('');
 
-    // Start server - uses PORT env variable for flexibility (e.g., burger-api serve --port 3000)
+    // Start server - uses PORT env variable for flexibility (e.g., burger-api serve --port 4000)
     lines.push('const port = Number(process.env.PORT) || 4000;');
     lines.push('app.serve(port, () => {');
     lines.push(

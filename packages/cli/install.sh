@@ -6,7 +6,7 @@
 # This script installs the Burger API CLI on your system.
 # It downloads the appropriate executable and adds it to your PATH.
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.sh | bash
+# Usage: curl -fsSL https://burger-api.com/install.sh | bash
 #
 
 set -e  # Exit on any error
@@ -73,7 +73,7 @@ elif [ "$OS" = "darwin" ]; then
     if [ "$ARCH" = "arm64" ]; then
         EXECUTABLE_NAME="burger-api-mac"
     elif [ "$ARCH" = "x86_64" ]; then
-        EXECUTABLE_NAME="burger-api-mac"
+        EXECUTABLE_NAME="burger-api-mac-intel"
     else
         print_error "Unsupported architecture: $ARCH"
         exit 1
