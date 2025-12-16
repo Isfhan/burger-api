@@ -2,6 +2,13 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.1.1 - (December 17, 2025)
+
+### Added
+- GitHub Actions release workflow
+- Updated README.md
+---
+
 ## Version 0.1.0 - (December 14, 2025)
 
 ### Added
@@ -12,7 +19,6 @@ All notable changes to the Burger API CLI will be documented in this file.
 - `build` command to bundle projects to single JS file
 - `build:executable` command to compile to standalone executable
 - `serve` command for development server with hot reload
-- `upgrade` command to update CLI to latest version
 - Beautiful console output with colors and symbols
 - Zero external dependencies for file operations (uses Bun's native APIs)
 - Comprehensive documentation and examples
