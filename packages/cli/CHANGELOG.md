@@ -2,12 +2,11 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 0.1.1 - (December 17, 2025)
+## Version 0.6.3 - (December 17, 2025)
 
 ### Added
 - GitHub Actions release workflow
 - Updated README.md
----
 
 ## Version 0.1.0 - (December 14, 2025)
 
