@@ -593,23 +593,24 @@ export function myMiddleware(options: MyMiddlewareOptions = {}): Middleware {
 }
 ```
 
-## 🚦 Future Plans
+## 🚦 CLI Tool
 
-### CLI Tool (Coming Soon)
+The Burger API CLI makes it easy to add middleware to your project:
 
 ```bash
-# Easy installation
+# Install the CLI (if not already installed)
+# macOS, Linux, WSL:
+curl -fsSL https://burger-api.com/install.sh | bash
+
+# Windows PowerShell:
+irm https://burger-api.com/install.ps1 | iex
+
+# Easy middleware installation
 burger-api add cors
 burger-api add rate-limiter
 
 # List available middleware
 burger-api list
-
-# Update middleware
-burger-api update cors
-
-# Remove middleware
-burger-api remove cors
 ```
 
 ### Additional Middleware (Planned)

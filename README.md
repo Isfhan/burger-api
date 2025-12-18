@@ -72,6 +72,20 @@ your development workflow.
     downloads
 -   💻 **Cross-Platform** - Works on Windows, macOS, and Linux
 
+#### 📥 Installation
+
+Install the CLI tool from [burger-api.com](https://burger-api.com):
+
+**macOS, Linux, WSL:**
+```bash
+curl -fsSL https://burger-api.com/install.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+irm https://burger-api.com/install.ps1 | iex
+```
+
 For detailed documentation, see
 [`packages/cli/README.md`](./packages/cli/README.md).
 

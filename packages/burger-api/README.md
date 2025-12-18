@@ -20,6 +20,7 @@ yet.**
 ## 📚 Table of Contents
 
 -   [Overview](#-overview)
+-   [CLI Tool](#-cli-tool)
 -   [Changelog](#-changelog)
 -   [What's Coming Next](#-whats-coming-next)
 -   [Contributing](#-contributing)
@@ -59,6 +60,67 @@ burger-api is built to offer a robust developer experience through:
 
 -   🔍 **Swagger UI Integration:**  
     Out-of-the-box Swagger UI endpoint for interactive API documentation.
+
+## 🛠️ CLI Tool
+
+burger-api comes with a powerful CLI tool that makes it easy to scaffold new
+projects and manage middleware. Install it globally to get started:
+
+### Installation
+
+**macOS, Linux, WSL:**
+```bash
+curl -fsSL https://burger-api.com/install.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+irm https://burger-api.com/install.ps1 | iex
+```
+
+Or download the executable from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+
+### Quick Start
+
+```bash
+# Create a new burger-api project
+burger-api create my-api
+
+# Navigate to your project
+cd my-api
+
+# Start development server
+bun run dev
+```
+
+### Installing Middleware
+
+The CLI makes it easy to add production-ready middleware to your project. Browse
+available middleware and install them with a single command:
+
+```bash
+# List all available middleware
+burger-api list
+
+# Add middleware to your project
+burger-api add cors logger rate-limiter
+```
+
+**Popular Middleware Available:**
+
+-   **`cors`** - Cross-Origin Resource Sharing for handling cross-origin requests
+-   **`logger`** - Request/response logging with detailed information
+-   **`rate-limiter`** - Request rate limiting to prevent API abuse
+-   **`jwt-auth`** - JWT authentication for securing your API endpoints
+-   **`api-key-auth`** - API key authentication for server-to-server communication
+-   **`compression`** - Response compression (gzip/deflate) to reduce bandwidth
+-   **`security-headers`** - Security HTTP headers to protect against common attacks
+-   **`cache`** - HTTP caching headers for improved performance
+-   **`timeout`** - Request timeout to prevent long-running requests
+-   **`body-size-limiter`** - Request body size limits to prevent large payload attacks
+
+After installing middleware, the CLI will show you exactly how to use it in your
+project. For more information, visit the [CLI documentation](../../packages/cli/README.md).
 
 ## 📣 Changelog
 

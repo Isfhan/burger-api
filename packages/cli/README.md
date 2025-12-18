@@ -8,12 +8,12 @@ Simple command-line tool for creating and managing Burger API projects.
 
 **macOS, Linux, WSL:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.sh | bash
+curl -fsSL https://burger-api.com/install.sh | bash
 ```
 
 **Windows PowerShell:**
 ```powershell
-irm https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.ps1 | iex
+irm https://burger-api.com/install.ps1 | iex
 ```
 
 ### Manual Installation
@@ -387,12 +387,12 @@ chmod +x /opt/my-api
 
 **macOS/Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.sh | bash
+curl -fsSL https://burger-api.com/install.sh | bash
 ```
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/isfhan/burger-api/main/packages/cli/install.ps1 | iex
+irm https://burger-api.com/install.ps1 | iex
 ```
 
 Or manually download from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest) and add to PATH.
