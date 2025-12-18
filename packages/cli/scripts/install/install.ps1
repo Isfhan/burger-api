@@ -63,14 +63,46 @@ try {
 }
 catch {
     Print-Error "Could not determine latest version"
-    Print-Info "Please check your internet connection"
+    $errorMessage = $_.Exception.Message
+    
+    if ($errorMessage -match "Could not resolve|Unable to connect") {
+        Print-Info "Could not connect to GitHub API. Please check your internet connection."
+    }
+    elseif ($errorMessage -match "403|rate limit") {
+        Print-Info "GitHub API rate limit exceeded. Please try again later."
+    }
+    else {
+        Print-Info "GitHub API might be temporarily unavailable."
+        Print-Info "Please check your internet connection and try again."
+    }
+    
     exit 1
 }
 
 # Create installation directory
 $installDir = Join-Path $env:USERPROFILE ".burger-api\bin"
 Print-Info "Creating installation directory: $installDir"
-New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+try {
+    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+}
+catch {
+    Print-Error "Could not create installation directory"
+    $errorMessage = $_.Exception.Message
+    
+    if ($errorMessage -match "denied|permission") {
+        Print-Info "Permission denied. Try running as administrator or check directory permissions."
+    }
+    elseif ($errorMessage -match "path|long") {
+        Print-Info "Installation path is too long or invalid."
+    }
+    else {
+        Print-Info "Error: $errorMessage"
+    }
+    
+    Print-Info "Directory: $installDir"
+    exit 1
+}
 
 # Download URL
 $downloadUrl = "https://github.com/isfhan/burger-api/releases/download/$latestVersion/$executableName"
@@ -78,16 +110,47 @@ $installPath = Join-Path $installDir "burger-api.exe"
 
 # Download the executable
 Print-Info "Downloading from GitHub..."
+Write-Host ""
+
 try {
-    # Use WebClient for better progress indication
-    $webClient = New-Object System.Net.WebClient
-    $webClient.DownloadFile($downloadUrl, $installPath)
+    # Use Invoke-WebRequest which shows progress bar automatically
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $installPath -UseBasicParsing
+    Write-Host ""
     Print-Success "Downloaded successfully"
 }
 catch {
-    Print-Error "Failed to download"
-    Print-Info "URL: $downloadUrl"
-    Print-Info "Error: $($_.Exception.Message)"
+    Write-Host ""
+    Print-Error "Failed to download the executable"
+    
+    # Provide user-friendly error messages based on exception type
+    $errorMessage = $_.Exception.Message
+    
+    if ($errorMessage -match "Could not resolve|Unable to connect|No such host") {
+        Print-Info "Could not connect to GitHub. Please check your internet connection."
+    }
+    elseif ($errorMessage -match "404|Not Found") {
+        Print-Info "The file does not exist or is not accessible."
+        Print-Info "This might be a temporary issue. Please try again later."
+    }
+    elseif ($errorMessage -match "403|Forbidden") {
+        Print-Info "Access denied. GitHub might be rate limiting requests."
+        Print-Info "Please wait a moment and try again."
+    }
+    elseif ($errorMessage -match "timeout") {
+        Print-Info "Download timed out. Please check your internet connection."
+    }
+    elseif ($errorMessage -match "denied|permission") {
+        Print-Info "Permission denied. Try running as administrator or check file permissions."
+    }
+    elseif ($errorMessage -match "disk|space") {
+        Print-Info "Not enough disk space to install. Please free up some space."
+    }
+    else {
+        Print-Info "Download failed: $errorMessage"
+        Print-Info "Please check your internet connection and try again."
+    }
+    
+    Print-Info "Download URL: $downloadUrl"
     exit 1
 }
 
@@ -105,8 +168,10 @@ if ($userPath -notlike "*$installDir*") {
         Print-Info "You may need to restart your terminal for PATH to update"
     }
     catch {
-        Print-Error "Failed to add to PATH"
-        Print-Info "Please manually add $installDir to your PATH"
+        Print-Error "Could not add to PATH automatically"
+        Print-Info "Permission denied or registry access failed."
+        Print-Info "Please manually add this to your PATH:"
+        Print-Info "$installDir"
     }
 }
 else {

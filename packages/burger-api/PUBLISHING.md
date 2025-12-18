@@ -307,7 +307,7 @@ cat package.json | grep -E '"(name|version|module|types|files)"'
 
 # Should output:
 #   "name": "burger-api",
-#   "version": "0.5.0",
+#   "version": "0.6.4",
 #   "module": "dist/src/index.js",
 #   "types": "dist/src/index.d.ts",
 #   "files": ["dist"]
@@ -424,7 +424,7 @@ If you prefer to update manually:
 
 ```bash
 # Edit package.json
-# Change "version": "0.5.0" to "0.5.1"
+# Change "version": "0.6.4" to "0.6.5"
 
 # Update CHANGELOG.md
 # Add new version entry with date
