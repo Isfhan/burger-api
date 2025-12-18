@@ -70,7 +70,7 @@ if [ ! -f "$INSTALL_PATH" ]; then
         print_info "Installation directory still exists: $INSTALL_DIR"
         echo ""
         print_warning "Would you like to remove it? (y/N)"
-        read -r response
+        read -r response < /dev/tty
         
         if [ "$response" = "y" ] || [ "$response" = "Y" ]; then
             if rm -rf "$INSTALL_DIR"; then
@@ -92,7 +92,7 @@ print_warning "This will remove burger-api from your system"
 print_info "Installation path: $INSTALL_PATH"
 echo ""
 print_info "Do you want to continue? (y/N)"
-read -r confirmation
+read -r confirmation < /dev/tty
 
 if [ "$confirmation" != "y" ] && [ "$confirmation" != "Y" ]; then
     print_info "Uninstall cancelled. No changes were made."
