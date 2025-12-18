@@ -267,14 +267,26 @@ print_success "burger-api has been removed from your system"
 echo ""
 print_info "To apply PATH changes, restart your terminal or run:"
 echo ""
-if [ -n "$SHELL_CONFIG" ]; then
-    echo "    source $SHELL_CONFIG"
-fi
+case $(basename "$SHELL") in
+    fish)
+        echo "    exec $SHELL"
+        ;;
+    zsh)
+        echo "    exec $SHELL"
+        ;;
+    bash)
+        if [ -f "$HOME/.bash_profile" ]; then
+            echo "    source $HOME/.bash_profile"
+        elif [ -f "$HOME/.bashrc" ]; then
+            echo "    source $HOME/.bashrc"
+        fi
+        ;;
+esac
 echo ""
 print_info "If you reinstall later, run:"
 echo ""
 echo "    curl -fsSL https://burger-api.com/install.sh | bash"
 echo ""
-print_success "Thank you for using Burger API! 👋"
+print_success "Thank you for using Burger API!"
 echo ""
 

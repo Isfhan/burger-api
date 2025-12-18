@@ -117,9 +117,10 @@ Print-Info "Removing from PATH..."
 try {
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     
-    if ($userPath -like "*$installDir*") {
+    if ($userPath -and $userPath -like "*$installDir*") {
         # Remove the installation directory from PATH
-        $newPath = ($userPath -split ';' | Where-Object { $_ -ne $installDir }) -join ';'
+        $pathArray = $userPath -split ';' | Where-Object { $_ -and $_ -ne $installDir }
+        $newPath = $pathArray -join ';'
         
         [Environment]::SetEnvironmentVariable(
             "Path",

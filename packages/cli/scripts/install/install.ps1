@@ -112,34 +112,24 @@ $installPath = Join-Path $installDir "burger-api.exe"
 Print-Info "Downloading from GitHub..."
 
 try {
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "BurgerAPI-Installer/1.0")
-    
-    # Progress tracking with script scope
-    $script:lastPercent = -1
-    $progressAction = {
-        param($sender, $e)
-        if ($e.TotalBytesToReceive -gt 0) {
-            $percent = [math]::Round(($e.BytesReceived / $e.TotalBytesToReceive) * 100)
-            if ($percent -ne $script:lastPercent) {
-                $downloadedMB = [math]::Round($e.BytesReceived / 1MB, 1)
-                $totalMB = [math]::Round($e.TotalBytesToReceive / 1MB, 1)
-                Write-Progress -Activity "Downloading burger-api" -Status "$percent% ($downloadedMB MB / $totalMB MB)" -PercentComplete $percent
-                $script:lastPercent = $percent
-            }
+    # Try curl.exe first (faster, shows progress automatically)
+    # Note: 'curl' is an alias to 'Invoke-WebRequest' in PowerShell, so use 'curl.exe'
+    if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+        # Use curl.exe with progress bar (-#), silent but show errors (-S), fail on error (-f), follow redirects (-L), output to file (-o)
+        & curl.exe -#SfLo "$installPath" "$downloadUrl"
+        if ($LASTEXITCODE -ne 0) {
+            throw "curl.exe download failed with exit code $LASTEXITCODE"
         }
     }
-    
-    $webClient.add_DownloadProgressChanged($progressAction)
-    $webClient.DownloadFileAsync([uri]$downloadUrl, $installPath)
-    
-    # Wait for completion
-    while ($webClient.IsBusy) {
-        Start-Sleep -Milliseconds 50
+    else {
+        # Fallback to Invoke-RestMethod (simpler and more reliable than Invoke-WebRequest)
+        Invoke-RestMethod -Uri $downloadUrl -OutFile $installPath -ErrorAction Stop
     }
     
-    Write-Progress -Activity "Downloading burger-api" -Completed
-    $webClient.Dispose()
+    # Verify file was downloaded
+    if (-not (Test-Path $installPath)) {
+        throw "Downloaded file not found. Did an antivirus delete it?"
+    }
     
     Write-Host ""
     Print-Success "Downloaded successfully"
@@ -223,4 +213,6 @@ Write-Host ""
 Print-Success "Happy coding!"
 Write-Host ""
 Print-Info "Note: You may need to restart your terminal for the command to work"
+
+
 

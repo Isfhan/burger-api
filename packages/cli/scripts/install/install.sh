@@ -307,5 +307,5 @@ print_info "To get started, create a new project:"
 echo ""
 echo "    burger-api create my-awesome-api"
 echo ""
-print_success "Happy coding! 🎉"
+print_success "Happy coding!"
 
