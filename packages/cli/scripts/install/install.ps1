@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 # Function to print colored output
 function Print-Success {
     param([string]$Message)
-    Write-Host "[✓] $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Print-Error {
@@ -194,7 +194,7 @@ Print-Info "To get started, create a new project:"
 Write-Host ""
 Write-Host "    burger-api create my-awesome-api" -ForegroundColor Cyan
 Write-Host ""
-Print-Success "Happy coding! 🎉"
+Print-Success "Happy coding!"
 Write-Host ""
 Print-Info "Note: You may need to restart your terminal for the command to work"
 

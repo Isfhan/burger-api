@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 # Function to print colored output
 function Print-Success {
     param([string]$Message)
-    Write-Host "[✓] $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Print-Error {
@@ -189,6 +189,6 @@ Print-Info "If you reinstall later, run:"
 Write-Host ""
 Write-Host "    irm https://burger-api.com/install.ps1 | iex" -ForegroundColor Cyan
 Write-Host ""
-Print-Success "Thank you for using Burger API! 👋"
+Print-Success "Thank you for using Burger API!"
 Write-Host ""
 
