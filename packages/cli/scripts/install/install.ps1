@@ -110,11 +110,37 @@ $installPath = Join-Path $installDir "burger-api.exe"
 
 # Download the executable
 Print-Info "Downloading from GitHub..."
-Write-Host ""
 
 try {
-    # Use Invoke-WebRequest which shows progress bar automatically
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $installPath -UseBasicParsing
+    $webClient = New-Object System.Net.WebClient
+    $webClient.Headers.Add("User-Agent", "BurgerAPI-Installer/1.0")
+    
+    # Progress tracking with script scope
+    $script:lastPercent = -1
+    $progressAction = {
+        param($sender, $e)
+        if ($e.TotalBytesToReceive -gt 0) {
+            $percent = [math]::Round(($e.BytesReceived / $e.TotalBytesToReceive) * 100)
+            if ($percent -ne $script:lastPercent) {
+                $downloadedMB = [math]::Round($e.BytesReceived / 1MB, 1)
+                $totalMB = [math]::Round($e.TotalBytesToReceive / 1MB, 1)
+                Write-Progress -Activity "Downloading burger-api" -Status "$percent% ($downloadedMB MB / $totalMB MB)" -PercentComplete $percent
+                $script:lastPercent = $percent
+            }
+        }
+    }
+    
+    $webClient.add_DownloadProgressChanged($progressAction)
+    $webClient.DownloadFileAsync([uri]$downloadUrl, $installPath)
+    
+    # Wait for completion
+    while ($webClient.IsBusy) {
+        Start-Sleep -Milliseconds 50
+    }
+    
+    Write-Progress -Activity "Downloading burger-api" -Completed
+    $webClient.Dispose()
+    
     Write-Host ""
     Print-Success "Downloaded successfully"
 }
