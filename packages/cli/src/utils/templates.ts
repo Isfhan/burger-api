@@ -10,6 +10,7 @@ import { join } from 'path';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
+import { downloadFile } from './github';
 
 /**
  * Generate package.json content for a new project
@@ -972,6 +973,39 @@ export const globalMiddleware: any[] = [];
 }
 
 /**
+ * Download the .llm-context folder from GitHub to the target project
+ * This includes context files for AI assistants working with Burger API
+ *
+ * @param targetDir - Where to create the project
+ */
+async function downloadLlmFolder(targetDir: string): Promise<void> {
+    try {
+        const llmDir = join(targetDir, 'ecosystem', '.llm-context');
+        
+        // Download all three .llm files from GitHub
+        const files = [
+            'llms.txt',
+            'llms-small.txt',
+            'llms-full.txt',
+        ];
+
+        for (const fileName of files) {
+            const sourcePath = `ecosystem/.llm-context/${fileName}`;
+            const destPath = join(llmDir, fileName);
+            await downloadFile(sourcePath, destPath);
+        }
+    } catch (err) {
+        // Log warning but don't fail project creation if download fails
+        // This allows projects to be created even if GitHub is unreachable
+        console.warn(
+            `Warning: Could not download .llm-context folder: ${
+                err instanceof Error ? err.message : 'Unknown error'
+            }`
+        );
+    }
+}
+
+/**
  * Create a new project with all necessary files
  * This is the main function that sets up everything
  *
@@ -1043,6 +1077,9 @@ export async function createProject(
             join(ecosystemMiddlewareDir, 'index.ts'),
             generateMiddlewareIndex()
         );
+
+        // Download .llm-context folder with context files for AI assistants
+        await downloadLlmFolder(targetDir);
 
         spin.stop('Project created successfully!');
     } catch (err) {
