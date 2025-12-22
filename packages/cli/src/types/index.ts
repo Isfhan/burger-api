@@ -1,6 +1,6 @@
 /**
  * Shared TypeScript types for the CLI
- * 
+ *
  * These types are used across different parts of the CLI
  * to ensure type safety and good developer experience.
  */
@@ -9,47 +9,45 @@
  * Options for creating a new Burger API project
  */
 export interface CreateOptions {
-  /** Name of the project */
-  name: string;
-  /** Whether to include API routes */
-  useApi: boolean;
-  /** Directory for API routes (e.g., 'api') */
-  apiDir?: string;
-  /** Prefix for API routes (e.g., '/api') */
-  apiPrefix?: string;
-  /** Enable debug mode */
-  debug?: boolean;
-  /** Whether to include Page routes */
-  usePages: boolean;
-  /** Directory for Page routes (e.g., 'pages') */
-  pageDir?: string;
-  /** Prefix for Page routes (e.g., '/') */
-  pagePrefix?: string;
+    /** Name of the project */
+    name: string;
+    /** Whether to include API routes */
+    useApi: boolean;
+    /** Directory for API routes (e.g., 'api') */
+    apiDir?: string;
+    /** Prefix for API routes (e.g., '/api') */
+    apiPrefix?: string;
+    /** Enable debug mode */
+    debug?: boolean;
+    /** Whether to include Page routes */
+    usePages: boolean;
+    /** Directory for Page routes (e.g., 'pages') */
+    pageDir?: string;
+    /** Prefix for Page routes (e.g., '/') */
+    pagePrefix?: string;
 }
 
 /**
  * Information about a middleware/feature from GitHub
  */
 export interface MiddlewareInfo {
-  /** Name of the middleware (e.g., 'cors') */
-  name: string;
-  /** Short description of what it does */
-  description: string;
-  /** Path in the GitHub repo */
-  path: string;
-  /** Files that are part of this middleware */
-  files: string[];
+    /** Name of the middleware (e.g., 'cors') */
+    name: string;
+    /** Short description of what it does */
+    description: string;
+    /** Path in the GitHub repo */
+    path: string;
+    /** Files that are part of this middleware */
+    files: string[];
 }
 
 /**
  * GitHub API response for directory contents
  */
 export interface GitHubFile {
-  name: string;
-  path: string;
-  type: 'file' | 'dir';
-  download_url?: string;
-  size: number;
+    name: string;
+    path: string;
+    type: 'file' | 'dir';
+    download_url?: string;
+    size: number;
 }
-
-

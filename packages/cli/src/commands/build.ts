@@ -10,7 +10,7 @@
 
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 import {
     spinner,
     success,
