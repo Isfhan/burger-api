@@ -233,6 +233,37 @@ git push origin main
 
 Create a git tag to trigger the GitHub Actions workflow:
 
+#### Method 1: Using Release Script (Recommended)
+
+The easiest way is to use the release script:
+
+```bash
+# From the repository root
+./packages/cli/scripts/release/release-cli.sh
+```
+
+**What it does:**
+- Automatically reads version from `packages/cli/package.json`
+- Creates and pushes the CLI tag with correct format (`cli/v*`)
+- Prevents duplicate tags
+- Shows clear output
+
+**Example output:**
+```
+📦 Releasing CLI version: 0.6.5
+Enumerating objects: 1, done.
+Counting objects: 100% (1/1), done.
+Writing objects: 100% (1/1), 173 bytes | 173.00 KiB/s, done.
+Total 1 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+To https://github.com/Isfhan/burger-api.git
+ * [new tag]         cli/v0.6.5 -> cli/v0.6.5
+✅ Tag cli/v0.6.5 created and pushed
+```
+
+#### Method 2: Manual Tag Creation
+
+If you prefer to create the tag manually:
+
 ```bash
 # Get the version from package.json
 VERSION=$(node -p "require('./packages/cli/package.json').version")
@@ -244,7 +275,7 @@ git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
 git push origin "cli/v${VERSION}"
 ```
 
-**Alternative:** Use GitHub's workflow_dispatch:
+#### Method 3: Use GitHub's workflow_dispatch
 
 1. Go to GitHub Actions tab
 2. Select "Release CLI Executables" workflow
@@ -471,9 +502,15 @@ npm version patch                    # Update version
 git add CHANGELOG.md
 git commit -m "chore(cli): update changelog"
 git push origin main
-VERSION=$(node -p "require('./package.json').version")
-git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
-git push origin "cli/v${VERSION}"       # Triggers GitHub Actions
+
+# Create and push tag (using release script - recommended)
+cd ../..                              # Go to repo root
+./packages/cli/scripts/release/release-cli.sh
+
+# Or manually:
+# VERSION=$(node -p "require('./packages/cli/package.json').version")
+# git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
+# git push origin "cli/v${VERSION}"       # Triggers GitHub Actions
 ```
 
 ### Verification Commands
@@ -519,10 +556,13 @@ git add packages/cli/CHANGELOG.md
 git commit -m "chore(cli): update changelog for v0.6.5"
 git push origin main
 
-# 6. Create and push tag
-VERSION=$(node -p "require('./packages/cli/package.json').version")
-git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
-git push origin "cli/v${VERSION}"
+# 6. Create and push tag (using release script)
+./packages/cli/scripts/release/release-cli.sh
+
+# Or manually:
+# VERSION=$(node -p "require('./packages/cli/package.json').version")
+# git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
+# git push origin "cli/v${VERSION}"
 
 # 7. Wait for GitHub Actions to complete
 # Check: https://github.com/isfhan/burger-api/actions
@@ -548,5 +588,5 @@ MIT License - see [LICENSE](../burger-api/LICENSE) file for details.
 ---
 
 **Last Updated:** December 2025  
-**Current Version:** 0.6.4
+**Current Version:** 0.6.5
 

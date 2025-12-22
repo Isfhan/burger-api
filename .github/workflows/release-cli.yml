@@ -177,7 +177,7 @@ jobs:
               uses: softprops/action-gh-release@v1
               with:
                   tag_name: cli/${{ env.VERSION }}
-                  name: Burger API CLI v${{ env.VERSION }}
+                  name: Burger API CLI ${{ env.VERSION }}
                   body: |
                       ## Installation
 
