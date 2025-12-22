@@ -3,11 +3,11 @@ name: Release CLI Executables
 on:
   push:
     tags:
-      - 'v*'
+      - 'cli/v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: 'Version to release (e.g., cli/v1.0.0)'
         required: true
         type: string
 
@@ -69,8 +69,10 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.version }}" != "" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            # Strip cli/ prefix if present
+            VERSION="${VERSION#cli/}"
           else
-            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="${GITHUB_REF#refs/tags/cli/}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
         shell: bash
@@ -80,8 +82,12 @@ jobs:
         run: |
           if ("${{ github.event.inputs.version }}") {
             $VERSION = "${{ github.event.inputs.version }}"
+            # Strip cli/ prefix if present
+            if ($VERSION -like "cli/*") {
+              $VERSION = $VERSION -replace "^cli/", ""
+            }
           } else {
-            $VERSION = "${{ github.ref }}".Replace('refs/tags/', '')
+            $VERSION = "${{ github.ref }}".Replace('refs/tags/cli/', '')
           }
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
         shell: pwsh
@@ -159,8 +165,10 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.version }}" != "" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            # Strip cli/ prefix if present
+            VERSION="${VERSION#cli/}"
           else
-            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="${GITHUB_REF#refs/tags/cli/}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
         shell: bash
@@ -168,21 +176,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.VERSION }}
-          name: Release ${{ env.VERSION }}
+          tag_name: cli/${{ env.VERSION }}
+          name: Burger API CLI v${{ env.VERSION }}
           body: |
             ## Installation
             
             Download the appropriate executable for your platform:
             
-            - **Linux**: [burger-api-linux](https://github.com/isfhan/burger-api/releases/download/${{ env.VERSION }}/burger-api-linux)
-            - **Windows**: [burger-api.exe](https://github.com/isfhan/burger-api/releases/download/${{ env.VERSION }}/burger-api.exe)
-            - **macOS (ARM64)**: [burger-api-mac](https://github.com/isfhan/burger-api/releases/download/${{ env.VERSION }}/burger-api-mac)
-            - **macOS (Intel)**: [burger-api-mac-intel](https://github.com/isfhan/burger-api/releases/download/${{ env.VERSION }}/burger-api-mac-intel)
+            - **Linux**: [burger-api-linux](https://github.com/isfhan/burger-api/releases/download/cli/${{ env.VERSION }}/burger-api-linux)
+            - **Windows**: [burger-api.exe](https://github.com/isfhan/burger-api/releases/download/cli/${{ env.VERSION }}/burger-api.exe)
+            - **macOS (ARM64)**: [burger-api-mac](https://github.com/isfhan/burger-api/releases/download/cli/${{ env.VERSION }}/burger-api-mac)
+            - **macOS (Intel)**: [burger-api-mac-intel](https://github.com/isfhan/burger-api/releases/download/cli/${{ env.VERSION }}/burger-api-mac-intel)
             
             ## Verification
             
-            Check the [checksums.txt](https://github.com/isfhan/burger-api/releases/download/${{ env.VERSION }}/checksums.txt) file to verify the integrity of downloaded executables.
+            Check the [checksums.txt](https://github.com/isfhan/burger-api/releases/download/cli/${{ env.VERSION }}/checksums.txt) file to verify the integrity of downloaded executables.
             
             ## Changelog
             
