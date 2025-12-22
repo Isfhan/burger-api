@@ -2,6 +2,13 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.6.5 - (December 23, 2025)
+
+### Added
+- `.llm-context` folder to the project with AI context files
+- `llms.txt`, `llms-small.txt`, and `llms-full.txt` files
+- Updated README.md
+
 ## Version 0.6.3 - (December 17, 2025)
 
 ### Added
