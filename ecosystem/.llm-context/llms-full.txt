@@ -1,0 +1,1716 @@
+---
+url: 'https://burger-api.com/docs/overview'
+---
+
+# Burger API - Modern API Framework for Bun
+
+Burger API is a modern, high-performance API framework built on Bun.js. It combines the simplicity of file-based routing with powerful features like built-in middleware, Zod-based schema validation, and automatic OpenAPI generation.
+
+## Key Features
+
+- ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
+- 📁 **File-Based Routing** - Automatically registers API routes from your file structure
+- 🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+ middlewares
+- ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full type safety
+- 📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0 specifications
+- 🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for interactive API docs
+- 🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy to understand
+
+---
+url: 'https://burger-api.com/docs/core/burger-class'
+---
+
+# Burger Class
+
+The `Burger` class is the main entry point for creating a Burger API application.
+
+## Constructor
+
+```typescript
+import { Burger } from 'burger-api';
+
+const app = new Burger(options: ServerOptions);
+```
+
+### ServerOptions Interface
+
+```typescript
+interface ServerOptions {
+    // API Routing
+    apiDir?: string;              // Directory path to load API routes from
+    apiPrefix?: string;           // Prefix for API routes (default: '/api')
+    
+    // Page Routing
+    pageDir?: string;              // Directory path to load page routes from
+    pagePrefix?: string;           // Prefix for page routes (default: '/')
+    
+    // Middleware
+    globalMiddleware?: Middleware[]; // Global middleware to execute before each request
+    
+    // OpenAPI Documentation
+    title?: string;                // API title for OpenAPI docs
+    description?: string;           // API description
+    version?: string;              // API version
+    
+    // Debugging
+    debug?: boolean;               // Enable debug mode (default: false)
+    
+    // Server Options (extends Bun's ServeOptions)
+    hostname?: string;             // Hostname to bind to
+    // ... other Bun server options
+}
+```
+
+## Methods
+
+### serve(port, callback?)
+
+Starts the server and begins listening for incoming requests.
+
+```typescript
+await app.serve(4000);
+await app.serve(4000, () => {
+    console.log('Server started!');
+});
+```
+
+**Parameters:**
+- `port` (number, default: 4000) - The port number to listen on
+- `callback?` (function) - Optional callback executed when server starts
+
+**Returns:** Promise<void>
+
+---
+url: 'https://burger-api.com/docs/core/types'
+---
+
+# Type Definitions
+
+## BurgerRequest
+
+Extends Bun's `BunRequest` with additional properties for Burger API.
+
+```typescript
+interface BurgerRequest<RequestValidatedProperties = DefaultRequestProperties> 
+    extends Omit<BunRequest<string>, 'params'> {
+    /**
+     * URL parameters extracted from the request path.
+     * Example: /users/:id → { id: '123' }
+     */
+    params?: Record<string, string>;
+    
+    /**
+     * Validated data from Zod schemas.
+     * Contains validated params, query, and body.
+     */
+    validated?: RequestValidatedProperties & {
+        params?: Record<string, unknown>;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    };
+    
+    /**
+     * Wildcard parameters for wildcard routes.
+     * Example: /files/[...] → ['path', 'to', 'file.txt']
+     */
+    wildcardParams?: string[];
+}
+```
+
+## Middleware
+
+A middleware function that processes HTTP requests.
+
+```typescript
+type Middleware = 
+    | ((request: BurgerRequest) => Promise<BurgerNext>)
+    | ((request: BurgerRequest) => BurgerNext);
+```
+
+**Return Types:**
+- `undefined` - Continue to next middleware/handler
+- `Response` - Stop and send this response immediately
+- `Function` - Transform the final response after handler runs
+
+```typescript
+type BurgerNext = 
+    | Response
+    | ((response: Response) => Promise<Response>)
+    | undefined;
+```
+
+## RequestHandler
+
+A request handler function that processes incoming HTTP requests.
+
+```typescript
+type RequestHandler = (
+    request: BurgerRequest
+) => Promise<Response> | Response;
+```
+
+## RouteDefinition
+
+Defines a route with its handlers, middleware, and schema.
+
+```typescript
+interface RouteDefinition {
+    path: string;                          // Route path
+    handlers: { [method: string]: RequestHandler }; // HTTP method handlers
+    middleware?: Middleware[];             // Route-specific middleware
+    schema?: RouteSchema;                  // Zod validation schema
+    openapi?: openapi;                     // OpenAPI metadata
+    isWildcard?: boolean;                   // True for wildcard routes
+}
+```
+
+## RouteSchema
+
+Zod schema structure for validating request data.
+
+```typescript
+type RouteSchema = {
+    [method: string]: {                    // HTTP method (lowercase)
+        params?: z.ZodObject<any, any>;    // URL parameters
+        query?: z.ZodObject<any, any>;     // Query string parameters
+        body?: z.ZodObject<any, any>;      // Request body
+    };
+};
+```
+
+---
+url: 'https://burger-api.com/docs/routing/file-based-routing'
+---
+
+# File-Based Routing
+
+Burger API uses file-based routing where the file structure determines the API routes.
+
+## Route File Naming
+
+Routes are defined in files named `route.ts` within your API directory structure.
+
+```
+api/
+├── route.ts                    → GET /api
+├── users/
+│   └── route.ts               → GET /api/users
+├── users/
+│   └── [id]/
+│       └── route.ts           → GET /api/users/:id
+└── files/
+    └── [...]
+        └── route.ts           → GET /api/files/*
+```
+
+## Route File Structure
+
+Each `route.ts` file can export:
+
+1. **HTTP Method Handlers** - Functions named after HTTP methods (GET, POST, PUT, DELETE, etc.)
+2. **Schema** - Zod validation schema (optional)
+3. **Middleware** - Route-specific middleware (optional)
+4. **OpenAPI Metadata** - Documentation metadata (optional)
+
+```typescript
+// api/users/route.ts
+import { z } from 'zod';
+import type { BurgerRequest, Middleware } from 'burger-api';
+
+export const schema = {
+    get: {
+        query: z.object({
+            page: z.coerce.number().min(1).default(1),
+        }),
+    },
+};
+
+export const middleware: Middleware[] = [
+    async (req) => {
+        console.log('Route middleware');
+        return undefined;
+    },
+];
+
+export async function GET(req: BurgerRequest) {
+    return Response.json({ users: [] });
+}
+```
+
+---
+url: 'https://burger-api.com/docs/routing/static-routes'
+---
+
+# Static Routes
+
+Static routes match exact paths without any dynamic segments.
+
+## Example
+
+```
+api/
+└── users/
+    └── route.ts               → GET /api/users
+```
+
+**File:** `api/users/route.ts`
+```typescript
+export async function GET() {
+    return Response.json({ message: 'Get all users' });
+}
+```
+
+**Access:** `GET http://localhost:4000/api/users`
+
+---
+url: 'https://burger-api.com/docs/routing/dynamic-routes'
+---
+
+# Dynamic Routes
+
+Dynamic routes use square brackets `[param]` to capture URL parameters.
+
+## Example
+
+```
+api/
+└── users/
+    └── [id]/
+        └── route.ts           → GET /api/users/:id
+```
+
+**File:** `api/users/[id]/route.ts`
+```typescript
+import type { BurgerRequest } from 'burger-api';
+
+export async function GET(req: BurgerRequest) {
+    const { id } = req.params || {};
+    return Response.json({ userId: id });
+}
+```
+
+**Access:** `GET http://localhost:4000/api/users/123`
+**Result:** `{ "userId": "123" }`
+
+## Multiple Dynamic Segments
+
+```
+api/
+└── users/
+    └── [userId]/
+        └── posts/
+            └── [postId]/
+                └── route.ts  → GET /api/users/:userId/posts/:postId
+```
+
+**File:** `api/users/[userId]/posts/[postId]/route.ts`
+```typescript
+export async function GET(req: BurgerRequest) {
+    const { userId, postId } = req.params || {};
+    return Response.json({ userId, postId });
+}
+```
+
+---
+url: 'https://burger-api.com/docs/routing/wildcard-routes'
+---
+
+# Wildcard Routes
+
+Wildcard routes use `[...]` to match any path segments after the route.
+
+## Example
+
+```
+api/
+└── files/
+    └── [...]
+        └── route.ts           → GET /api/files/*
+```
+
+**File:** `api/files/[...]/route.ts`
+```typescript
+import type { BurgerRequest } from 'burger-api';
+
+export async function GET(req: BurgerRequest) {
+    const segments = req.wildcardParams || [];
+    return Response.json({ path: segments });
+}
+```
+
+**Access:** `GET http://localhost:4000/api/files/docs/guide/intro`
+**Result:** `{ "path": ["docs", "guide", "intro"] }`
+
+## Nested Wildcard Routes
+
+```
+api/
+└── users/
+    └── [userId]/
+        └── [...]
+            └── route.ts       → GET /api/users/:userId/*
+```
+
+**File:** `api/users/[userId]/[...]/route.ts`
+```typescript
+export async function GET(req: BurgerRequest) {
+    const { userId } = req.params || {};
+    const segments = req.wildcardParams || [];
+    return Response.json({ userId, path: segments });
+}
+```
+
+**Access:** `GET http://localhost:4000/api/users/123/settings/privacy`
+**Result:** `{ "userId": "123", "path": ["settings", "privacy"] }`
+
+## Route Priority
+
+Routes are matched in this order:
+1. Static routes (highest priority)
+2. Dynamic routes (`[id]`)
+3. Wildcard routes (`[...]`) (lowest priority)
+
+---
+url: 'https://burger-api.com/docs/routing/route-groups'
+---
+
+# Route Groups
+
+Route groups use parentheses `(group)` to organize routes without affecting the URL path.
+
+## Example
+
+```
+api/
+└── (admin)/
+    └── users/
+        └── route.ts           → GET /api/users (not /api/(admin)/users)
+```
+
+**File:** `api/(admin)/users/route.ts`
+```typescript
+export async function GET() {
+    return Response.json({ users: [] });
+}
+```
+
+**Access:** `GET http://localhost:4000/api/users`
+
+The `(admin)` folder is ignored in the URL path but helps organize your code.
+
+---
+url: 'https://burger-api.com/docs/middleware/system'
+---
+
+# Middleware System
+
+Burger API's middleware system is simple and powerful. Middleware functions run before route handlers and can control the request flow.
+
+## Middleware Return Types
+
+Middleware can return three types:
+
+### 1. `undefined` - Continue
+
+Allows the request to continue to the next middleware or handler.
+
+```typescript
+const logger: Middleware = async (req) => {
+    console.log(`${req.method} ${req.url}`);
+    return undefined; // Continue to next middleware/handler
+};
+```
+
+### 2. `Response` - Stop Early
+
+Stops the request and sends a response immediately.
+
+```typescript
+const auth: Middleware = async (req) => {
+    const token = req.headers.get('Authorization');
+    if (!token) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return undefined; // Continue if authorized
+};
+```
+
+### 3. `Function` - Transform Response
+
+Transforms the final response after the handler runs.
+
+```typescript
+const cors: Middleware = async (req) => {
+    // Continue processing
+    return undefined;
+    
+    // But return a function to transform the response
+    return (response: Response) => {
+        response.headers.set('Access-Control-Allow-Origin', '*');
+        return response;
+    };
+};
+```
+
+## Middleware Execution Flow
+
+1. Global middleware runs first (in order)
+2. Route-specific middleware runs next (in order)
+3. Validation middleware runs (if schema is defined)
+4. Route handler runs
+5. "After" functions run in reverse order (response transformation)
+
+---
+url: 'https://burger-api.com/docs/middleware/global'
+---
+
+# Global Middleware
+
+Global middleware runs before every request. Define it when creating the Burger instance.
+
+## Example
+
+```typescript
+import { Burger } from 'burger-api';
+import { cors } from './middleware/cors';
+import { logger } from './middleware/logger';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware: [
+        logger(),           // Runs first
+        cors({ origin: '*' }), // Runs second
+    ],
+});
+
+await app.serve(4000);
+```
+
+## Creating Global Middleware
+
+```typescript
+import type { Middleware } from 'burger-api';
+
+export function logger(): Middleware {
+    return async (req) => {
+        console.log(`${req.method} ${req.url}`);
+        return undefined; // Continue
+    };
+}
+```
+
+---
+url: 'https://burger-api.com/docs/middleware/route-specific'
+---
+
+# Route-Specific Middleware
+
+Route-specific middleware runs only for specific routes. Export it from the route file.
+
+## Example
+
+```typescript
+// api/protected/route.ts
+import type { Middleware, BurgerRequest } from 'burger-api';
+
+export const middleware: Middleware[] = [
+    async (req) => {
+        const token = req.headers.get('Authorization');
+        if (!token) {
+            return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        return undefined;
+    },
+];
+
+export async function GET() {
+    return Response.json({ message: 'Protected route' });
+}
+```
+
+## Execution Order
+
+1. Global middleware
+2. Route-specific middleware
+3. Validation middleware (if schema exists)
+4. Route handler
+
+---
+url: 'https://burger-api.com/docs/middleware/after'
+---
+
+# After Middleware (Response Transformation)
+
+After middleware transforms the final response after the handler runs. Return a function from middleware to use this feature.
+
+## Example
+
+```typescript
+const cors: Middleware = async (req) => {
+    // Continue processing
+    return undefined;
+    
+    // Return function to transform response
+    return (response: Response) => {
+        response.headers.set('Access-Control-Allow-Origin', '*');
+        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+        return response;
+    };
+};
+```
+
+## Multiple After Functions
+
+If multiple middleware return functions, they execute in reverse order:
+
+```typescript
+// Middleware 1: Add CORS headers
+const cors: Middleware = async () => {
+    return (response) => {
+        response.headers.set('Access-Control-Allow-Origin', '*');
+        return response;
+    };
+};
+
+// Middleware 2: Add custom header
+const customHeader: Middleware = async () => {
+    return (response) => {
+        response.headers.set('X-Custom-Header', 'value');
+        return response;
+    };
+};
+
+// Execution order for after functions:
+// 1. customHeader function runs first
+// 2. cors function runs second (last added, first to transform)
+```
+
+---
+url: 'https://burger-api.com/docs/validation/zod'
+---
+
+# Zod Validation
+
+Burger API uses Zod for request validation. Define schemas in your route files to automatically validate params, query, and body.
+
+## Schema Structure
+
+```typescript
+import { z } from 'zod';
+
+export const schema = {
+    // HTTP method (lowercase)
+    get: {
+        params: z.object({ id: z.string().uuid() }),      // URL parameters
+        query: z.object({ page: z.coerce.number() }),     // Query string
+    },
+    post: {
+        body: z.object({                                    // Request body
+            name: z.string().min(1),
+            email: z.string().email(),
+        }),
+    },
+};
+```
+
+## Validation Types
+
+### Params Validation
+
+Validates URL parameters from dynamic routes.
+
+```typescript
+export const schema = {
+    get: {
+        params: z.object({
+            id: z.string().uuid(),
+        }),
+    },
+};
+```
+
+### Query Validation
+
+Validates query string parameters.
+
+```typescript
+export const schema = {
+    get: {
+        query: z.object({
+            page: z.coerce.number().min(1).default(1),
+            limit: z.coerce.number().min(1).max(100).default(10),
+            search: z.string().optional(),
+        }),
+    },
+};
+```
+
+### Body Validation
+
+Validates JSON request body.
+
+```typescript
+export const schema = {
+    post: {
+        body: z.object({
+            name: z.string().min(1, 'Name is required'),
+            email: z.string().email('Invalid email'),
+            age: z.number().int().min(18).max(120),
+        }),
+    },
+};
+```
+
+---
+url: 'https://burger-api.com/docs/validation/accessing-validated-data'
+---
+
+# Accessing Validated Data
+
+After validation, access validated data through `req.validated`.
+
+## Example
+
+```typescript
+import { z } from 'zod';
+import type { BurgerRequest } from 'burger-api';
+
+export const schema = {
+    get: {
+        params: z.object({ id: z.string() }),
+        query: z.object({ page: z.coerce.number() }),
+    },
+    post: {
+        body: z.object({
+            name: z.string().min(1),
+            email: z.string().email(),
+        }),
+    },
+};
+
+export async function GET(req: BurgerRequest) {
+    const { id } = req.validated?.params || {};
+    const { page } = req.validated?.query || {};
+    return Response.json({ id, page });
+}
+
+export async function POST(req: BurgerRequest) {
+    const { name, email } = req.validated?.body || {};
+    return Response.json({ name, email }, { status: 201 });
+}
+```
+
+## Type Safety
+
+Use TypeScript generics for full type safety:
+
+```typescript
+export async function POST(
+    req: BurgerRequest<{ body: z.infer<typeof schema.post.body> }>
+) {
+    // TypeScript knows the exact shape of req.validated.body
+    const { name, email } = req.validated.body;
+    return Response.json({ name, email });
+}
+```
+
+---
+url: 'https://burger-api.com/docs/validation/errors'
+---
+
+# Validation Errors
+
+When validation fails, Burger API automatically returns a 400 response with error details.
+
+## Error Response Format
+
+```json
+{
+    "errors": {
+        "params": [
+            { "message": "Invalid uuid" }
+        ],
+        "query": [
+            { "message": "Expected number, received string" }
+        ],
+        "body": [
+            { "message": "String must contain at least 1 character(s)" },
+            { "message": "Invalid email" }
+        ]
+    }
+}
+```
+
+## Example
+
+**Request:**
+```bash
+POST /api/users
+Content-Type: application/json
+
+{
+    "name": "",
+    "email": "invalid-email"
+}
+```
+
+**Response:**
+```json
+{
+    "errors": {
+        "body": [
+            { "message": "String must contain at least 1 character(s)" },
+            { "message": "Invalid email" }
+        ]
+    }
+}
+```
+
+**Status Code:** 400 Bad Request
+
+---
+url: 'https://burger-api.com/docs/openapi/generation'
+---
+
+# OpenAPI Generation
+
+Burger API automatically generates OpenAPI 3.0 specifications from your routes and Zod schemas.
+
+## Automatic Generation
+
+OpenAPI docs are automatically generated when you:
+1. Define routes with HTTP method handlers
+2. Use Zod schemas for validation
+3. Add OpenAPI metadata (optional)
+
+## Accessing OpenAPI JSON
+
+The OpenAPI specification is available at `/openapi.json`:
+
+```bash
+GET http://localhost:4000/openapi.json
+```
+
+## Configuration
+
+Configure OpenAPI metadata in the Burger constructor:
+
+```typescript
+const app = new Burger({
+    apiDir: './api',
+    title: 'My API',
+    description: 'API for managing users and products',
+    version: '1.0.0',
+});
+```
+
+---
+url: 'https://burger-api.com/docs/openapi/metadata'
+---
+
+# OpenAPI Metadata
+
+Add OpenAPI metadata to your routes for better documentation.
+
+## Example
+
+```typescript
+export const openapi = {
+    get: {
+        summary: 'Get all users',
+        description: 'Returns a paginated list of users',
+        tags: ['Users'],
+        operationId: 'getUsers',
+        responses: {
+            '200': {
+                description: 'Successfully retrieved users',
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                users: { type: 'array' },
+                            },
+                        },
+                    },
+                },
+            },
+            '400': { description: 'Invalid query parameters' },
+        },
+    },
+    post: {
+        summary: 'Create a new user',
+        description: 'Creates a user with the provided data',
+        tags: ['Users'],
+        operationId: 'createUser',
+        responses: {
+            '201': { description: 'User created successfully' },
+            '400': { description: 'Invalid request body' },
+        },
+    },
+};
+```
+
+## Metadata Properties
+
+- `summary` - Short description of the endpoint
+- `description` - Detailed description
+- `tags` - Group endpoints together
+- `operationId` - Unique identifier for code generation
+- `responses` - Define possible responses
+- `deprecated` - Mark endpoint as deprecated
+
+---
+url: 'https://burger-api.com/docs/openapi/swagger-ui'
+---
+
+# Swagger UI
+
+Burger API includes built-in Swagger UI for interactive API documentation.
+
+## Accessing Swagger UI
+
+Navigate to `/docs` in your browser:
+
+```
+http://localhost:4000/docs
+```
+
+## Features
+
+- Interactive API testing
+- Request/response examples
+- Schema documentation
+- Try it out functionality
+
+Swagger UI automatically uses the OpenAPI specification generated from your routes.
+
+---
+url: 'https://burger-api.com/docs/cli/installation'
+---
+
+# CLI Installation
+
+The Burger API CLI tool helps you create projects and manage middleware.
+
+## Quick Install
+
+**macOS, Linux, WSL:**
+```bash
+curl -fsSL https://burger-api.com/install.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+irm https://burger-api.com/install.ps1 | iex
+```
+
+## Manual Installation
+
+1. Download the executable from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
+2. Add to PATH
+3. Make executable (Linux/macOS): `chmod +x burger-api`
+
+## Verify Installation
+
+```bash
+burger-api --version
+```
+
+---
+url: 'https://burger-api.com/docs/cli/create'
+---
+
+# CLI: Create Command
+
+Creates a new Burger API project with interactive prompts.
+
+## Usage
+
+```bash
+burger-api create <project-name>
+```
+
+## Example
+
+```bash
+burger-api create my-api
+```
+
+## Interactive Prompts
+
+The CLI will ask you:
+
+1. **Do you need API routes?** (yes/no)
+   - If yes:
+     - API directory name (default: `api`)
+     - API route prefix (default: `/api`)
+     - Enable debug mode? (yes/no)
+
+2. **Do you need Page routes?** (yes/no)
+   - If yes:
+     - Page directory name (default: `pages`)
+     - Page route prefix (default: `/`)
+
+## What Gets Created
+
+- Full project structure
+- TypeScript configuration
+- Dependencies installed
+- Example routes
+- Ready to run!
+
+## Project Structure
+
+```
+my-api/
+├── src/
+│   ├── index.ts              # Main server file
+│   ├── api/                  # API routes (if enabled)
+│   │   └── route.ts
+│   └── pages/                # Page routes (if enabled)
+│       └── index.html
+├── ecosystem/
+│   └── middleware/           # Ecosystem middleware
+├── package.json
+├── tsconfig.json
+└── .gitignore
+```
+
+---
+url: 'https://burger-api.com/docs/cli/list'
+---
+
+# CLI: List Command
+
+Shows all available middleware from the ecosystem.
+
+## Usage
+
+```bash
+burger-api list
+burger-api ls  # Alias
+```
+
+## Output
+
+```
+Available Middleware
+────────────────────────────────
+
+Name            Description
+─────────────────────────────────────────────────
+cors            Cross-Origin Resource Sharing
+logger          Request/response logging
+rate-limiter    Request rate limiting
+jwt-auth        JWT authentication
+api-key-auth    API key authentication
+compression     Response compression
+security-headers Security HTTP headers
+cache           HTTP caching headers
+timeout         Request timeout
+body-size-limiter Request body size limits
+```
+
+## Usage Instructions
+
+After running `list`, the CLI shows how to add middleware:
+
+```bash
+burger-api add <middleware-name>
+```
+
+Example: `burger-api add cors logger rate-limiter`
+
+---
+url: 'https://burger-api.com/docs/cli/add'
+---
+
+# CLI: Add Command
+
+Adds one or more middleware to your project.
+
+## Usage
+
+```bash
+burger-api add <middleware...>
+```
+
+## Examples
+
+```bash
+# Add a single middleware
+burger-api add cors
+
+# Add multiple middleware at once
+burger-api add cors logger rate-limiter
+
+# Add authentication middleware
+burger-api add jwt-auth api-key-auth
+```
+
+## What It Does
+
+1. Downloads middleware code from GitHub
+2. Copies files to `ecosystem/middleware/` folder
+3. Shows you example code to use it
+
+## After Adding
+
+The CLI shows you exactly how to use the middleware:
+
+```typescript
+import { Burger } from 'burger-api';
+import { cors } from './ecosystem/middleware/cors/cors';
+import { logger } from './ecosystem/middleware/logger/logger';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware: [logger(), cors()],
+});
+```
+
+## Middleware Location
+
+Middleware is added to:
+```
+ecosystem/middleware/
+├── cors/
+│   ├── cors.ts
+│   └── README.md
+├── logger/
+│   ├── logger.ts
+│   └── README.md
+└── ...
+```
+
+Check each middleware's README for configuration options.
+
+---
+url: 'https://burger-api.com/docs/cli/serve'
+---
+
+# CLI: Serve Command
+
+Starts a development server with hot reload (auto-restart on file changes).
+
+## Usage
+
+```bash
+burger-api serve
+burger-api serve --port 4000
+burger-api serve --file src/index.ts
+burger-api serve --port 8080 --file app.ts
+```
+
+## Options
+
+- `-p, --port <port>` - Port to run on (default: 4000)
+- `-f, --file <file>` - Entry file (default: `src/index.ts`)
+
+## Features
+
+- Hot reload - automatically restarts on file changes
+- Fast startup
+- Error reporting
+
+## Example Output
+
+```
+→ Starting development server...
+
+✓ Server running on http://localhost:4000
+ℹ Press Ctrl+C to stop
+  File changes will automatically restart the server
+```
+
+---
+url: 'https://burger-api.com/docs/cli/build'
+---
+
+# CLI: Build Command
+
+Bundles your project into a single JavaScript file.
+
+## Usage
+
+```bash
+burger-api build <file>
+burger-api build index.ts
+burger-api build src/index.ts --minify
+burger-api build index.ts --outfile dist/app.js
+burger-api build index.ts --sourcemap linked
+```
+
+## Options
+
+- `--outfile <path>` - Output file path (default: `.build/bundle.js`)
+- `--minify` - Minify the output for smaller file size
+- `--sourcemap <type>` - Generate sourcemaps (`inline`, `linked`, or `none`)
+- `--target <target>` - Target environment (e.g., `bun`, `node`)
+
+## Example Output
+
+```
+✓ Build completed successfully!
+  Output: .build/bundle.js
+  Size: 42.5 KB
+```
+
+## Running the Bundle
+
+```bash
+bun .build/bundle.js
+```
+
+---
+url: 'https://burger-api.com/docs/cli/build-executable'
+---
+
+# CLI: Build Executable Command
+
+Compiles your project to a standalone executable that runs without Bun installed.
+
+## Usage
+
+```bash
+burger-api build:executable <file>
+burger-api build:executable index.ts
+burger-api build:executable index.ts --target bun-windows-x64
+burger-api build:executable index.ts --target bun-linux-x64
+burger-api build:executable index.ts --target bun-darwin-arm64
+burger-api build:executable index.ts --outfile my-server.exe
+```
+
+## Options
+
+- `--outfile <path>` - Output file path
+- `--target <target>` - Target platform
+- `--minify` - Minify the output (enabled by default)
+- `--no-bytecode` - Disable bytecode compilation
+
+## Supported Targets
+
+- `bun-windows-x64` - Windows (64-bit)
+- `bun-linux-x64` - Linux (64-bit)
+- `bun-linux-arm64` - Linux (ARM 64-bit)
+- `bun-darwin-x64` - macOS (Intel)
+- `bun-darwin-arm64` - macOS (Apple Silicon)
+
+## Example Output
+
+```
+✓ Compilation completed successfully!
+  Executable: .build/my-api.exe
+  Size: 45.2 MB
+
+  Your standalone executable is ready to run!
+  Run it: .build/my-api.exe
+```
+
+## Use Case
+
+Perfect for deploying your API to production servers without installing Bun or Node.js!
+
+---
+url: 'https://burger-api.com/docs/examples/complete-route'
+---
+
+# Complete Route Example
+
+A complete example showing all route features.
+
+```typescript
+// api/products/route.ts
+import { z } from 'zod';
+import type { BurgerRequest, Middleware } from 'burger-api';
+
+// OpenAPI metadata
+export const openapi = {
+    get: {
+        summary: 'Get all products',
+        description: 'Returns a paginated list of products',
+        tags: ['Products'],
+        operationId: 'getProducts',
+        responses: {
+            '200': { description: 'Success' },
+            '400': { description: 'Invalid query parameters' },
+        },
+    },
+    post: {
+        summary: 'Create a product',
+        description: 'Creates a new product',
+        tags: ['Products'],
+        operationId: 'createProduct',
+        responses: {
+            '201': { description: 'Product created' },
+            '400': { description: 'Invalid request body' },
+        },
+    },
+};
+
+// Zod validation schema
+export const schema = {
+    get: {
+        query: z.object({
+            page: z.coerce.number().min(1).default(1),
+            limit: z.coerce.number().min(1).max(100).default(10),
+            search: z.string().optional(),
+        }),
+    },
+    post: {
+        body: z.object({
+            name: z.string().min(1, 'Name is required'),
+            price: z.number().positive('Price must be positive'),
+            category: z.enum(['food', 'drink', 'dessert']),
+        }),
+    },
+};
+
+// Route-specific middleware
+export const middleware: Middleware[] = [
+    async (req) => {
+        console.log(`[${req.method}] ${req.url}`);
+        return undefined;
+    },
+];
+
+// GET handler
+export async function GET(req: BurgerRequest) {
+    const { page, limit, search } = req.validated?.query || {};
+    
+    // Mock data
+    const products = [
+        { id: '1', name: 'Burger', price: 9.99, category: 'food' },
+        { id: '2', name: 'Cola', price: 2.99, category: 'drink' },
+    ];
+    
+    // Filter if search provided
+    let filtered = products;
+    if (search) {
+        filtered = products.filter(p => 
+            p.name.toLowerCase().includes(search.toLowerCase())
+        );
+    }
+    
+    // Paginate
+    const start = (page - 1) * limit;
+    const paginated = filtered.slice(start, start + limit);
+    
+    return Response.json({
+        products: paginated,
+        pagination: {
+            page,
+            limit,
+            total: filtered.length,
+        },
+    });
+}
+
+// POST handler
+export async function POST(req: BurgerRequest) {
+    const { name, price, category } = req.validated?.body || {};
+    
+    const newProduct = {
+        id: crypto.randomUUID(),
+        name,
+        price,
+        category,
+        createdAt: new Date().toISOString(),
+    };
+    
+    return Response.json(newProduct, { status: 201 });
+}
+```
+
+---
+url: 'https://burger-api.com/docs/examples/complete-project'
+---
+
+# Complete Project Example
+
+A complete project setup example.
+
+## Project Structure
+
+```
+my-api/
+├── src/
+│   ├── index.ts
+│   ├── api/
+│   │   ├── route.ts
+│   │   ├── users/
+│   │   │   └── route.ts
+│   │   └── users/
+│   │       └── [id]/
+│   │           └── route.ts
+│   └── pages/
+│       └── index.html
+├── ecosystem/
+│   └── middleware/
+│       ├── cors/
+│       └── logger/
+├── package.json
+└── tsconfig.json
+```
+
+## Main Server File
+
+```typescript
+// src/index.ts
+import { Burger } from 'burger-api';
+import { cors } from '../ecosystem/middleware/cors/cors';
+import { logger } from '../ecosystem/middleware/logger/logger';
+
+const app = new Burger({
+    apiDir: './src/api',
+    apiPrefix: '/api',
+    pageDir: './src/pages',
+    pagePrefix: '/',
+    globalMiddleware: [
+        logger(),
+        cors({ origin: '*' }),
+    ],
+    title: 'My API',
+    description: 'API for managing users',
+    version: '1.0.0',
+    debug: process.env.NODE_ENV !== 'production',
+});
+
+const port = Number(process.env.PORT) || 4000;
+await app.serve(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
+});
+```
+
+## Example Route
+
+```typescript
+// src/api/users/route.ts
+import { z } from 'zod';
+import type { BurgerRequest } from 'burger-api';
+
+export const schema = {
+    get: {
+        query: z.object({
+            page: z.coerce.number().min(1).default(1),
+        }),
+    },
+    post: {
+        body: z.object({
+            name: z.string().min(1),
+            email: z.string().email(),
+        }),
+    },
+};
+
+export async function GET(req: BurgerRequest) {
+    const { page } = req.validated?.query || {};
+    return Response.json({ users: [], page });
+}
+
+export async function POST(req: BurgerRequest) {
+    const { name, email } = req.validated?.body || {};
+    return Response.json({ name, email }, { status: 201 });
+}
+```
+
+## Running the Project
+
+```bash
+# Development
+bun run dev
+
+# Production
+bun run start
+```
+
+---
+url: 'https://burger-api.com/docs/advanced/performance'
+---
+
+# Performance Optimization
+
+Burger API is optimized for performance with several built-in optimizations.
+
+## Fast Paths
+
+The framework uses specialized fast paths for common middleware counts:
+- 0 middlewares - Ultra-fast path with no middleware overhead
+- 1 middleware - Single middleware fast path
+- 2 middlewares - Manual loop unrolling
+- 3+ middlewares - General path with pre-allocated arrays
+
+## AOT Compilation
+
+Middleware arrays are pre-computed at route registration time, avoiding runtime allocations.
+
+## Route Matching
+
+Routes are sorted by specificity:
+1. Static routes (highest priority)
+2. Dynamic routes
+3. Wildcard routes (lowest priority)
+
+This ensures the most specific route is matched first.
+
+---
+url: 'https://burger-api.com/docs/advanced/error-handling'
+---
+
+# Error Handling
+
+Burger API provides comprehensive error handling.
+
+## Automatic Error Handling
+
+Errors in route handlers are automatically caught and returned as appropriate responses.
+
+## Debug Mode
+
+Enable debug mode for detailed error information:
+
+```typescript
+const app = new Burger({
+    apiDir: './api',
+    debug: true,
+});
+```
+
+## Error Response Format
+
+**Debug Mode Enabled:**
+```json
+{
+    "request": "GET /api/users",
+    "error": "Error message",
+    "stack": "Error stack trace"
+}
+```
+
+**Debug Mode Disabled:**
+```
+Internal Server Error
+```
+
+## Custom Error Handling
+
+Handle errors in middleware:
+
+```typescript
+const errorHandler: Middleware = async (req) => {
+    try {
+        return undefined; // Continue
+    } catch (error) {
+        return Response.json(
+            { error: error.message },
+            { status: 500 }
+        );
+    }
+};
+```
+
+---
+url: 'https://burger-api.com/docs/ecosystem/middleware'
+---
+
+# Available Middleware
+
+Burger API ecosystem includes production-ready middleware.
+
+## Core Middleware
+
+- **cors** - Cross-Origin Resource Sharing
+- **logger** - Request/response logging
+- **rate-limiter** - Request rate limiting
+- **jwt-auth** - JWT authentication
+- **api-key-auth** - API key authentication
+- **compression** - Response compression (gzip/deflate)
+- **security-headers** - Security HTTP headers
+- **cache** - HTTP caching headers
+- **timeout** - Request timeout
+- **body-size-limiter** - Request body size limits
+
+## Installing Middleware
+
+```bash
+burger-api add cors logger rate-limiter
+```
+
+## Using Middleware
+
+```typescript
+import { cors } from './ecosystem/middleware/cors/cors';
+import { logger } from './ecosystem/middleware/logger/logger';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware: [
+        logger(),
+        cors({ origin: '*' }),
+    ],
+});
+```
+
+Each middleware includes a README with configuration options.
+
+---
+url: 'https://burger-api.com/docs/troubleshooting'
+---
+
+# Troubleshooting
+
+Common issues and solutions.
+
+## "burger-api: command not found"
+
+**Solution:** Install the CLI using the install script:
+
+```bash
+# macOS/Linux
+curl -fsSL https://burger-api.com/install.sh | bash
+
+# Windows
+irm https://burger-api.com/install.ps1 | iex
+```
+
+## "Directory already exists"
+
+**Solution:** Choose a different project name:
+
+```bash
+burger-api create my-api-v2
+```
+
+## "Could not get middleware list from GitHub"
+
+**Solution:** Check your internet connection. The CLI needs internet to download middleware.
+
+## "Entry file not found: index.ts"
+
+**Solution:** Make sure you're in the project directory:
+
+```bash
+cd my-project
+burger-api serve
+```
+
+## Build fails with errors
+
+**Solution:** Check that:
+1. You're in a Burger API project directory
+2. The entry file exists
+3. There are no TypeScript errors
+
+Run `bun run dev` first to see any errors.
+
+## Cross-compilation fails from Windows (D:\ drive)
+
+**Error:**
+```
+Failed to extract executable for 'bun-linux-x64-v1.3.4'. The download may be incomplete.
+```
+
+**Solution:** Move your project to `C:\` drive. Cross-compilation works correctly from the system drive.
+
+---
+url: 'https://burger-api.com/docs/getting-started'
+---
+
+# Getting Started
+
+Quick start guide for Burger API.
+
+## Installation
+
+```bash
+# Install Bun (if not already installed)
+curl -fsSL https://bun.sh/install | bash
+
+# Install burger-api
+bun add burger-api
+```
+
+## Create Your First API
+
+```typescript
+// index.ts
+import { Burger } from 'burger-api';
+
+const app = new Burger({
+    apiDir: './api',
+});
+
+await app.serve(4000);
+```
+
+## Create Your First Route
+
+```typescript
+// api/hello/route.ts
+export async function GET() {
+    return Response.json({ message: 'Hello, Burger API!' });
+}
+```
+
+## Run Your Server
+
+```bash
+bun run index.ts
+```
+
+Visit `http://localhost:4000/api/hello` to see your API in action!
+
+## Using the CLI
+
+```bash
+# Create a new project
+burger-api create my-api
+
+# Navigate to your project
+cd my-api
+
+# Start development server
+bun run dev
+```
+
+---
+url: 'https://burger-api.com/docs/quick-start'
+---
+
+# Quick Start
+
+Get up and running with Burger API in 30 seconds.
+
+## Step 1: Install CLI
+
+```bash
+curl -fsSL https://burger-api.com/install.sh | bash
+```
+
+## Step 2: Create Project
+
+```bash
+burger-api create my-api
+```
+
+## Step 3: Start Server
+
+```bash
+cd my-api
+bun run dev
+```
+
+## Step 4: Open Browser
+
+Visit `http://localhost:4000` to see your API!
+
+## Next Steps
+
+- Add middleware: `burger-api add cors logger`
+- Create routes in `src/api/`
+- View API docs at `http://localhost:4000/docs`
+- Check OpenAPI spec at `http://localhost:4000/openapi.json`
+
+That's it! Your Burger API server is running! 🎉
+

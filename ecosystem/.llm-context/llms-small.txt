@@ -1,0 +1,395 @@
+# Burger API - Essential Reference
+
+A modern, high-performance API framework built on Bun.js with file-based routing, built-in middleware, Zod validation, and automatic OpenAPI generation.
+
+## Framework Basics
+
+### Burger Class
+
+```typescript
+import { Burger } from 'burger-api';
+
+const app = new Burger({
+    apiDir: './api',           // Directory for API routes
+    apiPrefix: '/api',         // Prefix for API routes (default: '/api')
+    pageDir: './pages',        // Directory for page routes (optional)
+    pagePrefix: '/',            // Prefix for page routes (default: '/')
+    globalMiddleware: [],       // Array of global middleware functions
+    title: 'My API',           // OpenAPI title
+    description: 'API description',
+    version: '1.0.0',          // API version
+    debug: false,              // Enable debug mode
+});
+
+// Start the server
+await app.serve(4000);
+```
+
+### Core Types
+
+```typescript
+// BurgerRequest extends BunRequest with additional properties
+interface BurgerRequest {
+    params?: Record<string, string>;      // URL parameters (e.g., /users/:id)
+    validated?: {                          // Validated data from Zod schemas
+        params?: Record<string, unknown>;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    };
+    wildcardParams?: string[];             // Wildcard route parameters
+    // ... all standard Request properties (url, method, headers, etc.)
+}
+
+// Middleware return types
+type Middleware = (request: BurgerRequest) => Promise<BurgerNext> | BurgerNext;
+type BurgerNext = Response | ((response: Response) => Promise<Response>) | undefined;
+
+// Request handler
+type RequestHandler = (request: BurgerRequest) => Promise<Response> | Response;
+```
+
+## File-Based Routing
+
+### Route File Structure
+
+Create route files named `route.ts` in your API directory:
+
+```
+api/
+├── route.ts                    → GET /api
+├── users/
+│   └── route.ts               → GET /api/users
+├── users/
+│   └── [id]/
+│       └── route.ts           → GET /api/users/:id
+└── files/
+    └── [...]
+        └── route.ts           → GET /api/files/*
+```
+
+### Route File Exports
+
+```typescript
+import { z } from 'zod';
+import type { BurgerRequest, Middleware } from 'burger-api';
+
+// OpenAPI metadata (optional)
+export const openapi = {
+    get: {
+        summary: 'Get users',
+        description: 'Returns a list of users',
+        tags: ['Users'],
+        operationId: 'getUsers',
+        responses: {
+            '200': { description: 'Success' },
+        },
+    },
+};
+
+// Zod validation schema (optional)
+export const schema = {
+    get: {
+        query: z.object({
+            page: z.coerce.number().min(1).default(1),
+            limit: z.coerce.number().min(1).max(100).default(10),
+        }),
+    },
+    post: {
+        body: z.object({
+            name: z.string().min(1),
+            email: z.string().email(),
+        }),
+    },
+};
+
+// Route-specific middleware (optional)
+export const middleware: Middleware[] = [
+    async (req) => {
+        console.log(`Request to ${req.url}`);
+        return undefined; // Continue to handler
+    },
+];
+
+// HTTP method handlers
+export async function GET(req: BurgerRequest) {
+    const { page, limit } = req.validated?.query || {};
+    return Response.json({ page, limit, users: [] });
+}
+
+export async function POST(req: BurgerRequest) {
+    const { name, email } = req.validated?.body || {};
+    return Response.json({ name, email }, { status: 201 });
+}
+```
+
+### Routing Patterns
+
+**Static Routes:**
+```
+api/users/route.ts → /api/users
+```
+
+**Dynamic Routes:**
+```
+api/users/[id]/route.ts → /api/users/:id
+// Access via req.params.id
+```
+
+**Wildcard Routes:**
+```
+api/files/[...]/route.ts → /api/files/*
+// Access via req.wildcardParams (array of path segments)
+```
+
+**Route Groups (for organization, not in URL):**
+```
+api/(admin)/users/route.ts → /api/users
+// (admin) is ignored in the URL path
+```
+
+## Middleware System
+
+### Middleware Return Types
+
+Middleware can return three types:
+
+1. **`undefined`** - Continue to next middleware/handler
+2. **`Response`** - Stop and send this response immediately
+3. **`Function`** - Transform the final response after handler runs
+
+```typescript
+// Example: Continue
+const logger: Middleware = async (req) => {
+    console.log(`${req.method} ${req.url}`);
+    return undefined; // Continue
+};
+
+// Example: Stop early
+const auth: Middleware = async (req) => {
+    const token = req.headers.get('Authorization');
+    if (!token) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return undefined; // Continue if authorized
+};
+
+// Example: Transform response
+const cors: Middleware = async (req) => {
+    return undefined; // Continue, but transform response later
+    // Return function to transform final response
+    return (response: Response) => {
+        response.headers.set('Access-Control-Allow-Origin', '*');
+        return response;
+    };
+};
+```
+
+### Global Middleware
+
+```typescript
+import { cors } from './middleware/cors';
+import { logger } from './middleware/logger';
+
+const app = new Burger({
+    apiDir: './api',
+    globalMiddleware: [
+        logger(),
+        cors({ origin: '*' }),
+    ],
+});
+```
+
+## Zod Validation
+
+### Schema Structure
+
+```typescript
+import { z } from 'zod';
+
+export const schema = {
+    // HTTP method (lowercase)
+    get: {
+        params: z.object({ id: z.string() }),           // URL params
+        query: z.object({ page: z.coerce.number() }),    // Query string
+    },
+    post: {
+        body: z.object({                                 // Request body
+            name: z.string().min(1),
+            email: z.string().email(),
+        }),
+    },
+};
+```
+
+### Accessing Validated Data
+
+```typescript
+export async function GET(req: BurgerRequest) {
+    // Validated data is available in req.validated
+    const { id } = req.validated?.params || {};
+    const { page } = req.validated?.query || {};
+    
+    return Response.json({ id, page });
+}
+
+export async function POST(req: BurgerRequest) {
+    const { name, email } = req.validated?.body || {};
+    return Response.json({ name, email }, { status: 201 });
+}
+```
+
+### Validation Errors
+
+If validation fails, Burger API automatically returns:
+```json
+{
+    "errors": {
+        "body": [{ "message": "Invalid email" }],
+        "query": [{ "message": "Page must be >= 1" }]
+    }
+}
+```
+With status code 400.
+
+## CLI Commands
+
+### Installation
+
+**macOS, Linux, WSL:**
+```bash
+curl -fsSL https://burger-api.com/install.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+irm https://burger-api.com/install.ps1 | iex
+```
+
+### Create Project
+
+```bash
+burger-api create my-api
+```
+
+Interactive prompts for:
+- API routes (yes/no)
+- API directory name (default: api)
+- API prefix (default: /api)
+- Debug mode (yes/no)
+- Page routes (yes/no)
+- Page directory name (default: pages)
+- Page prefix (default: /)
+
+### Add Middleware
+
+```bash
+# List available middleware
+burger-api list
+
+# Add middleware
+burger-api add cors logger rate-limiter
+
+# Adds middleware to ecosystem/middleware/ directory
+```
+
+### Development Server
+
+```bash
+burger-api serve
+burger-api serve --port 4000
+burger-api serve --file src/index.ts
+```
+
+### Build
+
+```bash
+# Bundle to single JS file
+burger-api build src/index.ts
+burger-api build src/index.ts --minify --outfile dist/app.js
+
+# Compile to executable
+burger-api build:executable src/index.ts
+burger-api build:executable src/index.ts --target bun-linux-x64
+```
+
+## Quick Examples
+
+### Basic Route
+
+```typescript
+// api/hello/route.ts
+export async function GET() {
+    return Response.json({ message: 'Hello, Burger API!' });
+}
+```
+
+### Route with Validation
+
+```typescript
+// api/users/[id]/route.ts
+import { z } from 'zod';
+
+export const schema = {
+    get: {
+        params: z.object({
+            id: z.string().uuid(),
+        }),
+    },
+};
+
+export async function GET(req: BurgerRequest) {
+    const { id } = req.validated?.params || {};
+    return Response.json({ userId: id });
+}
+```
+
+### Route with Middleware
+
+```typescript
+// api/protected/route.ts
+export const middleware: Middleware[] = [
+    async (req) => {
+        const token = req.headers.get('Authorization');
+        if (!token) {
+            return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        return undefined;
+    },
+];
+
+export async function GET() {
+    return Response.json({ message: 'Protected route' });
+}
+```
+
+### Complete Example
+
+```typescript
+// index.ts
+import { Burger } from 'burger-api';
+import { cors } from './middleware/cors';
+import { logger } from './middleware/logger';
+
+const app = new Burger({
+    apiDir: './api',
+    apiPrefix: '/api',
+    globalMiddleware: [
+        logger(),
+        cors({ origin: '*' }),
+    ],
+    title: 'My API',
+    version: '1.0.0',
+});
+
+await app.serve(4000);
+```
+
+## Key Features
+
+- ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
+- 📁 **File-Based Routing** - Automatic route registration from file structure
+- 🔄 **Middleware System** - Global and route-specific middleware
+- ✅ **Type-Safe Validation** - Zod schemas with automatic type inference
+- 📚 **Automatic OpenAPI** - Generates OpenAPI 3.0 specs from routes
+- 🔍 **Swagger UI** - Built-in interactive API documentation at `/docs`
+- 🚀 **CLI Tool** - Project scaffolding and middleware management

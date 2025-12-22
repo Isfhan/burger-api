@@ -10,6 +10,10 @@ recommend the following folder structure:
 ```
 my-burger-app/
 ├── ecosystem/           # Official middleware collection (copy from burger-api)
+│   ├── .llm-context/   # AI context files for Burger API documentation
+│   │   ├── llms.txt
+│   │   ├── llms-small.txt
+│   │   └── llms-full.txt
 │   └── middlewares/
 │       ├── cors/
 │       ├── logger/
@@ -98,6 +102,27 @@ middleware for Burger API applications.
 -   ✅ Optimized for Bun.js v1.3.1+ with automatic fallbacks
 -   ✅ Comprehensive documentation and testing guides
 -   ✅ Copy & paste approach for easy customization
+
+### AI Context Files
+
+Located in `./.llm-context/` - Documentation files that provide context for AI
+assistants working with Burger API projects.
+
+**Files:**
+
+-   `llms.txt` - Essential reference guide for Burger API
+-   `llms-small.txt` - Compact documentation with key concepts
+-   `llms-full.txt` - Complete documentation with all features and examples
+
+**Purpose:**
+
+These files are automatically included when you create a new Burger API project
+using the CLI (`burger-api create`). They help AI assistants understand the
+framework's structure, patterns, and best practices, enabling better code
+suggestions and assistance.
+
+**Note:** These files are optional and can be safely removed if not needed. They
+don't affect the runtime behavior of your application.
 
 ## 🎯 Benefits of This Structure
 

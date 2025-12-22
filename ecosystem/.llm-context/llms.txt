@@ -1,0 +1,83 @@
+# Burger API - Modern API Framework for Bun
+
+> A modern, high-performance API framework built on Bun.js with file-based routing, built-in middleware, Zod validation, and automatic OpenAPI generation.
+
+## Table of Contents
+
+### Getting Started
+
+- [Quick Start - Burger API](https://burger-api.com/docs/quick-start)
+- [Installation - Burger API](https://burger-api.com/docs/installation)
+- [Key Concepts - Burger API](https://burger-api.com/docs/key-concepts)
+
+### Framework Core
+
+- [Burger Class - Burger API](https://burger-api.com/docs/core/burger-class)
+- [Server Options - Burger API](https://burger-api.com/docs/core/server-options)
+- [Request Handling - Burger API](https://burger-api.com/docs/core/request-handling)
+- [Response Types - Burger API](https://burger-api.com/docs/core/response-types)
+
+### Routing
+
+- [File-Based Routing - Burger API](https://burger-api.com/docs/routing/file-based-routing)
+- [Static Routes - Burger API](https://burger-api.com/docs/routing/static-routes)
+- [Dynamic Routes - Burger API](https://burger-api.com/docs/routing/dynamic-routes)
+- [Wildcard Routes - Burger API](https://burger-api.com/docs/routing/wildcard-routes)
+- [Route Groups - Burger API](https://burger-api.com/docs/routing/route-groups)
+- [Nested Routes - Burger API](https://burger-api.com/docs/routing/nested-routes)
+
+### Middleware
+
+- [Middleware System - Burger API](https://burger-api.com/docs/middleware/system)
+- [Global Middleware - Burger API](https://burger-api.com/docs/middleware/global)
+- [Route-Specific Middleware - Burger API](https://burger-api.com/docs/middleware/route-specific)
+- [Middleware Return Types - Burger API](https://burger-api.com/docs/middleware/return-types)
+- [After Middleware - Burger API](https://burger-api.com/docs/middleware/after)
+
+### Validation
+
+- [Zod Validation - Burger API](https://burger-api.com/docs/validation/zod)
+- [Schema Definition - Burger API](https://burger-api.com/docs/validation/schema)
+- [Params Validation - Burger API](https://burger-api.com/docs/validation/params)
+- [Query Validation - Burger API](https://burger-api.com/docs/validation/query)
+- [Body Validation - Burger API](https://burger-api.com/docs/validation/body)
+- [Error Handling - Burger API](https://burger-api.com/docs/validation/errors)
+
+### OpenAPI & Documentation
+
+- [OpenAPI Generation - Burger API](https://burger-api.com/docs/openapi/generation)
+- [Swagger UI - Burger API](https://burger-api.com/docs/openapi/swagger-ui)
+- [OpenAPI Metadata - Burger API](https://burger-api.com/docs/openapi/metadata)
+
+### CLI Tool
+
+- [CLI Installation - Burger API](https://burger-api.com/docs/cli/installation)
+- [Create Command - Burger API](https://burger-api.com/docs/cli/create)
+- [Add Command - Burger API](https://burger-api.com/docs/cli/add)
+- [List Command - Burger API](https://burger-api.com/docs/cli/list)
+- [Serve Command - Burger API](https://burger-api.com/docs/cli/serve)
+- [Build Command - Burger API](https://burger-api.com/docs/cli/build)
+- [Build Executable - Burger API](https://burger-api.com/docs/cli/build-executable)
+
+### Examples
+
+- [Basic Route Example - Burger API](https://burger-api.com/docs/examples/basic-route)
+- [Middleware Example - Burger API](https://burger-api.com/docs/examples/middleware)
+- [Validation Example - Burger API](https://burger-api.com/docs/examples/validation)
+- [Complete Project Example - Burger API](https://burger-api.com/docs/examples/complete-project)
+
+### Ecosystem
+
+- [Available Middleware - Burger API](https://burger-api.com/docs/ecosystem/middleware)
+- [CORS Middleware - Burger API](https://burger-api.com/docs/ecosystem/cors)
+- [Logger Middleware - Burger API](https://burger-api.com/docs/ecosystem/logger)
+- [Rate Limiter - Burger API](https://burger-api.com/docs/ecosystem/rate-limiter)
+- [JWT Auth - Burger API](https://burger-api.com/docs/ecosystem/jwt-auth)
+- [API Key Auth - Burger API](https://burger-api.com/docs/ecosystem/api-key-auth)
+
+### Advanced
+
+- [Performance Optimization - Burger API](https://burger-api.com/docs/advanced/performance)
+- [Error Handling Patterns - Burger API](https://burger-api.com/docs/advanced/error-handling)
+- [Type Safety - Burger API](https://burger-api.com/docs/advanced/type-safety)
+- [Deployment - Burger API](https://burger-api.com/docs/advanced/deployment)
