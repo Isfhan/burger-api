@@ -54,15 +54,25 @@ if ($arch -ne "AMD64") {
 
 $executableName = "burger-api.exe"
 
-# Get the latest version from GitHub API
-Print-Info "Checking for latest version..."
+# Get the latest CLI version from GitHub API
+Print-Info "Checking for latest CLI version..."
 try {
-    $response = Invoke-RestMethod -Uri "https://api.github.com/repos/isfhan/burger-api/releases/latest"
-    $latestVersion = $response.tag_name
-    Print-Success "Latest version: $latestVersion"
+    # Fetch all releases and filter for CLI releases (tags starting with cli/v)
+    $allReleases = Invoke-RestMethod -Uri "https://api.github.com/repos/isfhan/burger-api/releases"
+    $cliRelease = $allReleases | Where-Object { $_.tag_name -like "cli/v*" } | Select-Object -First 1
+    
+    if (-not $cliRelease) {
+        throw "No CLI releases found"
+    }
+    
+    $latestVersion = $cliRelease.tag_name
+    # Extract clean version for display (remove cli/ prefix)
+    $displayVersion = $latestVersion -replace "^cli/", ""
+    
+    Print-Success "Latest version: $displayVersion"
 }
 catch {
-    Print-Error "Could not determine latest version"
+    Print-Error "Could not determine latest CLI version"
     $errorMessage = $_.Exception.Message
     
     if ($errorMessage -match "Could not resolve|Unable to connect") {
@@ -70,6 +80,9 @@ catch {
     }
     elseif ($errorMessage -match "403|rate limit") {
         Print-Info "GitHub API rate limit exceeded. Please try again later."
+    }
+    elseif ($errorMessage -match "No CLI releases") {
+        Print-Info "No CLI releases found. Please check the repository."
     }
     else {
         Print-Info "GitHub API might be temporarily unavailable."
@@ -200,7 +213,7 @@ $env:Path = "$env:Path;$installDir"
 # Verify installation
 Print-Header "Installation Complete!"
 Print-Success "burger-api has been installed to $installPath"
-Print-Info "Version: $latestVersion"
+Print-Info "Version: $displayVersion"
 Write-Host ""
 Print-Info "To verify installation, run:"
 Write-Host ""

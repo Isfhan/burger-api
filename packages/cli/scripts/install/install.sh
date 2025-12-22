@@ -85,18 +85,22 @@ else
     exit 1
 fi
 
-# Get the latest version from GitHub API
-print_info "Checking for latest version..."
-LATEST_VERSION=$(curl -s https://api.github.com/repos/isfhan/burger-api/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
+# Get the latest CLI version from GitHub API
+print_info "Checking for latest CLI version..."
+# Fetch all releases and filter for CLI releases (tags starting with cli/v)
+LATEST_VERSION=$(curl -s https://api.github.com/repos/isfhan/burger-api/releases | grep -o '"tag_name":"cli/v[^"]*"' | head -1 | cut -d '"' -f 4)
 
 if [ -z "$LATEST_VERSION" ]; then
-    print_error "Could not determine latest version"
-    print_info "Could not connect to GitHub API. Please check your internet connection."
-    print_info "If the problem persists, GitHub API might be temporarily unavailable."
+    print_error "Could not determine latest CLI version"
+    print_info "Could not connect to GitHub API or no CLI releases found."
+    print_info "Please check your internet connection and try again."
     exit 1
 fi
 
-print_success "Latest version: $LATEST_VERSION"
+# Extract clean version for display (remove cli/ prefix)
+DISPLAY_VERSION="${LATEST_VERSION#cli/}"
+
+print_success "Latest version: $DISPLAY_VERSION"
 
 # Create installation directory
 INSTALL_DIR="$HOME/.burger-api/bin"
@@ -297,7 +301,7 @@ fi
 # Verify installation
 print_header "Installation Complete!"
 print_success "burger-api has been installed to $INSTALL_PATH"
-print_info "Version: $LATEST_VERSION"
+print_info "Version: $DISPLAY_VERSION"
 echo ""
 print_info "To verify installation, run:"
 echo ""
