@@ -50,6 +50,8 @@ jobs:
                   else
                     VERSION="${GITHUB_REF#refs/tags/cli/}"
                   fi
+                  # Strip 'v' prefix if present (e.g., v0.6.6 -> 0.6.6)
+                  VERSION="${VERSION#v}"
                   echo "VERSION=${VERSION}" >> $GITHUB_ENV
                   echo "version=${VERSION}" >> $GITHUB_OUTPUT
               shell: bash
