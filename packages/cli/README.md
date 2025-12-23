@@ -4,7 +4,19 @@ Simple command-line tool for creating and managing Burger API projects.
 
 ## Installation
 
-### Quick Install (Recommended)
+### Option 1: npm/bun (Recommended if you have Bun installed)
+
+**Global installation:**
+```bash
+bun add -g @burger-api/cli
+```
+
+**Or use with bunx (no installation needed):**
+```bash
+bunx @burger-api/cli create my-project
+```
+
+### Option 2: Standalone Executable
 
 **macOS, Linux, WSL:**
 ```bash
@@ -16,7 +28,7 @@ curl -fsSL https://burger-api.com/install.sh | bash
 irm https://burger-api.com/install.ps1 | iex
 ```
 
-### Manual Installation
+### Option 3: Manual Download
 
 1. Download the executable for your platform from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
 2. Add to PATH

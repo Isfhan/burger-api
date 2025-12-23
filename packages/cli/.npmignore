@@ -1,0 +1,30 @@
+# Build artifacts
+dist/
+.build/
+
+# Development files
+node_modules/
+.git/
+.gitignore
+.editorconfig
+.prettierrc
+tsconfig.json
+tsconfig.build.json
+bun.lockb
+
+# Scripts (not needed in npm package)
+scripts/
+
+# Documentation (keep README and CHANGELOG)
+PUBLISHING.md
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+

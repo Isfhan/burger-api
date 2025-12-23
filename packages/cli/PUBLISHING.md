@@ -587,6 +587,133 @@ MIT License - see [LICENSE](../burger-api/LICENSE) file for details.
 
 ---
 
+---
+
+## 📦 Publishing to npm
+
+The CLI package is also published to npm as `@burger-api/cli`, providing a lightweight installation option for users who already have Bun installed.
+
+### How It Works
+
+When you create a `cli/v*` tag, two workflows run in parallel:
+
+1. **`release-cli.yml`** → Builds executables and creates GitHub Release
+2. **`release-cli-npm.yml`** → Publishes to npm registry
+
+Both workflows trigger on the same tag, ensuring version synchronization.
+
+### Prerequisites
+
+Before npm publishing can work, you need to configure an npm token:
+
+1. **Create an npm access token:**
+   - Go to https://www.npmjs.com/settings/YOUR_USERNAME/tokens
+   - Click "Generate New Token"
+   - Choose "Automation" token type
+   - Copy the token
+
+2. **Add token to GitHub Secrets:**
+   - Go to your GitHub repository settings
+   - Navigate to "Secrets and variables" → "Actions"
+   - Click "New repository secret"
+   - Name: `NPM_TOKEN`
+   - Value: Paste your npm token
+   - Click "Add secret"
+
+**Important:** The token must have publish permissions for the `@burger-api` scope.
+
+### Automatic Publishing
+
+The npm publishing workflow (`release-cli-npm.yml`) automatically:
+
+1. Triggers when a `cli/v*` tag is pushed
+2. Verifies the package.json version matches the tag
+3. Checks what files will be published (dry-run)
+4. Publishes to npm with `--access public` (required for scoped packages)
+5. Verifies the publication was successful
+
+**Example:**
+```bash
+# Create and push tag
+./packages/cli/scripts/release/release-cli.sh
+
+# Both workflows run automatically:
+# - release-cli.yml → Builds executables
+# - release-cli-npm.yml → Publishes to npm
+```
+
+### Manual Publishing
+
+If you need to publish manually (without creating a tag):
+
+```bash
+# Navigate to CLI directory
+cd packages/cli
+
+# Login to npm (first time only)
+npm login
+
+# Publish
+npm publish --access public
+```
+
+### Verification
+
+After publishing, verify the package is available:
+
+```bash
+# Check published version
+npm view @burger-api/cli version
+
+# View package info
+npm view @burger-api/cli
+
+# Test installation
+bun add -g @burger-api/cli
+burger-api --version
+```
+
+### Package Contents
+
+The npm package includes:
+- `src/` - All source files (TypeScript)
+- `README.md` - Documentation
+- `CHANGELOG.md` - Version history
+- `LICENSE` - License file
+
+Excluded from npm package:
+- `dist/` - Build artifacts
+- `scripts/` - Release scripts
+- `node_modules/` - Dependencies
+- Development files (tsconfig, .gitignore, etc.)
+
+### Benefits of npm Publishing
+
+- **Small package size:** ~50KB vs 100MB executables
+- **Fast installation:** `bun add -g @burger-api/cli` is quick
+- **Works with bunx:** `bunx @burger-api/cli create my-project` (no install needed)
+- **Version management:** Users can pin specific versions
+- **Backward compatible:** Executable releases still available
+
+### Troubleshooting npm Publishing
+
+**Issue: "npm ERR! 403 Forbidden"**
+
+**Solution:** Check that:
+- `NPM_TOKEN` secret is configured in GitHub
+- Token has publish permissions for `@burger-api` scope
+- You're logged in to npm (for manual publishing)
+
+**Issue: "Version already exists"**
+
+**Solution:** The version in `package.json` must match the tag version. Update `package.json` version before creating the tag.
+
+**Issue: "Package not found after publishing"**
+
+**Solution:** Wait 2-3 minutes for npm to propagate. Check https://www.npmjs.com/package/@burger-api/cli
+
+---
+
 **Last Updated:** December 2025  
 **Current Version:** 0.6.5
 

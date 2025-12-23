@@ -7,6 +7,15 @@
   "bin": {
     "burger-api": "./src/index.ts"
   },
+  "files": [
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
   "scripts": {
     "dev": "bun run src/index.ts",
     "build:win": "bun build ./src/index.ts --compile --target bun-windows-x64 --outfile dist/burger-api.exe --minify",
