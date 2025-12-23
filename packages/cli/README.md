@@ -1,79 +1,57 @@
-# Burger API CLI
+# BurgerAPI CLI 👨‍💻
 
-Simple command-line tool for creating and managing Burger API projects.
+A Command-Line Tool for Creating and Managing BurgerAPI Projects.
 
 ## Installation
 
-### Option 1: npm/bun (Recommended if you have Bun installed)
+### Option 1: Bun Global Installation (Recommended if you have Bun installed)
 
-**Global installation:**
+**Global Installation:**
+
 ```bash
 bun add -g @burger-api/cli
 ```
 
-**Or use with bunx (no installation needed):**
+**Or use with bunx (No Installation Needed):**
+
 ```bash
 bunx @burger-api/cli create my-project
 ```
 
-### Option 2: Standalone Executable
+### Option 2: Standalone Executable (Alternative Installation Method)
 
 **macOS, Linux, WSL:**
+
 ```bash
 curl -fsSL https://burger-api.com/install.sh | bash
 ```
 
 **Windows PowerShell:**
+
 ```powershell
 irm https://burger-api.com/install.ps1 | iex
 ```
 
-### Option 3: Manual Download
+### Option 3: Manual Download (Alternative Installation Method)
 
-1. Download the executable for your platform from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
+1. Download the executable for your platform from
+   [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
 2. Add to PATH
 3. Make executable (Linux/macOS): `chmod +x burger-api`
 
-### Verify Installation
+### Verify Installation (To Check if the CLI is Installed Correctly)
 
 ```bash
 burger-api --version
 ```
 
-## Quick Start
-
-Create a new project in 30 seconds:
-
-```bash
-# Create a new project
-burger-api create my-awesome-api
-
-# Navigate to your project
-cd my-awesome-api
-
-# Start development server
-bun run dev
-
-# Open http://localhost:4000 in your browser
-```
-
-That's it! Your Burger API server is running! 🎉
-
----
-
-## Commands
+## Available Commands (To Manage Your Project)
 
 ### `burger-api create <project-name>`
 
 Create a new Burger API project with interactive prompts.
 
-**Example:**
-
-```bash
-burger-api create my-api
-```
-
-The CLI will ask you:
+**Questions You Will Be Asked:**
 
 -   Do you need API routes? (yes/no)
 -   API directory name (default: api)
@@ -346,68 +324,23 @@ export async function POST(req: BurgerRequest) {
 
 That's it! The route is automatically available at `/api/users`
 
-## Common Workflows
+### Adding Pages
 
-### Workflow 1: Create and Run a Project
+Create a new file in the `pages/` folder:
 
-```bash
-# 1. Create project
-burger-api create my-api
-
-# 2. Navigate to it
-cd my-api
-
-# 3. Start dev server
-bun run dev
-
-# 4. Make changes and see them instantly!
+```html
+<!-- pages/about.html -->
+<html>
+    <body>
+        <h1>About Page</h1>
+        <p>This is the about page.</p>
+    </body>
+</html>
 ```
 
-### Workflow 2: Add Middleware
-
-```bash
-# 1. See what's available
-burger-api list
-
-# 2. Add what you need
-burger-api add cors logger rate-limiter
-
-# 3. Use them in index.ts (CLI shows you how!)
-```
-
-### Workflow 3: Build for Production
-
-```bash
-# 1. Test your app works
-burger-api serve
-
-# 2. Build an executable
-burger-api build:executable index.ts --target bun-linux-x64
-
-# 3. Deploy to your server
-scp .build/my-api user@server:/opt/
-ssh user@server
-chmod +x /opt/my-api
-/opt/my-api
-```
+That's it! The page is automatically available at `/about`
 
 ## Troubleshooting
-
-### "burger-api: command not found"
-
-**Solution:** Install the CLI using the install script:
-
-**macOS/Linux:**
-```bash
-curl -fsSL https://burger-api.com/install.sh | bash
-```
-
-**Windows:**
-```powershell
-irm https://burger-api.com/install.ps1 | iex
-```
-
-Or manually download from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest) and add to PATH.
 
 ### "Directory already exists"
 
@@ -602,30 +535,6 @@ bun run ../src/index.ts serve
 -   **Simple language** - No jargon, clear explanations
 -   **Well commented** - Explain why, not just what
 
----
-
-## Release Process
-
-For maintainers releasing new versions:
-
-1. **Update versions** in `package.json` and `src/index.ts`
-2. **Update CHANGELOG.md** with all changes
-3. **Create and push a version tag:**
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-4. **GitHub Actions automatically:**
-   - Builds executables for all platforms (Linux, Windows, macOS ARM64, macOS Intel)
-   - Creates a GitHub Release with all executables attached
-   - Generates SHA256 checksums for verification
-
-The release workflow is triggered automatically when you push a tag matching `v*` pattern.
-
-See [CHANGELOG.md](./CHANGELOG.md) for version history.
-
----
-
 ## Technical Details
 
 **Built with:**
@@ -653,4 +562,4 @@ See [CHANGELOG.md](./CHANGELOG.md) for version history.
 
 MIT License - See [LICENSE](../../LICENSE) for details.
 
-**Built with ❤️ for the Burger API community**
+**Built with ❤️ for the BurgerAPI community**

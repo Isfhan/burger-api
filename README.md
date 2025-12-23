@@ -74,7 +74,17 @@ your development workflow.
 
 #### 📥 Installation
 
-Install the CLI tool from [burger-api.com](https://burger-api.com):
+**Option 1: Bun Global Installation (Recommended if you have Bun installed)**
+
+```bash
+# Global installation
+bun add -g @burger-api/cli
+
+# Or use with bunx (No Installation Needed)
+bunx @burger-api/cli create my-project
+```
+
+**Option 2: Standalone Executable**
 
 **macOS, Linux, WSL:**
 ```bash
@@ -85,6 +95,12 @@ curl -fsSL https://burger-api.com/install.sh | bash
 ```powershell
 irm https://burger-api.com/install.ps1 | iex
 ```
+
+Or download the executable from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+
+**Package Details:**
+- **NPM Package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
+- **Requires:** Bun >=1.3.0
 
 For detailed documentation, see
 [`packages/cli/README.md`](./packages/cli/README.md).
