@@ -424,7 +424,7 @@ If you prefer to update manually:
 
 ```bash
 # Edit package.json
-# Change "version": "0.6.4" to "0.6.5"
+# Change "version": "0.6.4" to "0.6.6"
 
 # Update CHANGELOG.md
 # Add new version entry with date
