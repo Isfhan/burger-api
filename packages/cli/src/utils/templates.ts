@@ -931,7 +931,7 @@ export function generateIndexPage(projectName: string): string {
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="version">BurgerAPI v0.6.6 • Bun v1.3+</div>
+        <div class="version">BurgerAPI v0.7.0 • Bun v1.3+</div>
         <div class="social-links">
             <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
             <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
@@ -981,13 +981,9 @@ export const globalMiddleware: any[] = [];
 async function downloadLlmFolder(targetDir: string): Promise<void> {
     try {
         const llmDir = join(targetDir, 'ecosystem', '.llm-context');
-        
+
         // Download all three .llm files from GitHub
-        const files = [
-            'llms.txt',
-            'llms-small.txt',
-            'llms-full.txt',
-        ];
+        const files = ['llms.txt', 'llms-small.txt', 'llms-full.txt'];
 
         for (const fileName of files) {
             const sourcePath = `ecosystem/.llm-context/${fileName}`;

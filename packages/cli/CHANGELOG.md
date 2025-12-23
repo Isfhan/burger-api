@@ -2,6 +2,15 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.7.0 - (December 23, 2025)
+
+### Added
+- npm publishing support - CLI is now available on npm as `@burger-api/cli`
+- Users can install via `bun add -g @burger-api/cli` or use `bunx @burger-api/cli`
+- Lightweight npm package (~27KB) as alternative to 100MB executables
+- GitHub Actions workflow for automated npm publishing (when organization is configured)
+
+
 ## Version 0.6.6 - (December 23, 2025)
 
 ### Added
