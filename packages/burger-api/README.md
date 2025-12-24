@@ -1,6 +1,8 @@
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI logo"/>
-</p>
+<div align="center">
+  <a href="https://burger-api.com">
+    <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342"  alt="BurgerAPI"/>
+  </a>
+</div>
 
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
@@ -61,24 +63,43 @@ burger-api is built to offer a robust developer experience through:
 -   🔍 **Swagger UI Integration:**  
     Out-of-the-box Swagger UI endpoint for interactive API documentation.
 
-## 🛠️ CLI Tool
+## 🛠️ CLI Tool (Newly Added)
 
 burger-api comes with a powerful CLI tool that makes it easy to scaffold new
 projects and manage middleware. Install it globally to get started:
 
 ### Installation
 
+**Option 1: npm/bun (Recommended if you have Bun installed)**
+
+```bash
+# Global installation
+bun add -g @burger-api/cli
+
+# Or use with bunx (no installation needed)
+bunx @burger-api/cli create my-project
+```
+
+**Option 2: Standalone Executable**
+
 **macOS, Linux, WSL:**
+
 ```bash
 curl -fsSL https://burger-api.com/install.sh | bash
 ```
 
 **Windows PowerShell:**
+
 ```powershell
 irm https://burger-api.com/install.ps1 | iex
 ```
 
-Or download the executable from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+Or download the executable from
+[GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+
+**Package Details:**
+- **npm package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
+- **Requires:** Bun >=1.3.0
 
 ### Quick Start
 
@@ -108,21 +129,32 @@ burger-api add cors logger rate-limiter
 
 **Popular Middleware Available:**
 
--   **`cors`** - Cross-Origin Resource Sharing for handling cross-origin requests
+-   **`cors`** - Cross-Origin Resource Sharing for handling cross-origin
+    requests
 -   **`logger`** - Request/response logging with detailed information
 -   **`rate-limiter`** - Request rate limiting to prevent API abuse
 -   **`jwt-auth`** - JWT authentication for securing your API endpoints
--   **`api-key-auth`** - API key authentication for server-to-server communication
+-   **`api-key-auth`** - API key authentication for server-to-server
+    communication
 -   **`compression`** - Response compression (gzip/deflate) to reduce bandwidth
--   **`security-headers`** - Security HTTP headers to protect against common attacks
+-   **`security-headers`** - Security HTTP headers to protect against common
+    attacks
 -   **`cache`** - HTTP caching headers for improved performance
 -   **`timeout`** - Request timeout to prevent long-running requests
--   **`body-size-limiter`** - Request body size limits to prevent large payload attacks
+-   **`body-size-limiter`** - Request body size limits to prevent large payload
+    attacks
 
 After installing middleware, the CLI will show you exactly how to use it in your
-project. For more information, visit the [CLI documentation](../../packages/cli/README.md).
+project. For more information, visit the
+[CLI documentation](../../packages/cli/README.md).
 
 ## 📣 Changelog
+
+### Latest Version: 0.7.0 (December 24, 2025)
+
+-   🔧 **CLI & Release Improvements:**
+    -   Added CLI tool for creating new projects and managing middleware
+    -   Updated README.md
 
 ### Latest Version: 0.6.2 (November 13, 2025)
 
@@ -204,7 +236,8 @@ project. For more information, visit the [CLI documentation](../../packages/cli/
     -   Updated and better request validation middleware error handling
     -   Removed Zod-to-json-schema dependency and use Zod 4 directly
 
-For a complete list of changes, please check the [Changelog](./packages/burger-api/CHANGELOG.md) file.
+For a complete list of changes, please check the
+[Changelog](./packages/burger-api/CHANGELOG.md) file.
 
 ## 🎯 What's Coming Next?
 
@@ -220,8 +253,8 @@ something amazing together.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](./packages/burger-api/LICENSE) file
-for details.
+This project is licensed under the MIT License - see the
+[LICENSE](./packages/burger-api/LICENSE) file for details.
 
 The MIT License is a permissive license that is short and to the point. It lets
 people do anything they want with your code as long as they provide attribution

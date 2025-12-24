@@ -1,5 +1,12 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.7.0 (December 24, 2025)
+
+-   🔧 **CLI & Release Improvements:**
+    -   Added CLI tool for creating new projects and managing middleware
+    -   Updated README.md
+
+
 ### Version 0.6.3 (December 17, 2025)
 
 -   🔧 **CLI & Release Improvements:**
