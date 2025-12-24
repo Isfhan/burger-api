@@ -70,17 +70,19 @@ projects and manage middleware. Install it globally to get started:
 
 ### Installation
 
-**Option 1: npm/bun (Recommended if you have Bun installed)**
+**Option 1: Bun Global Installation (Recommended if you have Bun installed)**
 
-```bash
+````bash
 # Global installation
 bun add -g @burger-api/cli
+````
+**Or use with bunx (No Installation Needed):**
 
-# Or use with bunx (no installation needed)
+````bash
 bunx @burger-api/cli create my-project
-```
+````
 
-**Option 2: Standalone Executable**
+**Option 2: Standalone Executable (Alternative Installation Method)**
 
 **macOS, Linux, WSL:**
 
@@ -94,12 +96,24 @@ curl -fsSL https://burger-api.com/install.sh | bash
 irm https://burger-api.com/install.ps1 | iex
 ```
 
-Or download the executable from
-[GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+**Option 3: Manual Download (Alternative Installation Method)**
+
+1. Download the executable for your platform from
+   [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
+2. Add to PATH
+3. Make executable (Linux/macOS): `chmod +x burger-api`
+
+**Verify Installation (To Check if the CLI is Installed Correctly)**
+
+```bash
+burger-api --version
+```
 
 **Package Details:**
-- **npm package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.3.0
+
+-   **npm package:**
+    [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
+-   **Requires:** Bun >=1.3.0
 
 ### Quick Start
 
