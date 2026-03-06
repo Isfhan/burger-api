@@ -30,7 +30,7 @@ Perfect for developers building real-world applications!
     debug: true,
 });
 
-const port = 5000;
+const port = Number(process.env.PORT) || 4000;
 
 // Start the server with comprehensive production information
 burger.serve(port, () => {
