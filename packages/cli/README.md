@@ -69,8 +69,23 @@ installed!
 -   ✅ Full project structure
 -   ✅ TypeScript configured
 -   ✅ Dependencies installed
+-   ✅ `burger.config.ts` generated from your answers
 -   ✅ Example routes
 -   ✅ Ready to run!
+
+Generated config example:
+
+```ts
+export default {
+    apiDir: './src/api',
+    pageDir: './src/pages',
+    apiPrefix: '/api',
+    pagePrefix: '/',
+    debug: false,
+};
+```
+
+Edit `burger.config.ts` anytime to change routes, prefixes, or debug mode.
 
 ---
 
@@ -151,7 +166,8 @@ const app = new Burger({
 
 ### `burger-api build <file>`
 
-Bundle your project into a single JavaScript file.
+Bundle your project with build-time (AOT) route discovery.
+The CLI scans routes first, generates a virtual entry file, then runs Bun build.
 
 **Example:**
 
@@ -171,22 +187,29 @@ burger-api build index.ts --sourcemap linked
 
 **Options:**
 
--   `--outfile <path>` - Output file path (default: `.build/bundle.js`)
+-   `--outfile <path>` - Output file path (default: `.build/bundle/app.js`)
 -   `--minify` - Minify the output for smaller file size
 -   `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
 -   `--target <target>` - Target environment (e.g., bun, node)
+
+Build config is loaded from `burger.config.ts` or `burger.config.js` when
+present. If no config exists, the CLI uses defaults:
+`apiDir=./src/api`, `pageDir=./src/pages`, `apiPrefix=/api`, `pagePrefix=/`.
 
 **Output:**
 
 ```
 ✓ Build completed successfully!
-  Output: .build/bundle.js
+  Output: .build/bundle/app.js
   Size: 42.5 KB
 ```
 
+- API-only apps: `app.js` is usually enough to deploy.
+- Apps with pages/assets: deploy the full `.build/bundle/` directory.
+
 ---
 
-### `burger-api build:executable <file>`
+### `burger-api build:exec <file>`
 
 Compile your project to a standalone executable that runs without Bun installed!
 
@@ -194,19 +217,19 @@ Compile your project to a standalone executable that runs without Bun installed!
 
 ```bash
 # Build for current platform
-burger-api build:executable index.ts
+burger-api build:exec index.ts
 
 # Build for Windows
-burger-api build:executable index.ts --target bun-windows-x64
+burger-api build:exec index.ts --target bun-windows-x64
 
 # Build for Linux
-burger-api build:executable index.ts --target bun-linux-x64
+burger-api build:exec index.ts --target bun-linux-x64
 
 # Build for Mac (ARM)
-burger-api build:executable index.ts --target bun-darwin-arm64
+burger-api build:exec index.ts --target bun-darwin-arm64
 
 # Custom output name
-burger-api build:executable index.ts --outfile my-server.exe
+burger-api build:exec index.ts --outfile my-server.exe
 ```
 
 **Options:**
@@ -228,11 +251,11 @@ burger-api build:executable index.ts --outfile my-server.exe
 
 ```
 ✓ Compilation completed successfully!
-  Executable: .build/my-api.exe
+  Executable: .build/executable/<project>.exe
   Size: 45.2 MB
 
   Your standalone executable is ready to run!
-  Run it: .build/my-api.exe
+  Run it: .build/executable/<project>.exe
 ```
 
 **Use case:** Perfect for deploying your API to production servers without
@@ -371,8 +394,12 @@ burger-api serve
 1. You're in a Burger API project directory
 2. The entry file exists
 3. There are no TypeScript errors in your code
+4. Route folder rules are valid (no mixed dynamic + wildcard siblings)
 
 Run `bun run dev` first to see any errors.
+
+If you use custom folders or prefixes, verify your `burger.config.ts` /
+`burger.config.js` values.
 
 ### Cross-compilation fails from Windows (D:\ drive)
 
@@ -500,17 +527,17 @@ you encounter crashes, rebuild without `--bytecode`. The build scripts use
 
 ### Testing
 
-Test commands locally:
+Run tests:
 
 ```bash
-# Create a test project
-bun run src/index.ts create test-app
+# Run all CLI tests
+bun run test
 
-# Test other commands
-cd test-app
-bun run ../src/index.ts list
-bun run ../src/index.ts add cors
-bun run ../src/index.ts serve
+# Run key parity tests only
+bun test test/scanner.test.ts test/virtual-entry.test.ts
+
+# Run build output test only
+bun test test/build-output.test.ts
 ```
 
 ### Contributing
@@ -527,6 +554,11 @@ bun run ../src/index.ts serve
 -   Add comments explaining your code
 -   Test all commands before submitting
 -   Update README if adding new features
+-   Keep route rules in one place:
+    - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
+    - scanner traversal: `packages/cli/src/utils/scanner.ts`
+-   Run parity checks when changing routing/build:
+    - `bun test test/scanner.test.ts test/virtual-entry.test.ts`
 
 ### Design Principles
 

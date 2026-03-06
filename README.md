@@ -141,11 +141,82 @@ bun run typecheck
 bun run build
 
 # Test burger-api
-bun run test
+
+# Run all framework example tests with one command
+bun run test:framework
+
+# Run all CLI tests with one command
+bun run test:cli
 
 # Run burger-api dev server
 bun run dev
 ```
+
+## 🔨 Production Builds
+
+BurgerAPI has two production build modes using the CLI:
+
+### 1) Bundle mode
+
+```bash
+burger-api build src/index.ts
+```
+
+- Default output: `.build/bundle/app.js`
+- Run with Bun:
+
+```bash
+bun .build/bundle/app.js
+```
+
+### 2) Standalone executable mode
+
+```bash
+burger-api build:exec src/index.ts
+```
+
+- Default output:
+  - Windows: `.build/executable/<project>.exe`
+  - Linux/macOS: `.build/executable/<project>`
+- No Bun install required on the target machine.
+
+### Useful options
+
+- `--outfile <path>` custom output path
+- `--target <platform>` cross-compile executable target
+- `--minify` minified output
+- `--sourcemap <type>` (`inline`, `linked`, `none`) for bundle mode
+- `--no-bytecode` disable bytecode in executable mode
+
+## ⚙️ AOT Routing (How builds work)
+
+BurgerAPI uses file-based routing. In development, routes are discovered by
+scanning files at runtime. In production builds, routes are discovered at build
+time (AOT) so runtime scanning is not needed.
+
+Build flow:
+
+1. CLI scans route/page directories.
+2. CLI generates a temporary entry file with static imports.
+3. Bun bundles the app and embedded route metadata.
+4. Runtime uses embedded routes directly.
+
+This keeps production startup reliable in bundled and executable outputs.
+
+## 🧭 Routing/Build Ownership (Contributor Guide)
+
+If you want to contribute, this split helps:
+
+- Framework route behavior:
+  - `packages/burger-api/src/core/api-router.ts`
+  - `packages/burger-api/src/core/page-router.ts`
+  - `packages/burger-api/src/utils/pathConversion.ts`
+- CLI build scanning and generation:
+  - `packages/cli/src/utils/scanner.ts`
+  - `packages/cli/src/utils/virtual-entry.ts`
+  - `packages/cli/src/utils/build/pipeline.ts`
+  - `packages/cli/src/utils/build/bun.ts`
+  - `packages/cli/src/utils/build/entry.ts`
 
 ## 📚 Documentation
 

@@ -2,15 +2,15 @@
  * Build Commands
  *
  * Two commands for packaging your Burger API project:
- * 1. `burger-api build <file>` - Bundle to single JS file
- * 2. `burger-api build:executable <file>` - Compile to standalone executable
+ * 1. `burger-api build <file>`      — Bundle to .build/bundle/
+ * 2. `burger-api build:exec <file>` — Compile to .build/executable/
  *
- * These are wrappers around Bun's build commands with sensible defaults.
+ * Both use build-time (AOT) route discovery — no filesystem scanning at runtime.
  */
 
 import { Command } from 'commander';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'fs';
+import { dirname } from 'path';
 import {
     spinner,
     success,
@@ -20,9 +20,11 @@ import {
     formatSize,
     dim,
 } from '../utils/logger';
+import { runVirtualEntryBuild } from '../utils/build/pipeline';
+import { getProjectName } from '../utils/build/project';
 
 /**
- * Build command options
+ * Options for the `build` command.
  */
 interface BuildCommandOptions {
     outfile: string;
@@ -32,7 +34,7 @@ interface BuildCommandOptions {
 }
 
 /**
- * Build executable command options
+ * Options for the `build:exec` command.
  */
 interface BuildExecutableOptions {
     outfile?: string;
@@ -42,74 +44,73 @@ interface BuildExecutableOptions {
 }
 
 /**
- * Create the "build" command
- * Bundles your code into a single JavaScript file
+ * `burger-api build <file>`
+ *
+ * Bundles your project into .build/bundle/ using AOT route discovery.
+ *
+ * Output:
+ *   .build/bundle/
+ *     app.js             — Bun server (run with: bun .build/bundle/app.js)
+ *     index.html         — HTML pages (flat, one per page route)
+ *     style-[hash].css   — CSS assets (flat)
+ *     app-[hash].js      — JS chunks (flat)
+ *
+ * API-only projects: app.js is a self-contained single file.
+ * Projects with HTML pages: deploy the entire .build/bundle/ directory.
  */
 export const buildCommand = new Command('build')
-    .description('Bundle your project to a single JavaScript file')
-    .argument('<file>', 'Entry file to build (e.g., index.ts)')
-    .option('--outfile <path>', 'Output file path', '.build/bundle.js')
+    .description('Bundle your project into .build/bundle/')
+    .argument(
+        '<file>',
+        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+    )
+    .option('--outfile <path>', 'Output bundle path', '.build/bundle/app.js')
     .option('--minify', 'Minify the output')
     .option(
         '--sourcemap <type>',
         'Generate sourcemaps (inline, linked, or none)'
     )
-    .option('--target <target>', 'Target environment (e.g., bun, node)')
-    .action(async (file: string, options: BuildCommandOptions) => {
-        // Check if the input file exists
-        if (!existsSync(file)) {
-            logError(`File not found: ${file}`);
-            process.exit(1);
-        }
-
+    .option('--target <env>', 'Target environment (default: bun)')
+    .action(async (_file: string, options: BuildCommandOptions) => {
+        const cwd = process.cwd();
         const spin = spinner('Building project...');
 
         try {
-            // Build the command arguments for Bun
-            const args = ['build', file];
+            info('Build-time route discovery enabled.');
 
-            // Add output file
-            args.push('--outfile', options.outfile);
-
-            // Add optional flags
-            if (options.minify) {
-                args.push('--minify');
-            }
-
-            if (options.sourcemap) {
-                args.push('--sourcemap', options.sourcemap);
-            }
-
-            // Always target bun by default since BurgerAPI uses Bun builtins
-            args.push('--target', options.target || 'bun');
-
-            // Run the build using Bun.spawn
-            const proc = Bun.spawn(['bun', ...args], {
-                stdout: 'pipe',
-                stderr: 'pipe',
+            const { success: ok, hasPages } = await runVirtualEntryBuild({
+                cwd,
+                outfile: options.outfile,
+                target: options.target || 'bun',
+                minify: options.minify,
+                sourcemap: options.sourcemap,
             });
 
-            // Wait for it to complete
-            const exitCode = await proc.exited;
-
-            if (exitCode !== 0) {
-                // Read error output
-                const errorText = await new Response(proc.stderr).text();
+            if (!ok) {
                 spin.stop('Build failed', true);
-                logError(errorText || 'Build process failed');
+                logError(
+                    'Bun.build failed. Check that api/page directories and route files are valid.'
+                );
                 process.exit(1);
             }
 
-            // Get file size
-            const outputFile = Bun.file(options.outfile);
-            const size = outputFile.size;
+            const size = Bun.file(options.outfile).size;
+            const bundleDir = dirname(options.outfile);
 
             spin.stop('Build completed successfully!');
             newline();
-            success(`Output: ${options.outfile}`);
-            info(`Size: ${formatSize(size)}`);
+            success(`Bundle:  ${options.outfile}  (${formatSize(size)})`);
             newline();
-            dim('Run your bundle with: bun ' + options.outfile);
+            if (hasPages) {
+                info(`Pages and assets are in: ${bundleDir}/`);
+                dim(
+                    'Deploy the entire directory — HTML pages depend on their chunks.'
+                );
+                dim(`Run: bun ${options.outfile}`);
+            } else {
+                info('API-only bundle — self-contained single file.');
+                dim(`Run anywhere: bun ${options.outfile}`);
+            }
             newline();
         } catch (err) {
             spin.stop('Build failed', true);
@@ -119,109 +120,85 @@ export const buildCommand = new Command('build')
     });
 
 /**
- * Create the "build:executable" command
- * Compiles your code to a standalone executable
+ * `burger-api build:exec <file>`
+ *
+ * Compiles your project into a standalone binary in .build/executable/.
+ * The binary is fully self-contained — no Bun installation required on the target.
+ * All routes, pages, and assets are embedded inside the binary.
  */
-export const buildExecutableCommand = new Command('build:executable')
-    .description('Compile your project to a standalone executable')
-    .argument('<file>', 'Entry file to compile (e.g., index.ts)')
-    .option('--outfile <path>', 'Output file path')
+export const buildExecutableCommand = new Command('build:exec')
+    .description(
+        'Compile your project to a standalone executable in .build/executable/'
+    )
+    .argument(
+        '<file>',
+        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+    )
+    .option('--outfile <path>', 'Output executable path')
     .option(
-        '--target <target>',
+        '--target <platform>',
         'Target platform (bun-windows-x64, bun-linux-x64, bun-darwin-arm64)'
     )
     .option('--minify', 'Minify the output (enabled by default)', true)
     .option('--no-bytecode', 'Disable bytecode compilation')
-    .action(async (file: string, options: BuildExecutableOptions) => {
-        // Check if the input file exists
-        if (!existsSync(file)) {
-            logError(`File not found: ${file}`);
-            process.exit(1);
-        }
+    .action(async (_file: string, options: BuildExecutableOptions) => {
+        const cwd = process.cwd();
 
-        // Determine output filename
         let outfile = options.outfile;
         if (!outfile) {
-            // Get project name from package.json or use basename
-            const projectName = getProjectName();
-
-            // Add platform-specific extension
-            // Check if targeting Windows or if we're on Windows without a specific target
+            const projectName = getProjectName(cwd);
             const isWindows =
                 options.target?.includes('windows') ||
                 (!options.target && process.platform === 'win32');
-
-            if (isWindows) {
-                outfile = `.build/${projectName}.exe`;
-            } else {
-                outfile = `.build/${projectName}`;
-            }
+            outfile = isWindows
+                ? `.build/executable/${projectName}.exe`
+                : `.build/executable/${projectName}`;
         }
 
         const spin = spinner('Compiling to executable...');
 
         try {
-            // Build the command arguments for Bun
-            const args = ['build', file, '--compile'];
-
-            // Add output file
-            args.push('--outfile', outfile);
-
-            // Add target platform
-            if (options.target) {
-                args.push('--target', options.target);
-            }
-
-            // Add minify (on by default)
-            if (options.minify) {
-                args.push('--minify');
-            }
-
-            // Add bytecode (on by default, unless --no-bytecode is passed)
-            if (options.bytecode !== false) {
-                args.push('--bytecode');
-            }
-
+            info('Build-time route discovery enabled.');
             spin.update('Compiling... (this may take a minute)');
 
-            // Run the build using Bun.spawn
-            const proc = Bun.spawn(['bun', ...args], {
-                stdout: 'pipe',
-                stderr: 'pipe',
+            const { success: ok, outputs } = await runVirtualEntryBuild({
+                cwd,
+                outfile,
+                target: options.target,
+                minify: options.minify,
+                bytecode: options.bytecode !== false,
+                compile: true,
             });
 
-            // Wait for it to complete
-            const exitCode = await proc.exited;
-
-            if (exitCode !== 0) {
-                // Read error output
-                const errorText = await new Response(proc.stderr).text();
+            if (!ok) {
                 spin.stop('Compilation failed', true);
-                logError(errorText || 'Compilation process failed');
+                logError(
+                    'Bun.build failed. Check that api/page directories and route files are valid.'
+                );
                 process.exit(1);
             }
 
-            // Get file size - check if file exists first
-            let size = 0;
-            if (existsSync(outfile)) {
-                const executableFile = Bun.file(outfile);
-                size = executableFile.size;
-            }
+            const size = existsSync(outfile)
+                ? Bun.file(outfile).size
+                : (outputs[0]?.size ?? 0);
 
             spin.stop('Compilation completed successfully!');
             newline();
             success(`Executable: ${outfile}`);
-            if (size > 0) {
-                info(`Size: ${formatSize(size)}`);
-            }
+            if (size > 0) info(`Size: ${formatSize(size)}`);
             newline();
-            info('Your standalone executable is ready to run!');
-
+            info(
+                'Standalone binary — copy it anywhere, no Bun required on the target.'
+            );
+            dim(
+                'All routes, pages, and assets are embedded inside the binary.'
+            );
+            newline();
             if (process.platform !== 'win32') {
-                dim(`Make it executable: chmod +x ${outfile}`);
-                dim(`Run it: ./${outfile}`);
+                dim(`Make executable: chmod +x ${outfile}`);
+                dim(`Run: ./${outfile}`);
             } else {
-                dim(`Run it: ${outfile}`);
+                dim(`Run: ${outfile}`);
             }
             newline();
         } catch (err) {
@@ -230,21 +207,3 @@ export const buildExecutableCommand = new Command('build:executable')
             process.exit(1);
         }
     });
-
-/**
- * Get the project name from package.json
- * Falls back to 'app' if not found
- */
-function getProjectName(): string {
-    try {
-        const packageJsonPath = join(process.cwd(), 'package.json');
-        if (existsSync(packageJsonPath)) {
-            const content = readFileSync(packageJsonPath, 'utf-8');
-            const packageJson = JSON.parse(content);
-            return packageJson?.name || 'app';
-        }
-    } catch (err) {
-        // Ignore errors
-    }
-    return 'app';
-}

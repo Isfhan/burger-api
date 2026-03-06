@@ -51,3 +51,15 @@ export interface GitHubFile {
     download_url?: string;
     size: number;
 }
+
+/**
+ * Build-time configuration for Burger API (conventions or burger.config.ts).
+ * Used by the CLI when generating the virtual entry and scanning routes.
+ */
+export interface BuildConfig {
+    apiDir: string;
+    pageDir: string;
+    apiPrefix: string;
+    pagePrefix: string;
+    debug?: boolean;
+}

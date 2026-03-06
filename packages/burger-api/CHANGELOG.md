@@ -1,5 +1,17 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.8.0 (March 4, 2026)
+
+-   Fixed issues in `burger-api build` and `burger-api build:exec` flow.
+-   Added shared path conversion utilities so runtime routing and build-time
+    route scanning follow the same rules.
+-   Added support for prebuilt `apiRoutes` and `pageRoutes` in server options to
+    avoid runtime file scanning in production builds.
+-   Added a reusable example test server helper so example tests can auto-start
+    and stop servers safely.
+-   Updated package test scripts so `test` runs `test:examples` with stable
+    settings for integration-style example tests.
+
 ### Version 0.7.0 (December 24, 2025)
 
 -   🔧 **CLI & Release Improvements:**

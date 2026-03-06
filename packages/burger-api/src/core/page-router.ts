@@ -9,6 +9,7 @@ import {
     compareRoutes,
     ROUTE_CONSTANTS,
 } from '../utils/index';
+import { filePathToPageRoutePath } from '../utils/pathConversion';
 
 // Import types
 import type { PageDefinition } from '../types/index';
@@ -27,7 +28,10 @@ export class PageRouter {
      * @param pagesDir The directory path where page modules are located.
      * @param prefix Optional prefix to prepend to all routes (e.g., "pages" becomes "/pages/...").
      */
-    constructor(private pagesDir: string, private prefix: string = '') {
+    constructor(
+        private pagesDir: string,
+        private prefix: string = ''
+    ) {
         if (!pagesDir) {
             throw new Error('Pages directory path must be provided');
         }
@@ -104,9 +108,10 @@ export class PageRouter {
                     )
                 ) {
                     // Convert file path to route path and load the module
-                    const routePath = this.convertFilePathToRoute(relativePath);
-                    // Clean the route path
-                    const cleanedRoutePath = this.cleanRoutePath(routePath);
+                    const cleanedRoutePath = filePathToPageRoutePath(
+                        relativePath,
+                        this.prefix
+                    );
 
                     // Get the module path
                     const modulePath = path.resolve(entryPath);
@@ -153,92 +158,6 @@ export class PageRouter {
             console.error(`Error scanning directory ${dir}:`, error);
             throw error;
         }
-    }
-
-    /**
-     * Converts a file path to a route path by processing dynamic segments,
-     * removing certain directory indicators, and applying a prefix if specified.
-     * @param filePath The file path to convert into a route path.
-     * @returns The converted route path string (before extension cleaning).
-     */
-    private convertFilePathToRoute(filePath: string): string {
-        // Split path into segments
-        const segments = filePath.split(path.sep);
-        const resultSegments: string[] = [];
-
-        for (let segment of segments) {
-            if (!segment) continue; // Skip empty segments
-
-            // Skip grouping segments (e.g., (group))
-            if (
-                segment.startsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_START) &&
-                segment.endsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_END)
-            )
-                continue;
-
-            // Convert dynamic segments from [param] to :param
-            if (
-                segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
-                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
-            ) {
-                const param = segment.slice(1, -1);
-                resultSegments.push(
-                    ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + param
-                );
-            } else {
-                resultSegments.push(segment);
-            }
-        }
-
-        // Construct the route with leading slash
-        let route = '/' + resultSegments.join('/');
-
-        // Apply prefix if provided
-        if (this.prefix) {
-            const cleanPrefixStr = cleanPrefix(this.prefix);
-            route = '/' + cleanPrefixStr + route;
-        }
-
-        // Remove trailing slash unless it's the root
-        if (route !== '/' && route.endsWith('/')) {
-            route = route.slice(0, -1);
-        }
-
-        return route;
-    }
-
-    /**
-     * Cleans a route path by handling index files and removing extensions.
-     * @param routePath The route path to clean
-     * @returns The cleaned route path
-     */
-    private cleanRoutePath(routePath: string): string {
-        // Break the route path into segments
-        const pathSegments = routePath.split('/');
-
-        // Get the last segment
-        if (pathSegments.length > 0) {
-            const lastSegment = pathSegments[pathSegments.length - 1];
-
-            // Check if the last segment is an index file
-            if (ROUTE_CONSTANTS.PAGE_INDEX_FILES.includes(lastSegment)) {
-                // Remove the last segment for index files
-                pathSegments.pop();
-            } else {
-                // Remove file extension for non-index files
-                const extensionIndex = lastSegment.lastIndexOf('.');
-                if (extensionIndex > 0) {
-                    pathSegments[pathSegments.length - 1] =
-                        lastSegment.substring(0, extensionIndex);
-                }
-            }
-        }
-
-        // Join the segments back together
-        const finalPath =
-            pathSegments.join('/') === '' ? '/' : pathSegments.join('/');
-
-        return finalPath;
     }
 
     /**

@@ -68,6 +68,18 @@ export interface ServerOptions
      * information to the console or logs to aid in development and troubleshooting.
      */
     debug?: boolean;
+
+    /**
+     * Pre-built API routes (e.g. from CLI build). When provided, apiDir is ignored
+     * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
+     */
+    apiRoutes?: RouteDefinition[];
+
+    /**
+     * Pre-built page routes (e.g. from CLI build). When provided, pageDir is ignored
+     * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
+     */
+    pageRoutes?: PageDefinition[];
 }
 
 type DefaultRequestProperties = {
@@ -212,9 +224,9 @@ export interface RouteDefinition {
  */
 export type RouteSchema = {
     [method: string]: {
-        params?: z.ZodObject<any, any>;
-        query?: z.ZodObject<any, any>;
-        body?: z.ZodObject<any, any>;
+        params?: z.ZodTypeAny;
+        query?: z.ZodTypeAny;
+        body?: z.ZodTypeAny;
     };
 };
 

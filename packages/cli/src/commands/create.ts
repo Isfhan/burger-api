@@ -82,6 +82,7 @@ export const createCommand = new Command('create')
             info('Creating project with the following configuration:');
             newline();
             console.log(`  Name: ${projectName}`);
+            console.log(`  Config File: burger.config.ts`);
             if (options.useApi) {
                 console.log(`  API Routes: ${options.apiDir || 'api'}`);
             }
@@ -106,10 +107,13 @@ export const createCommand = new Command('create')
             console.log(`  2. Start the development server:`);
             command('bun run dev');
             newline();
-            console.log(`  3. Open your browser:`);
+            console.log(`  3. Edit config if needed:`);
+            command('burger.config.ts');
+            newline();
+            console.log(`  4. Open your browser:`);
             console.log(`     ${highlight('http://localhost:4000')}`);
             newline();
-            console.log(`  4. Add middleware (optional):`);
+            console.log(`  5. Add middleware (optional):`);
             command('burger-api add cors logger');
             newline();
             success('Happy coding!');

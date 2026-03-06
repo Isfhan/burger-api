@@ -1,17 +1,12 @@
-# 🧪 Examples – Framework Testing
+# Examples
 
-## 🎯 Purpose
+This folder is for framework development and testing.
+It is not a tutorial folder and not for production use.
 
-This folder is for **framework devs only**. It’s here to test BurgerAPI while building it—not for tutorials, learning, or production use.
-
-## 🔧 Why
-
-* Try out new features
-* Reproduce and fix bugs
-* Check changes don’t break stuff
-* Test before publishing to npm
-
-## 🚀 How to Use
+Use these examples to:
+- test new framework changes
+- reproduce bugs
+- verify route and validation behavior
 
 Run an example:
 
@@ -20,40 +15,12 @@ cd examples/[example-name]
 bun run index.ts
 ```
 
-Things to try:
+Run all example tests:
 
-* Valid + invalid params
-* Edge cases
-* Error handling
+```bash
+bun run test:examples
+```
 
-Debugging tips:
-
-* Drop in `console.log`s
-* Play with route patterns
-* Check param extraction + validation
-
-## ⚠️ Notes
-
-* Not for learning the framework
-* Dev/testing only
-* Keep examples minimal
-
-## 🔍 What to Test
-
-* Routing (dynamic segments)
-* Validation (Zod schemas)
-* Type inference (TS)
-* Param extraction
-* Error handling
-
-## 📝 Adding New Examples
-
-* One feature per example
-* Clear folder name
-* Minimal code + short note on what it tests
-
----
-
-👉 Keep it simple. This folder is just your sandbox for testing the framework while building it.
+Keep each example small and focused on one feature.
 
 

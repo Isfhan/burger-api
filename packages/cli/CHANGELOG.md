@@ -2,6 +2,30 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.8.0 - (March 4, 2026)
+
+### Added
+- Added `burger.config.ts` generation in `burger-api create`, using project
+  setup answers as defaults.
+- Added build config resolver with convention defaults and optional
+  `burger.config.ts` / `burger.config.js` overrides.
+- Added route scanner and virtual-entry generation utilities for build-time
+  route discovery.
+- Added CLI test coverage for route parity, conflict detection, config
+  resolution, virtual entry generation, and build output behavior.
+
+### Changed
+- Changed `build` and `build:exec` to use one AOT build pipeline with static
+  route metadata.
+- Changed default executable output to `.build/executable/<project>[.exe]`.
+- Improved README docs for production build behavior and test commands.
+
+### Fixed
+- Fixed route conflict handling for invalid dynamic/wildcard folder
+  combinations during build-time discovery.
+- Fixed unsafe cross-package imports in CLI code.
+- Made build-output tests stricter in CI so broken builds are caught early.
+
 ## Version 0.7.0 - (December 23, 2025)
 
 ### Added
@@ -32,7 +56,7 @@ All notable changes to the Burger API CLI will be documented in this file.
 - `list` command to show available middleware from ecosystem
 - `add` command to download and install middleware
 - `build` command to bundle projects to single JS file
-- `build:executable` command to compile to standalone executable
+- `build:exec` command to compile to standalone executable
 - `serve` command for development server with hot reload
 - Beautiful console output with colors and symbols
 - Zero external dependencies for file operations (uses Bun's native APIs)

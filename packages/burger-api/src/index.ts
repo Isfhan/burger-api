@@ -22,6 +22,7 @@ import type {
     Middleware,
     BurgerRequest,
     RequestHandler,
+    RouteDefinition,
 } from './types/index';
 import type { HTMLBundle } from 'bun';
 
@@ -90,15 +91,17 @@ export class Burger {
         const { apiDir, pageDir, apiPrefix, pagePrefix, globalMiddleware } =
             options;
 
-        // Initialize API router if apiDir is provided
-        this.apiRouter = apiDir
-            ? new ApiRouter(apiDir, apiPrefix || 'api')
-            : undefined;
+        // Initialize API router only when using runtime scanning (no prebuilt apiRoutes)
+        this.apiRouter =
+            apiDir && !options.apiRoutes?.length
+                ? new ApiRouter(apiDir, apiPrefix || 'api')
+                : undefined;
 
-        // Initialize page router if pageDir is provided
-        this.pageRouter = pageDir
-            ? new PageRouter(pageDir, pagePrefix || '')
-            : undefined;
+        // Initialize page router only when using runtime scanning (no prebuilt pageRoutes)
+        this.pageRouter =
+            pageDir && !options.pageRoutes?.length
+                ? new PageRouter(pageDir, pagePrefix || '')
+                : undefined;
 
         // Add global middleware if any
         this.globalMiddleware = globalMiddleware?.length
@@ -111,7 +114,17 @@ export class Burger {
      * @returns A promise that resolves to a boolean
      */
     private async processPageRoutes(): Promise<boolean> {
-        // If no page router, return false
+        // Production path: use pre-built page routes (no filesystem scan)
+        const prebuiltPages = this.options.pageRoutes;
+        if (prebuiltPages?.length) {
+            for (let i = 0; i < prebuiltPages.length; i++) {
+                const page = prebuiltPages[i];
+                this.routes[page.path] = page.handler;
+            }
+            return true;
+        }
+
+        // Dev path: load from filesystem via PageRouter
         if (!this.pageRouter) return false;
 
         // Load pages routes
@@ -140,14 +153,16 @@ export class Burger {
      * @returns A promise that resolves to a boolean
      */
     private async processApiRoutes(): Promise<boolean> {
-        // If no api router, return false
-        if (!this.apiRouter) return false;
-
-        // Load API routes
-        await this.apiRouter.loadRoutes();
-
-        // Collect API routes
-        const apiRoutes = collectRoutes(this.apiRouter.routes);
+        // Production path: use pre-built API routes (no filesystem scan)
+        let apiRoutes: RouteDefinition[];
+        if (this.options.apiRoutes?.length) {
+            apiRoutes = this.options.apiRoutes;
+        } else {
+            // Dev path: load from filesystem via ApiRouter
+            if (!this.apiRouter) return false;
+            await this.apiRouter.loadRoutes();
+            apiRoutes = collectRoutes(this.apiRouter.routes);
+        }
 
         // Get the length of the API routes
         const routeCount = apiRoutes.length;
@@ -512,7 +527,7 @@ export class Burger {
         } else {
             // If no routes were configured, log an error
             console.error(
-                'Error: No routes configured! Please provide either apiDir with route.ts files or pageDir with html files when initializing the Burger Class.'
+                'Error: No routes configured! Please provide apiDir/pageDir (for dev) or apiRoutes/pageRoutes (for production builds) when initializing the Burger class.'
             );
         }
     }
@@ -529,4 +544,6 @@ export type {
     BurgerNext,
     Middleware,
     openapi,
+    RouteDefinition,
+    PageDefinition,
 } from './types/index';

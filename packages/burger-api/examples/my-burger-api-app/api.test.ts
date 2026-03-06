@@ -9,10 +9,16 @@
  *   2. In another terminal, run: bun test examples/my-burger-api-app/api.test.ts
  */
 
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import {
+    startExampleServer,
+    stopExampleServer,
+    type RunningExampleServer,
+} from '../test-utils/example-server';
 
-const BASE_URL = 'http://localhost:5000';
+let BASE_URL = 'http://localhost:0';
 const REQUEST_TIMEOUT = 5000;
+let testServer: RunningExampleServer | null = null;
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<Response> {
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
@@ -41,27 +47,17 @@ async function fetchJSON<T = any>(path: string): Promise<T> {
     return response.json();
 }
 
-async function checkServer(): Promise<boolean> {
-    try {
-        const response = await fetchAPI('/api');
-        return response.status === 200;
-    } catch {
-        return false;
-    }
-}
-
 beforeAll(async () => {
-    const isRunning = await checkServer();
-    if (!isRunning) {
-        throw new Error(
-            '❌ Server is not running!\n\n' +
-            'Please start the server first:\n' +
-            '  bun run examples/my-burger-api-app/index.ts\n\n' +
-            'Then run the tests in another terminal:\n' +
-            '  bun test examples/my-burger-api-app/api.test.ts'
-        );
-    }
-    console.log('✅ Server is running, starting tests...\n');
+    testServer = await startExampleServer({
+        exampleDir: import.meta.dir,
+        healthPath: '/api',
+        port: 5000,
+    });
+    BASE_URL = testServer.baseUrl;
+});
+
+afterAll(async () => {
+    await stopExampleServer(testServer);
 });
 
 describe('My Burger API App - Production Ready Example', () => {

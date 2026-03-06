@@ -1,6 +1,6 @@
 {
   "name": "burger-api",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "author": "Isfhan Ahmed",
   "type": "module",
   "module": "dist/src/index.js",
@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun test",
+    "test": "bun run test:examples",
+    "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
     "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
   },
   "keywords": [

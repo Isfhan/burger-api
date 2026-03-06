@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "bun run --filter burger-api typecheck",
     "build": "bun run --filter burger-api build",
-    "test": "bun run --filter burger-api test",
+    "test:framework": "bun run --filter burger-api test:examples",
+    "test:cli": "bun run --filter @burger-api/cli test",
     "dev": "bun run --filter burger-api dev"
   },
   "repository": {

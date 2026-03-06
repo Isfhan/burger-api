@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'bun:test';
+import { generateVirtualEntrySource } from '../src/utils/virtual-entry';
+import type { BuildConfig } from '../src/types/index';
+
+const config: BuildConfig = {
+    apiDir: './api',
+    pageDir: './pages',
+    apiPrefix: '/api',
+    pagePrefix: '/',
+    debug: false,
+};
+
+describe('generateVirtualEntrySource', () => {
+    it('includes all HTTP methods, including OPTIONS', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [{ importPath: '/tmp/api/route.ts', routePath: '/api', isWildcard: false }],
+            []
+        );
+
+        expect(source).toContain('GET: _r0.GET');
+        expect(source).toContain('POST: _r0.POST');
+        expect(source).toContain('PUT: _r0.PUT');
+        expect(source).toContain('DELETE: _r0.DELETE');
+        expect(source).toContain('PATCH: _r0.PATCH');
+        expect(source).toContain('HEAD: _r0.HEAD');
+        expect(source).toContain(
+            'OPTIONS: (_r0.POST || _r0.PUT || _r0.DELETE || _r0.PATCH) && !_r0.OPTIONS'
+        );
+    });
+
+    it('adds trailing slash aliases for non-root page routes', () => {
+        const source = generateVirtualEntrySource(config, [], [
+            { importPath: '/tmp/pages/index.html', routePath: '/' },
+            { importPath: '/tmp/pages/about.html', routePath: '/about' },
+        ]);
+
+        expect(source).toContain('{ path: "/", handler: _p0.default }');
+        expect(source).toContain('{ path: "/about", handler: _p1.default }');
+        expect(source).toContain('{ path: "/about/", handler: _p1.default }');
+    });
+});

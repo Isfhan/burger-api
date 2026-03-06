@@ -223,3 +223,7 @@ bun-experiment/*
 
 examples/my-burger-api-app/*
 bun.lock
+
+# Burger API CLI build output
+**/.build/
+

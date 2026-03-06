@@ -182,6 +182,37 @@ export function generateIndexFile(options: CreateOptions): string {
 }
 
 /**
+ * Generate burger.config.ts from create command answers.
+ * This keeps build/runtime config explicit in scaffolded projects.
+ *
+ * @param options - Project configuration from user prompts
+ * @returns burger.config.ts content as a string
+ */
+export function generateBurgerConfig(options: CreateOptions): string {
+    const apiDir = `./src/${options.apiDir || 'api'}`;
+    const pageDir = `./src/${options.pageDir || 'pages'}`;
+    const apiPrefix = options.apiPrefix || '/api';
+    const pagePrefix = options.pagePrefix || '/';
+    const debug = Boolean(options.debug);
+
+    return [
+        '/**',
+        ' * BurgerAPI build and dev config.',
+        ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
+        ' * Edit these paths and prefixes to match your project.',
+        ' */',
+        'export default {',
+        `    apiDir: ${JSON.stringify(apiDir)},   // folder with API route files`,
+        `    pageDir: ${JSON.stringify(pageDir)},   // folder with HTML pages`,
+        `    apiPrefix: ${JSON.stringify(apiPrefix)},   // URL prefix for API routes`,
+        `    pagePrefix: ${JSON.stringify(pagePrefix)},   // URL prefix for pages`,
+        `    debug: ${debug},   // extra logging when true`,
+        '};',
+        '',
+    ].join('\n');
+}
+
+/**
  * Generate a comprehensive API route file with full examples
  * Includes: OpenAPI metadata, Zod schemas, all HTTP methods, middleware
  * Every line has beginner-friendly comments explaining what it does
@@ -1025,6 +1056,10 @@ export async function createProject(
         await Bun.write(
             join(targetDir, '.prettierrc'),
             generatePrettierConfig()
+        );
+        await Bun.write(
+            join(targetDir, 'burger.config.ts'),
+            generateBurgerConfig(options)
         );
 
         // Create src directory and index file

@@ -3,12 +3,8 @@ import { readdir } from 'fs/promises';
 import * as path from 'path';
 
 // Import utils
-import {
-    cleanPrefix,
-    normalizePath,
-    ROUTE_CONSTANTS,
-    HTTP_METHODS,
-} from '../utils/index';
+import { normalizePath, ROUTE_CONSTANTS, HTTP_METHODS } from '../utils/index';
+import { filePathToApiRoutePath } from '../utils/pathConversion';
 
 // Import types
 import type {
@@ -34,7 +30,10 @@ export class ApiRouter {
      * @param prefix Optional prefix to prepend to all routes (e.g., "api" becomes "/api/...").
      * @throws {Error} If the routes directory path is not provided.
      */
-    constructor(private routesDir: string, private prefix: string = '') {
+    constructor(
+        private routesDir: string,
+        private prefix: string = ''
+    ) {
         if (!routesDir) {
             throw new Error('Routes directory path is required');
         }
@@ -193,7 +192,7 @@ export class ApiRouter {
     ): Promise<void> {
         try {
             // Convert the file path to a route path
-            const routePath = this.convertFilePathToRoute(relativePath);
+            const routePath = filePathToApiRoutePath(relativePath, this.prefix);
             console.info('Loading route:', routePath);
 
             // Get the module path like "D:\\Projects\\src\\api\\users\\route.ts"
@@ -214,7 +213,12 @@ export class ApiRouter {
 
             // Auto-inject minimal OPTIONS handler for CORS preflight when needed
             // Only if route defines any preflight-triggering methods and lacks an OPTIONS handler
-            const PREFLIGHT_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'] as const;
+            const PREFLIGHT_METHODS = [
+                'POST',
+                'PUT',
+                'DELETE',
+                'PATCH',
+            ] as const;
             let hasPreflightMethods = false;
             // Manual loop is slightly faster than Array.prototype.some in tight paths
             for (let i = 0; i < PREFLIGHT_METHODS.length; i++) {
@@ -249,69 +253,6 @@ export class ApiRouter {
                 `Failed to load route module '${entryPath}': ${String(error)}`
             );
         }
-    }
-
-    /**
-     * Converts a file path to a route path by processing dynamic segments and wildcard segments applying the prefix.
-     * @param filePath The file path to convert (e.g., "users/[id]/route.ts" , "users/[...slug]/route.ts").
-     * @returns {string} The converted route path (e.g., "/users/:id" , "/users/*slug").
-     */
-    private convertFilePathToRoute(filePath: string): string {
-        // Remove the "route.ts" suffix
-        if (filePath.endsWith('route.ts')) {
-            filePath = filePath.slice(0, -'route.ts'.length);
-        }
-
-        // Split path into segments
-        const segments = filePath.split(path.sep);
-        const resultSegments: string[] = [];
-
-        for (let segment of segments) {
-            if (!segment) continue; // Skip empty segments
-
-            // Skip grouping segments (e.g., (group))
-            if (
-                segment.startsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_START) &&
-                segment.endsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_END)
-            ) {
-                continue;
-            }
-
-            // Convert dynamic segments from [param] to :param
-            if (
-                segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
-                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&
-                !segment.startsWith(ROUTE_CONSTANTS.WILDCARD_START)
-            ) {
-                const param = segment.slice(1, -1);
-
-                resultSegments.push(
-                    ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + param
-                );
-            }
-            // Convert wildcard segments from [...] to *
-            else if (segment === ROUTE_CONSTANTS.WILDCARD_SIMPLE) {
-                resultSegments.push(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX);
-            } else {
-                resultSegments.push(segment);
-            }
-        }
-
-        // Construct the route with leading slash
-        let route = '/' + resultSegments.join('/');
-
-        // Apply prefix if provided
-        if (this.prefix) {
-            const cleanPrefixStr = cleanPrefix(this.prefix);
-            route = '/' + cleanPrefixStr + route;
-        }
-
-        // Remove trailing slash unless it's the root
-        if (route !== '/' && route.endsWith('/')) {
-            route = route.slice(0, -1);
-        }
-
-        return route;
     }
 
     /**
