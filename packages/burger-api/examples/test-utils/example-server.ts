@@ -1,10 +1,34 @@
 import { spawn } from 'child_process';
 import { once } from 'events';
+import { createServer } from 'net';
 
 export interface RunningExampleServer {
     process: ReturnType<typeof spawn>;
     port: number;
     baseUrl: string;
+}
+
+async function getAvailablePort(): Promise<number> {
+    return await new Promise((resolve, reject) => {
+        const server = createServer();
+        server.on('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
+            if (!address || typeof address === 'string') {
+                server.close();
+                reject(new Error('Failed to allocate a test port.'));
+                return;
+            }
+            const { port } = address;
+            server.close((closeErr) => {
+                if (closeErr) {
+                    reject(closeErr);
+                    return;
+                }
+                resolve(port);
+            });
+        });
+    });
 }
 
 async function waitForHealth(options: {
@@ -40,7 +64,7 @@ export async function startExampleServer(options: {
     acceptedStatuses?: number[];
     timeoutMs?: number;
 }): Promise<RunningExampleServer> {
-    const port = options.port ?? 4000;
+    const port = options.port ?? (await getAvailablePort());
     const baseUrl = `http://localhost:${port}`;
     const acceptedStatuses = options.acceptedStatuses ?? [200];
 
@@ -65,6 +89,10 @@ export async function startExampleServer(options: {
         }),
         earlyExit,
     ]);
+
+    // Health check won; when stopExampleServer kills the process, earlyExit will
+    // eventually reject. Attach a no-op handler so that rejection is not unhandled.
+    earlyExit.catch(() => {});
 
     return { process: proc, port, baseUrl };
 }
