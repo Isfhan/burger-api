@@ -71,7 +71,7 @@ export const buildCommand = new Command('build')
         'Generate sourcemaps (inline, linked, or none)'
     )
     .option('--target <env>', 'Target environment (default: bun)')
-    .action(async (_file: string, options: BuildCommandOptions) => {
+    .action(async (file: string, options: BuildCommandOptions) => {
         const cwd = process.cwd();
         const spin = spinner('Building project...');
 
@@ -80,6 +80,7 @@ export const buildCommand = new Command('build')
 
             const { success: ok, hasPages } = await runVirtualEntryBuild({
                 cwd,
+                entryFile: file,
                 outfile: options.outfile,
                 target: options.target || 'bun',
                 minify: options.minify,
@@ -141,7 +142,7 @@ export const buildExecutableCommand = new Command('build:exec')
     )
     .option('--minify', 'Minify the output (enabled by default)', true)
     .option('--no-bytecode', 'Disable bytecode compilation')
-    .action(async (_file: string, options: BuildExecutableOptions) => {
+    .action(async (file: string, options: BuildExecutableOptions) => {
         const cwd = process.cwd();
 
         let outfile = options.outfile;
@@ -163,6 +164,7 @@ export const buildExecutableCommand = new Command('build:exec')
 
             const { success: ok, outputs } = await runVirtualEntryBuild({
                 cwd,
+                entryFile: file,
                 outfile,
                 target: options.target,
                 minify: options.minify,

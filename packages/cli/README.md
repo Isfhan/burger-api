@@ -527,17 +527,23 @@ you encounter crashes, rebuild without `--bytecode`. The build scripts use
 
 ### Testing
 
-Run tests:
+Run tests (from `packages/cli`):
 
 ```bash
 # Run all CLI tests
 bun run test
 
-# Run key parity tests only
-bun test test/scanner.test.ts test/virtual-entry.test.ts
+# Run build tests only (check production matches dev)
+bun run test:build
 
-# Run build output test only
+# Run one test file
 bun test test/build-output.test.ts
+```
+
+From the **repo root**, run all CLI tests with:
+
+```bash
+bun run test:cli
 ```
 
 ### Contributing
@@ -557,8 +563,8 @@ bun test test/build-output.test.ts
 -   Keep route rules in one place:
     - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
     - scanner traversal: `packages/cli/src/utils/scanner.ts`
--   Run parity checks when changing routing/build:
-    - `bun test test/scanner.test.ts test/virtual-entry.test.ts`
+-   Run build tests when changing routing/build (keeps dev and production behavior the same):
+    - `bun run test:build`
 
 ### Design Principles
 

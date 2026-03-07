@@ -39,4 +39,19 @@ describe('generateVirtualEntrySource', () => {
         expect(source).toContain('{ path: "/about", handler: _p1.default }');
         expect(source).toContain('{ path: "/about/", handler: _p1.default }');
     });
+
+    it('spreads preserved Burger options when an options module is provided', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [{ importPath: '/tmp/api/route.ts', routePath: '/api', isWildcard: false }],
+            [],
+            '/tmp/__burger_build_options__.ts'
+        );
+
+        expect(source).toContain(
+            "import { burgerOptions as __burgerOptions } from '/tmp/__burger_build_options__.ts';"
+        );
+        expect(source).toContain('...__burgerOptions');
+        expect(source).not.toContain('globalMiddleware: []');
+    });
 });

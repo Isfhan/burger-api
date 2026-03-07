@@ -11,7 +11,7 @@ All notable changes to the Burger API CLI will be documented in this file.
   `burger.config.ts` / `burger.config.js` overrides.
 - Added route scanner and virtual-entry generation utilities for build-time
   route discovery.
-- Added CLI test coverage for route parity, conflict detection, config
+- Added CLI test coverage for route behavior vs framework, conflict detection, config
   resolution, virtual entry generation, and build output behavior.
 
 ### Changed
@@ -25,6 +25,14 @@ All notable changes to the Burger API CLI will be documented in this file.
   combinations during build-time discovery.
 - Fixed unsafe cross-package imports in CLI code.
 - Made build-output tests stricter in CI so broken builds are caught early.
+- Fixed virtual build entry generation to preserve user `new Burger({...})`
+  options from the provided entry file instead of hardcoding
+  `globalMiddleware: []`.
+- Fixed bug where production build dropped global middleware and options like
+  `title`, `description`, `version`, and `hostname` could be dropped in
+  build output.
+- Added integration coverage to verify `globalMiddleware` remains active in
+  production bundle output.
 
 ## Version 0.7.0 - (December 23, 2025)
 

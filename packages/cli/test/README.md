@@ -4,10 +4,22 @@ This folder has tests for the Burger API CLI build flow.
 
 ## Quick commands
 
-Run all main CLI tests:
+**From repo root** — run all CLI tests:
 
 ```bash
-bun test test/scanner.test.ts test/config.test.ts test/virtual-entry.test.ts test/build-output.test.ts
+bun run test:cli
+```
+
+**From `packages/cli`** — run all CLI tests:
+
+```bash
+bun run test
+```
+
+Or run only the build-related tests (checks that production build behaves like dev):
+
+```bash
+bun run test:build
 ```
 
 Run one test file:
@@ -25,8 +37,12 @@ bun test test/scanner.test.ts
   - Checks build config defaults and override behavior.
 - `virtual-entry.test.ts`
   - Checks generated build entry source content.
+- `entry-options.test.ts`
+  - Checks extraction of `new Burger({...})` options from the user entry file.
 - `build-output.test.ts`
   - Checks built bundle can run and respond.
+- `build-preserve-options.test.ts`
+  - Integration test that builds a fixture app and verifies global middleware is preserved in production bundle output.
 
 ## Optional environment variables
 
