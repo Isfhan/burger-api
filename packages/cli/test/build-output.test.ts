@@ -11,8 +11,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { getAvailablePort } from './test-utils';
 
-const BASE_URL = 'http://localhost:4001';
+let baseUrl = '';
 const REQUIRE_BUNDLE =
     process.env.REQUIRE_BUILD_BUNDLE === 'true' || process.env.CI === 'true';
 const BUNDLE_PATH =
@@ -45,8 +46,10 @@ beforeAll(async () => {
         );
         return;
     }
+    const port = await getAvailablePort();
+    baseUrl = `http://localhost:${port}`;
     serverProc = spawn('bun', [bundlePath as string], {
-        env: { ...process.env, PORT: '4001' },
+        env: { ...process.env, PORT: String(port) },
         stdio: 'pipe',
     });
     await new Promise<void>((resolve, reject) => {
@@ -76,7 +79,7 @@ describe('Build output (AOT routes)', () => {
             expect(REQUIRE_BUNDLE).toBe(false);
             return;
         }
-        const res = await fetch(`${BASE_URL}/api/products`);
+        const res = await fetch(`${baseUrl}/api/products`);
         expect(res.status).toBe(200);
         const data = await res.json();
         expect(data).toHaveProperty('name');

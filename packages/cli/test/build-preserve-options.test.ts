@@ -3,13 +3,13 @@ import { spawn } from 'child_process';
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
+import { getAvailablePort } from './test-utils';
 
 const FIXTURE_DIR = join(import.meta.dir, 'fixtures', 'preserve-options');
 const OUTFILE = '.build/bundle/app.js';
 const BUNDLE_PATH = join(FIXTURE_DIR, OUTFILE);
-const PORT = 4197;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+let baseUrl = '';
 let serverProc: ReturnType<typeof spawn> | null = null;
 
 beforeAll(async () => {
@@ -28,8 +28,10 @@ beforeAll(async () => {
     expect(result.success).toBe(true);
     expect(existsSync(BUNDLE_PATH)).toBe(true);
 
+    const port = await getAvailablePort();
+    baseUrl = `http://127.0.0.1:${port}`;
     serverProc = spawn('bun', [BUNDLE_PATH], {
-        env: { ...process.env, PORT: String(PORT) },
+        env: { ...process.env, PORT: String(port) },
         stdio: 'pipe',
     });
 
@@ -81,7 +83,7 @@ afterAll(async () => {
 
 describe('Build integration: preserve user Burger options', () => {
     it('keeps globalMiddleware from the entry file in the built output', async () => {
-        const res = await fetch(`${BASE_URL}/api`);
+        const res = await fetch(`${baseUrl}/api`);
         expect(res.status).toBe(418);
         expect(await res.text()).toContain('blocked by global middleware');
     });
