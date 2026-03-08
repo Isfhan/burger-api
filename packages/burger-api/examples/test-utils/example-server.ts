@@ -106,8 +106,10 @@ export async function stopExampleServer(
     server.process.kill('SIGTERM');
     const exited = once(server.process, 'exit');
     const timeout = Bun.sleep(3000).then(() => {
-        if (!server.process.killed) {
+        try {
             server.process.kill('SIGKILL');
+        } catch {
+            // Process may have exited between timeout and SIGKILL; ignore.
         }
     });
     await Promise.race([exited, timeout]);
