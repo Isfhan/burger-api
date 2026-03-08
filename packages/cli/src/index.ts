@@ -28,7 +28,7 @@ const program = new Command();
 program
     .name('burger-api')
     .description('Simple tool to work with BurgerAPI projects')
-    .version('0.7.1');
+    .version('0.9.0');
 
 // Add all our commands to the CLI
 // Each command is defined in its own file for better organization

@@ -2,7 +2,7 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 0.8.0 - (March 4, 2026)
+## Version 0.9.0 - (March 8, 2026)
 
 ### Added
 - Added `burger.config.ts` generation in `burger-api create`, using project

@@ -1,6 +1,6 @@
 ## 📣 Release Notes - Burger API Framework
 
-### Version 0.8.0 (March 4, 2026)
+### Version 0.9.0 (March 8, 2026)
 
 -   Fixed issues in `burger-api build` and `burger-api build:exec` flow.
 -   Added shared path conversion utilities so runtime routing and build-time

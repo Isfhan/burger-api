@@ -7,7 +7,7 @@
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.6.2-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-0.9.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -164,13 +164,13 @@ project. For more information, visit the
 
 ## 📣 Changelog
 
-### Latest Version: 0.7.0 (December 24, 2025)
+### Latest Version: 0.9.0 (March 8, 2026)
 
 -   🔧 **CLI & Release Improvements:**
     -   Added CLI tool for creating new projects and managing middleware
     -   Updated README.md
 
-### Latest Version: 0.6.2 (November 13, 2025)
+### Previous Version: 0.7.0 (November 13, 2025)
 
 -   ⚡ **Major Performance Improvements:**
 

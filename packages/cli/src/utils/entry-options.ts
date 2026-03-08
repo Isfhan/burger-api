@@ -135,7 +135,10 @@ export function prepareEntryOptionsModule(options: {
     // Remove trailing partial assignment fragments like "const app ="
     // when the constructor is assigned (e.g. const app = new Burger(...)).
     const prelude = rawPrelude
-        .replace(/(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*$/, '')
+        .replace(
+            /(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(?::\s*.*?)?\s*=\s*$/,
+            ''
+        )
         .trimEnd();
     const tempFilePath = resolve(dirname(entryPath), ENTRY_OPTIONS_FILENAME);
     const tempFileSource = [
