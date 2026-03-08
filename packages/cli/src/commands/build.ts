@@ -10,7 +10,7 @@
 
 import { Command } from 'commander';
 import { existsSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import {
     spinner,
     success,
@@ -73,6 +73,13 @@ export const buildCommand = new Command('build')
     .option('--target <env>', 'Target environment (default: bun)')
     .action(async (file: string, options: BuildCommandOptions) => {
         const cwd = process.cwd();
+        const entryPath = resolve(cwd, file);
+        if (!existsSync(entryPath)) {
+            logError(`Entry file not found: ${file}`);
+            info('Make sure you are in the project directory.');
+            process.exit(1);
+        }
+
         const spin = spinner('Building project...');
 
         try {
@@ -144,6 +151,12 @@ export const buildExecutableCommand = new Command('build:exec')
     .option('--no-bytecode', 'Disable bytecode compilation')
     .action(async (file: string, options: BuildExecutableOptions) => {
         const cwd = process.cwd();
+        const entryPath = resolve(cwd, file);
+        if (!existsSync(entryPath)) {
+            logError(`Entry file not found: ${file}`);
+            info('Make sure you are in the project directory.');
+            process.exit(1);
+        }
 
         let outfile = options.outfile;
         if (!outfile) {
