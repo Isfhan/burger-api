@@ -11,6 +11,7 @@
     "build": "bun run --filter burger-api build",
     "test:framework": "bun run --filter burger-api test:examples",
     "test:cli": "bun run --filter @burger-api/cli test",
+    "test:route-sync": "bun test test/route-sync.test.ts",
     "dev": "bun run --filter burger-api dev"
   },
   "repository": {

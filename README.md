@@ -218,6 +218,8 @@ If you want to contribute, this split helps:
   - `packages/cli/src/utils/build/bun.ts`
   - `packages/cli/src/utils/build/entry.ts`
 
+When changing route or path conversion logic in either the framework or the CLI, run `bun run test:route-sync` from the repo root and update the other implementation if the test fails.
+
 ## 📚 Documentation
 
 -   **Framework Documentation:**

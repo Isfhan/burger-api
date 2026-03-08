@@ -2,7 +2,7 @@ import * as path from 'path';
 
 /**
  * Shared route conventions for CLI scanning and code generation.
- * Keep this module in sync with framework routing rules.
+ * Must match framework routing rules (packages/burger-api pathConversion). Sync check: bun run test:route-sync (from repo root).
  */
 export const ROUTE_CONSTANTS = {
     SUPPORTED_PAGE_EXTENSIONS: ['.tsx', '.html'],
