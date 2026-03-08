@@ -37,8 +37,8 @@ burger.serve(port, () => {
     console.log('🍔 My Burger API App - Production Ready Demo is running!');
     console.log('=========================================================');
     console.log('');
-    console.log('📖 API Documentation: http://localhost:5000/docs');
-    console.log('🔗 OpenAPI Spec: http://localhost:5000/openapi.json');
+    console.log(`📖 API Documentation: http://localhost:${port}/docs`);
+    console.log(`🔗 OpenAPI Spec: http://localhost:${port}/openapi.json`);
     console.log('');
     console.log('🏗️ Production Features Enabled:');
     console.log('');
