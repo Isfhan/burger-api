@@ -6,7 +6,7 @@ import { generateOpenAPIDocument } from './core/openapi';
 import { swaggerHtml } from './core/swagger-ui';
 
 // Import utils
-import { collectRoutes } from './utils/index';
+import { collectRoutes, compareRoutes } from './utils/index';
 import { METHOD_NOT_ALLOWED, NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 import {
     extractPathnameFromUrl,
@@ -117,8 +117,13 @@ export class Burger {
         // Production path: use pre-built page routes (no filesystem scan)
         const prebuiltPages = this.options.pageRoutes;
         if (prebuiltPages?.length) {
-            for (let i = 0; i < prebuiltPages.length; i++) {
-                const page = prebuiltPages[i];
+            // Sort the prebuilt pages
+            const sorted = [...prebuiltPages].sort((a, b) =>
+                compareRoutes(a, b)
+            );
+
+            for (let i = 0; i < sorted.length; i++) {
+                const page = sorted[i];
                 this.routes[page.path] = page.handler;
             }
             return true;
