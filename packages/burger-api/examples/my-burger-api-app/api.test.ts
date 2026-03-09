@@ -51,7 +51,6 @@ beforeAll(async () => {
     testServer = await startExampleServer({
         exampleDir: import.meta.dir,
         healthPath: '/api',
-        port: 5000,
     });
     BASE_URL = testServer.baseUrl;
 });
