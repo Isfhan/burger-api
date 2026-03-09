@@ -8,6 +8,99 @@ interface PreparedEntryOptions {
 
 const ENTRY_OPTIONS_FILENAME = '__burger_build_options__.ts';
 
+/**
+ * Find the index of the closing ')' that matches the '(' at openIndex.
+ * Skips strings, template literals, and comments so parens inside them are ignored.
+ * Returns -1 if no matching ')' is found.
+ */
+function findMatchingClosingParen(source: string, openIndex: number): number {
+    let depth = 1;
+    let inSingle = false;
+    let inDouble = false;
+    let inTemplate = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    let escaped = false;
+
+    for (let i = openIndex + 1; i < source.length; i++) {
+        const ch = source[i];
+        const next = i + 1 < source.length ? source[i + 1] : '';
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') {
+                inBlockComment = false;
+                i++;
+            }
+            continue;
+        }
+
+        if (inSingle) {
+            if (!escaped && ch === "'") inSingle = false;
+            escaped = !escaped && ch === '\\';
+            continue;
+        }
+        if (inDouble) {
+            if (!escaped && ch === '"') inDouble = false;
+            escaped = !escaped && ch === '\\';
+            continue;
+        }
+        if (inTemplate) {
+            if (!escaped && ch === '`') {
+                inTemplate = false;
+                escaped = false;
+                continue;
+            }
+            if (!escaped && ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '/' && next === '/') {
+            inLineComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            inBlockComment = true;
+            i++;
+            continue;
+        }
+        if (ch === "'") {
+            inSingle = true;
+            escaped = false;
+            continue;
+        }
+        if (ch === '"') {
+            inDouble = true;
+            escaped = false;
+            continue;
+        }
+        if (ch === '`') {
+            inTemplate = true;
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '(') {
+            depth++;
+            continue;
+        }
+        if (ch === ')') {
+            depth--;
+            if (depth === 0) return i;
+        }
+    }
+
+    return -1;
+}
+
 function extractBurgerOptionsObjectLiteral(source: string): string | null {
     const burgerCtor = source.match(/\bnew\s+Burger\s*\(/);
     if (!burgerCtor || burgerCtor.index === undefined) {
@@ -19,8 +112,13 @@ function extractBurgerOptionsObjectLiteral(source: string): string | null {
         return null;
     }
 
-    const objectStart = source.indexOf('{', callStart);
-    if (objectStart < 0) {
+    const callEnd = findMatchingClosingParen(source, callStart);
+    if (callEnd < 0) {
+        return null;
+    }
+
+    const objectStart = source.indexOf('{', callStart + 1);
+    if (objectStart < 0 || objectStart >= callEnd) {
         return null;
     }
 

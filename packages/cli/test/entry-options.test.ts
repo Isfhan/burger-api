@@ -126,4 +126,51 @@ app.serve(4000);
         expect(result.importPath).toBeUndefined();
         expect(result.tempFilePath).toBeUndefined();
     });
+
+    it('returns empty result when Burger constructor receives a variable (no inline object)', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
+        tempDirs.push(dir);
+
+        writeFileSync(
+            join(dir, 'index.ts'),
+            `
+import { Burger } from 'burger-api';
+const config = { title: 'API', hostname: '0.0.0.0' };
+const app = new Burger(config);
+app.serve(4000);
+`,
+            'utf-8'
+        );
+
+        const result = prepareEntryOptionsModule({
+            cwd: dir,
+            entryFile: './index.ts',
+        });
+
+        expect(result.importPath).toBeUndefined();
+        expect(result.tempFilePath).toBeUndefined();
+    });
+
+    it('does not use a later { (e.g. arrow function) as options when constructor has variable', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
+        tempDirs.push(dir);
+
+        writeFileSync(
+            join(dir, 'index.ts'),
+            `
+import { Burger } from 'burger-api';
+const app = new Burger(myConfigVariable);
+app.serve(4000, () => { return 1; });
+`,
+            'utf-8'
+        );
+
+        const result = prepareEntryOptionsModule({
+            cwd: dir,
+            entryFile: './index.ts',
+        });
+
+        expect(result.importPath).toBeUndefined();
+        expect(result.tempFilePath).toBeUndefined();
+    });
 });
