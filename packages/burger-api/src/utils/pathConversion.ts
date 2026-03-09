@@ -1,17 +1,6 @@
 import * as path from 'path';
+import { cleanPrefix } from './index';
 import { ROUTE_CONSTANTS } from './routing';
-
-/**
- * Cleans a prefix by removing leading and trailing slashes.
- * @param prefix The prefix to clean.
- * @returns The cleaned prefix.
- */
-function cleanPrefix(prefix: string): string {
-    let p = prefix;
-    while (p.startsWith('/')) p = p.slice(1);
-    while (p.endsWith('/')) p = p.slice(0, -1);
-    return p;
-}
 
 /**
  * Converts a file path to an API route path.
