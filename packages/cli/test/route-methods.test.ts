@@ -26,6 +26,20 @@ describe('detectExportedMethods', () => {
         expect(methods!.sort()).toEqual(['GET', 'POST']);
     });
 
+    it('detects GET and POST from export const METHOD = ...', async () => {
+        const path = join(fixturesDir, 'const-exports', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeDefined();
+        expect(methods!.sort()).toEqual(['GET', 'POST']);
+    });
+
+    it('detects both GET and POST when route mixes export const GET and export function POST', async () => {
+        const path = join(fixturesDir, 'mixed', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeDefined();
+        expect(methods!.sort()).toEqual(['GET', 'POST']);
+    });
+
     it('returns undefined for non-existent file', async () => {
         const methods = await detectExportedMethods(
             join(fixturesDir, 'nonexistent', 'route.ts')

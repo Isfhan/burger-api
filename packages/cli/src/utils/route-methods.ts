@@ -22,12 +22,16 @@ const EXPORT_FUNCTION_RE =
 /** Matches export { ... } and captures the content between braces */
 const EXPORT_NAMED_BLOCK_RE = /export\s*\{([^}]*)\}/g;
 
+/** Matches export const GET = ... or export const POST = async (req) => ... */
+const EXPORT_CONST_RE =
+    /export\s+const\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*=/g;
+
 /** Matches a single HTTP method name (used to find all methods inside a block) */
 const METHOD_NAME_RE = /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 
 /**
  * Detect which HTTP methods are exported from a route file.
- * Reads the file and looks for export function METHOD( and export { ... METHOD ... }.
+ * Reads the file and looks for export function METHOD(, export const METHOD = ..., and export { ... METHOD ... }.
  *
  * @param filePath - Absolute path to the route file (e.g. route.ts).
  * @returns Array of method names found, or undefined if file could not be read or parsed.
@@ -47,6 +51,12 @@ export async function detectExportedMethods(
     let match: RegExpExecArray | null;
     EXPORT_FUNCTION_RE.lastIndex = 0;
     while ((match = EXPORT_FUNCTION_RE.exec(content)) !== null) {
+        const name = match[1];
+        if (name) found.add(name);
+    }
+
+    EXPORT_CONST_RE.lastIndex = 0;
+    while ((match = EXPORT_CONST_RE.exec(content)) !== null) {
         const name = match[1];
         if (name) found.add(name);
     }
