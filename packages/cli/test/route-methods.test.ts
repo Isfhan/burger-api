@@ -19,6 +19,13 @@ describe('detectExportedMethods', () => {
         expect(methods).toEqual(['GET']);
     });
 
+    it('detects GET and POST from a single export { GET, POST } block', async () => {
+        const path = join(fixturesDir, 'named-export-block', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeDefined();
+        expect(methods!.sort()).toEqual(['GET', 'POST']);
+    });
+
     it('returns undefined for non-existent file', async () => {
         const methods = await detectExportedMethods(
             join(fixturesDir, 'nonexistent', 'route.ts')

@@ -19,9 +19,11 @@ const HTTP_METHOD_NAMES = [
 const EXPORT_FUNCTION_RE =
     /export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*\(/g;
 
-/** Matches export { GET, POST } or export { GET as X, POST } - captures method names */
-const EXPORT_NAMED_RE =
-    /export\s*\{\s*[^}]*?\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b[^}]*\}/g;
+/** Matches export { ... } and captures the content between braces */
+const EXPORT_NAMED_BLOCK_RE = /export\s*\{([^}]*)\}/g;
+
+/** Matches a single HTTP method name (used to find all methods inside a block) */
+const METHOD_NAME_RE = /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 
 /**
  * Detect which HTTP methods are exported from a route file.
@@ -49,10 +51,16 @@ export async function detectExportedMethods(
         if (name) found.add(name);
     }
 
-    EXPORT_NAMED_RE.lastIndex = 0;
-    while ((match = EXPORT_NAMED_RE.exec(content)) !== null) {
-        const name = match[1];
-        if (name) found.add(name);
+    // Scan each export { ... } block and collect all HTTP method names inside it
+    EXPORT_NAMED_BLOCK_RE.lastIndex = 0;
+    while ((match = EXPORT_NAMED_BLOCK_RE.exec(content)) !== null) {
+        const blockContent = match[1] ?? '';
+        let methodMatch: RegExpExecArray | null;
+        METHOD_NAME_RE.lastIndex = 0;
+        while ((methodMatch = METHOD_NAME_RE.exec(blockContent)) !== null) {
+            const name = methodMatch[1];
+            if (name) found.add(name);
+        }
     }
 
     const methods = [...found].filter((m) =>
