@@ -6,6 +6,7 @@
 import { readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
+import { detectExportedMethods } from './route-methods';
 import { ROUTE_CONSTANTS } from './route-conventions';
 import {
     filePathToApiRoutePath,
@@ -98,13 +99,18 @@ async function scanApiDir(
         if (entry.isFile() && entry.name === 'route.ts') {
             const routePath = filePathToApiRoutePath(relativePath, prefix);
             const importPath = entryPath.split(path.sep).join('/');
-            out.push({
+            const methods = await detectExportedMethods(entryPath);
+            const scanEntry: ApiRouteScanEntry = {
                 importPath,
                 routePath,
                 isWildcard: routePath.includes(
                     ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
                 ),
-            });
+            };
+            if (methods !== undefined) {
+                scanEntry.methods = methods;
+            }
+            out.push(scanEntry);
         }
     }
 }

@@ -8,6 +8,11 @@ import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
 const fixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
 const parityFixturesDir = join(import.meta.dir, 'fixtures', 'parity-routes');
 const conflictFixturesDir = join(import.meta.dir, 'fixtures', 'conflicts');
+const routeMethodsFixturesDir = join(
+    import.meta.dir,
+    'fixtures',
+    'route-methods'
+);
 
 describe('scanApiRoutes', () => {
     it('converts file paths to route paths matching framework (static, dynamic, group)', async () => {
@@ -18,18 +23,28 @@ describe('scanApiRoutes', () => {
         expect(paths).toContain('/api/users/:id');
 
         expect(entries.find((e) => e.routePath === '/api')).toBeDefined();
-        expect(entries.find((e) => e.routePath === '/api/users/:id')).toBeDefined();
+        expect(
+            entries.find((e) => e.routePath === '/api/users/:id')
+        ).toBeDefined();
         const dynamic = entries.find((e) => e.routePath === '/api/users/:id');
         expect(dynamic?.isWildcard).toBe(false);
     });
 
     it('returns empty array when apiDir does not exist', async () => {
-        const entries = await scanApiRoutes(fixturesDir, './nonexistent', '/api');
+        const entries = await scanApiRoutes(
+            fixturesDir,
+            './nonexistent',
+            '/api'
+        );
         expect(entries).toEqual([]);
     });
 
     it('normalizes prefix and supports grouping + wildcard segments', async () => {
-        const entries = await scanApiRoutes(parityFixturesDir, './api', '//api//');
+        const entries = await scanApiRoutes(
+            parityFixturesDir,
+            './api',
+            '//api//'
+        );
         const paths = entries.map((e) => e.routePath).sort();
 
         expect(paths).toEqual([
@@ -52,6 +67,33 @@ describe('scanApiRoutes', () => {
         ).rejects.toThrow('Multiple dynamic route folders');
     });
 
+    it('sets methods on entries when route file exports specific HTTP methods', async () => {
+        const entries = await scanApiRoutes(
+            routeMethodsFixturesDir,
+            'get-only',
+            '/api'
+        );
+        expect(entries).toHaveLength(1);
+        const entry = entries[0];
+        if (!entry) throw new Error('expected one entry');
+        expect(entry.routePath).toBe('/api');
+        expect(entry.methods).toEqual(['GET']);
+    });
+
+    it('sets methods for multiple exported methods', async () => {
+        const entries = await scanApiRoutes(
+            routeMethodsFixturesDir,
+            '.',
+            '/api'
+        );
+        const rootEntry = entries.find((e) => e.routePath === '/api');
+        expect(rootEntry).toBeDefined();
+        if (!rootEntry) throw new Error('expected root entry');
+        expect(rootEntry.methods).toEqual(
+            expect.arrayContaining(['GET', 'POST'])
+        );
+        expect(rootEntry.methods).toHaveLength(2);
+    });
 });
 
 describe('scanPageRoutes', () => {
@@ -61,7 +103,11 @@ describe('scanPageRoutes', () => {
     });
 
     it('converts page paths for index, dynamic, extension stripping, and grouping', async () => {
-        const entries = await scanPageRoutes(parityFixturesDir, './pages', '//');
+        const entries = await scanPageRoutes(
+            parityFixturesDir,
+            './pages',
+            '//'
+        );
         const paths = entries.map((e) => e.routePath).sort();
 
         expect(paths).toEqual([
@@ -74,7 +120,11 @@ describe('scanPageRoutes', () => {
     });
 
     it('applies non-root page prefix consistently', async () => {
-        const entries = await scanPageRoutes(parityFixturesDir, './pages', '/site/');
+        const entries = await scanPageRoutes(
+            parityFixturesDir,
+            './pages',
+            '/site/'
+        );
         const paths = entries.map((e) => e.routePath).sort();
 
         expect(paths).toEqual([
