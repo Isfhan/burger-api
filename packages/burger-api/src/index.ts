@@ -126,7 +126,7 @@ export class Burger {
                 const page = sorted[i];
                 this.routes[page.path] = page.handler;
             }
-            return true;
+            return sorted.length > 0;
         }
 
         // Dev path: load from filesystem via PageRouter
