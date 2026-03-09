@@ -4,21 +4,18 @@
  */
 
 import type { BuildConfig } from '../types/index';
-import type {
-    ApiRouteScanEntry,
-    PageRouteScanEntry,
-} from './scanner';
+import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
 
-const HTTP_METHODS = [
-    'GET',
-    'POST',
-    'PUT',
-    'DELETE',
-    'PATCH',
-    'HEAD',
-];
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
 
 const PREFLIGHT_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
+
+function methodsToEmit(entry: ApiRouteScanEntry): string[] {
+    if (entry.methods && entry.methods.length > 0) {
+        return entry.methods;
+    }
+    return [...HTTP_METHODS];
+}
 
 function pushImportLines(
     lines: string[],
@@ -26,7 +23,9 @@ function pushImportLines(
     variablePrefix: 'r' | 'p'
 ): void {
     entries.forEach((entry, index) => {
-        lines.push(`import * as _${variablePrefix}${index} from '${entry.importPath}';`);
+        lines.push(
+            `import * as _${variablePrefix}${index} from '${entry.importPath}';`
+        );
     });
 }
 
@@ -63,15 +62,24 @@ export function generateVirtualEntrySource(
     lines.push('const apiRoutes = [');
 
     apiEntries.forEach((e, i) => {
+        const methods = methodsToEmit(e);
+        const hasPreflight = PREFLIGHT_METHODS.some((m) => methods.includes(m));
+        const hasOptions = methods.includes('OPTIONS');
+
         lines.push('  {');
         lines.push(`    path: ${JSON.stringify(e.routePath)},`);
         lines.push('    handlers: {');
-        for (const m of HTTP_METHODS) {
+        for (const m of methods) {
+            if (m === 'OPTIONS') continue;
             lines.push(`      ${m}: _r${i}.${m},`);
         }
-        lines.push(
-            `      OPTIONS: (${PREFLIGHT_METHODS.map((m) => `_r${i}.${m}`).join(' || ')}) && !_r${i}.OPTIONS ? () => new Response(null, { status: 204 }) : _r${i}.OPTIONS,`
-        );
+        if (hasOptions) {
+            lines.push(`      OPTIONS: _r${i}.OPTIONS,`);
+        } else if (hasPreflight) {
+            lines.push(
+                `      OPTIONS: () => new Response(null, { status: 204 }),`
+            );
+        }
         lines.push('    },');
         lines.push(`    middleware: _r${i}.middleware,`);
         lines.push(`    schema: _r${i}.schema,`);
@@ -85,9 +93,13 @@ export function generateVirtualEntrySource(
 
     lines.push('const pageRoutes = [');
     pageEntries.forEach((p, i) => {
-        lines.push(`  { path: ${JSON.stringify(p.routePath)}, handler: _p${i}.default },`);
+        lines.push(
+            `  { path: ${JSON.stringify(p.routePath)}, handler: _p${i}.default },`
+        );
         if (p.routePath !== '/' && !p.routePath.endsWith('/')) {
-            lines.push(`  { path: ${JSON.stringify(p.routePath + '/')}, handler: _p${i}.default },`);
+            lines.push(
+                `  { path: ${JSON.stringify(p.routePath + '/')}, handler: _p${i}.default },`
+            );
         }
     });
     lines.push('];');

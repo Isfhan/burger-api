@@ -163,6 +163,8 @@ export function generateOpenAPIDocument(
 
         // For each HTTP method in the route, add an OpenAPI operation.
         for (const method in route.handlers) {
+            // If the handler is not a function, skip
+            if (typeof route.handlers[method] !== 'function') continue;
             // Convert HTTP method to lowercase
             const lowerMethod = method.toLowerCase();
 

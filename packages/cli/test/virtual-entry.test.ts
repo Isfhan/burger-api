@@ -11,10 +11,16 @@ const config: BuildConfig = {
 };
 
 describe('generateVirtualEntrySource', () => {
-    it('includes all HTTP methods, including OPTIONS', () => {
+    it('when entry has no methods, emits all HTTP methods and auto OPTIONS', () => {
         const source = generateVirtualEntrySource(
             config,
-            [{ importPath: '/tmp/api/route.ts', routePath: '/api', isWildcard: false }],
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                },
+            ],
             []
         );
 
@@ -25,15 +31,62 @@ describe('generateVirtualEntrySource', () => {
         expect(source).toContain('PATCH: _r0.PATCH');
         expect(source).toContain('HEAD: _r0.HEAD');
         expect(source).toContain(
-            'OPTIONS: (_r0.POST || _r0.PUT || _r0.DELETE || _r0.PATCH) && !_r0.OPTIONS'
+            'OPTIONS: () => new Response(null, { status: 204 })'
         );
     });
 
+    it('when entry has methods [GET, POST], emits only those and auto OPTIONS', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                    methods: ['GET', 'POST'],
+                },
+            ],
+            []
+        );
+
+        expect(source).toContain('GET: _r0.GET');
+        expect(source).toContain('POST: _r0.POST');
+        expect(source).toContain(
+            'OPTIONS: () => new Response(null, { status: 204 })'
+        );
+        expect(source).not.toContain('PUT: _r0.PUT');
+        expect(source).not.toContain('DELETE: _r0.DELETE');
+        expect(source).not.toContain('PATCH: _r0.PATCH');
+        expect(source).not.toContain('HEAD: _r0.HEAD');
+    });
+
+    it('when entry has only GET, does not emit OPTIONS', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                    methods: ['GET'],
+                },
+            ],
+            []
+        );
+
+        expect(source).toContain('GET: _r0.GET');
+        expect(source).not.toContain('OPTIONS:');
+    });
+
     it('adds trailing slash aliases for non-root page routes', () => {
-        const source = generateVirtualEntrySource(config, [], [
-            { importPath: '/tmp/pages/index.html', routePath: '/' },
-            { importPath: '/tmp/pages/about.html', routePath: '/about' },
-        ]);
+        const source = generateVirtualEntrySource(
+            config,
+            [],
+            [
+                { importPath: '/tmp/pages/index.html', routePath: '/' },
+                { importPath: '/tmp/pages/about.html', routePath: '/about' },
+            ]
+        );
 
         expect(source).toContain('{ path: "/", handler: _p0.default }');
         expect(source).toContain('{ path: "/about", handler: _p1.default }');
@@ -43,7 +96,13 @@ describe('generateVirtualEntrySource', () => {
     it('spreads preserved Burger options when an options module is provided', () => {
         const source = generateVirtualEntrySource(
             config,
-            [{ importPath: '/tmp/api/route.ts', routePath: '/api', isWildcard: false }],
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                },
+            ],
             [],
             '/tmp/__burger_build_options__.ts'
         );

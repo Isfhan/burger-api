@@ -18,6 +18,8 @@ export interface ApiRouteScanEntry {
     /** Route path with prefix (e.g. /api/users/:id) */
     routePath: string;
     isWildcard: boolean;
+    /** HTTP methods exported by the route module (set by method detection; omit = emit all) */
+    methods?: string[];
 }
 
 export interface PageRouteScanEntry {
