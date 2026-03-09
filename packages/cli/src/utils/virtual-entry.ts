@@ -6,7 +6,19 @@
 import type { BuildConfig } from '../types/index';
 import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
+/** Matches framework routing.ts; OPTIONS handled in loop when present, else auto 204 when preflight. */
+const HTTP_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'DELETE',
+    'PATCH',
+    'HEAD',
+    'OPTIONS',
+];
+
+/** Default methods to emit when entry has no methods; excludes OPTIONS so we add 204 only when hasPreflight. */
+const DEFAULT_EMIT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
 
 const PREFLIGHT_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
@@ -14,7 +26,7 @@ function methodsToEmit(entry: ApiRouteScanEntry): string[] {
     if (entry.methods && entry.methods.length > 0) {
         return entry.methods;
     }
-    return [...HTTP_METHODS];
+    return [...DEFAULT_EMIT_METHODS];
 }
 
 function pushImportLines(
@@ -64,18 +76,14 @@ export function generateVirtualEntrySource(
     apiEntries.forEach((e, i) => {
         const methods = methodsToEmit(e);
         const hasPreflight = PREFLIGHT_METHODS.some((m) => methods.includes(m));
-        const hasOptions = methods.includes('OPTIONS');
 
         lines.push('  {');
         lines.push(`    path: ${JSON.stringify(e.routePath)},`);
         lines.push('    handlers: {');
         for (const m of methods) {
-            if (m === 'OPTIONS') continue;
             lines.push(`      ${m}: _r${i}.${m},`);
         }
-        if (hasOptions) {
-            lines.push(`      OPTIONS: _r${i}.OPTIONS,`);
-        } else if (hasPreflight) {
+        if (!methods.includes('OPTIONS') && hasPreflight) {
             lines.push(
                 `      OPTIONS: () => new Response(null, { status: 204 }),`
             );

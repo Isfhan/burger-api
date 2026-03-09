@@ -78,6 +78,28 @@ describe('generateVirtualEntrySource', () => {
         expect(source).not.toContain('OPTIONS:');
     });
 
+    it('when entry has methods [GET, POST, OPTIONS], emits OPTIONS from module and no auto 204', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                    methods: ['GET', 'POST', 'OPTIONS'],
+                },
+            ],
+            []
+        );
+
+        expect(source).toContain('GET: _r0.GET');
+        expect(source).toContain('POST: _r0.POST');
+        expect(source).toContain('OPTIONS: _r0.OPTIONS');
+        expect(source).not.toContain(
+            'OPTIONS: () => new Response(null, { status: 204 })'
+        );
+    });
+
     it('adds trailing slash aliases for non-root page routes', () => {
         const source = generateVirtualEntrySource(
             config,
