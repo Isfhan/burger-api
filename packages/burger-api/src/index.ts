@@ -93,13 +93,13 @@ export class Burger {
 
         // Initialize API router only when using runtime scanning (no prebuilt apiRoutes)
         this.apiRouter =
-            apiDir && !options.apiRoutes?.length
+            apiDir && !Array.isArray(options.apiRoutes)
                 ? new ApiRouter(apiDir, apiPrefix || 'api')
                 : undefined;
 
         // Initialize page router only when using runtime scanning (no prebuilt pageRoutes)
         this.pageRouter =
-            pageDir && !options.pageRoutes?.length
+            pageDir && !Array.isArray(options.pageRoutes)
                 ? new PageRouter(pageDir, pagePrefix || '')
                 : undefined;
 
@@ -116,7 +116,7 @@ export class Burger {
     private async processPageRoutes(): Promise<boolean> {
         // Production path: use pre-built page routes (no filesystem scan)
         const prebuiltPages = this.options.pageRoutes;
-        if (prebuiltPages?.length) {
+        if (Array.isArray(prebuiltPages)) {
             // Sort the prebuilt pages
             const sorted = [...prebuiltPages].sort((a, b) =>
                 compareRoutes(a, b)
@@ -160,7 +160,7 @@ export class Burger {
     private async processApiRoutes(): Promise<boolean> {
         // Production path: use pre-built API routes (no filesystem scan)
         let apiRoutes: RouteDefinition[];
-        if (this.options.apiRoutes?.length) {
+        if (Array.isArray(this.options.apiRoutes)) {
             apiRoutes = this.options.apiRoutes;
         } else {
             // Dev path: load from filesystem via ApiRouter
