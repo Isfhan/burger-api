@@ -108,6 +108,43 @@ app.serve(4000);
         expect(existsSync(result.tempFilePath!)).toBe(false);
     });
 
+    it('strips trailing export default when entry is export default new Burger({...})', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
+        tempDirs.push(dir);
+
+        const entryPath = join(dir, 'index.ts');
+        writeFileSync(
+            entryPath,
+            `
+import { Burger } from 'burger-api';
+
+export default new Burger({
+  title: 'Default Export API',
+  hostname: '0.0.0.0',
+});
+`,
+            'utf-8'
+        );
+
+        const result = prepareEntryOptionsModule({
+            cwd: dir,
+            entryFile: './index.ts',
+        });
+
+        expect(result.importPath).toBeDefined();
+        expect(result.tempFilePath).toBeDefined();
+        expect(existsSync(result.tempFilePath!)).toBe(true);
+
+        const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
+        expect(tempSource).toContain('export const burgerOptions = {');
+        expect(tempSource).toContain('Default Export API');
+        expect(tempSource).toContain('0.0.0.0');
+        expect(tempSource).not.toContain('export default');
+
+        cleanupEntryOptionsModule(result.tempFilePath);
+        expect(existsSync(result.tempFilePath!)).toBe(false);
+    });
+
     it('returns empty result when no Burger constructor exists', () => {
         const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
         tempDirs.push(dir);

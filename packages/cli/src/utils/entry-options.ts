@@ -237,6 +237,7 @@ export function prepareEntryOptionsModule(options: {
             /(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(?::\s*.*?)?\s*=\s*$/,
             ''
         )
+        .replace(/\s*export\s+default\s*$/, '')
         .trimEnd();
     const tempFilePath = resolve(dirname(entryPath), ENTRY_OPTIONS_FILENAME);
     const tempFileSource = [
