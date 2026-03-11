@@ -161,7 +161,9 @@ export class Burger {
         // Production path: use pre-built API routes (no filesystem scan)
         let apiRoutes: RouteDefinition[];
         if (Array.isArray(this.options.apiRoutes)) {
-            apiRoutes = this.options.apiRoutes;
+            apiRoutes = [...this.options.apiRoutes].sort((a, b) =>
+                compareRoutes(a, b)
+            );
         } else {
             // Dev path: load from filesystem via ApiRouter
             if (!this.apiRouter) return false;
