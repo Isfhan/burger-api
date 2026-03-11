@@ -6,17 +6,6 @@
 import type { BuildConfig } from '../types/index';
 import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
 
-/** Matches framework routing.ts; OPTIONS handled in loop when present, else auto 204 when preflight. */
-const HTTP_METHODS = [
-    'GET',
-    'POST',
-    'PUT',
-    'DELETE',
-    'PATCH',
-    'HEAD',
-    'OPTIONS',
-];
-
 /** Default methods to emit when entry has no methods; excludes OPTIONS so we add 204 only when hasPreflight. */
 const DEFAULT_EMIT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
 
