@@ -30,6 +30,16 @@ const EXPORT_CONST_RE =
 const METHOD_NAME_RE = /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 
 /**
+ * Strip comments so export regexes do not match inside comments.
+ * Removes multi-line comments (/* ... *\/) and lines that are only a single-line comment (// ...).
+ */
+function stripComments(content: string): string {
+    let out = content.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    out = out.replace(/^\s*\/\/[^\n]*$/gm, '\n');
+    return out;
+}
+
+/**
  * Detect which HTTP methods are exported from a route file.
  * Reads the file and looks for export function METHOD(, export const METHOD = ..., and export { ... METHOD ... }.
  *
@@ -46,24 +56,25 @@ export async function detectExportedMethods(
         return undefined;
     }
 
+    const contentWithoutComments = stripComments(content);
     const found = new Set<string>();
 
     let match: RegExpExecArray | null;
     EXPORT_FUNCTION_RE.lastIndex = 0;
-    while ((match = EXPORT_FUNCTION_RE.exec(content)) !== null) {
+    while ((match = EXPORT_FUNCTION_RE.exec(contentWithoutComments)) !== null) {
         const name = match[1];
         if (name) found.add(name);
     }
 
     EXPORT_CONST_RE.lastIndex = 0;
-    while ((match = EXPORT_CONST_RE.exec(content)) !== null) {
+    while ((match = EXPORT_CONST_RE.exec(contentWithoutComments)) !== null) {
         const name = match[1];
         if (name) found.add(name);
     }
 
     // Scan each export { ... } block and collect all HTTP method names inside it
     EXPORT_NAMED_BLOCK_RE.lastIndex = 0;
-    while ((match = EXPORT_NAMED_BLOCK_RE.exec(content)) !== null) {
+    while ((match = EXPORT_NAMED_BLOCK_RE.exec(contentWithoutComments)) !== null) {
         const blockContent = match[1] ?? '';
         let methodMatch: RegExpExecArray | null;
         METHOD_NAME_RE.lastIndex = 0;

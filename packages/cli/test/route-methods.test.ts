@@ -46,4 +46,24 @@ describe('detectExportedMethods', () => {
         );
         expect(methods).toBeUndefined();
     });
+
+    it('ignores commented-out exports and returns undefined when only comments export methods', async () => {
+        const path = join(fixturesDir, 'commented-only', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeUndefined();
+    });
+
+    it('detects only real export when another method is commented out', async () => {
+        const path = join(fixturesDir, 'commented-export', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeDefined();
+        expect(methods).toEqual(['GET']);
+    });
+
+    it('ignores exports inside block comments and detects only real export', async () => {
+        const path = join(fixturesDir, 'block-comment', 'route.ts');
+        const methods = await detectExportedMethods(path);
+        expect(methods).toBeDefined();
+        expect(methods).toEqual(['POST']);
+    });
 });
