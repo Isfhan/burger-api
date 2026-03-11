@@ -118,6 +118,14 @@ export class ApiRouter {
                 const relativePath = path.join(basePath, entry.name);
 
                 if (entry.isDirectory()) {
+                    // Skip named wildcard folders
+                    if (
+                        entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
+                        entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+                    ) {
+                        continue;
+                    }
+
                     // Check if this is a dynamic or wildcard directory
                     const isDynamic =
                         entry.name.startsWith(
@@ -126,7 +134,7 @@ export class ApiRouter {
                         entry.name.endsWith(
                             ROUTE_CONSTANTS.DYNAMIC_FOLDER_END
                         ) &&
-                        entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE;
+                        !entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
 
                     const isWildcard =
                         entry.name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;

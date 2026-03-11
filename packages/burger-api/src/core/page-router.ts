@@ -86,6 +86,10 @@ export class PageRouter {
                 const relativePath = path.join(basePath, entry.name);
 
                 if (entry.isDirectory()) {
+                    if (entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START)) {
+                        continue;
+                    }
+
                     // Handle dynamic directories (e.g., [id])
                     if (
                         entry.name.startsWith(

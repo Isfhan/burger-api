@@ -8,6 +8,11 @@ import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
 const fixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
 const parityFixturesDir = join(import.meta.dir, 'fixtures', 'parity-routes');
 const conflictFixturesDir = join(import.meta.dir, 'fixtures', 'conflicts');
+const namedWildcardFixturesDir = join(
+    import.meta.dir,
+    'fixtures',
+    'named-wildcard'
+);
 const routeMethodsFixturesDir = join(
     import.meta.dir,
     'fixtures',
@@ -65,6 +70,15 @@ describe('scanApiRoutes', () => {
         await expect(
             scanApiRoutes(conflictFixturesDir, './api-two-dynamic', '/api')
         ).rejects.toThrow('Multiple dynamic route folders');
+    });
+
+    it('ignores unsupported [...slug] folders entirely', async () => {
+        const entries = await scanApiRoutes(
+            namedWildcardFixturesDir,
+            './api',
+            '/api'
+        );
+        expect(entries).toHaveLength(0);
     });
 
     it('sets methods on entries when route file exports specific HTTP methods', async () => {

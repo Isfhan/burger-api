@@ -63,10 +63,17 @@ async function scanApiDir(
         const relativePath = path.join(basePath, entry.name);
 
         if (entry.isDirectory()) {
+            if (
+                entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
+                entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+            ) {
+                continue;
+            }
+
             const isDynamic =
                 entry.name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
                 entry.name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&
-                entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE;
+                !entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
             const isWildcard = entry.name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
 
             if (isDynamic && wildcardFolderFound) {
@@ -147,6 +154,10 @@ async function scanPageDir(
         const relativePath = path.join(basePath, entry.name);
 
         if (entry.isDirectory()) {
+            if (entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START)) {
+                continue;
+            }
+
             const isDynamic =
                 entry.name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
                 entry.name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END);
