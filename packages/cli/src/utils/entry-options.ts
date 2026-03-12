@@ -18,6 +18,8 @@ function findMatchingClosingParen(source: string, openIndex: number): number {
     let inSingle = false;
     let inDouble = false;
     let inTemplate = false;
+    let interpolationBraceDepth = 0;
+    let nestedTemplateDepth = 0;
     let inLineComment = false;
     let inBlockComment = false;
     let escaped = false;
@@ -50,9 +52,35 @@ function findMatchingClosingParen(source: string, openIndex: number): number {
         }
         if (inTemplate) {
             if (!escaped && ch === '`') {
-                inTemplate = false;
+                if (nestedTemplateDepth > 0) {
+                    nestedTemplateDepth--;
+                } else if (interpolationBraceDepth > 0) {
+                    nestedTemplateDepth++;
+                } else {
+                    inTemplate = false;
+                    interpolationBraceDepth = 0;
+                    nestedTemplateDepth = 0;
+                }
                 escaped = false;
                 continue;
+            }
+            if (!escaped && ch === '$' && next === '{') {
+                interpolationBraceDepth = 1;
+                i++;
+                escaped = false;
+                continue;
+            }
+            if (!escaped && nestedTemplateDepth === 0) {
+                if (ch === '{') {
+                    interpolationBraceDepth++;
+                    escaped = false;
+                    continue;
+                }
+                if (ch === '}') {
+                    interpolationBraceDepth--;
+                    escaped = false;
+                    continue;
+                }
             }
             if (!escaped && ch === '\\') {
                 escaped = true;
@@ -84,6 +112,8 @@ function findMatchingClosingParen(source: string, openIndex: number): number {
         }
         if (ch === '`') {
             inTemplate = true;
+            interpolationBraceDepth = 0;
+            nestedTemplateDepth = 0;
             escaped = false;
             continue;
         }
@@ -127,6 +157,8 @@ function extractBurgerOptionsObjectLiteral(source: string): string | null {
     let inSingle = false;
     let inDouble = false;
     let inTemplate = false;
+    let interpolationBraceDepth = 0;
+    let nestedTemplateDepth = 0;
     let inLineComment = false;
     let inBlockComment = false;
     let escaped = false;
@@ -159,9 +191,35 @@ function extractBurgerOptionsObjectLiteral(source: string): string | null {
         }
         if (inTemplate) {
             if (!escaped && ch === '`') {
-                inTemplate = false;
+                if (nestedTemplateDepth > 0) {
+                    nestedTemplateDepth--;
+                } else if (interpolationBraceDepth > 0) {
+                    nestedTemplateDepth++;
+                } else {
+                    inTemplate = false;
+                    interpolationBraceDepth = 0;
+                    nestedTemplateDepth = 0;
+                }
                 escaped = false;
                 continue;
+            }
+            if (!escaped && ch === '$' && next === '{') {
+                interpolationBraceDepth = 1;
+                i++;
+                escaped = false;
+                continue;
+            }
+            if (!escaped && nestedTemplateDepth === 0) {
+                if (ch === '{') {
+                    interpolationBraceDepth++;
+                    escaped = false;
+                    continue;
+                }
+                if (ch === '}') {
+                    interpolationBraceDepth--;
+                    escaped = false;
+                    continue;
+                }
             }
             if (!escaped && ch === '\\') {
                 escaped = true;
@@ -193,6 +251,8 @@ function extractBurgerOptionsObjectLiteral(source: string): string | null {
         }
         if (ch === '`') {
             inTemplate = true;
+            interpolationBraceDepth = 0;
+            nestedTemplateDepth = 0;
             escaped = false;
             continue;
         }

@@ -210,4 +210,80 @@ app.serve(4000, () => { return 1; });
         expect(result.importPath).toBeUndefined();
         expect(result.tempFilePath).toBeUndefined();
     });
+
+    it('extracts full options when title uses nested template literal', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
+        tempDirs.push(dir);
+
+        const entryPath = join(dir, 'index.ts');
+        writeFileSync(
+            entryPath,
+            [
+                "import { Burger } from 'burger-api';",
+                '',
+                'const app = new Burger({',
+                '  title: `${`nested`} text`,',
+                "  hostname: '0.0.0.0',",
+                '});',
+                '',
+                'app.serve(4000);',
+            ].join('\n'),
+            'utf-8'
+        );
+
+        const result = prepareEntryOptionsModule({
+            cwd: dir,
+            entryFile: './index.ts',
+        });
+
+        expect(result.importPath).toBeDefined();
+        expect(result.tempFilePath).toBeDefined();
+        expect(existsSync(result.tempFilePath!)).toBe(true);
+
+        const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
+        expect(tempSource).toContain('export const burgerOptions = {');
+        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain('nested');
+        expect(tempSource).toContain('text');
+        expect(tempSource).toContain('`');
+        cleanupEntryOptionsModule(result.tempFilePath);
+    });
+
+    it('extracts full options when title uses deeply nested template literals', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-entry-options-'));
+        tempDirs.push(dir);
+
+        const entryPath = join(dir, 'index.ts');
+        writeFileSync(
+            entryPath,
+            [
+                "import { Burger } from 'burger-api';",
+                '',
+                'const app = new Burger({',
+                '  title: `${`a${`b`}c`}`,',
+                "  hostname: '0.0.0.0',",
+                '});',
+                '',
+                'app.serve(4000);',
+            ].join('\n'),
+            'utf-8'
+        );
+
+        const result = prepareEntryOptionsModule({
+            cwd: dir,
+            entryFile: './index.ts',
+        });
+
+        expect(result.importPath).toBeDefined();
+        expect(result.tempFilePath).toBeDefined();
+        expect(existsSync(result.tempFilePath!)).toBe(true);
+
+        const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
+        expect(tempSource).toContain('export const burgerOptions = {');
+        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain('a');
+        expect(tempSource).toContain('b');
+        expect(tempSource).toContain('c');
+        cleanupEntryOptionsModule(result.tempFilePath);
+    });
 });
