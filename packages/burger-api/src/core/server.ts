@@ -1,10 +1,15 @@
 // Import stuff from Bun
 import { serve } from 'bun';
+import type { HTMLBundle } from 'bun';
 
 // Import stuff from utils
 import { errorResponse } from '../utils/error';
 
-import type { ServerOptions, FetchHandler } from '../types/index';
+import type {
+    ServerOptions,
+    FetchHandler,
+    RequestHandler,
+} from '../types/index';
 
 export class Server {
     private options: ServerOptions;
@@ -19,20 +24,18 @@ export class Server {
     }
 
     public start(
-        routes: { [key: string]: any } | undefined,
+        routes: Record<string, HTMLBundle | RequestHandler> | undefined,
         handler: FetchHandler,
         port: number,
         cb?: () => void
     ): void {
         // Start Bun's native server using Bun.serve
-        this.server = serve({
+        const serveOptions = {
             routes,
-            // Bun's fetch handler
             fetch: async (request: Request) => {
                 try {
                     return await handler(request);
                 } catch (error) {
-                    // Return a custom error response
                     return errorResponse(
                         error,
                         request,
@@ -40,8 +43,7 @@ export class Server {
                     );
                 }
             },
-            // Global error handler
-            error(error) {
+            error(error: Error) {
                 console.error(error);
                 return new Response(`Internal Server Error: ${error.message}`, {
                     status: 500,
@@ -51,7 +53,8 @@ export class Server {
                 });
             },
             port,
-        });
+        };
+        this.server = serve(serveOptions as Parameters<typeof serve>[0]);
         if (cb) {
             cb();
         } else {

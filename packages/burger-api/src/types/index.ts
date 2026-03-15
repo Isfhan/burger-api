@@ -1,19 +1,21 @@
 import type { BunRequest, Server } from 'bun';
-import type { ServeOptions as BunServerOptions } from 'bun';
+import type { serve } from 'bun';
+
+/** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
+type BunServerOptions = Parameters<typeof serve>[0];
 import { z } from 'zod';
 
-export interface ServerOptions
-    extends Omit<
-        BunServerOptions,
-        | 'fetch'
-        | 'port'
-        | 'reusePort'
-        | 'ipv6Only'
-        | 'unix'
-        | 'error'
-        | 'id'
-        | 'development'
-    > {
+export interface ServerOptions extends Omit<
+    BunServerOptions,
+    | 'fetch'
+    | 'port'
+    | 'reusePort'
+    | 'ipv6Only'
+    | 'unix'
+    | 'error'
+    | 'id'
+    | 'development'
+> {
     /**
      * The title of the API. This is an optional property that can be used
      * to specify a custom title for the API documentation.
@@ -89,7 +91,8 @@ type DefaultRequestProperties = {
 };
 
 export interface BurgerRequest<
-    RequestValidatedProperties extends DefaultRequestProperties = DefaultRequestProperties
+    RequestValidatedProperties extends DefaultRequestProperties =
+        DefaultRequestProperties,
 > extends Omit<BunRequest<string>, 'params'> {
     /**
      * Contains URL parameters extracted from the request path.

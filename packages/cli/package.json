@@ -31,8 +31,7 @@
     "@clack/prompts": "^0.7.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/commander": "^2.12.5"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

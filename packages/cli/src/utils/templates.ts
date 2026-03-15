@@ -993,13 +993,15 @@ export function generateMiddlewareIndex(): string {
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
  * 
- * export const globalMiddleware = [
+ * export const globalMiddleware: Middleware[] = [
  *     logger(),
  *     cors(),
  * ];
  */
 
-export const globalMiddleware: any[] = [];
+import type { Middleware } from 'burger-api';
+
+export const globalMiddleware: Middleware[] = [];
 `;
 }
 

@@ -1,4 +1,4 @@
-// Import types
+import type { z } from 'zod';
 import type {
     RouteSchema,
     Middleware,
@@ -24,9 +24,9 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
     const methodMap: Record<
         string,
         {
-            paramsSchema?: any;
-            querySchema?: any;
-            bodySchema?: any;
+            paramsSchema?: z.ZodTypeAny;
+            querySchema?: z.ZodTypeAny;
+            bodySchema?: z.ZodTypeAny;
             hasParams: boolean;
             hasQuery: boolean;
             hasBody: boolean;
@@ -104,10 +104,10 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
         } | null = null;
 
         // Validate URL parameters (if available and schema provided).
-        if (hasParams && req.params) {
+        if (hasParams && req.params && paramsSchema) {
             const result = paramsSchema.safeParse(req.params);
             if (result.success) {
-                validated.params = result.data;
+                validated.params = result.data as Record<string, unknown>;
             } else {
                 if (!errors) errors = {};
                 errors.params = result.error.issues;
@@ -115,13 +115,13 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
         }
 
         // Validate query parameters if available and schema provided.
-        if (hasQuery) {
+        if (hasQuery && querySchema) {
             const url = new URL(req.url);
             const queryParams = Object.fromEntries(url.searchParams.entries());
 
             const result = querySchema.safeParse(queryParams);
             if (result.success) {
-                validated.query = result.data;
+                validated.query = result.data as Record<string, unknown>;
             } else {
                 if (!errors) errors = {};
                 errors.query = result.error.issues;
@@ -135,14 +135,18 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
             '';
 
         // Validate request body if it's JSON
-        if (hasBody && contentType?.includes('application/json')) {
+        if (
+            hasBody &&
+            contentType?.includes('application/json') &&
+            bodySchema
+        ) {
             try {
                 // Attempt to parse the JSON body.
                 const bodyData = await req.json();
                 const result = bodySchema.safeParse(bodyData);
                 if (result.success) {
                     // Set the validated body.
-                    validated.body = result.data;
+                    validated.body = result.data as Record<string, unknown>;
 
                     // Set the json method to return the validated body.
                     req.json = async () => result.data;
@@ -150,12 +154,10 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
                     if (!errors) errors = {};
                     errors.body = result.error.issues;
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 // Create a message from the error.
                 const msg =
-                    error && typeof error.message === 'string'
-                        ? error.message
-                        : String(error);
+                    error instanceof Error ? error.message : String(error);
 
                 if (!errors) errors = {};
                 errors.body = [{ message: msg }];
