@@ -2,37 +2,21 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 0.9.0 - (March 8, 2026)
+## Version 0.9.0 - (March 15, 2026)
 
-### Added
-- Added `burger.config.ts` generation in `burger-api create`, using project
-  setup answers as defaults.
-- Added build config resolver with convention defaults and optional
-  `burger.config.ts` / `burger.config.js` overrides.
-- Added route scanner and virtual-entry generation utilities for build-time
-  route discovery.
-- Added CLI test coverage for route behavior vs framework, conflict detection, config
-  resolution, virtual entry generation, and build output behavior.
-
-### Changed
-- Changed `build` and `build:exec` to use one AOT build pipeline with static
-  route metadata.
-- Changed default executable output to `.build/executable/<project>[.exe]`.
-- Improved README docs for production build behavior and test commands.
-
-### Fixed
-- Fixed route conflict handling for invalid dynamic/wildcard folder
-  combinations during build-time discovery.
-- Fixed unsafe cross-package imports in CLI code.
-- Made build-output tests stricter in CI so broken builds are caught early.
-- Fixed virtual build entry generation to preserve user `new Burger({...})`
-  options from the provided entry file instead of hardcoding
-  `globalMiddleware: []`.
-- Fixed bug where production build dropped global middleware and options like
-  `title`, `description`, `version`, and `hostname` could be dropped in
-  build output.
-- Added integration coverage to verify `globalMiddleware` remains active in
-  production bundle output.
+-   ✨ **Create** – New projects get a config file (`burger.config.ts`) from
+    your answers; the build uses this config when present.
+-   🔨 **Build** – One build pipeline for both bundle and executable; routes
+    are found at build time so production is fast and reliable.
+-   📂 **Defaults** – Executable output: `.build/executable/<project>` (or
+    `.exe` on Windows); bundle: `.build/bundle/app.js`.
+-   🧪 **Tests** – New tests for routes, config, and build output; CI catches
+    broken builds early.
+-   🐛 **Fixed** – Invalid route combinations are caught at build time.
+-   🐛 **Fixed** – Production build keeps your middleware and options (e.g.
+    title, description) instead of dropping them.
+-   📚 **Docs** – README updated with production build steps and test
+    commands.
 
 ## Version 0.7.0 - (December 23, 2025)
 

@@ -164,11 +164,14 @@ project. For more information, visit the
 
 ## 📣 Changelog
 
-### Latest Version: 0.9.0 (March 8, 2026)
+### Latest Version: 0.9.0 (March 15, 2026)
 
--   🔧 **CLI & Release Improvements:**
-    -   Added CLI tool for creating new projects and managing middleware
-    -   Updated README.md
+-   🚀 Production builds work better and use the same route rules as
+    development.
+-   📦 You can pass route lists into the server so production does not scan
+    files.
+-   🧪 Example tests and test scripts are improved; run framework and CLI
+    tests from the repo root.
 
 ### Previous Version: 0.7.0 (November 13, 2025)
 
