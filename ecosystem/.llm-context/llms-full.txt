@@ -166,6 +166,12 @@ interface RouteDefinition {
     openapi?: openapi;                     // OpenAPI metadata
     isWildcard?: boolean;                   // True for wildcard routes
 }
+
+interface PageDefinition {
+    path: string;
+    handler: RequestHandler;
+    middleware?: Middleware[];
+}
 ```
 
 ## RouteSchema
@@ -175,9 +181,9 @@ Zod schema structure for validating request data.
 ```typescript
 type RouteSchema = {
     [method: string]: {                    // HTTP method (lowercase)
-        params?: z.ZodObject<any, any>;    // URL parameters
-        query?: z.ZodObject<any, any>;     // Query string parameters
-        body?: z.ZodObject<any, any>;      // Request body
+        params?: z.ZodTypeAny;              // URL parameters
+        query?: z.ZodTypeAny;               // Query string parameters
+        body?: z.ZodTypeAny;                // Request body
     };
 };
 ```
@@ -969,6 +975,7 @@ The CLI will ask you:
 - Full project structure
 - TypeScript configuration
 - Dependencies installed
+- `burger.config.ts` (apiDir, pageDir, prefixes; used by CLI build)
 - Example routes
 - Ready to run!
 
@@ -984,6 +991,7 @@ my-api/
 │       └── index.html
 ├── ecosystem/
 │   └── middleware/           # Ecosystem middleware
+├── burger.config.ts          # Build/config (used by burger-api build)
 ├── package.json
 ├── tsconfig.json
 └── .gitignore
@@ -1181,10 +1189,10 @@ bun .build/bundle/app.js
 - Projects with pages/assets: deploy the full `.build/bundle/` directory.
 
 ---
-url: 'https://burger-api.com/docs/cli/build-executable'
+url: 'https://burger-api.com/docs/cli/build-exec'
 ---
 
-# CLI: Build Exec Command
+# CLI: Build Exec Command (burger-api build:exec)
 
 Compiles your project to a standalone executable that runs without Bun installed.
 

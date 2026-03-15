@@ -277,6 +277,8 @@ irm https://burger-api.com/install.ps1 | iex
 burger-api create my-api
 ```
 
+Generates `burger.config.ts` from your answers; CLI build uses it for apiDir, pageDir, and prefixes.
+
 Interactive prompts for:
 - API routes (yes/no)
 - API directory name (default: api)
