@@ -18,7 +18,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "bun test --timeout 30000 test/**/*.test.ts",
+    "test": "bun test --timeout 30000 ./test",
     "test:build": "bun test test/scanner.test.ts test/virtual-entry.test.ts test/entry-options.test.ts test/build-preserve-options.test.ts",
     "build:win": "bun build ./src/index.ts --compile --target bun-windows-x64 --outfile dist/burger-api.exe --minify",
     "build:linux": "bun build ./src/index.ts --compile --target bun-linux-x64 --outfile dist/burger-api-linux --minify",
@@ -48,5 +48,8 @@
     "type": "git",
     "url": "git+https://github.com/isfhan/burger-api.git",
     "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -10,6 +10,8 @@
  * This makes it easy to add new commands and provide helpful error messages.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Command } from 'commander';
 import { createCommand } from './commands/create';
 import { addCommand } from './commands/add';
@@ -17,6 +19,22 @@ import { listCommand } from './commands/list';
 import { buildCommand, buildExecutableCommand } from './commands/build';
 import { serveCommand } from './commands/serve';
 import { showBanner } from './utils/logger';
+
+/**
+ * Read CLI version from package.json (single source of truth for publish).
+ * @returns The version of the CLI.
+ */
+function getVersion(): string {
+    try {
+        const pkgPath = join(import.meta.dir, '..', 'package.json');
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+            version?: string;
+        };
+        return pkg.version ?? '0.0.0';
+    } catch {
+        return '0.0.0';
+    }
+}
 
 /**
  * Create the main CLI program
@@ -28,7 +46,7 @@ const program = new Command();
 program
     .name('burger-api')
     .description('Simple tool to work with BurgerAPI projects')
-    .version('0.9.0');
+    .version(getVersion());
 
 // Add all our commands to the CLI
 // Each command is defined in its own file for better organization
@@ -41,7 +59,7 @@ program.addCommand(serveCommand); // Run development server
 
 // Show banner + help when no command is provided
 program.action(() => {
-    showBanner();
+    showBanner(getVersion());
     program.help();
 });
 

@@ -22,9 +22,8 @@ docs/
 *.md
 !README.md
 
-# Build files
-dist/
-build/
+# Build files (do NOT exclude dist/ - package publishes dist via "files": ["dist"])
+# build/
 
 # IDE files
 .idea/

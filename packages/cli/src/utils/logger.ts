@@ -403,23 +403,24 @@ const LOGO_TEXT = `
  ██╔╝  ██╔══██╗██║   ██║██╔══██╗██║  ╚██╗██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║
 ██╔╝   ██████╦╝╚██████╔╝██║  ██║╚██████╔╝███████╗██║  ██║██║  ██║██║     ██║
 ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═╝╚═╝   ╚═╝╚═╝     ╚═╝
-                                    CLI tool for BurgerAPI projects - v0.9.0                                            
 `.trim();
 
 /**
  * Show ASCII art banner for BurgerAPI CLI
  * Displays when CLI starts
  * Uses ASCII-safe characters for Windows CMD compatibility
+ * @param version - CLI version (e.g. from package.json); defaults to '0.0.0'
  */
-export function showBanner(): void {
+export function showBanner(version: string = '0.0.0'): void {
     const bannerColor = '\x1b[38;2;255;204;153m'; // Warm orange color
 
     const reset = '\x1b[0m';
+    const tagline = `CLI tool for BurgerAPI projects - v${version}`;
 
     // Unicode banner for modern terminals
     console.log(`${bannerColor}
-${LOGO_TEXT}    
-                                                                                                 
+${LOGO_TEXT}
+${tagline}
 ${reset}`);
 }
 
