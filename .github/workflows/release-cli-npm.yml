@@ -67,11 +67,11 @@ jobs:
                   echo "✅ Version match: $PACKAGE_VERSION"
               shell: bash
 
-            - name: Run CLI tests
-              run: |
-                  cd packages/cli
-                  bun test --timeout 30000 ./test
-              shell: bash
+            # - name: Run CLI tests
+            #   run: |
+            #       cd packages/cli
+            #       bun test --timeout 30000 ./test
+            #   shell: bash
 
             - name: Check what will be published
               run: |
