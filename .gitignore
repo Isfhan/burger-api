@@ -227,3 +227,6 @@ bun.lock
 # Burger API CLI build output
 **/.build/
 
+# CLI build source (required for compile; do not ignore)
+!packages/cli/src/utils/build/
+
