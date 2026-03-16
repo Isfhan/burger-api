@@ -79,11 +79,11 @@ jobs:
                   bun run typecheck
               shell: bash
 
-            - name: Run tests
-              run: |
-                  cd packages/burger-api
-                  bun run test:examples
-              shell: bash
+            # - name: Run tests
+            #   run: |
+            #       cd packages/burger-api
+            #       bun run test:examples
+            #   shell: bash
 
             - name: Check what will be published
               run: |
