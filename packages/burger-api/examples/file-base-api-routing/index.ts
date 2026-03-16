@@ -11,4 +11,5 @@ const burger = new Burger({
 });
 
 // Start the server
-burger.serve(4000);
+const port = Number(process.env.PORT) || 4000;
+burger.serve(port);

@@ -42,11 +42,11 @@ function mapZodTypeToOpenAPIType(zodType: ZodType<unknown, unknown>): string {
  * @returns An array of OpenAPI 3.0 parameter objects or an empty array if the Zod schema is undefined.
  */
 function buildParameters(
-    zodSchema: ZodObject<any, any> | undefined,
+    zodSchema: unknown,
     location: 'path' | 'query'
 ): any[] {
     const parameters: any[] = [];
-    if (zodSchema && typeof zodSchema.shape === 'object') {
+    if (isZodObjectSchema(zodSchema)) {
         // Get the shape of the Zod schema
         const shape: Record<
             string,
@@ -86,6 +86,10 @@ function buildParameters(
     return parameters;
 }
 
+function isZodObjectSchema(value: unknown): value is ZodObject<any, any> {
+    return value instanceof ZodObject;
+}
+
 /**
  * Builds a request body object for OpenAPI based on a Zod schema.
  * Converts the Zod schema into JSON schema and constructs an OpenAPI
@@ -93,9 +97,9 @@ function buildParameters(
  * @param zodSchema - The Zod schema to convert into JSON schema.
  * @returns An OpenAPI requestBody object, or undefined if no schema is provided.
  */
-function buildRequestBody(zodSchema: any): any {
+function buildRequestBody(zodSchema: unknown): any {
     // If no schema is provided, return undefined
-    if (!zodSchema) return undefined;
+    if (!(zodSchema instanceof ZodType)) return undefined;
     // Convert the Zod schema to a JSON schema
     const jsonSchema = toJSONSchema(zodSchema);
     // Return the OpenAPI requestBody object
@@ -159,6 +163,8 @@ export function generateOpenAPIDocument(
 
         // For each HTTP method in the route, add an OpenAPI operation.
         for (const method in route.handlers) {
+            // If the handler is not a function, skip
+            if (typeof route.handlers[method] !== 'function') continue;
             // Convert HTTP method to lowercase
             const lowerMethod = method.toLowerCase();
 

@@ -1,5 +1,16 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.9.0 (March 15, 2026)
+
+-   🚀 **Production builds** – `build` and `build:exec` work better and are more
+    reliable.
+-   🎯 **Same rules everywhere** – Same route and path rules in development and
+    production builds.
+-   📦 **No file scanning in production** – You can pass in route lists when
+    starting the server so production does not need to scan files.
+-   🧪 **Example tests** – A shared helper starts and stops the server safely.
+-   📋 **Test scripts** – Run framework and CLI tests from the repo root.
+
 ### Version 0.7.0 (December 24, 2025)
 
 -   🔧 **CLI & Release Improvements:**

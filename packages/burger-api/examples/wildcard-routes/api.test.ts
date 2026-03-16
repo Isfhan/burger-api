@@ -19,14 +19,20 @@
  *   - Test filtering: bun test --test-name-pattern "Admin"
  */
 
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import {
+    startExampleServer,
+    stopExampleServer,
+    type RunningExampleServer,
+} from '../test-utils/example-server';
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const BASE_URL = 'http://localhost:4000';
+let BASE_URL = 'http://localhost:0';
 const REQUEST_TIMEOUT = 5000; // 5 seconds
+let testServer: RunningExampleServer | null = null;
 
 // ============================================================================
 // Test Utilities
@@ -88,18 +94,6 @@ function validateRouteResponse(data: any, expectedMessage: string) {
     expect(data.message).toBe(expectedMessage);
 }
 
-/**
- * Checks if server is running
- */
-async function checkServer(): Promise<boolean> {
-    try {
-        const response = await fetchAPI('/api/users');
-        return response.status === 200;
-    } catch {
-        return false;
-    }
-}
-
 // ============================================================================
 // Test Data
 // ============================================================================
@@ -120,17 +114,15 @@ const AUTH_ENDPOINTS = [
 // ============================================================================
 
 beforeAll(async () => {
-    const isRunning = await checkServer();
-    if (!isRunning) {
-        throw new Error(
-            '❌ Server is not running!\n\n' +
-                'Please start the server first:\n' +
-                '  bun run examples/wildcard-routes/index.ts\n\n' +
-                'Then run the tests in another terminal:\n' +
-                '  bun test examples/wildcard-routes/api.test.ts'
-        );
-    }
-    console.log('✅ Server is running, starting tests...\n');
+    testServer = await startExampleServer({
+        exampleDir: import.meta.dir,
+        healthPath: '/api/users',
+    });
+    BASE_URL = testServer.baseUrl;
+});
+
+afterAll(async () => {
+    await stopExampleServer(testServer);
 });
 
 // ============================================================================

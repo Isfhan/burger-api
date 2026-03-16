@@ -1,19 +1,21 @@
 import type { BunRequest, Server } from 'bun';
-import type { ServeOptions as BunServerOptions } from 'bun';
+import type { serve } from 'bun';
+
+/** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
+type BunServerOptions = Parameters<typeof serve>[0];
 import { z } from 'zod';
 
-export interface ServerOptions
-    extends Omit<
-        BunServerOptions,
-        | 'fetch'
-        | 'port'
-        | 'reusePort'
-        | 'ipv6Only'
-        | 'unix'
-        | 'error'
-        | 'id'
-        | 'development'
-    > {
+export interface ServerOptions extends Omit<
+    BunServerOptions,
+    | 'fetch'
+    | 'port'
+    | 'reusePort'
+    | 'ipv6Only'
+    | 'unix'
+    | 'error'
+    | 'id'
+    | 'development'
+> {
     /**
      * The title of the API. This is an optional property that can be used
      * to specify a custom title for the API documentation.
@@ -68,6 +70,18 @@ export interface ServerOptions
      * information to the console or logs to aid in development and troubleshooting.
      */
     debug?: boolean;
+
+    /**
+     * Pre-built API routes (e.g. from CLI build). When provided, apiDir is ignored
+     * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
+     */
+    apiRoutes?: RouteDefinition[];
+
+    /**
+     * Pre-built page routes (e.g. from CLI build). When provided, pageDir is ignored
+     * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
+     */
+    pageRoutes?: PageDefinition[];
 }
 
 type DefaultRequestProperties = {
@@ -77,7 +91,8 @@ type DefaultRequestProperties = {
 };
 
 export interface BurgerRequest<
-    RequestValidatedProperties extends DefaultRequestProperties = DefaultRequestProperties
+    RequestValidatedProperties extends DefaultRequestProperties =
+        DefaultRequestProperties,
 > extends Omit<BunRequest<string>, 'params'> {
     /**
      * Contains URL parameters extracted from the request path.
@@ -212,9 +227,9 @@ export interface RouteDefinition {
  */
 export type RouteSchema = {
     [method: string]: {
-        params?: z.ZodObject<any, any>;
-        query?: z.ZodObject<any, any>;
-        body?: z.ZodObject<any, any>;
+        params?: z.ZodTypeAny;
+        query?: z.ZodTypeAny;
+        body?: z.ZodTypeAny;
     };
 };
 

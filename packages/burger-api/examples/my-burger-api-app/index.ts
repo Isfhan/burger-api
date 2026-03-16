@@ -30,15 +30,15 @@ Perfect for developers building real-world applications!
     debug: true,
 });
 
-const port = 5000;
+const port = Number(process.env.PORT) || 4000;
 
 // Start the server with comprehensive production information
 burger.serve(port, () => {
     console.log('🍔 My Burger API App - Production Ready Demo is running!');
     console.log('=========================================================');
     console.log('');
-    console.log('📖 API Documentation: http://localhost:5000/docs');
-    console.log('🔗 OpenAPI Spec: http://localhost:5000/openapi.json');
+    console.log(`📖 API Documentation: http://localhost:${port}/docs`);
+    console.log(`🔗 OpenAPI Spec: http://localhost:${port}/openapi.json`);
     console.log('');
     console.log('🏗️ Production Features Enabled:');
     console.log('');

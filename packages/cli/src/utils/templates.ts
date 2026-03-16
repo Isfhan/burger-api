@@ -30,7 +30,7 @@ export function generatePackageJson(projectName: string): string {
             build: 'bun build src/index.ts --outdir ./dist',
         },
         dependencies: {
-            'burger-api': '^0.6.2',
+            'burger-api': '^0.9.0',
         },
         devDependencies: {
             '@types/bun': 'latest',
@@ -179,6 +179,37 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('});');
 
     return lines.join('\n');
+}
+
+/**
+ * Generate burger.config.ts from create command answers.
+ * This keeps build/runtime config explicit in scaffolded projects.
+ *
+ * @param options - Project configuration from user prompts
+ * @returns burger.config.ts content as a string
+ */
+export function generateBurgerConfig(options: CreateOptions): string {
+    const apiDir = `./src/${options.apiDir || 'api'}`;
+    const pageDir = `./src/${options.pageDir || 'pages'}`;
+    const apiPrefix = options.apiPrefix || '/api';
+    const pagePrefix = options.pagePrefix || '/';
+    const debug = Boolean(options.debug);
+
+    return [
+        '/**',
+        ' * BurgerAPI build and dev config.',
+        ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
+        ' * Edit these paths and prefixes to match your project.',
+        ' */',
+        'export default {',
+        `    apiDir: ${JSON.stringify(apiDir)},   // folder with API route files`,
+        `    pageDir: ${JSON.stringify(pageDir)},   // folder with HTML pages`,
+        `    apiPrefix: ${JSON.stringify(apiPrefix)},   // URL prefix for API routes`,
+        `    pagePrefix: ${JSON.stringify(pagePrefix)},   // URL prefix for pages`,
+        `    debug: ${debug},   // extra logging when true`,
+        '};',
+        '',
+    ].join('\n');
 }
 
 /**
@@ -931,7 +962,7 @@ export function generateIndexPage(projectName: string): string {
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="version">BurgerAPI v0.7.1 • Bun v1.3+</div>
+        <div class="version">BurgerAPI v0.9.0 • Bun v1.3+</div>
         <div class="social-links">
             <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
             <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
@@ -962,13 +993,15 @@ export function generateMiddlewareIndex(): string {
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
  * 
- * export const globalMiddleware = [
+ * export const globalMiddleware: Middleware[] = [
  *     logger(),
  *     cors(),
  * ];
  */
 
-export const globalMiddleware: any[] = [];
+import type { Middleware } from 'burger-api';
+
+export const globalMiddleware: Middleware[] = [];
 `;
 }
 
@@ -1025,6 +1058,10 @@ export async function createProject(
         await Bun.write(
             join(targetDir, '.prettierrc'),
             generatePrettierConfig()
+        );
+        await Bun.write(
+            join(targetDir, 'burger.config.ts'),
+            generateBurgerConfig(options)
         );
 
         // Create src directory and index file

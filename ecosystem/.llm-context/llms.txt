@@ -57,7 +57,7 @@
 - [List Command - Burger API](https://burger-api.com/docs/cli/list)
 - [Serve Command - Burger API](https://burger-api.com/docs/cli/serve)
 - [Build Command - Burger API](https://burger-api.com/docs/cli/build)
-- [Build Executable - Burger API](https://burger-api.com/docs/cli/build-executable)
+- [Build Exec Command (build:exec) - Burger API](https://burger-api.com/docs/cli/build-exec)
 
 ### Examples
 

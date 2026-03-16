@@ -2,6 +2,22 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.9.0 - (March 15, 2026)
+
+-   ✨ **Create** – New projects get a config file (`burger.config.ts`) from
+    your answers; the build uses this config when present.
+-   🔨 **Build** – One build pipeline for both bundle and executable; routes
+    are found at build time so production is fast and reliable.
+-   📂 **Defaults** – Executable output: `.build/executable/<project>` (or
+    `.exe` on Windows); bundle: `.build/bundle/app.js`.
+-   🧪 **Tests** – New tests for routes, config, and build output; CI catches
+    broken builds early.
+-   🐛 **Fixed** – Invalid route combinations are caught at build time.
+-   🐛 **Fixed** – Production build keeps your middleware and options (e.g.
+    title, description) instead of dropping them.
+-   📚 **Docs** – README updated with production build steps and test
+    commands.
+
 ## Version 0.7.0 - (December 23, 2025)
 
 ### Added
@@ -32,7 +48,7 @@ All notable changes to the Burger API CLI will be documented in this file.
 - `list` command to show available middleware from ecosystem
 - `add` command to download and install middleware
 - `build` command to bundle projects to single JS file
-- `build:executable` command to compile to standalone executable
+- `build:exec` command to compile to standalone executable
 - `serve` command for development server with hot reload
 - Beautiful console output with colors and symbols
 - Zero external dependencies for file operations (uses Bun's native APIs)

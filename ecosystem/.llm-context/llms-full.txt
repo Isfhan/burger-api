@@ -54,6 +54,10 @@ interface ServerOptions {
     
     // Debugging
     debug?: boolean;               // Enable debug mode (default: false)
+
+    // Pre-built routes (production build mode)
+    apiRoutes?: RouteDefinition[]; // Use pre-built API routes (skip runtime scanning)
+    pageRoutes?: PageDefinition[]; // Use pre-built page routes (skip runtime scanning)
     
     // Server Options (extends Bun's ServeOptions)
     hostname?: string;             // Hostname to bind to
@@ -162,6 +166,12 @@ interface RouteDefinition {
     openapi?: openapi;                     // OpenAPI metadata
     isWildcard?: boolean;                   // True for wildcard routes
 }
+
+interface PageDefinition {
+    path: string;
+    handler: RequestHandler;
+    middleware?: Middleware[];
+}
 ```
 
 ## RouteSchema
@@ -171,9 +181,9 @@ Zod schema structure for validating request data.
 ```typescript
 type RouteSchema = {
     [method: string]: {                    // HTTP method (lowercase)
-        params?: z.ZodObject<any, any>;    // URL parameters
-        query?: z.ZodObject<any, any>;     // Query string parameters
-        body?: z.ZodObject<any, any>;      // Request body
+        params?: z.ZodTypeAny;              // URL parameters
+        query?: z.ZodTypeAny;               // Query string parameters
+        body?: z.ZodTypeAny;                // Request body
     };
 };
 ```
@@ -397,6 +407,14 @@ export async function GET() {
 **Access:** `GET http://localhost:4000/api/users`
 
 The `(admin)` folder is ignored in the URL path but helps organize your code.
+
+## Build-Time Scanner Constraints
+
+For parity with runtime routing behavior, the CLI scanner enforces these rules:
+- Do not mix wildcard (`[...]`) and dynamic (`[id]`) route folders at the same API directory level.
+- Do not create multiple dynamic API folders in the same directory level (example: `[id]` and `[slug]` siblings).
+- Do not create multiple wildcard API folders in the same directory level.
+- For pages, do not create multiple dynamic page folders in the same directory level.
 
 ---
 url: 'https://burger-api.com/docs/middleware/system'
@@ -957,6 +975,7 @@ The CLI will ask you:
 - Full project structure
 - TypeScript configuration
 - Dependencies installed
+- `burger.config.ts` (apiDir, pageDir, prefixes; used by CLI build)
 - Example routes
 - Ready to run!
 
@@ -972,6 +991,7 @@ my-api/
 │       └── index.html
 ├── ecosystem/
 │   └── middleware/           # Ecosystem middleware
+├── burger.config.ts          # Build/config (used by burger-api build)
 ├── package.json
 ├── tsconfig.json
 └── .gitignore
@@ -1130,7 +1150,7 @@ url: 'https://burger-api.com/docs/cli/build'
 
 # CLI: Build Command
 
-Bundles your project into a single JavaScript file.
+Bundles your project into `.build/bundle/` using build-time route discovery (AOT).
 
 ## Usage
 
@@ -1144,42 +1164,47 @@ burger-api build index.ts --sourcemap linked
 
 ## Options
 
-- `--outfile <path>` - Output file path (default: `.build/bundle.js`)
+- `--outfile <path>` - Output bundle path (default: `.build/bundle/app.js`)
 - `--minify` - Minify the output for smaller file size
 - `--sourcemap <type>` - Generate sourcemaps (`inline`, `linked`, or `none`)
-- `--target <target>` - Target environment (e.g., `bun`, `node`)
+- `--target <env>` - Target environment (default: `bun`)
 
 ## Example Output
 
 ```
 ✓ Build completed successfully!
-  Output: .build/bundle.js
+  Bundle: .build/bundle/app.js
   Size: 42.5 KB
 ```
 
 ## Running the Bundle
 
 ```bash
-bun .build/bundle.js
+bun .build/bundle/app.js
 ```
 
+## Deployment Notes
+
+- API-only projects: the bundle output can be treated as a single runnable JS file.
+- Projects with pages/assets: deploy the full `.build/bundle/` directory.
+
 ---
-url: 'https://burger-api.com/docs/cli/build-executable'
+url: 'https://burger-api.com/docs/cli/build-exec'
 ---
 
-# CLI: Build Executable Command
+# CLI: Build Exec Command (burger-api build:exec)
 
 Compiles your project to a standalone executable that runs without Bun installed.
 
 ## Usage
 
 ```bash
-burger-api build:executable <file>
-burger-api build:executable index.ts
-burger-api build:executable index.ts --target bun-windows-x64
-burger-api build:executable index.ts --target bun-linux-x64
-burger-api build:executable index.ts --target bun-darwin-arm64
-burger-api build:executable index.ts --outfile my-server.exe
+burger-api build:exec <file>
+burger-api build:exec index.ts
+burger-api build:exec index.ts --target bun-windows-x64
+burger-api build:exec index.ts --target bun-linux-x64
+burger-api build:exec index.ts --target bun-darwin-arm64
+burger-api build:exec index.ts --outfile my-server.exe
 ```
 
 ## Options
@@ -1201,11 +1226,11 @@ burger-api build:executable index.ts --outfile my-server.exe
 
 ```
 ✓ Compilation completed successfully!
-  Executable: .build/my-api.exe
+  Executable: .build/executable/my-api.exe
   Size: 45.2 MB
 
-  Your standalone executable is ready to run!
-  Run it: .build/my-api.exe
+  Standalone binary is ready to run.
+  Run it: .build/executable/my-api.exe
 ```
 
 ## Use Case
@@ -1443,7 +1468,8 @@ The framework uses specialized fast paths for common middleware counts:
 
 ## AOT Compilation
 
-Middleware arrays are pre-computed at route registration time, avoiding runtime allocations.
+In production builds, the CLI discovers routes/pages at build time and generates a virtual entry with static imports.
+That entry passes pre-built `apiRoutes` and `pageRoutes` into `new Burger(...)`, so runtime filesystem scanning is skipped.
 
 ## Route Matching
 

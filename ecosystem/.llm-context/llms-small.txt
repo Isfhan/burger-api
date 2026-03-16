@@ -14,6 +14,8 @@ const app = new Burger({
     apiPrefix: '/api',         // Prefix for API routes (default: '/api')
     pageDir: './pages',        // Directory for page routes (optional)
     pagePrefix: '/',            // Prefix for page routes (default: '/')
+    apiRoutes: [],             // Pre-built API routes (production build mode)
+    pageRoutes: [],            // Pre-built page routes (production build mode)
     globalMiddleware: [],       // Array of global middleware functions
     title: 'My API',           // OpenAPI title
     description: 'API description',
@@ -147,6 +149,10 @@ api/(admin)/users/route.ts → /api/users
 // (admin) is ignored in the URL path
 ```
 
+Build-time route scanner rules:
+- Do not mix wildcard (`[...]`) and dynamic (`[id]`) folders in the same API directory level.
+- Do not create multiple dynamic folders (e.g., `[id]` and `[slug]`) in the same directory level.
+
 ## Middleware System
 
 ### Middleware Return Types
@@ -271,6 +277,8 @@ irm https://burger-api.com/install.ps1 | iex
 burger-api create my-api
 ```
 
+Generates `burger.config.ts` from your answers; CLI build uses it for apiDir, pageDir, and prefixes.
+
 Interactive prompts for:
 - API routes (yes/no)
 - API directory name (default: api)
@@ -303,14 +311,19 @@ burger-api serve --file src/index.ts
 ### Build
 
 ```bash
-# Bundle to single JS file
+# Bundle app (default output: .build/bundle/app.js)
 burger-api build src/index.ts
 burger-api build src/index.ts --minify --outfile dist/app.js
 
-# Compile to executable
-burger-api build:executable src/index.ts
-burger-api build:executable src/index.ts --target bun-linux-x64
+# Compile standalone executable (default output: .build/executable/<project>)
+burger-api build:exec src/index.ts
+burger-api build:exec src/index.ts --target bun-linux-x64
 ```
+
+Production build notes:
+- `build` and `build:exec` use build-time route discovery (AOT).
+- Runtime scanning is skipped in production by passing pre-built `apiRoutes` and `pageRoutes`.
+- API-only bundles can run as a single JS file; page projects should deploy the entire bundle directory.
 
 ## Quick Examples
 
