@@ -173,9 +173,12 @@ jobs:
             - name: Verify CLI version in built executable
               run: |
                   chmod +x release_assets/burger-api-linux
-                  VERSION_OUT=$(./release_assets/burger-api-linux --version 2>&1)
-                  if ! echo "$VERSION_OUT" | grep -qFx "${{ env.VERSION }}"; then
-                    echo "Version mismatch: expected ${{ env.VERSION }}, got: $VERSION_OUT"
+                  VERSION_OUT=$(./release_assets/burger-api-linux --version 2>&1 | tr -d '\r\n ')
+                  EXPECTED="${{ env.VERSION }}"
+                  EXPECTED_NORM="${EXPECTED#v}"
+                  GOT_NORM="${VERSION_OUT#v}"
+                  if [ "$GOT_NORM" != "$EXPECTED_NORM" ]; then
+                    echo "Version mismatch: expected $EXPECTED, got: $VERSION_OUT"
                     exit 1
                   fi
                   echo "Verified CLI version: $VERSION_OUT"

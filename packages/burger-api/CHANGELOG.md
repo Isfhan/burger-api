@@ -1,6 +1,6 @@
 ## 📣 Release Notes - Burger API Framework
 
-### Version 0.9.5 (March 18, 2026)
+### Version 0.9.6 (March 18, 2026)
 
 -   🚀 **Production builds** – `build` and `build:exec` work better and are more
     reliable.
