@@ -30,7 +30,7 @@ export function generatePackageJson(projectName: string): string {
             build: 'bun build src/index.ts --outdir ./dist',
         },
         dependencies: {
-            'burger-api': '^0.9.3',
+            'burger-api': '^0.9.5',
         },
         devDependencies: {
             '@types/bun': 'latest',
@@ -962,7 +962,7 @@ export function generateIndexPage(projectName: string): string {
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="version">BurgerAPI v0.9.3 • Bun v1.3+</div>
+        <div class="version">BurgerAPI v0.9.5 • Bun v1.3+</div>
         <div class="social-links">
             <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
             <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>

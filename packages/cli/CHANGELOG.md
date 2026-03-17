@@ -2,7 +2,7 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 0.9.3 - (March 17, 2026)
+## Version 0.9.5 - (March 18, 2026)
 
 -   ✨ **Create** – New projects get a config file (`burger.config.ts`) from
     your answers; the build uses this config when present.
