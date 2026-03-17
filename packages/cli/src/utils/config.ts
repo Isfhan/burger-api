@@ -7,7 +7,9 @@
 
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 import type { BuildConfig } from '../types/index';
+import { warning } from './logger';
 
 const CONVENTION_DEFAULTS: BuildConfig = {
     apiDir: './src/api',
@@ -41,15 +43,16 @@ export async function resolveBuildConfig(cwd: string): Promise<BuildConfig> {
     }
 
     try {
-        const mod = await import(configPath);
+        const configUrl = pathToFileURL(configPath).href;
+        const mod = await import(configUrl);
         const user = mod.default ?? mod;
         if (!user || typeof user !== 'object') {
             return { ...CONVENTION_DEFAULTS };
         }
         return mergeBuildConfig(CONVENTION_DEFAULTS, user);
     } catch (err) {
-        console.warn(
-            `[burger-api] Could not load ${configPath}: ${err instanceof Error ? err.message : String(err)}. Using convention defaults.`
+        warning(
+            `Could not load ${configPath}: ${err instanceof Error ? err.message : String(err)}. Using convention defaults.`
         );
         return { ...CONVENTION_DEFAULTS };
     }
@@ -60,8 +63,7 @@ function mergeBuildConfig(
     user: Record<string, unknown>
 ): BuildConfig {
     return {
-        apiDir:
-            typeof user.apiDir === 'string' ? user.apiDir : defaults.apiDir,
+        apiDir: typeof user.apiDir === 'string' ? user.apiDir : defaults.apiDir,
         pageDir:
             typeof user.pageDir === 'string' ? user.pageDir : defaults.pageDir,
         apiPrefix:
@@ -72,7 +74,6 @@ function mergeBuildConfig(
             typeof user.pagePrefix === 'string'
                 ? user.pagePrefix
                 : defaults.pagePrefix,
-        debug:
-            typeof user.debug === 'boolean' ? user.debug : defaults.debug,
+        debug: typeof user.debug === 'boolean' ? user.debug : defaults.debug,
     };
 }

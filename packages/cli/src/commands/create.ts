@@ -10,7 +10,7 @@
 import { Command } from 'commander';
 import * as clack from '@clack/prompts';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { isAbsolute, join, relative, resolve } from 'path';
 import type { CreateOptions } from '../types/index';
 import { createProject, installDependencies } from '../utils/templates';
 import {
@@ -45,6 +45,26 @@ function validateProjectName(name: string): string | undefined {
     return undefined;
 }
 
+/**
+ * Ensure directory name (apiDir/pageDir) resolves under targetDir/src to prevent path traversal.
+ */
+function validateDirUnderSrc(
+    targetDir: string,
+    dirName: string,
+    label: string
+): string | undefined {
+    if (!dirName || dirName.includes('..')) {
+        return `${label} cannot be empty or contain '..'`;
+    }
+    const srcRoot = resolve(targetDir, 'src');
+    const resolved = resolve(targetDir, 'src', dirName);
+    const rel = relative(srcRoot, resolved);
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+        return `${label} must resolve inside the project's src directory`;
+    }
+    return undefined;
+}
+
 export const createCommand = new Command('create')
     .description('Create a new Burger API project')
     .argument('<project-name>', 'Name of your project')
@@ -76,6 +96,32 @@ export const createCommand = new Command('create')
             if (clack.isCancel(options)) {
                 clack.outro('Operation cancelled');
                 process.exit(0);
+            }
+
+            // Validate apiDir/pageDir stay under targetDir/src (prevent path traversal)
+            if (options.useApi) {
+                const apiDirError = validateDirUnderSrc(
+                    targetDir,
+                    options.apiDir || 'api',
+                    'API directory'
+                );
+                if (apiDirError) {
+                    clack.outro('Invalid configuration');
+                    logError(apiDirError);
+                    process.exit(1);
+                }
+            }
+            if (options.usePages) {
+                const pageDirError = validateDirUnderSrc(
+                    targetDir,
+                    options.pageDir || 'pages',
+                    'Page directory'
+                );
+                if (pageDirError) {
+                    clack.outro('Invalid configuration');
+                    logError(pageDirError);
+                    process.exit(1);
+                }
             }
 
             // Show what we're about to create
@@ -154,6 +200,8 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                                   return 'Please enter a directory name';
                               if (value.includes(' '))
                                   return 'Directory name cannot contain spaces';
+                              if (value.includes('..'))
+                                  return 'Directory name cannot contain ..';
                           },
                       })
                     : Promise.resolve('api'),
@@ -196,6 +244,8 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                                   return 'Please enter a directory name';
                               if (value.includes(' '))
                                   return 'Directory name cannot contain spaces';
+                              if (value.includes('..'))
+                                  return 'Directory name cannot contain ..';
                           },
                       })
                     : Promise.resolve('pages'),

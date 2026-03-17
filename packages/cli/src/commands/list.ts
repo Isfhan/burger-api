@@ -11,7 +11,7 @@ import { Command } from 'commander';
 import { getMiddlewareList, getMiddlewareInfo } from '../utils/github';
 import {
     header,
-    spinner,
+    withSpinner,
     error as logError,
     table,
     newline,
@@ -28,54 +28,49 @@ export const listCommand = new Command('list')
     .description('Show available middleware from the ecosystem')
     .alias('ls') // Allow users to type "burger-api ls" too
     .action(async () => {
-        // Show a spinner while fetching from GitHub
-        const spin = spinner('Fetching middleware list from GitHub...');
-
         try {
-            // Get the list of middleware names
-            const middlewareNames = await getMiddlewareList();
+            await withSpinner(
+                'Fetching middleware list from GitHub...',
+                async (spin) => {
+                    const middlewareNames = await getMiddlewareList();
 
-            // Fetch details for each middleware (in parallel for speed!)
-            const middlewareDetails = await Promise.all(
-                middlewareNames.map((name) =>
-                    getMiddlewareInfo(name).catch(() => ({
-                        name,
-                        description: 'No description available',
-                        path: '',
-                        files: [],
-                    }))
-                )
+                    const middlewareDetails = await Promise.all(
+                        middlewareNames.map((name) =>
+                            getMiddlewareInfo(name).catch(() => ({
+                                name,
+                                description: 'No description available',
+                                path: '',
+                                files: [],
+                            }))
+                        )
+                    );
+
+                    spin.stop('Found available middleware!');
+                    newline();
+
+                    header('Available Middleware');
+
+                    const tableData: string[][] = [
+                        ['Name', 'Description'],
+                        ...middlewareDetails.map((m) => [
+                            m.name,
+                            m.description.length > 60
+                                ? m.description.substring(0, 57) + '...'
+                                : m.description,
+                        ]),
+                    ];
+
+                    table(tableData);
+                    newline();
+
+                    info('To add middleware to your project, run:');
+                    command('burger-api add <middleware-name>');
+                    newline();
+                    dim('Example: burger-api add cors logger rate-limiter');
+                    newline();
+                }
             );
-
-            spin.stop('Found available middleware!');
-            newline();
-
-            // Display header
-            header('Available Middleware');
-
-            // Create table data
-            const tableData: string[][] = [
-                ['Name', 'Description'],
-                ...middlewareDetails.map((m) => [
-                    m.name,
-                    m.description.length > 60
-                        ? m.description.substring(0, 57) + '...'
-                        : m.description,
-                ]),
-            ];
-
-            // Show the table
-            table(tableData);
-            newline();
-
-            // Show usage instructions
-            info('To add middleware to your project, run:');
-            command('burger-api add <middleware-name>');
-            newline();
-            dim('Example: burger-api add cors logger rate-limiter');
-            newline();
         } catch (err) {
-            spin.stop('Failed to fetch middleware list', true);
             logError(
                 err instanceof Error
                     ? err.message

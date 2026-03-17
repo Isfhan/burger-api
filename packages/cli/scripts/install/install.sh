@@ -122,6 +122,20 @@ echo ""
 
 # Use curl with progress bar for better user experience
 if curl -fL --progress-bar -o "$INSTALL_PATH" "$DOWNLOAD_URL"; then
+    # Verify checksum when release provides checksums.txt
+    CHECKSUMS_URL="https://github.com/isfhan/burger-api/releases/download/$LATEST_VERSION/checksums.txt"
+    if CHECKSUMS=$(curl -sfL "$CHECKSUMS_URL" 2>/dev/null); then
+        EXPECTED_HASH=$(echo "$CHECKSUMS" | grep "$EXECUTABLE_NAME" | grep -oE '`[a-fA-F0-9]{64}`' | tr -d '`' | head -1)
+        if [ -n "$EXPECTED_HASH" ]; then
+            ACTUAL_HASH=$(sha256sum "$INSTALL_PATH" | awk '{print $1}')
+            if [ "$(echo "$ACTUAL_HASH" | tr '[:upper:]' '[:lower:]')" != "$(echo "$EXPECTED_HASH" | tr '[:upper:]' '[:lower:]')" ]; then
+                rm -f "$INSTALL_PATH"
+                print_error "Checksum verification failed. The downloaded file may be corrupted or modified."
+                exit 1
+            fi
+            print_info "Checksum verified"
+        fi
+    fi
     echo ""
     print_success "Downloaded successfully"
 else

@@ -20,11 +20,18 @@ import { buildCommand, buildExecutableCommand } from './commands/build';
 import { serveCommand } from './commands/serve';
 import { showBanner } from './utils/logger';
 
+/** Injected at build time when compiling to executable (--define CLI_VERSION). */
+declare const CLI_VERSION: string | undefined;
+
 /**
  * Read CLI version from package.json (single source of truth for publish).
+ * When running as compiled binary, version is injected at build time via CLI_VERSION.
  * @returns The version of the CLI.
  */
 function getVersion(): string {
+    if (typeof CLI_VERSION !== 'undefined') {
+        return CLI_VERSION;
+    }
     try {
         const pkgPath = join(import.meta.dir, '..', 'package.json');
         const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
@@ -71,6 +78,26 @@ program.configureOutput({
     writeErr: (str) => {
         process.stderr.write(str);
     },
+});
+
+// Use exit code 2 for usage errors (invalid options/args) per CLI guidelines
+const USAGE_ERROR_CODES = [
+    'commander.unknownOption',
+    'commander.unknownArgument',
+    'commander.missingMandatoryOptionValue',
+    'commander.invalidOptionArgument',
+    'commander.invalidArgument',
+];
+program.exitOverride((err) => {
+    const errorCode = (err as { code?: string }).code;
+    const code =
+        err.exitCode === 0
+            ? 0
+            : typeof errorCode === 'string' &&
+                USAGE_ERROR_CODES.includes(errorCode)
+              ? 2
+              : 1;
+    process.exit(code);
 });
 
 // Run the CLI - this parses the arguments the user typed

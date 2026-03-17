@@ -69,7 +69,7 @@ export const addCommand = new Command('add')
         for (const name of middlewareNames) {
             try {
                 // Check if it exists on GitHub
-                const spin = spinner(`Checking ${name}...`);
+                let spin = spinner(`Checking ${name}...`);
 
                 let exists;
                 try {
@@ -106,6 +106,7 @@ export const addCommand = new Command('add')
                         results.skipped.push(name);
                         continue;
                     }
+                    spin = spinner(`Downloading ${name}...`);
                 }
 
                 // Download the middleware

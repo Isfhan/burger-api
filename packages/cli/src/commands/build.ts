@@ -11,6 +11,7 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { dirname, resolve } from 'path';
+import type { Spinner } from '../utils/logger';
 import {
     spinner,
     success,
@@ -20,8 +21,50 @@ import {
     formatSize,
     dim,
 } from '../utils/logger';
-import { runVirtualEntryBuild } from '../utils/build/pipeline';
+import {
+    runVirtualEntryBuild,
+    type VirtualBuildResult,
+} from '../utils/build/pipeline';
 import { getProjectName } from '../utils/build/project';
+
+function ensureEntryFileExists(cwd: string, file: string): void {
+    const entryPath = resolve(cwd, file);
+    if (!existsSync(entryPath)) {
+        logError(`Entry file not found: ${file}`);
+        info('Make sure you are in the project directory.');
+        process.exit(1);
+    }
+}
+
+async function runBuildWithSpinner(params: {
+    file: string;
+    cwd: string;
+    spinMessage: string;
+    failMessage: string;
+    buildOptions: Parameters<typeof runVirtualEntryBuild>[0];
+    onBeforeBuild?: (spin: Spinner) => void;
+    onSuccess: (result: VirtualBuildResult, spin: Spinner) => void;
+}): Promise<void> {
+    ensureEntryFileExists(params.cwd, params.file);
+    const spin = spinner(params.spinMessage);
+    try {
+        info('Build-time route discovery enabled.');
+        params.onBeforeBuild?.(spin);
+        const result = await runVirtualEntryBuild(params.buildOptions);
+        if (!result.success) {
+            spin.stop(params.failMessage, true);
+            logError(
+                'Bun.build failed. Check that api/page directories and route files are valid.'
+            );
+            process.exit(1);
+        }
+        params.onSuccess(result, spin);
+    } catch (err) {
+        spin.stop(params.failMessage, true);
+        logError(err instanceof Error ? err.message : 'Unknown error');
+        process.exit(1);
+    }
+}
 
 /**
  * Options for the `build` command.
@@ -73,58 +116,39 @@ export const buildCommand = new Command('build')
     .option('--target <env>', 'Target environment (default: bun)')
     .action(async (file: string, options: BuildCommandOptions) => {
         const cwd = process.cwd();
-        const entryPath = resolve(cwd, file);
-        if (!existsSync(entryPath)) {
-            logError(`Entry file not found: ${file}`);
-            info('Make sure you are in the project directory.');
-            process.exit(1);
-        }
-
-        const spin = spinner('Building project...');
-
-        try {
-            info('Build-time route discovery enabled.');
-
-            const { success: ok, hasPages } = await runVirtualEntryBuild({
+        await runBuildWithSpinner({
+            file,
+            cwd,
+            spinMessage: 'Building project...',
+            failMessage: 'Build failed',
+            buildOptions: {
                 cwd,
                 entryFile: file,
                 outfile: options.outfile,
                 target: options.target || 'bun',
                 minify: options.minify,
                 sourcemap: options.sourcemap,
-            });
-
-            if (!ok) {
-                spin.stop('Build failed', true);
-                logError(
-                    'Bun.build failed. Check that api/page directories and route files are valid.'
-                );
-                process.exit(1);
-            }
-
-            const size = Bun.file(options.outfile).size;
-            const bundleDir = dirname(options.outfile);
-
-            spin.stop('Build completed successfully!');
-            newline();
-            success(`Bundle:  ${options.outfile}  (${formatSize(size)})`);
-            newline();
-            if (hasPages) {
-                info(`Pages and assets are in: ${bundleDir}/`);
-                dim(
-                    'Deploy the entire directory — HTML pages depend on their chunks.'
-                );
-                dim(`Run: bun ${options.outfile}`);
-            } else {
-                info('API-only bundle — self-contained single file.');
-                dim(`Run anywhere: bun ${options.outfile}`);
-            }
-            newline();
-        } catch (err) {
-            spin.stop('Build failed', true);
-            logError(err instanceof Error ? err.message : 'Unknown error');
-            process.exit(1);
-        }
+            },
+            onSuccess: (result, spin) => {
+                const size = Bun.file(options.outfile).size;
+                const bundleDir = dirname(options.outfile);
+                spin.stop('Build completed successfully!');
+                newline();
+                success(`Bundle:  ${options.outfile}  (${formatSize(size)})`);
+                newline();
+                if (result.hasPages) {
+                    info(`Pages and assets are in: ${bundleDir}/`);
+                    dim(
+                        'Deploy the entire directory — HTML pages depend on their chunks.'
+                    );
+                    dim(`Run: bun ${options.outfile}`);
+                } else {
+                    info('API-only bundle — self-contained single file.');
+                    dim(`Run anywhere: bun ${options.outfile}`);
+                }
+                newline();
+            },
+        });
     });
 
 /**
@@ -151,13 +175,6 @@ export const buildExecutableCommand = new Command('build:exec')
     .option('--no-bytecode', 'Disable bytecode compilation')
     .action(async (file: string, options: BuildExecutableOptions) => {
         const cwd = process.cwd();
-        const entryPath = resolve(cwd, file);
-        if (!existsSync(entryPath)) {
-            logError(`Entry file not found: ${file}`);
-            info('Make sure you are in the project directory.');
-            process.exit(1);
-        }
-
         let outfile = options.outfile;
         if (!outfile) {
             const projectName = getProjectName(cwd);
@@ -168,14 +185,14 @@ export const buildExecutableCommand = new Command('build:exec')
                 ? `.build/executable/${projectName}.exe`
                 : `.build/executable/${projectName}`;
         }
+        const outfileFinal = outfile;
 
-        const spin = spinner('Compiling to executable...');
-
-        try {
-            info('Build-time route discovery enabled.');
-            spin.update('Compiling... (this may take a minute)');
-
-            const { success: ok, outputs } = await runVirtualEntryBuild({
+        await runBuildWithSpinner({
+            file,
+            cwd,
+            spinMessage: 'Compiling to executable...',
+            failMessage: 'Compilation failed',
+            buildOptions: {
                 cwd,
                 entryFile: file,
                 outfile,
@@ -183,42 +200,32 @@ export const buildExecutableCommand = new Command('build:exec')
                 minify: options.minify,
                 bytecode: options.bytecode !== false,
                 compile: true,
-            });
-
-            if (!ok) {
-                spin.stop('Compilation failed', true);
-                logError(
-                    'Bun.build failed. Check that api/page directories and route files are valid.'
+            },
+            onBeforeBuild: (spin) =>
+                spin.update('Compiling... (this may take a minute)'),
+            onSuccess: (result, spin) => {
+                const size = existsSync(outfileFinal)
+                    ? Bun.file(outfileFinal).size
+                    : (result.outputs[0]?.size ?? 0);
+                spin.stop('Compilation completed successfully!');
+                newline();
+                success(`Executable: ${outfileFinal}`);
+                if (size > 0) info(`Size: ${formatSize(size)}`);
+                newline();
+                info(
+                    'Standalone binary — copy it anywhere, no Bun required on the target.'
                 );
-                process.exit(1);
-            }
-
-            const size = existsSync(outfile)
-                ? Bun.file(outfile).size
-                : (outputs[0]?.size ?? 0);
-
-            spin.stop('Compilation completed successfully!');
-            newline();
-            success(`Executable: ${outfile}`);
-            if (size > 0) info(`Size: ${formatSize(size)}`);
-            newline();
-            info(
-                'Standalone binary — copy it anywhere, no Bun required on the target.'
-            );
-            dim(
-                'All routes, pages, and assets are embedded inside the binary.'
-            );
-            newline();
-            if (process.platform !== 'win32') {
-                dim(`Make executable: chmod +x ${outfile}`);
-                dim(`Run: ./${outfile}`);
-            } else {
-                dim(`Run: ${outfile}`);
-            }
-            newline();
-        } catch (err) {
-            spin.stop('Compilation failed', true);
-            logError(err instanceof Error ? err.message : 'Unknown error');
-            process.exit(1);
-        }
+                dim(
+                    'All routes, pages, and assets are embedded inside the binary.'
+                );
+                newline();
+                if (process.platform !== 'win32') {
+                    dim(`Make executable: chmod +x ${outfileFinal}`);
+                    dim(`Run: ./${outfileFinal}`);
+                } else {
+                    dim(`Run: ${outfileFinal}`);
+                }
+                newline();
+            },
+        });
     });

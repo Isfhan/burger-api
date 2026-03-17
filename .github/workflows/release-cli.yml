@@ -133,6 +133,16 @@ jobs:
               with:
                   path: ./releases
 
+            - name: Get version from tag
+              run: |
+                  if [ "${{ github.event.inputs.version }}" != "" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                    VERSION="${VERSION#cli/}"
+                  else
+                    VERSION="${GITHUB_REF#refs/tags/cli/}"
+                  fi
+                  echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
             - name: Generate checksums
               run: |
                   cd releases
@@ -160,18 +170,15 @@ jobs:
                   cp releases/*/* release_assets/
                   cp releases/checksums.txt release_assets/
 
-            - name: Get version from tag
-              id: get_version
+            - name: Verify CLI version in built executable
               run: |
-                  if [ "${{ github.event.inputs.version }}" != "" ]; then
-                    VERSION="${{ github.event.inputs.version }}"
-                    # Strip cli/ prefix if present
-                    VERSION="${VERSION#cli/}"
-                  else
-                    VERSION="${GITHUB_REF#refs/tags/cli/}"
+                  chmod +x release_assets/burger-api-linux
+                  VERSION_OUT=$(./release_assets/burger-api-linux --version 2>&1)
+                  if ! echo "$VERSION_OUT" | grep -qFx "${{ env.VERSION }}"; then
+                    echo "Version mismatch: expected ${{ env.VERSION }}, got: $VERSION_OUT"
+                    exit 1
                   fi
-                  echo "VERSION=${VERSION}" >> $GITHUB_ENV
-              shell: bash
+                  echo "Verified CLI version: $VERSION_OUT"
 
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v1
