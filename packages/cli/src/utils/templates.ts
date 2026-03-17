@@ -1142,7 +1142,12 @@ export async function installDependencies(projectDir: string): Promise<void> {
         const exitCode = await proc.exited;
 
         if (exitCode !== 0) {
-            throw new Error('bun install failed');
+            const stderrText = await new Response(proc.stderr).text();
+            const message =
+                stderrText.trim().length > 0
+                    ? `bun install failed:\n${stderrText.trim()}`
+                    : 'bun install failed';
+            throw new Error(message);
         }
 
         spin.stop('Dependencies installed!');

@@ -143,7 +143,29 @@ try {
     if (-not (Test-Path $installPath)) {
         throw "Downloaded file not found. Did an antivirus delete it?"
     }
-    
+
+    # Verify checksum when release provides checksums.txt
+    $checksumsUrl = "https://github.com/isfhan/burger-api/releases/download/$latestVersion/checksums.txt"
+    try {
+        $checksumsContent = Invoke-RestMethod -Uri $checksumsUrl -ErrorAction Stop
+        $checksumsText = $checksumsContent | Out-String
+        if ($checksumsText -match "burger-api\.exe.*``([a-fA-F0-9]{64})``") {
+            $expectedHash = $Matches[1].ToLower()
+            $actualHash = (Get-FileHash -Path $installPath -Algorithm SHA256).Hash.ToLower()
+            if ($actualHash -ne $expectedHash) {
+                Remove-Item -Path $installPath -Force -ErrorAction SilentlyContinue
+                throw "Checksum verification failed. The downloaded file may be corrupted or modified."
+            }
+            Print-Info "Checksum verified"
+        }
+    }
+    catch {
+        if ($_.Exception.Message -match "Checksum verification failed") {
+            throw
+        }
+        # checksums.txt missing or unreadable (e.g. older release); skip verification
+    }
+
     Write-Host ""
     Print-Success "Downloaded successfully"
 }

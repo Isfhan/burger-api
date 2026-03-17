@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/cli",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Simple command-line tool for Burger API projects",
   "module": "src/index.ts",
   "type": "module",
@@ -20,10 +20,10 @@
     "dev": "bun run src/index.ts",
     "test": "bun test --timeout 30000 ./test",
     "test:build": "bun test test/scanner.test.ts test/virtual-entry.test.ts test/entry-options.test.ts test/build-preserve-options.test.ts",
-    "build:win": "bun build ./src/index.ts --compile --target bun-windows-x64 --outfile dist/burger-api.exe --minify",
-    "build:linux": "bun build ./src/index.ts --compile --target bun-linux-x64 --outfile dist/burger-api-linux --minify",
-    "build:mac": "bun build ./src/index.ts --compile --target bun-darwin-arm64 --outfile dist/burger-api-mac --minify",
-    "build:mac-intel": "bun build ./src/index.ts --compile --target bun-darwin-x64 --outfile dist/burger-api-mac-intel --minify",
+    "build:win": "bun run scripts/build-executable.ts win",
+    "build:linux": "bun run scripts/build-executable.ts linux",
+    "build:mac": "bun run scripts/build-executable.ts mac",
+    "build:mac-intel": "bun run scripts/build-executable.ts mac-intel",
     "build:all": "bun run build:win && bun run build:linux && bun run build:mac && bun run build:mac-intel"
   },
   "dependencies": {

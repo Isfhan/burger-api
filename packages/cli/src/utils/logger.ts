@@ -380,6 +380,27 @@ export function spinner(message: string): Spinner {
 }
 
 /**
+ * Run an async command with a spinner. On throw, stops the spinner with error state and rethrows.
+ * Use so catch blocks do not need to remember to stop the spinner.
+ *
+ * @param message - Spinner message
+ * @param fn - Async callback receiving the spinner
+ * @returns Result of fn
+ */
+export async function withSpinner<T>(
+    message: string,
+    fn: (spin: Spinner) => Promise<T>
+): Promise<T> {
+    const spin = new Spinner(message);
+    try {
+        return await fn(spin);
+    } catch (err) {
+        spin.stop(message.replace(/\s*\.\.\.\s*$/, '') + ' failed', true);
+        throw err;
+    }
+}
+
+/**
  * Format a file size in a human-readable way
  * Converts bytes to KB, MB, etc.
  *
