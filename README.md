@@ -29,7 +29,7 @@ simplicity of file-based routing with powerful features like built-in
 middleware, Zod-based schema validation, and automatic OpenAPI generation.
 
 **This project is under active development and should not be used in production
-yet.** 📌 Latest release: **0.9.0** (March 15, 2026).
+yet.** 📌 Latest release: **0.9.3** (March 17, 2026).
 
 ## 📦 Packages
 
