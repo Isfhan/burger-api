@@ -87,13 +87,30 @@ fi
 
 # Get the latest CLI version from GitHub API
 print_info "Checking for latest CLI version..."
-# Fetch all releases and filter for CLI releases (tags starting with cli/v)
-LATEST_VERSION=$(curl -s https://api.github.com/repos/isfhan/burger-api/releases | grep -o '"tag_name":"cli/v[^"]*"' | head -1 | cut -d '"' -f 4)
+RELEASES_JSON=$(mktemp)
+trap 'rm -f "$RELEASES_JSON"' EXIT
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$RELEASES_JSON" -H "User-Agent: BurgerAPI-Installer/1.0" "https://api.github.com/repos/isfhan/burger-api/releases")
+
+if [ "$HTTP_CODE" = "403" ] || [ "$HTTP_CODE" = "429" ]; then
+    print_error "Could not determine latest CLI version"
+    print_info "GitHub API rate limit or access denied. Try again later or use a different network."
+    exit 1
+fi
+
+if [ "$HTTP_CODE" != "200" ]; then
+    print_error "Could not determine latest CLI version"
+    print_info "Could not connect to GitHub API (HTTP $HTTP_CODE)."
+    print_info "Please check your internet connection and try again."
+    exit 1
+fi
+
+# Fetch CLI releases (tags starting with cli/v) from response
+LATEST_VERSION=$(grep -o '"tag_name":"cli/v[^"]*"' "$RELEASES_JSON" | head -1 | cut -d '"' -f 4)
 
 if [ -z "$LATEST_VERSION" ]; then
     print_error "Could not determine latest CLI version"
-    print_info "Could not connect to GitHub API or no CLI releases found."
-    print_info "Please check your internet connection and try again."
+    print_info "No CLI releases found."
+    print_info "Please check the repository or try again later."
     exit 1
 fi
 
@@ -121,10 +138,10 @@ print_info "Downloading from GitHub..."
 echo ""
 
 # Use curl with progress bar for better user experience
-if curl -fL --progress-bar -o "$INSTALL_PATH" "$DOWNLOAD_URL"; then
+if curl -fL --progress-bar -H "User-Agent: BurgerAPI-Installer/1.0" -o "$INSTALL_PATH" "$DOWNLOAD_URL"; then
     # Verify checksum when release provides checksums.txt
     CHECKSUMS_URL="https://github.com/isfhan/burger-api/releases/download/$LATEST_VERSION/checksums.txt"
-    if CHECKSUMS=$(curl -sfL "$CHECKSUMS_URL" 2>/dev/null); then
+    if CHECKSUMS=$(curl -sfL -H "User-Agent: BurgerAPI-Installer/1.0" "$CHECKSUMS_URL" 2>/dev/null); then
         EXPECTED_HASH=$(echo "$CHECKSUMS" | grep "$EXECUTABLE_NAME" | grep -oE '`[a-fA-F0-9]{64}`' | tr -d '`' | head -1)
         if [ -n "$EXPECTED_HASH" ]; then
             ACTUAL_HASH=$(sha256sum "$INSTALL_PATH" | awk '{print $1}')
