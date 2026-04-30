@@ -62,7 +62,7 @@ Example:
 
 ```bash
 cd packages/burger-api/examples/file-base-api-routing
-bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
+bun run ../../../cli/src/index.ts build index.ts --outfile .build/bundle/app.js
 cd ../../../cli
 bun test test/build-output.test.ts
 ```

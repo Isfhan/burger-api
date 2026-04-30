@@ -31,7 +31,8 @@
     "@clack/prompts": "^0.7.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "burger-api": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"

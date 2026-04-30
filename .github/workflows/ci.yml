@@ -18,5 +18,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Build example bundle for CLI build-output test
+        run: |
+          cd packages/burger-api/examples/file-base-api-routing
+          bun run ../../../cli/src/index.ts build index.ts --outfile .build/bundle/app.js
+
       - name: Full test suite + typecheck
         run: bun run test:all
