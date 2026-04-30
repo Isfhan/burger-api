@@ -19,7 +19,7 @@ const burger = new Burger({
     debug: true,
 });
 
-// Start the server on port 4000
-burger.serve(4000, () => {
-    console.log(`🚀 Server is running on port 4000`);
+const port = Number(process.env.PORT) || 4000;
+burger.serve(port, () => {
+    console.log(`🚀 Server is running on port ${port}`);
 });

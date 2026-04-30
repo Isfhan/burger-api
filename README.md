@@ -140,12 +140,13 @@ bun run typecheck
 # Build burger-api
 bun run build
 
-# Test burger-api
+# Full suite: route-sync + framework (examples + ecosystem smoke) + CLI + typecheck
+bun run test:all
 
-# Run all framework example tests with one command
+# Framework package only (examples + ecosystem middleware smoke tests)
 bun run test:framework
 
-# Run all CLI tests with one command
+# CLI tests only
 bun run test:cli
 
 # Run burger-api dev server

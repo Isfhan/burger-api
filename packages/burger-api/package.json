@@ -18,8 +18,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun run test:examples",
+    "test": "bun run test:examples && bun run test:ecosystem",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
+    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
     "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
   },
   "keywords": [

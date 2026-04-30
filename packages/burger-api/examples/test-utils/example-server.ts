@@ -63,6 +63,8 @@ export async function startExampleServer(options: {
     port?: number;
     acceptedStatuses?: number[];
     timeoutMs?: number;
+    /** Extra environment variables for the child process (merged over `process.env`). */
+    env?: Record<string, string | undefined>;
 }): Promise<RunningExampleServer> {
     const port = options.port ?? (await getAvailablePort());
     const baseUrl = `http://localhost:${port}`;
@@ -70,7 +72,7 @@ export async function startExampleServer(options: {
 
     const proc = spawn('bun', ['run', 'index.ts'], {
         cwd: options.exampleDir,
-        env: { ...process.env, PORT: String(port) },
+        env: { ...process.env, ...options.env, PORT: String(port) },
         stdio: 'pipe',
     });
 

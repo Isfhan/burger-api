@@ -1,5 +1,8 @@
 # Manual Testing Guide for Burger API Middleware
 
+Automated smoke coverage lives in the main repo: run `bun run test:all` from the
+repository root, or `bun run test:ecosystem` from `packages/burger-api`.
+
 This guide will help you manually test each middleware to ensure everything
 works correctly in a real Bun.js environment.
 
