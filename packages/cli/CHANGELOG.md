@@ -2,6 +2,14 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.9.8 - (May 16, 2026)
+
+-   **Create** – Scaffolded `index.html` uses your API route prefix and
+    `src/<apiDir>` / `src/<pageDir>` paths in hints and the “Try API” link;
+    pages-only projects no longer show a broken `/api` link or API file hint.
+-   **Tests** – Coverage for `generateIndexPage` (custom prefix, defaults,
+    pages-only).
+
 ## Version 0.9.7 - (May 16, 2026)
 
 -   **CLI** – One-shot commands return to the shell reliably (GitHub `fetch`

@@ -873,20 +873,56 @@ export function generateSampleJs(): string {
     return 'console.log("Hello from app.js");';
 }
 
+/** Escape text for safe use inside HTML text nodes and double-quoted attributes. */
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Absolute path from site root for href (leading slash, no trailing slash except root). */
+function hrefFromApiPrefix(apiPrefix: string | undefined): string {
+    const raw = (apiPrefix ?? '/api').trim() || '/api';
+    let path = raw.startsWith('/') ? raw : `/${raw}`;
+    if (path.length > 1 && path.endsWith('/')) {
+        path = path.slice(0, -1);
+    }
+    return path;
+}
+
 /**
  * Generate a minimal, clean landing page
  * Uses official BurgerAPI color scheme
  *
- * @param projectName - Name of the project
+ * @param options - Project configuration (name, dirs, apiPrefix, useApi)
  * @returns index.html content as a string
  */
-export function generateIndexPage(projectName: string): string {
+export function generateIndexPage(options: CreateOptions): string {
+    const projectName = options.name;
+    const pageDir = options.pageDir || 'pages';
+    const apiDir = options.apiDir || 'api';
+    const apiTryHref = escapeHtml(hrefFromApiPrefix(options.apiPrefix));
+
+    const pageHintPath = escapeHtml(`src/${pageDir}/index.html`);
+    const apiHintPath = escapeHtml(`src/${apiDir}/route.ts`);
+
+    const editHintParagraphs = options.useApi
+        ? `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>
+        <p>Edit <code>${apiHintPath}</code> and save to reload the API endpoint.</p>`
+        : `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>`;
+
+    const tryApiLink = options.useApi
+        ? `<a href="${apiTryHref}" class="link">Try API</a>`
+        : '';
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${projectName}</title>
+    <title>${escapeHtml(projectName)}</title>
     <link rel="icon" type="image/png" href="https://burger-api.com/img/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -903,14 +939,13 @@ export function generateIndexPage(projectName: string): string {
             <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI Logo" class="logo">
             <span class="logo-text">BurgerAPI</span>
         </div>
-        <p class="subtitle">Your Project ${projectName} is ready</p>
+        <p class="subtitle">Your Project ${escapeHtml(projectName)} is ready</p>
         <div class="status">Server running</div>
     </section>
 
     <!-- Edit Hint -->
     <div class="edit-hint">
-        <p>Edit <code>src/pages/index.html</code> and save to reload the page.</p>
-        <p>Edit <code>src/api/route.ts</code> and save to reload the API endpoint.</p>
+        ${editHintParagraphs}
         <p class="hint">Your changes will automatically refresh the server.</p>
     </div>
 
@@ -934,7 +969,7 @@ export function generateIndexPage(projectName: string): string {
     <!-- Action Links -->
     <div class="links">
         <a href="/docs" class="link primary">API Docs</a>
-        <a href="/api" class="link">Try API</a>
+        ${tryApiLink}
         <a href="/openapi.json" class="link">OpenAPI</a>
     </div>
 
@@ -1081,7 +1116,7 @@ export async function createProject(
             const pagesDir = join(targetDir, 'src', options.pageDir || 'pages');
             await Bun.write(
                 join(pagesDir, 'index.html'),
-                generateIndexPage(options.name)
+                generateIndexPage(options)
             );
         }
 

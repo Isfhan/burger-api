@@ -72,6 +72,8 @@ installed!
 -   ✅ `burger.config.ts` generated from your answers
 -   ✅ Example routes
 -   ✅ Ready to run!
+-   ✅ When page routes are enabled, the sample `index.html` matches your choices
+    (API prefix for “Try API”, and edit hints for your API/page directories)
 
 Generated config example:
 
