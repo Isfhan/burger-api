@@ -30,7 +30,7 @@ export function generatePackageJson(projectName: string): string {
             build: 'bun build src/index.ts --outdir ./dist',
         },
         dependencies: {
-            'burger-api': '^0.9.6',
+            'burger-api': '^0.9.7',
         },
         devDependencies: {
             '@types/bun': 'latest',
@@ -962,7 +962,7 @@ export function generateIndexPage(projectName: string): string {
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="version">BurgerAPI v0.9.6 • Bun v1.3+</div>
+        <div class="version">BurgerAPI v0.9.7 • Bun v1.3+</div>
         <div class="social-links">
             <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
             <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
@@ -1138,14 +1138,19 @@ export async function installDependencies(projectDir: string): Promise<void> {
             stderr: 'pipe',
         });
 
-        // Wait for it to complete
         const exitCode = await proc.exited;
 
+        let stderrText = '';
+        try {
+            stderrText = (await new Response(proc.stderr).text()).trim();
+        } catch {
+            // stderr may already be closed; avoid leaving a readable stream dangling
+        }
+
         if (exitCode !== 0) {
-            const stderrText = await new Response(proc.stderr).text();
             const message =
-                stderrText.trim().length > 0
-                    ? `bun install failed:\n${stderrText.trim()}`
+                stderrText.length > 0
+                    ? `bun install failed:\n${stderrText}`
                     : 'bun install failed';
             throw new Error(message);
         }

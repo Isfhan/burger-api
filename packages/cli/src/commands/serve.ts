@@ -68,8 +68,8 @@ export const serveCommand = new Command('serve')
                 },
             });
 
-            // Handle Ctrl+C gracefully
-            process.on('SIGINT', () => {
+            // Handle Ctrl+C gracefully (once — avoid stacking listeners on reload edge cases)
+            process.once('SIGINT', () => {
                 newline();
                 info('Shutting down server...');
                 proc.kill();
@@ -77,7 +77,7 @@ export const serveCommand = new Command('serve')
             });
 
             // Handle Ctrl+Break on Windows
-            process.on('SIGBREAK', () => {
+            process.once('SIGBREAK', () => {
                 newline();
                 info('Shutting down server...');
                 proc.kill();

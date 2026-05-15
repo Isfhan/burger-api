@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/cli",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Simple command-line tool for Burger API projects",
   "module": "src/index.ts",
   "type": "module",

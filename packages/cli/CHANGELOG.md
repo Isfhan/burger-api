@@ -2,6 +2,17 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.9.7 - (May 16, 2026)
+
+-   **CLI** – One-shot commands return to the shell reliably (GitHub `fetch`
+    timeouts clear after each request; `bun install` stderr is drained).
+-   **CLI** – `parseAsync` at the entry so async command errors do not strand
+    the process.
+-   **CLI** – `serve` uses one-shot signal listeners (`once`) for Ctrl+C /
+    Ctrl+Break.
+-   **Tests** – Process-exit checks for `--version` and invalid `list` flags;
+    optional GitHub `ls` test via `BURGER_API_CLI_LIST_EXIT_TEST=1`.
+
 ## Version 0.9.6 - (March 18, 2026)
 
 -   ✨ **Create** – New projects get a config file (`burger.config.ts`) from

@@ -27,13 +27,25 @@ const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 
 const FETCH_TIMEOUT_MS = 20_000;
 
-function createFetchSignal(): AbortSignal {
+/**
+ * Fetch with a timeout. Always clears the timer when the request settles so
+ * the CLI process can exit (orphaned timers were keeping the event loop alive
+ * after successful responses).
+ */
+async function fetchWithTimeout(
+    input: string | URL | Request,
+    init?: RequestInit
+): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    controller.signal.addEventListener('abort', () => clearTimeout(timer), {
-        once: true,
-    });
-    return controller.signal;
+    try {
+        return await fetch(input, {
+            ...init,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function wrapFetchError(err: unknown, fallbackMessage: string): Error {
@@ -58,10 +70,9 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 export async function getMiddlewareList(): Promise<string[]> {
     try {
         // Use Bun's native fetch - no node-fetch package needed!
-        const response = await fetch(
+        const response = await fetchWithTimeout(
             `${API_URL}/contents/ecosystem/middlewares`,
             {
-                signal: createFetchSignal(),
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
                     'User-Agent': 'burger-api-cli',
@@ -104,10 +115,9 @@ export async function getMiddlewareList(): Promise<string[]> {
 export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
     try {
         // Get list of files in the middleware directory
-        const response = await fetch(
+        const response = await fetchWithTimeout(
             `${API_URL}/contents/ecosystem/middlewares/${name}`,
             {
-                signal: createFetchSignal(),
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
                     'User-Agent': 'burger-api-cli',
@@ -129,9 +139,9 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
 
         if (readmeFile && readmeFile.download_url) {
             try {
-                const readmeResponse = await fetch(readmeFile.download_url, {
-                    signal: createFetchSignal(),
-                });
+                const readmeResponse = await fetchWithTimeout(
+                    readmeFile.download_url
+                );
                 const readmeContent = await readmeResponse.text();
 
                 // Extract first non-empty line after the title as description
@@ -180,9 +190,7 @@ export async function downloadFile(
         // Build the URL to the raw file content
         const url = `${RAW_URL}/${path}`;
 
-        const response = await fetch(url, {
-            signal: createFetchSignal(),
-        });
+        const response = await fetchWithTimeout(url);
 
         if (!response.ok) {
             throw new Error(`Could not download ${path}`);
@@ -271,10 +279,9 @@ export async function downloadMiddleware(
  */
 export async function middlewareExists(name: string): Promise<boolean> {
     try {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
             `${API_URL}/contents/ecosystem/middlewares/${name}`,
             {
-                signal: createFetchSignal(),
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
                     'User-Agent': 'burger-api-cli',

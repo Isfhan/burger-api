@@ -100,5 +100,21 @@ program.exitOverride((err) => {
     process.exit(code);
 });
 
-// Run the CLI - this parses the arguments the user typed
-program.parse();
+function isCommanderProcessExit(err: unknown): err is { exitCode: number } {
+    return (
+        typeof err === 'object' &&
+        err !== null &&
+        'exitCode' in err &&
+        typeof (err as { exitCode: unknown }).exitCode === 'number' &&
+        Number.isInteger((err as { exitCode: number }).exitCode)
+    );
+}
+
+// Run the CLI — parseAsync so async command actions rejections are handled here
+await program.parseAsync(process.argv).catch((err: unknown) => {
+    if (isCommanderProcessExit(err)) {
+        process.exit(err.exitCode);
+    }
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+});

@@ -1,5 +1,11 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.9.7 (May 16, 2026)
+
+-   **CLI (published with this tag)** – Reliability and DX fixes: GitHub HTTP
+    timeouts no longer keep the process alive after work finishes; clearer
+    subprocess and entry handling; small contributor note in the CLI README.
+
 ### Version 0.9.6 (March 18, 2026)
 
 -   🚀 **Production builds** – `build` and `build:exec` work better and are more

@@ -1,0 +1,71 @@
+/**
+ * Regression: ephemeral CLI commands must exit without leaving orphaned handles
+ * (e.g. per-request abort timers that outlive successful fetches).
+ *
+ * Network-dependent `burger-api ls` is optional: set BURGER_API_CLI_LIST_EXIT_TEST=1
+ * when GitHub API is reachable (e.g. local dev) to assert the full list path.
+ */
+import { describe, expect, test } from 'bun:test';
+import { join } from 'path';
+
+const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
+
+async function runCli(args: string[]): Promise<{
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+    elapsedMs: number;
+}> {
+    const start = performance.now();
+    const proc = Bun.spawn(['bun', cliEntry, ...args], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+    });
+    const [exitCode, stdout, stderr] = await Promise.all([
+        proc.exited,
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+    ]);
+    return {
+        exitCode,
+        stdout,
+        stderr,
+        elapsedMs: performance.now() - start,
+    };
+}
+
+describe('CLI process exit', () => {
+    test('burger-api --version exits 0 with output under time bound', async () => {
+        const { exitCode, stdout, stderr, elapsedMs } = await runCli([
+            '--version',
+        ]);
+
+        expect(exitCode).toBe(0);
+        expect(stdout.trim().length).toBeGreaterThan(0);
+        expect(stderr).toBe('');
+        expect(elapsedMs).toBeLessThan(10_000);
+    });
+
+    test('burger-api list with invalid option exits non-zero quickly', async () => {
+        const { exitCode, stderr, elapsedMs } = await runCli([
+            'list',
+            '--not-a-valid-option-for-list',
+        ]);
+
+        expect(exitCode).not.toBe(0);
+        expect(stderr.toLowerCase()).toContain('unknown option');
+        expect(elapsedMs).toBeLessThan(10_000);
+    });
+
+    test.skipIf(process.env.BURGER_API_CLI_LIST_EXIT_TEST !== '1')(
+        'burger-api ls exits 0 with listing under time bound (requires GitHub)',
+        async () => {
+            const { exitCode, stdout, elapsedMs } = await runCli(['ls']);
+
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('Available Middleware');
+            expect(elapsedMs).toBeLessThan(18_000);
+        }
+    );
+});

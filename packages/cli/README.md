@@ -546,6 +546,12 @@ From the **repo root**, run all CLI tests with:
 bun run test:cli
 ```
 
+Optional: run the GitHub-backed `ls` exit integration test (skipped by default):
+
+```bash
+BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
+```
+
 ### Contributing
 
 1. Fork the repo
@@ -565,6 +571,10 @@ bun run test:cli
     - scanner traversal: `packages/cli/src/utils/scanner.ts`
 -   Run build tests when changing routing/build (keeps dev and production behavior the same):
     - `bun run test:build`
+-   CLI: commands that should return to the shell when finished must not leave
+    stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
+    in `src/utils/github.ts` for outbound requests. `serve` is meant to stay
+    running until you stop it.
 
 ### Design Principles
 
