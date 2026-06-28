@@ -15,6 +15,7 @@ import { join } from 'path';
 import { Command } from 'commander';
 import { createCommand } from './commands/create';
 import { addCommand } from './commands/add';
+import { skillsCommand } from './commands/skills';
 import { listCommand } from './commands/list';
 import { buildCommand, buildExecutableCommand } from './commands/build';
 import { serveCommand } from './commands/serve';
@@ -59,6 +60,7 @@ program
 // Each command is defined in its own file for better organization
 program.addCommand(createCommand); // Create new projects
 program.addCommand(addCommand); // Add middleware to projects
+program.addCommand(skillsCommand); // Manage agent skills: burger-api skills install
 program.addCommand(listCommand); // List available middleware
 program.addCommand(buildCommand); // Bundle to JS file
 program.addCommand(buildExecutableCommand); // Compile to executable

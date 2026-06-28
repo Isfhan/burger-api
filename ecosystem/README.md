@@ -10,10 +10,6 @@ recommend the following folder structure:
 ```
 my-burger-app/
 ├── ecosystem/           # Official middleware collection (copy from burger-api)
-│   ├── .llm-context/   # AI context files for Burger API documentation
-│   │   ├── llms.txt
-│   │   ├── llms-small.txt
-│   │   └── llms-full.txt
 │   └── middlewares/
 │       ├── cors/
 │       ├── logger/
@@ -26,6 +22,11 @@ my-burger-app/
 │   │   └── auth.ts
 │   └── custom/         # Your custom middleware
 │       └── my-middleware.ts
+├── .agents/             # AI agent skills (optional, created by CLI)
+│   └── skills/
+│       └── burger-api/
+│           ├── SKILL.md
+│           └── references/
 └── index.ts            # Main app entry
 ```
 
@@ -103,26 +104,36 @@ middleware for Burger API applications.
 -   ✅ Comprehensive documentation and testing guides
 -   ✅ Copy & paste approach for easy customization
 
-### AI Context Files
+### Agent Skills (Recommended)
 
-Located in `./.llm-context/` - Documentation files that provide context for AI
-assistants working with Burger API projects.
+Located in the monorepo at `ecosystem/skills/burger-api/` — skills are
+AI-readable documentation that help agentic IDEs (Cursor, Claude Code, OpenCode,
+OpenAI Codex, GitHub Copilot) understand your BurgerAPI project.
 
-**Files:**
+**Install in your project:**
 
--   `llms.txt` - Essential reference guide for Burger API
--   `llms-small.txt` - Compact documentation with key concepts
--   `llms-full.txt` - Complete documentation with all features and examples
+```bash
+burger-api skills install
+```
 
-**Purpose:**
+This creates `.agents/skills/burger-api/` with `SKILL.md` and reference files.
 
-These files are automatically included when you create a new Burger API project
-using the CLI (`burger-api create`). They help AI assistants understand the
-framework's structure, patterns, and best practices, enabling better code
-suggestions and assistance.
+**Subcommands:**
 
-**Note:** These files are optional and can be safely removed if not needed. They
-don't affect the runtime behavior of your application.
+-   `burger-api skills install [name]` — Download a skill (defaults to `burger-api`)
+-   `burger-api skills list` — Show locally installed skills
+-   `burger-api skills available` — List remote skills from the ecosystem
+
+### Legacy / Website: `.llm-context/`
+
+The `ecosystem/.llm-context/` folder stays in this monorepo for use on
+[burger-api.com](https://burger-api.com) (the `llms.txt` is referenced by the
+[llmstxt directory](https://llmstxt.org)). **The CLI no longer copies this
+folder into new projects** (since v0.9.9).
+
+**Migration:** If your project has `ecosystem/.llm-context/` from an older CLI
+version, run `burger-api skills install` to adopt the new format. The old folder
+can be safely removed.
 
 ## 🎯 Benefits of This Structure
 

@@ -25,6 +25,8 @@ export interface CreateOptions {
     pageDir?: string;
     /** Prefix for Page routes (e.g., '/') */
     pagePrefix?: string;
+    /** Whether to add AI agent skills */
+    addSkills?: boolean;
 }
 
 /**
@@ -38,6 +40,22 @@ export interface MiddlewareInfo {
     /** Path in the GitHub repo */
     path: string;
     /** Files that are part of this middleware */
+    files: string[];
+}
+
+/**
+ * Information about a skill from GitHub
+ */
+export interface SkillInfo {
+    /** Name of the skill (e.g., 'burger-api') */
+    name: string;
+    /** Short description from frontmatter */
+    description: string;
+    /** Version from frontmatter, if present */
+    version?: string;
+    /** Path in the GitHub repo */
+    path: string;
+    /** Files that are part of this skill */
     files: string[];
 }
 

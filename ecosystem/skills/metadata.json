@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "organization": "BurgerAPI",
+  "date": "28 June 2026",
+  "abstract": "Build APIs with BurgerAPI, a Bun-native framework with file-based routing, Zod v4 validation, and automatic OpenAPI generation.",
+  "references": ["https://burger-api.com/llms.txt"],
+  "skills": [
+    {
+      "name": "burger-api",
+      "description": "Build APIs with BurgerAPI, a Bun-native framework with file-based routing, Zod v4 validation, and automatic OpenAPI generation.",
+      "cli": "burger-api skills install"
+    }
+  ]
+}

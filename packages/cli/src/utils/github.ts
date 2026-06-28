@@ -10,7 +10,7 @@
  * - Download middleware code
  */
 
-import type { GitHubFile, MiddlewareInfo } from '../types/index';
+import type { GitHubFile, MiddlewareInfo, SkillInfo } from '../types/index';
 import { unlinkSync } from 'fs';
 
 /**
@@ -292,5 +292,220 @@ export async function middlewareExists(name: string): Promise<boolean> {
         return response.ok;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Get list of available skills from GitHub
+ * This scans the ecosystem/skills folder and returns what's available
+ *
+ * @returns Promise with array of skill names
+ * @throws Error if GitHub is unreachable or request fails
+ */
+export async function getSkillList(): Promise<string[]> {
+    try {
+        const response = await fetchWithTimeout(
+            `${API_URL}/contents/ecosystem/skills`,
+            {
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`GitHub returned status ${response.status}`);
+        }
+
+        const files = (await response.json()) as GitHubFile[];
+
+        return files
+            .filter((f) => f.type === 'dir')
+            .map((f) => f.name)
+            .sort();
+    } catch (err) {
+        throw wrapFetchError(
+            err,
+            'Could not get skill list from GitHub. Please check your internet connection.'
+        );
+    }
+}
+
+/**
+ * Recursively flatten all files in a skill directory tree
+ */
+export async function flattenSkillFiles(
+    basePath: string,
+    prefix: string = ''
+): Promise<string[]> {
+    const response = await fetchWithTimeout(
+        `${API_URL}/contents/${basePath}`,
+        {
+            headers: {
+                Accept: 'application/vnd.github.v3+json',
+                'User-Agent': 'burger-api-cli',
+            },
+        }
+    );
+
+    if (!response.ok) return [];
+
+    const entries = (await response.json()) as GitHubFile[];
+    const files: string[] = [];
+
+    for (const entry of entries) {
+        const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.type === 'file') {
+            files.push(relativePath);
+        } else if (entry.type === 'dir') {
+            const nested = await flattenSkillFiles(
+                `ecosystem/skills/${basePath.replace('ecosystem/skills/', '')}/${entry.name}`,
+                relativePath
+            );
+            files.push(...nested);
+        }
+    }
+
+    return files;
+}
+
+/**
+ * Parse a description line from SKILL.md YAML frontmatter.
+ * Extracted as a separate function for testability.
+ */
+export function parseSkillDescription(raw: string): { description: string; version?: string } {
+    const descLine = raw.split('\n').find((l) => l.startsWith('description:'));
+    const verLine = raw.split('\n').find((l) => l.startsWith('version:'));
+    const description = descLine
+        ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+        : '(no description)';
+    const version = verLine
+        ? verLine.slice('version:'.length).trim().replace(/^['"]|['"]$/g, '')
+        : undefined;
+    return { description, version };
+}
+
+/**
+ * Check if a skill exists on GitHub
+ *
+ * @param name - Name of the skill to check (e.g., 'burger-api')
+ * @returns Promise with true if it exists, false otherwise
+ */
+export async function skillExists(name: string): Promise<boolean> {
+    try {
+        const response = await fetchWithTimeout(
+            `${API_URL}/contents/ecosystem/skills/${name}`,
+            {
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
+            }
+        );
+
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Get detailed information about a specific skill
+ *
+ * @param name - Name of the skill (e.g., 'burger-api')
+ * @returns Promise with skill info structure
+ */
+export async function getSkillInfo(name: string): Promise<SkillInfo> {
+    try {
+        const response = await fetchWithTimeout(
+            `${API_URL}/contents/ecosystem/skills/${name}`,
+            {
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Skill "${name}" not found`);
+        }
+
+        const entries = (await response.json()) as GitHubFile[];
+        const flatFiles = await flattenSkillFiles(`ecosystem/skills/${name}`);
+
+        // Try to parse description and version from SKILL.md frontmatter
+        const skillMd = entries.find((f) => f.name === 'SKILL.md');
+        let description = `AI agent skill for ${name}`;
+        let version: string | undefined;
+
+        if (skillMd?.download_url) {
+            try {
+                const raw = await (await fetchWithTimeout(skillMd.download_url)).text();
+                const parsed = parseSkillDescription(raw);
+                if (parsed.description !== '(no description)') {
+                    description = parsed.description;
+                }
+                version = parsed.version;
+            } catch {
+                // fall back to defaults
+            }
+        }
+
+        return {
+            name,
+            description,
+            version,
+            path: `ecosystem/skills/${name}`,
+            files: flatFiles,
+        };
+    } catch (err) {
+        throw wrapFetchError(
+            err,
+            `Could not get info for skill "${name}"`
+        );
+    }
+}
+
+/**
+ * Download all files for a specific skill
+ *
+ * @param skillName - Name of the skill to download
+ * @param targetDir - Directory to save files in
+ * @returns Promise with number of files downloaded
+ */
+export async function downloadSkill(
+    skillName: string,
+    targetDir: string
+): Promise<number> {
+    try {
+        const info = await getSkillInfo(skillName);
+
+        // Create target directory
+        await Bun.write(`${targetDir}/.gitkeep`, '');
+
+        let filesDownloaded = 0;
+        for (const fileName of info.files) {
+            if (fileName === '.gitkeep') continue;
+            const sourcePath = `${info.path}/${fileName}`;
+            const destPath = `${targetDir}/${fileName}`;
+            // Ensure parent directory exists
+            const parentDir = destPath.substring(0, destPath.lastIndexOf('/'));
+            await Bun.write(`${parentDir}/.gitkeep`, '');
+            await downloadFile(sourcePath, destPath);
+            filesDownloaded++;
+        }
+
+        // Remove .gitkeep
+        try { unlinkSync(`${targetDir}/.gitkeep`); } catch { /* ignore */ }
+
+        return filesDownloaded;
+    } catch (err) {
+        throw new Error(
+            `Failed to download skill "${skillName}": ${
+                err instanceof Error ? err.message : 'Unknown error'
+            }`
+        );
     }
 }

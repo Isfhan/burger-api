@@ -2,6 +2,20 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.9.9 - (June 29, 2026)
+
+-   **Added** – `burger-api skills install [name]` to download AI agent skills
+    (defaults to `burger-api`).
+-   **Added** – `burger-api skills list` to show locally installed skills.
+-   **Added** – `burger-api skills available` to list remote skills from the
+    ecosystem.
+-   **Added** – Optional "Add AI agent skills?" prompt during `create` (default:
+    yes).
+-   **Changed** – `create` no longer auto-installs `.llm-context/`. Skills are
+    downloaded to `.agents/skills/burger-api/` instead.
+-   **Migration** – Existing projects with `ecosystem/.llm-context/` can adopt
+    the new format with `burger-api skills install`.
+
 ## Version 0.9.8 - (May 16, 2026)
 
 -   **Create** – Scaffolded `index.html` uses your API route prefix and

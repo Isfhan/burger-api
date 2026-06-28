@@ -135,6 +135,9 @@ export const createCommand = new Command('create')
             if (options.usePages) {
                 console.log(`  Page Routes: ${options.pageDir || 'pages'}`);
             }
+            if (options.addSkills) {
+                console.log(`  AI Agent Skills: burger-api`);
+            }
             newline();
 
             // Create the project
@@ -161,6 +164,14 @@ export const createCommand = new Command('create')
             newline();
             console.log(`  5. Add middleware (optional):`);
             command('burger-api add cors logger');
+            newline();
+            if (options.addSkills) {
+                console.log(`  6. AI skills installed at`);
+                console.log(`     ${highlight('.agents/skills/burger-api/')}`);
+            } else {
+                console.log(`  6. Add AI skills (optional):`);
+                command('burger-api skills install');
+            }
             newline();
             success('Happy coding!');
         } catch (err) {
@@ -259,6 +270,13 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                           placeholder: '/',
                       })
                     : Promise.resolve('/'),
+
+            // Question 8: AI agent skills
+            addSkills: () =>
+                clack.confirm({
+                    message: 'Add AI agent skills? (recommended for agentic IDEs)',
+                    initialValue: true,
+                }),
         },
         {
             // Callback when user cancels (Ctrl+C)
@@ -279,5 +297,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
         usePages: answers.usePages as boolean,
         pageDir: answers.pageDir as string | undefined,
         pagePrefix: answers.pagePrefix as string | undefined,
+        addSkills: answers.addSkills as boolean,
     };
 }

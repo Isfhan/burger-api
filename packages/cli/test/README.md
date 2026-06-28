@@ -52,6 +52,11 @@ bun test test/scanner.test.ts
   - Force `build-output.test.ts` to fail if bundle file is missing.
 - `CI=true`
   - CI mode also forces missing bundle to fail.
+- `BURGER_API_CLI_LIST_EXIT_TEST=1`
+  - Run `burger-api ls` GitHub-backed integration test (skipped by default).
+- `BURGER_API_CLI_SKILLS_EXIT_TEST=1`
+  - Run `burger-api skills available` GitHub-backed integration test
+    (skipped by default). Requires ecosystem/skills/ to be on GitHub.
 
 ## Typical local flow
 

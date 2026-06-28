@@ -2,8 +2,10 @@
  * Regression: ephemeral CLI commands must exit without leaving orphaned handles
  * (e.g. per-request abort timers that outlive successful fetches).
  *
- * Network-dependent `burger-api ls` is optional: set BURGER_API_CLI_LIST_EXIT_TEST=1
- * when GitHub API is reachable (e.g. local dev) to assert the full list path.
+ * Network-dependent tests:
+ *  - `burger-api ls`: set BURGER_API_CLI_LIST_EXIT_TEST=1
+ *  - `burger-api skills available`: set BURGER_API_CLI_SKILLS_EXIT_TEST=1
+ * when GitHub API is reachable (e.g. local dev) to assert full list paths.
  */
 import { describe, expect, test } from 'bun:test';
 import { join } from 'path';
@@ -68,4 +70,32 @@ describe('CLI process exit', () => {
             expect(elapsedMs).toBeLessThan(18_000);
         }
     );
+
+    test.skipIf(process.env.BURGER_API_CLI_SKILLS_EXIT_TEST !== '1')(
+        'burger-api skills available exits 0 with listing under time bound (requires GitHub)',
+        async () => {
+            const { exitCode, stdout, elapsedMs } = await runCli([
+                'skills',
+                'available',
+            ]);
+
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('burger-api');
+            expect(elapsedMs).toBeLessThan(18_000);
+        }
+    );
+
+    test('burger-api skills exits 0 under time bound', async () => {
+        const { exitCode, elapsedMs } = await runCli(['skills', '--help']);
+
+        expect(exitCode).toBe(0);
+        expect(elapsedMs).toBeLessThan(10_000);
+    });
+
+    test('burger-api skills install exits 0 under time bound', async () => {
+        const { exitCode, elapsedMs } = await runCli(['skills', 'install', '--help']);
+
+        expect(exitCode).toBe(0);
+        expect(elapsedMs).toBeLessThan(10_000);
+    });
 });

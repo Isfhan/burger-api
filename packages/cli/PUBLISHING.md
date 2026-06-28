@@ -158,6 +158,15 @@ bun run build:linux
 ./dist/burger-api-linux create --help
 ```
 
+### 3b. Verify Skills Against GitHub
+
+```bash
+# Ensure ecosystem/skills/ has been merged to main first
+# Verify skills install resolves from GitHub
+./dist/burger-api-linux skills available
+./dist/burger-api-linux skills install --help
+```
+
 ### 4. Commit Changes
 
 ```bash

@@ -60,6 +60,7 @@ Create a new Burger API project with interactive prompts.
 -   Do you need Page routes? (yes/no)
 -   Page directory name (default: pages)
 -   Page route prefix (default: /)
+-   Add AI agent skills? (recommended for agentic IDEs, default: yes)
 
 After answering, your project will be created with all files and dependencies
 installed!
@@ -72,6 +73,7 @@ installed!
 -   ✅ `burger.config.ts` generated from your answers
 -   ✅ Example routes
 -   ✅ Ready to run!
+-   ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
 -   ✅ When page routes are enabled, the sample `index.html` matches your choices
     (API prefix for “Try API”, and edit hints for your API/page directories)
 
@@ -163,6 +165,51 @@ const app = new Burger({
     globalMiddleware: [logger(), cors()],
 });
 ```
+
+---
+
+### `burger-api skills`
+
+Manage AI agent skills for your project. Skills help agentic IDEs understand
+your BurgerAPI project structure.
+
+**Subcommands:**
+
+| Command | Description |
+|---|---|
+| `burger-api skills install [name]` | Download a skill (defaults to `burger-api`) |
+| `burger-api skills list` | Show locally installed skills |
+| `burger-api skills available` | List remote skills available on GitHub |
+
+**Examples:**
+
+```bash
+# Install the default burger-api skill
+burger-api skills install
+
+# List what's installed
+burger-api skills list
+
+# See what skills are available
+burger-api skills available
+```
+
+**What gets installed:**
+
+```
+.agents/skills/burger-api/
+├── SKILL.md              # Main skill definition
+└── references/           # Reference documentation
+    ├── routing.md
+    ├── validation.md
+    ├── middleware.md
+    ├── cli.md
+    └── openapi.md
+```
+
+**Compatible agents:** Skills in `.agents/skills/` are automatically detected by
+Cursor, Claude Code, OpenCode, OpenAI Codex, GitHub Copilot, and any tool
+supporting the agentskills.io standard.
 
 ---
 
@@ -317,6 +364,11 @@ my-awesome-api/
 │   └── index.html         # Example page
 ├── middleware/            # Middleware folder
 │   └── index.ts          # Export middleware here
+├── .agents/               # AI agent skills (optional)
+│   └── skills/
+│       └── burger-api/    # BurgerAPI skill for agentic IDEs
+│           ├── SKILL.md
+│           └── references/
 ├── index.ts              # Main server file
 ├── package.json          # Dependencies
 ├── tsconfig.json         # TypeScript config
@@ -443,6 +495,22 @@ burger-api create --help           # Command-specific help
 -   Main website: https://burger-api.com
 -   GitHub: https://github.com/isfhan/burger-api
 -   Issues: https://github.com/isfhan/burger-api/issues
+
+---
+
+### Migration from `.llm-context`
+
+Projects created with CLI version **0.9.8 and earlier** may have an
+`ecosystem/.llm-context/` folder. Starting with 0.9.9, the CLI no longer
+auto-installs this folder. To adopt the new skills format:
+
+```bash
+cd my-project
+burger-api skills install
+```
+
+This downloads the burger-api skill to `.agents/skills/burger-api/` for
+agentic IDEs. The old `ecosystem/.llm-context/` folder can be safely removed.
 
 ---
 
