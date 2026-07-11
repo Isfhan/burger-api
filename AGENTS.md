@@ -10,7 +10,7 @@ BurgerAPI is a **Bun.js-exclusive** API framework — it only works with Bun.js 
 **Tech:** Bun >= 1.3.0, TypeScript (ESM), Zod ^4.0.17
 **Packages:** `burger-api` (core framework), `@burger-api/cli` (CLI tool)
 **Ecosystem:** Production-ready middleware in `ecosystem/middlewares/`
-**Status:** Pre-1.0 (v0.9.7), active development
+**Status:** Pre-1.0 (v0.10.0), active development
 **Homepage:** https://burger-api.com
 
 ## Essential Commands

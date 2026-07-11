@@ -29,7 +29,11 @@ simplicity of file-based routing with powerful features like built-in
 middleware, Zod-based schema validation, and automatic OpenAPI generation.
 
 **This project is under active development and should not be used in production
-yet.** 📌 Releases: **burger-api** 0.9.7 · **@burger-api/cli** 0.9.8 (May 16, 2026).
+yet.** 
+
+**📌 Releases:**
+- **burger-api** 0.10.0 (July 12, 2026)
+- **@burger-api/cli** 0.9.9 (May 16, 2026)
 
 ## 📦 Packages
 
@@ -42,11 +46,14 @@ published to npm.
 
 #### ✨ Key Features
 
--   ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
+-   ⚡ **Bun-Native Hybrid Routing** - Static routes are served by Bun's native
+    `routes` map (the fast path), while `:param` and `*` routes are served by
+    BurgerAPI's optimized internal trie. One shared execution pipeline for both.
 -   📁 **File-Based Routing** - Automatically registers API routes from your
-    file structure
+    file structure, including dynamic `[id]` parameters and `[...slug]`
+    wildcards
 -   🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+
-    middlewares
+    middlewares, reused identically for static and dynamic routes
 -   ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full
     type safety
 -   📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0
@@ -55,6 +62,11 @@ published to npm.
     interactive API docs
 -   🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy
     to understand
+-   🔀 **Automatic HEAD** - `HEAD` requests are derived from `GET` automatically
+    (same handler, body stripped)
+-   ❌ **Proper 405 Responses** - a known route requested with an unsupported
+    method returns `405` with an `Allow` header listing the supported methods
+-   🔗 **Loose Trailing Slash** - `/foo` and `/foo/` match the same route
 
 ### 🛠️ [`packages/cli`](./packages/cli)
 
@@ -204,6 +216,71 @@ Build flow:
 
 This keeps production startup reliable in bundled and executable outputs.
 
+## 🛣️ Routing
+
+BurgerAPI maps your file structure to routes automatically.
+
+| Pattern        | File                              | URL match            |
+| -------------- | --------------------------------- | -------------------- |
+| Static         | `api/health/route.ts`             | `/api/health`        |
+| Parameter      | `api/users/[id]/route.ts`         | `/api/users/123`     |
+| Wildcard       | `api/files/[...]/route.ts`        | `/api/files/a/b/c`   |
+
+-   **Static routes** are matched exactly and dispatched by Bun's native
+    `routes` map (O(1)).
+-   **Parameter routes** (`[id]`) capture a single path segment into
+    `req.params.id`.
+-   **Wildcard routes** (`[...]`) capture the remaining segments into
+    `req.wildcardParams` (an array). A wildcard route also matches its own base
+    path — `/api/files/[...]` matches both `/api/files/a/b/c` and `/api/files`.
+-   **Trailing slash** is loose by default: `/api/health` and `/api/health/`
+    resolve to the same route. A trailing slash on a parameter route is treated
+    as an empty parameter value (e.g. `/api/users/` → `req.params.id === ""`).
+-   **HEAD** is automatic: a `HEAD` request to a route that defines `GET` runs
+    the `GET` handler and returns the response with the body removed.
+-   **405** is correct: requesting a known route with an unsupported method
+    returns `405` with an `Allow` header (e.g. `Allow: GET, POST`).
+
+## ⚡ Performance
+
+-   **Static routes** use Bun-native routing — the fastest dispatch path, with
+    no framework code in the hot path.
+-   **Dynamic routes** use BurgerAPI's optimized internal trie, matched in
+    `O(number of path segments)`.
+-   **Shared compiled handlers** run the same middleware pipeline for static and
+    dynamic routes, so behavior (and optimizations) never drift between them.
+-   **Bun-first architecture**: the framework is built exclusively for Bun.js
+    and uses `Bun.serve` as the server.
+
+## 🏗️ Architecture
+
+```
+        Request
+           │
+           ▼
+   ┌───────────────────┐
+   │  Static path?      │
+   └───────────────────┘
+        │          │
+       yes         no
+        │          │
+        ▼          ▼
+  ┌──────────┐  ┌──────────────────────────────┐
+  │ Bun      │  │ Router.fetch (fallback)        │
+  │ routes   │  │   │                            │
+  │ map      │  │   ▼                            │
+  └──────────┘  │  Internal trie (:param, *)     │
+                └───────────────┬────────────────┘
+                                │
+                                ▼
+                  Shared execution pipeline (middleware → handler)
+```
+
+Static routes are dispatched directly by Bun; dynamic and wildcard routes are
+dispatched by the internal trie via a single `fetch` fallback. Both paths execute
+the **same compiled handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`, and
+middleware behavior are identical regardless of how the route was matched.
+
 ## 🧭 Routing/Build Ownership (Contributor Guide)
 
 If you want to contribute, this split helps:
@@ -211,6 +288,8 @@ If you want to contribute, this split helps:
 - Framework route behavior:
   - `packages/burger-api/src/core/api-router.ts`
   - `packages/burger-api/src/core/page-router.ts`
+  - `packages/burger-api/src/router/` (Hybrid Router: `compiler`, `trie`,
+    `static-map`, `allow-cache`, `router`)
   - `packages/burger-api/src/utils/pathConversion.ts`
 - CLI build scanning and generation:
   - `packages/cli/src/utils/scanner.ts`

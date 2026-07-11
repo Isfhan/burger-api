@@ -997,7 +997,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="version">BurgerAPI v0.9.7 • Bun v1.3+</div>
+        <div class="version">BurgerAPI v0.10.0 • Bun v1.3+</div>
         <div class="social-links">
             <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
             <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>

@@ -5,6 +5,7 @@ import * as path from 'path';
 // Import utils
 import { normalizePath, ROUTE_CONSTANTS, HTTP_METHODS } from '../utils/index';
 import { filePathToApiRoutePath } from '../utils/pathConversion';
+import { autoOptionsHandler } from '../utils/response';
 
 // Import types
 import type {
@@ -241,7 +242,7 @@ export class ApiRouter {
                 // if (process.env.NODE_ENV !== 'production') {
                 //     console.debug('Auto-added OPTIONS handler for route:', routePath);
                 // }
-                handlers.OPTIONS = () => new Response(null, { status: 204 });
+                handlers.OPTIONS = autoOptionsHandler;
             }
 
             const routeDef: RouteDefinition = {

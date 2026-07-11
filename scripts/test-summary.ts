@@ -25,6 +25,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'router',
+        cmd: ['bun', 'test', 'test/router-phase1.test.ts'],
+        kind: 'tests',
+    },
+    {
         label: 'framework',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:examples'],
         kind: 'tests',
