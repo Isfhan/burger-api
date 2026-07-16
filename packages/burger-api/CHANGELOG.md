@@ -1,5 +1,36 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.11.0 (Phase 2 — Request Context & Dead-Path Elimination)
+
+- 🍔 **`BurgerContext`** — a single, prototype-based request object allocated
+  **once per request**. Lazily exposes `query`, `params`, `route`, `headers`,
+  `validated`, `set` and transparently delegates the standard `Request` surface.
+  Shared, stable prototype → monomorphic hidden class (JIT-friendly).
+- ⚡ **`parseQuery`** — a fast, Bun-native querystring parser replacing the
+  per-request `new URL(req.url)` in the validator. Matches `URLSearchParams`
+  parity (incl. `+`→space, malformed-escape leniency). ~1.7× faster than the
+  previous `new URL` + `URLSearchParams` path.
+- 🎯 **`req.route`** — `{ path, pattern }` now available on **every** matched
+  route, including static routes served through Bun's native routing.
+- 🔧 **`req.set`** — response-mutation surface (`status` + `headers`), merged
+  into the outgoing `Response` by `applySet` at the single pipeline exit.
+  `applySet` is a no-op (zero allocation) when no mutation is set, and runs
+  uniformly on GET **and** auto-HEAD responses.
+- 🧠 **`RouteAccessAnalyzer`** (optional) — compile-time, self-contained static
+  analysis of which context fields a route reads, producing a frozen
+  `RouteAccessInfo` hint. Conservative: `debug`, ambiguous, or failed analysis
+  yields the safe "all fields used" default. **Never** affects runtime correctness.
+- 🪝 **Dead-path elimination** — provided structurally by the lazy getters; a
+  field a route never reads is never parsed and never allocated.
+- 🧊 **Frozen getters** — the shared prototype's getters are frozen so they
+  cannot be replaced across requests; delegation methods stay writable so the
+  existing `req.json` reassignment and middleware custom properties keep working.
+
+**Migration:** None required. All changes are strictly additive and optional
+(`query`, `set`, `route` are new optional `BurgerRequest` fields). Existing
+`route.ts` files and the `GET(req: BurgerRequest)` signature are unchanged; the
+entire `examples/` suite passes unchanged.
+
 ### Version 0.9.7 (May 16, 2026)
 
 -   **CLI (published with this tag)** – Reliability and DX fixes: GitHub HTTP

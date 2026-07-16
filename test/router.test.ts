@@ -20,7 +20,7 @@ function req(path: string, method = 'GET'): Request {
     return new Request(`http://localhost${path}`, { method });
 }
 
-describe('Router — Phase 1 (Hybrid Router)', () => {
+describe('Router — Hybrid Router dispatch', () => {
     describe('static routes', () => {
         it('serves a static route via the compiled handler', async () => {
             const r = new Router();

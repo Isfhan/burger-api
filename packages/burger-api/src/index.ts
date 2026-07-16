@@ -181,7 +181,10 @@ export class Burger {
         this.openApiDoc = generateOpenAPIDocument(apiRoutes, this.options);
 
         // Compile routes into the Hybrid Router.
-        const router = new Router({ globalMiddleware: this.globalMiddleware });
+        const router = new Router({
+            globalMiddleware: this.globalMiddleware,
+            debug: this.options.debug,
+        });
         router.compile(apiRoutes);
         this.dynamicRouter = router;
 

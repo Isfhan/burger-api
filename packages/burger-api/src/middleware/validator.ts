@@ -115,9 +115,10 @@ export function createValidationMiddleware(schema: RouteSchema): Middleware {
         }
 
         // Validate query parameters if available and schema provided.
+        // Uses the lazy `req.query` field (fast Bun-native parser) instead of
+        // constructing a `URL` per request.
         if (hasQuery && querySchema) {
-            const url = new URL(req.url);
-            const queryParams = Object.fromEntries(url.searchParams.entries());
+            const queryParams = req.query ?? {};
 
             const result = querySchema.safeParse(queryParams);
             if (result.success) {

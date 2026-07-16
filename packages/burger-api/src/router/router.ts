@@ -1,4 +1,5 @@
-import type { FetchHandler, BurgerRequest } from '../types/index';
+import type { FetchHandler } from '../types/index';
+import type { ContextInit } from '../context/types';
 import { NOT_FOUND, methodNotAllowed } from '../utils/response';
 import { normalizePath } from '../utils/index';
 import { extractPathnameFromUrl } from '../utils/wildcard';
@@ -6,7 +7,7 @@ import { RouterCompiler } from './compiler';
 import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
-import type { CompiledHandler, RouterConfig } from './types';
+import type { CompiledHandler, CompiledRoute, RouterConfig } from './types';
 
 /**
  * Public router that owns the compiled dispatch state and orchestrates
@@ -25,9 +26,14 @@ export class Router {
     private trie = new Trie();
     private allowCache = new AllowCache();
     private compiler: RouterCompiler;
+    /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
+    private compiledRoutes?: Map<string, CompiledRoute>;
 
     constructor(config: RouterConfig = {}) {
-        this.compiler = new RouterCompiler(config.globalMiddleware ?? []);
+        this.compiler = new RouterCompiler(
+            config.globalMiddleware ?? [],
+            config.debug ?? false
+        );
     }
 
     /**
@@ -40,16 +46,35 @@ export class Router {
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;
+        this.compiledRoutes = result.routes;
+    }
+
+    /**
+     * Read-only access to the retained compiled-route metadata
+     * (`RouteAccessInfo` + `RouteMeta`). Populated by `compile()`; not used on
+     * the request hot path, so it has no runtime performance impact.
+     */
+    getCompiledRoutes(): Map<string, CompiledRoute> | undefined {
+        return this.compiledRoutes;
     }
 
     /**
      * Returns the static routes as a `Bun.serve` `routes` map
      * (`path → compiled handler`).
+     *
+     * Bun's native routing invokes each handler with ONLY `(request)`, so the
+     * matched-route metadata cannot be passed as a second argument the way the
+     * trie-dispatched (dynamic/wildcard) routes are in `fetch`. To guarantee
+     * `req.route` is available for **every** matched route (ROADMAP-phase2 §5.7),
+     * each static handler is wrapped to inject `ctxInit` with its `route`
+     * identity (`path` === `pattern` for static routes). This preserves Bun's
+     * native dispatch fast path — no router redesign, no perf regression.
      */
     staticRoutes(): Record<string, CompiledHandler> {
         const out: Record<string, CompiledHandler> = {};
         for (const [path, handler] of this.staticMap.entries()) {
-            out[path] = handler;
+            out[path] = (request: Request) =>
+                handler(request, { route: { path, pattern: path } });
         }
         return out;
     }
@@ -76,7 +101,10 @@ export class Router {
         //    form natively; this catches the trailing-slash variants it missed).
         const staticExact = this.staticMap.get(path);
         if (staticExact) {
-            return staticExact(request as BurgerRequest);
+            // Every matched route gets a `ctxInit` with `route`; static routes
+            // have no params/wildcardParams.
+            const ctxInit: ContextInit = { route: { path, pattern: path } };
+            return staticExact(request, ctxInit);
         }
 
         // 2. Dynamic / wildcard routes via the internal trie. The trie is
@@ -94,15 +122,14 @@ export class Router {
                 return methodNotAllowed(allow);
             }
 
-            const burgerReq = request as BurgerRequest;
-            if (match.params && Object.keys(match.params).length > 0) {
-                burgerReq.params = match.params;
-            }
-            if (match.isWildcard) {
-                burgerReq.wildcardParams = match.wildcardParams ?? [];
-            }
-
-            return match.handler(burgerReq);
+            // Seed `ctxInit`: `route` is always present; `params` /
+            // `wildcardParams` are added only when the route has them.
+            const ctxInit: ContextInit = {
+                route: { path, pattern: match.pattern },
+                params: match.params,
+                wildcardParams: match.wildcardParams,
+            };
+            return match.handler(request, ctxInit);
         }
 
         // 3. Loose trailing-slash fallback for static routes: `/foo/` ≡ `/foo`.
@@ -112,7 +139,10 @@ export class Router {
                 this.staticMap.get(normalized) ??
                 this.staticMap.get(normalized + '/');
             if (loose) {
-                return loose(request as BurgerRequest);
+                const ctxInit: ContextInit = {
+                    route: { path: normalized, pattern: normalized },
+                };
+                return loose(request, ctxInit);
             }
         }
 

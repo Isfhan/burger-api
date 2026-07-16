@@ -15,6 +15,8 @@ interface DynTrieNode {
     isWildcard?: boolean;
     handler?: CompiledHandler;
     methods?: Set<string>;
+    /** The route-definition path this node was inserted with (for `RouteMeta`). */
+    pattern?: string;
 }
 
 /**
@@ -26,6 +28,8 @@ export interface TrieMatch {
     params: Record<string, string>;
     wildcardParams?: string[];
     isWildcard: boolean;
+    /** The route-definition path (for `RouteMeta.pattern`). */
+    pattern: string;
 }
 
 /**
@@ -94,6 +98,7 @@ export class Trie {
         node.handler = handler;
         node.methods = methods;
         node.isWildcard = isWildcard;
+        node.pattern = path;
     }
 
     /**
@@ -130,6 +135,7 @@ export class Trie {
                     methods: node.methods,
                     params: { ...params },
                     isWildcard: !!node.isWildcard,
+                    pattern: node.pattern!,
                 };
             }
             if (node.wildcardChild?.handler) {
@@ -139,6 +145,7 @@ export class Trie {
                     params: { ...params },
                     wildcardParams: [],
                     isWildcard: true,
+                    pattern: node.wildcardChild.pattern!,
                 };
             }
             return null;
@@ -174,6 +181,7 @@ export class Trie {
                 params: { ...params },
                 wildcardParams: segments.slice(i),
                 isWildcard: true,
+                pattern: node.wildcardChild.pattern!,
             };
         }
 

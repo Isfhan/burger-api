@@ -4,14 +4,17 @@ import type {
     BurgerRequest,
     RequestHandler,
 } from '../types/index';
+import type { ContextInit, RouteAccessInfo } from '../context/types';
 import { createValidationMiddleware } from '../middleware/validator';
 import { runWithMiddleware } from '../middleware/runner';
-import { methodNotAllowed, autoOptionsHandler } from '../utils/response';
+import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
+import { BurgerContext } from '../context/context';
+import { analyzeRouteAccess } from '../analysis/route-access-analyzer';
 import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import { ROUTE_CONSTANTS } from '../utils/routing';
-import type { CompiledHandler, CompiledRouter } from './types';
+import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
 
 /**
  * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
@@ -21,14 +24,18 @@ import type { CompiledHandler, CompiledRouter } from './types';
  *   + auto-HEAD + middleware pipeline delegation).
  * - Classify each route as static (→ `StaticMap`) or dynamic/wildcard (→ `Trie`).
  * - Populate the `AllowCache`.
+ * - Optionally run the `RouteAccessAnalyzer` once per route (compile-time only;
+ *   its output is baked into `meta` but never read at runtime in Phase 2).
  * - Fail fast on duplicate or ambiguous routes (compile-time error).
  * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
  */
 export class RouterCompiler {
     private globalMiddleware: Middleware[];
+    private debug: boolean;
 
-    constructor(globalMiddleware: Middleware[] = []) {
+    constructor(globalMiddleware: Middleware[] = [], debug = false) {
         this.globalMiddleware = globalMiddleware;
+        this.debug = debug;
     }
 
     compile(defs: RouteDefinition[]): CompiledRouter {
@@ -36,6 +43,9 @@ export class RouterCompiler {
         const trie = new Trie();
         const allowCache = new AllowCache();
         const registeredPaths = new Set<string>();
+        // Retained metadata per route (RouteAccessInfo + RouteMeta). Build-time
+        // only; never read on the request hot path (see ROADMAP-phase2 §5.7).
+        const compiledRoutes = new Map<string, CompiledRoute>();
 
         for (const def of defs) {
             const path = def.path;
@@ -69,12 +79,28 @@ export class RouterCompiler {
                 middlewares[idx++] = routeMiddleware[i];
             }
 
+            // Optional, compile-time-only route field analysis. The result is
+            // baked into `meta` but is unused at runtime in Phase 2, so it can
+            // never affect request correctness.
+            const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
+
             const isWildcard = def.isWildcard === true;
             const compiled = buildCompiledHandler(
                 handlers,
                 middlewares,
-                allow
+                allow,
+                meta
             );
+
+            // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
+            compiledRoutes.set(path, {
+                def,
+                handler: compiled,
+                methods: allowMethods,
+                allow,
+                route: { path, pattern: path },
+                meta,
+            });
 
             if (isStaticPath(path)) {
                 if (registeredPaths.has(path)) {
@@ -105,35 +131,45 @@ export class RouterCompiler {
             }
         }
 
-        return { staticMap, trie, allowCache };
+        return { staticMap, trie, allowCache, routes: compiledRoutes };
     }
 }
 
 /**
  * Builds a compiled handler that performs method dispatch, 405+Allow,
- * auto-HEAD, and delegate to the middleware pipeline.
+ * auto-HEAD, creates the single `BurgerContext`, delegates to the middleware
+ * pipeline, and merges `ctx.set` into the response via `applySet`.
  */
 function buildCompiledHandler(
     handlers: { [method: string]: RequestHandler },
     middlewares: Middleware[],
-    allow: string
+    allow: string,
+    meta: RouteAccessInfo
 ): CompiledHandler {
-    return async (request: BurgerRequest) => {
+    return async (request: Request, ctxInit?: ContextInit): Promise<Response> => {
         const method = request.method;
         let handler = handlers[method];
+
+        // Create the one `BurgerContext` for this request. `meta` is accepted
+        // but ignored at runtime (Phase 2).
+        const ctx = BurgerContext.create(request, ctxInit, meta);
+        const burgerReq = ctx as unknown as BurgerRequest;
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {
             handler = handlers.GET;
             const response = await runWithMiddleware(
-                request,
+                burgerReq,
                 middlewares,
                 handler
             );
+            // Uniform response mutation (ROADMAP-phase2 §8.7): apply `ctx.set`
+            // first, then strip the body from the mutated response.
+            const mutated = applySet(response, ctx.set);
             return new Response(null, {
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers,
+                status: mutated.status,
+                statusText: mutated.statusText,
+                headers: mutated.headers,
             });
         }
 
@@ -141,7 +177,9 @@ function buildCompiledHandler(
             return methodNotAllowed(allow);
         }
 
-        return runWithMiddleware(request, middlewares, handler);
+        const response = await runWithMiddleware(burgerReq, middlewares, handler);
+        // The only response-path mutation added in Phase 2: merge `ctx.set`.
+        return applySet(response, ctx.set);
     };
 }
 

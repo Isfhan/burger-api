@@ -1,5 +1,9 @@
 import type { BunRequest, Server } from 'bun';
 import type { serve } from 'bun';
+import type {
+    ContextSet,
+    RouteMeta,
+} from '../context/types';
 
 /** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
 type BunServerOptions = Parameters<typeof serve>[0];
@@ -125,6 +129,26 @@ export interface BurgerRequest<
      * `/users/123/456`, then the `wildcardParams` property will be `['123', '456']`.
      */
     wildcardParams?: string[];
+
+    /**
+     * The lazily parsed query string record.
+     * Added in Phase 2 — optional and additive. Parsed on first access via the
+     * fast Bun-native `parseQuery` parser (no `URL`/`URLSearchParams` allocation).
+     */
+    query?: Record<string, string | string[]>;
+
+    /**
+     * The response mutation object (`status` + `headers` only in Phase 2).
+     * Added in Phase 2 — optional and additive. Merged into the response by
+     * `applySet` at the pipeline exit. `cookies` is reserved for Phase 7.
+     */
+    set?: ContextSet;
+
+    /**
+     * The matched-route identity (`path` + `pattern`).
+     * Added in Phase 2 — optional and additive. Present on every matched route.
+     */
+    route?: RouteMeta;
 }
 
 /**
@@ -273,3 +297,13 @@ export interface TrieNode {
     isWildcard?: boolean; // True for wildcard routes [...]
     route?: RouteDefinition; // Route definition at leaf node
 }
+
+// Re-export the public-facing Phase 2 context types so consumers can reference
+// them from the package root (e.g. `RouteMeta`, `ContextSet`).
+export type {
+    ContextField,
+    ContextInit,
+    ContextSet,
+    RouteAccessInfo,
+    RouteMeta,
+} from '../context/types';
