@@ -87,7 +87,7 @@ burger-api serve --file src/index.ts
 
 ### `build <file>`
 
-Bundle the project for production (AOT route discovery):
+Bundle the project for production (route discovery prepared ahead of time, AOT):
 
 ```bash
 burger-api build src/index.ts
@@ -109,7 +109,7 @@ Default output: `.build/executable/<project>` (or `.exe` on Windows)
 
 ## Production Build Flow
 
-1. CLI scans the apiDir and pageDir at build time
+1. CLI scans the apiDir and pageDir when the app is built
 2. CLI generates a temporary entry file with static imports
 3. Bun bundles the app with embedded route metadata
-4. Runtime uses embedded routes directly (no filesystem scanning)
+4. The running server uses embedded routes directly (no filesystem scanning)

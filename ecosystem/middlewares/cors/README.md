@@ -1,6 +1,7 @@
 # CORS Middleware
 
-Cross-Origin Resource Sharing (CORS) middleware for burger-api framework. This
+Cross-Origin Resource Sharing (CORS) middleware for burger-api framework.
+Middleware is code that runs around your handler — before and/or after it. This
 middleware enables your API to be accessible from different origins by setting
 appropriate CORS headers with enterprise-grade performance and security
 features.

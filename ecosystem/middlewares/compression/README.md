@@ -1,6 +1,6 @@
 # Compression Middleware
 
-HTTP compression middleware for burger-api framework. This middleware compresses response bodies using gzip, deflate, or brotli compression to reduce bandwidth usage and improve load times.
+HTTP compression middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware compresses response bodies using gzip, deflate, or brotli compression to reduce bandwidth usage and improve load times.
 
 ## Features
 

@@ -1,7 +1,8 @@
 # My Burger API App - Production Ready Example
 
 This example demonstrates a production-ready burger-api application with
-comprehensive middleware, authentication, rate limiting, CORS, and logging.
+comprehensive middleware (code that runs around your handler), authentication,
+rate limiting, CORS, and logging.
 
 ## Overview
 

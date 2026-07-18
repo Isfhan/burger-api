@@ -50,7 +50,7 @@ const app = new Burger({
 
 ## Schema Conversion
 
-Zod v4 schemas defined in `schema` exports are automatically converted to OpenAPI 3.0 schema objects. This includes:
+A schema is a small description of the expected data shape. Zod v4 schemas defined in `schema` exports are automatically converted to OpenAPI 3.0 schema objects. This includes:
 - String types (minLength, maxLength, pattern)
 - Number types (minimum, maximum)
 - Arrays (items schema)

@@ -1,5 +1,7 @@
 # Middleware System Reference
 
+Middleware is code that runs around your handler — before and/or after it runs.
+
 ## Return Types
 
 Middleware functions can return three values:
@@ -63,7 +65,7 @@ This pattern is useful for:
 
 ## Performance
 
-The middleware pipeline has specialized fast paths:
+The middleware request flow (also called a pipeline) has specialized fast paths:
 - **0 middleware** — direct handler call, no overhead
 - **1 middleware** — single function call, no array iteration
 - **2 middleware** — manual loop unrolling for JIT optimization

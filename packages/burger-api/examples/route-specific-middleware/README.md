@@ -2,6 +2,7 @@
 
 This example demonstrates route-specific middleware in burger-api, showing
 how to apply middleware to specific routes in addition to global middleware.
+Middleware is code that runs around your handler — before and/or after it.
 
 ## Overview
 

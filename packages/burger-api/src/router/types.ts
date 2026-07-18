@@ -3,6 +3,7 @@ import type {
     RouteDefinition,
     BurgerRequest,
 } from '../types/index';
+import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
 import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
 
 /**
@@ -33,6 +34,9 @@ export interface CompiledRoute {
     route?: RouteMeta;
     /** The optional RouteAccessAnalyzer hint (unused at runtime in Phase 2). */
     meta?: RouteAccessInfo;
+    /** The precompiled validators for this route (Phase 3). Undefined when the
+     * route has no `schema`. Consumed by the validation orchestrator. */
+    validators?: CompiledRouteValidators;
 }
 
 /**
@@ -56,4 +60,6 @@ export interface RouterConfig {
     globalMiddleware?: Middleware[];
     /** When true, the optional RouteAccessAnalyzer is skipped at compile time. */
     debug?: boolean;
+    /** Phase 3 validation configuration (coercion / response / errors). */
+    validation?: ValidatorConfig;
 }

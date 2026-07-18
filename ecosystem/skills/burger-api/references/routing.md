@@ -2,7 +2,7 @@
 
 ## Route Discovery
 
-Routes are discovered by scanning the filesystem for `route.ts` files. In production builds, the CLI scans routes at build time (AOT) and embeds them.
+Routes are discovered by scanning the filesystem for `route.ts` files. In production builds, the CLI scans routes when the app is built — prepared ahead of time (AOT) — and embeds them.
 
 ## Priority Order
 
@@ -58,11 +58,11 @@ export async function GET(req: BurgerRequest) {
 
 ## AOT Routing (Production Builds)
 
-In production (`burger-api build`), the CLI:
-1. Scans the apiDir and pageDir at build time
+Routes are prepared ahead of time (AOT), i.e. built into the app before it runs. In production (`burger-api build`), the CLI:
+1. Scans the apiDir and pageDir when the app is built
 2. Generates a virtual entry file with static imports
 3. Bun bundles the app with embedded route metadata
-4. Runtime uses pre-built routes — no filesystem scanning
+4. The running server uses these pre-built routes — no filesystem scanning
 
 This means `apiRoutes` and `pageRoutes` arrays can be passed to the Burger constructor instead of `apiDir`/`pageDir`:
 

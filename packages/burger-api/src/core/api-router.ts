@@ -1,6 +1,11 @@
 // Import stuff from node
-import { readdir } from 'fs/promises';
-import * as path from 'path';
+// NOTE: Bun has no native recursive directory walker, so we use Node's
+// `fs/promises` via Bun's Node compatibility layer (AGENTS Rule 12 exception:
+// no `Bun.*` equivalent exists for directory traversal). `node:path` is only
+// used for OS-agnostic path string joining, which `pathConversion.ts` relies
+// on (`path.sep`); no other Node-specific APIs are used.
+import { readdir } from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Import utils
 import { normalizePath, ROUTE_CONSTANTS, HTTP_METHODS } from '../utils/index';

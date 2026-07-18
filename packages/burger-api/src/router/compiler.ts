@@ -5,7 +5,8 @@ import type {
     RequestHandler,
 } from '../types/index';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
-import { createValidationMiddleware } from '../middleware/validator';
+import { compileRouteSchema, clearValidatorCache } from '../validation/compiler';
+import { createValidatorMiddleware } from '../validation/validator';
 import { runWithMiddleware } from '../middleware/runner';
 import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
 import { BurgerContext } from '../context/context';
@@ -14,7 +15,9 @@ import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import { ROUTE_CONSTANTS } from '../utils/routing';
+import { validateResponse } from '../validation/response';
 import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
+import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
 
 /**
  * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
@@ -32,10 +35,16 @@ import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
 export class RouterCompiler {
     private globalMiddleware: Middleware[];
     private debug: boolean;
+    private config: ValidatorConfig;
 
-    constructor(globalMiddleware: Middleware[] = [], debug = false) {
+    constructor(
+        globalMiddleware: Middleware[] = [],
+        debug = false,
+        config: ValidatorConfig = {}
+    ) {
         this.globalMiddleware = globalMiddleware;
         this.debug = debug;
+        this.config = config;
     }
 
     compile(defs: RouteDefinition[]): CompiledRouter {
@@ -62,6 +71,9 @@ export class RouterCompiler {
             // Build the middleware array: global → validation → route-specific.
             const routeMiddleware = def.middleware ?? [];
             const hasSchema = !!def.schema;
+            let routeValidators:
+                | import('../validation/types').CompiledRouteValidators
+                | undefined;
             const total =
                 this.globalMiddleware.length +
                 (hasSchema ? 1 : 0) +
@@ -73,7 +85,19 @@ export class RouterCompiler {
                 middlewares[idx++] = this.globalMiddleware[i];
             }
             if (hasSchema) {
-                middlewares[idx++] = createValidationMiddleware(def.schema!);
+                // Phase 3: compile the schema ONCE here (before serve()),
+                // then wrap the precompiled validators in the orchestrator.
+                // The same compiled validators are retained on the route.
+                const validators = compileRouteSchema(
+                    def.schema!,
+                    this.config
+                );
+                middlewares[idx++] = createValidatorMiddleware(
+                    validators,
+                    this.config,
+                    this.debug === true
+                );
+                routeValidators = validators;
             }
             for (let i = 0; i < routeMiddleware.length; i++) {
                 middlewares[idx++] = routeMiddleware[i];
@@ -89,10 +113,15 @@ export class RouterCompiler {
                 handlers,
                 middlewares,
                 allow,
-                meta
+                meta,
+                routeValidators,
+                this.config,
+                this.debug
             );
 
             // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
+            // When a schema exists, also retain the precompiled validators so
+            // the validation orchestrator runs them at request time.
             compiledRoutes.set(path, {
                 def,
                 handler: compiled,
@@ -100,6 +129,7 @@ export class RouterCompiler {
                 allow,
                 route: { path, pattern: path },
                 meta,
+                validators: routeValidators,
             });
 
             if (isStaticPath(path)) {
@@ -144,8 +174,14 @@ function buildCompiledHandler(
     handlers: { [method: string]: RequestHandler },
     middlewares: Middleware[],
     allow: string,
-    meta: RouteAccessInfo
+    meta: RouteAccessInfo,
+    validators?: CompiledRouteValidators,
+    config: ValidatorConfig = {},
+    debug = false
 ): CompiledHandler {
+    // Dev mode (observe-only for response validation) follows the server's
+    // debug flag, mirroring Burger's own dev detection (phase3 D7).
+    const isDev = debug === true;
     return async (request: Request, ctxInit?: ContextInit): Promise<Response> => {
         const method = request.method;
         let handler = handlers[method];
@@ -163,6 +199,26 @@ function buildCompiledHandler(
                 middlewares,
                 handler
             );
+            // Response validation applies to HEAD too: a route declaring a
+            // `response` schema on GET must still pass the same response
+            // validation when derived from GET (phase3 M5 — single pipeline,
+            // no fork). The GET-derived response is validated before the body
+            // is stripped, so the schema sees the real payload. We validate
+            // against the GET response schema (HEAD is derived from GET).
+            if (validators?.response) {
+                const body = await safeJson(response);
+                const outcome = validateResponse(
+                    validators,
+                    'get',
+                    response.status,
+                    body,
+                    config,
+                    isDev
+                );
+                if (!outcome.ok && outcome.errorResponse) {
+                    return outcome.errorResponse;
+                }
+            }
             // Uniform response mutation (ROADMAP-phase2 §8.7): apply `ctx.set`
             // first, then strip the body from the mutated response.
             const mutated = applySet(response, ctx.set);
@@ -178,9 +234,49 @@ function buildCompiledHandler(
         }
 
         const response = await runWithMiddleware(burgerReq, middlewares, handler);
+        // Phase 3 (M5): response validation as a post-handler step inside the
+        // same single pipeline (no fork). Early-returns when no response schema.
+        if (validators?.response) {
+            const body = await safeJson(response);
+            const outcome = validateResponse(
+                validators,
+                method.toLowerCase(),
+                response.status,
+                body,
+                config,
+                isDev
+            );
+            if (!outcome.ok && outcome.errorResponse) {
+                return outcome.errorResponse;
+            }
+            // `safeJson` may have consumed the response stream. If it parsed a
+            // JSON body, rebuild the Response from it so the body is not lost
+            // (phase3 §8.4 — dev/observe passes the handler response through).
+            // For non-JSON responses `body` is undefined; return original.
+            if (body !== undefined) {
+                const rebuilt = new Response(JSON.stringify(body), {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: response.headers,
+                });
+                return applySet(rebuilt, ctx.set);
+            }
+        }
         // The only response-path mutation added in Phase 2: merge `ctx.set`.
         return applySet(response, ctx.set);
     };
+}
+
+/** Reads a JSON body for response validation without consuming the stream
+ * when it is not JSON. Falls back to undefined (validation sees no body). */
+async function safeJson(response: Response): Promise<unknown> {
+    const ct = response.headers.get('content-type') ?? '';
+    if (!ct.includes('application/json')) return undefined;
+    try {
+        return await response.json();
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -209,7 +305,14 @@ function registerNativeOptions(
 ): void {
     // Optional optimization: `Bun.nativeStaticResponse` may not exist in all
     // Bun versions. Detect it at runtime; the pipeline works without it.
-    const nativeStaticResponse = (Bun as any)?.nativeStaticResponse;
+    type NativeStaticResponse = (
+        method: string,
+        path: string,
+        response: Response
+    ) => void;
+    const nativeStaticResponse = (
+        Bun as { nativeStaticResponse?: NativeStaticResponse }
+    ).nativeStaticResponse;
     if (typeof nativeStaticResponse !== 'function') {
         return;
     }

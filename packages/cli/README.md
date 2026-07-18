@@ -95,7 +95,8 @@ Edit `burger.config.ts` anytime to change routes, prefixes, or debug mode.
 
 ### `burger-api list`
 
-Show all available middleware you can add to your project.
+Show all available middleware you can add to your project. (Middleware is code
+that runs around your handler — before and/or after it.)
 
 **Example:**
 
@@ -170,7 +171,7 @@ const app = new Burger({
 
 ### `burger-api skills`
 
-Manage AI agent skills for your project. Skills help agentic IDEs understand
+Manage AI agent skills for your project. Skills help AI-assisted IDEs understand
 your BurgerAPI project structure.
 
 **Subcommands:**
@@ -215,7 +216,8 @@ supporting the agentskills.io standard.
 
 ### `burger-api build <file>`
 
-Bundle your project with build-time (AOT) route discovery.
+Bundle your project with route discovery prepared ahead of time (AOT) — routes
+are found when the app is built, not while it is running.
 The CLI scans routes first, generates a virtual entry file, then runs Bun build.
 
 **Example:**

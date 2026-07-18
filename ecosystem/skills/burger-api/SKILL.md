@@ -9,7 +9,7 @@ Always consult [burger-api.com/docs](https://burger-api.com/docs) for the latest
 
 ## Overview
 
-BurgerAPI is a Bun.js-exclusive API framework with file-based routing, a middleware pipeline, Zod v4 validation, and automatic OpenAPI 3.0 + Swagger UI. Built by Isfhan Ahmed.
+BurgerAPI is a Bun.js-exclusive API framework with file-based routing, a middleware request flow (also called a pipeline — middleware is code that runs around your handler), Zod v4 validation, and automatic OpenAPI 3.0 + Swagger UI. Built by Isfhan Ahmed.
 
 **Requirements:** Bun >= 1.3.0, TypeScript (ESM)
 
@@ -31,7 +31,7 @@ await app.serve(4000);
 
 ## File-Based Routing
 
-Routes are discovered from the filesystem at runtime (dev) or embedded at build time (production).
+Routes are discovered from the filesystem when a request comes in (dev) or built into the app when it is prepared (production).
 
 ### Route File Structure
 
@@ -136,12 +136,12 @@ Validation errors return 400 with structured error details automatically.
 
 ## Middleware System
 
-Three return types:
+Each middleware can return one of three things:
 - **`undefined`** — continue to next middleware/handler
-- **`Response`** — short-circuit and send immediately
+- **`Response`** — stop early and send immediately (short-circuit)
 - **`Function`** `(response: Response) => Response` — transform the final response after the handler runs
 
-After-middlewares (function return type) run in reverse order, even when a previous middleware short-circuits.
+After-middlewares (function return type) run in reverse order, even when a previous middleware stops the chain early.
 
 ### Global Middleware
 
@@ -186,7 +186,7 @@ burger-api skills list             # List installed skills
 burger-api skills available        # List skills available on GitHub
 burger-api list                    # List available middleware
 burger-api serve                   # Dev server with hot reload
-burger-api build <file>            # Bundle for production (AOT routing)
+burger-api build <file>            # Bundle for production (routes prepared ahead of time, AOT)
 burger-api build:exec <file>       # Compile to standalone executable
 ```
 
@@ -203,10 +203,10 @@ bun test                 # Run tests in current package
 
 ## Architecture
 
-- **`Burger` class** — main entry point, orchestrates server, routers, middleware pipeline
-- **`ApiRouter`** — trie-based, filesystem-scanned, 3-tier priority (static > dynamic > wildcard)
+- **`Burger` class** — main entry point, the coordinator (orchestrator) for the server, routers, and middleware request flow
+- **`ApiRouter`** — trie-based (a tree structure for fast path matching), filesystem-scanned, 3-tier priority (static > dynamic > wildcard)
 - **`PageRouter`** — serves HTML pages (`.tsx` or `.html`) from a page directory
-- **Middleware pipeline** — optimized fast paths for 0, 1, 2, 3+ middleware
+- **Middleware request flow** — optimized fast paths for 0, 1, 2, 3+ middleware
 - **OpenAPI generator** — converts Zod schemas + route metadata to OpenAPI 3.0
 
 ## References

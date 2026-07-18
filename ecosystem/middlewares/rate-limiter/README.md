@@ -1,6 +1,6 @@
 # Rate Limiter Middleware
 
-Rate limiting middleware for burger-api framework. This middleware helps prevent API abuse by limiting the number of requests a client can make within a specified time window.
+Rate limiting middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware helps prevent API abuse by limiting the number of requests a client can make within a specified time window.
 
 ## Features
 

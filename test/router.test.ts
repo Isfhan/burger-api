@@ -341,4 +341,21 @@ describe('Router — Hybrid Router dispatch', () => {
             expect(new AllowCache().compute(['GET', 'POST'])).toBe('GET, POST');
         });
     });
+
+    describe('root path "/"', () => {
+        it('matches the root route and serves it', async () => {
+            const r = new Router();
+            r.compile([route('/', { GET: () => new Response('root') })]);
+            const res = await r.fetch(req('/'));
+            expect(res.status).toBe(200);
+            expect(await res.text()).toBe('root');
+        });
+
+        it('returns 404 for root when no root route is registered', async () => {
+            const r = new Router();
+            r.compile([route('/health', { GET: () => new Response('ok') })]);
+            const res = await r.fetch(req('/'));
+            expect(res.status).toBe(404);
+        });
+    });
 });

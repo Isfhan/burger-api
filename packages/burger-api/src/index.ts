@@ -12,6 +12,9 @@ import { Router } from './router';
 import { collectRoutes, compareRoutes } from './utils/index';
 import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 
+// Import validation (Phase 3)
+import { schemaRegistry } from './validation/registry';
+
 // Import types
 import type {
     ServerOptions,
@@ -104,6 +107,15 @@ export class Burger {
         this.globalMiddleware = globalMiddleware?.length
             ? globalMiddleware.slice()
             : [];
+
+        // Phase 3: seed the schema registry from ServerOptions.models so model
+        // refs in route schemas resolve at compile time (phase3 §12.12, D10).
+        // Seeded before routes compile (the registry is read-only after).
+        if (options.models) {
+            for (const name of Object.keys(options.models)) {
+                schemaRegistry.register(name, options.models[name]);
+            }
+        }
     }
 
     /**
@@ -184,6 +196,7 @@ export class Burger {
         const router = new Router({
             globalMiddleware: this.globalMiddleware,
             debug: this.options.debug,
+            validation: this.options.validation ?? {},
         });
         router.compile(apiRoutes);
         this.dynamicRouter = router;
@@ -236,6 +249,15 @@ export class Burger {
                 'Error: No routes configured! Please provide apiDir/pageDir (for dev) or apiRoutes/pageRoutes (for production builds) when initializing the Burger class.'
             );
         }
+    }
+
+    /**
+     * Returns the underlying `Server` instance, or `undefined` if `serve()`
+     * has not started one yet (e.g. no routes were configured). Exposed so
+     * callers (such as benchmark harnesses) can stop the server cleanly.
+     */
+    public getServer(): Server | undefined {
+        return this.server;
     }
 }
 

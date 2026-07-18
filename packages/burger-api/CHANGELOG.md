@@ -1,11 +1,58 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.12.0 (Validation 2.0)
+
+- 🧩 **Compiled validators** — each route schema is prepared once when the app
+  starts and reused on every request. Identical schemas across routes share a
+  single compiled validator, so startup cost scales with the number of unique
+  shapes, not the number of routes.
+- 🗂️ **Validator cache** — compiled validators are cached by a structural key,
+  so the same schema object (or model reference) is never compiled twice.
+- 📚 **Model registry** — define a shape once in `ServerOptions.models` and
+  reference it by name (`"Pagination"`) from any route's `schema` slot. Shared
+  contracts live in one place and reuse the compiled validator.
+- 🔌 **Standard Schema support** — any library that follows the Standard Schema
+  contract (Zod v4, Valibot, ArkType) works through the same `schema` export.
+  Zod remains the default.
+- 🔄 **Automatic type conversion (coercion)** — set `validation.coerce: true`
+  (app-wide) or `coerce: true` on a route to turn `"42"` into `42` and
+  `"true"` into `true` for query, params, headers, and cookies. Off by
+  default, so existing behavior is unchanged.
+- ↩️ **Response validation** — declare a `response` schema and BurgerAPI checks
+  what your handler returns. `validation.responseValidation` is `off` (default),
+  `dev` (observe, never break — useful in development), or `enforce` (returns a
+  safe error on mismatch).
+- 📥 **Headers validation** — validate request headers with a `headers` slot on
+  the route `schema`, attached to `req.validated.headers`.
+- 🍪 **Cookie validation** — validate cookie values with a `cookie` slot on the
+  route `schema`, attached to `req.validated.cookie`.
+- 📟 **Problem Details support** — choose the error format with
+  `validation.errorFormat`: `plain` (simple JSON) or `problem+json`
+  (RFC 9457). Production error bodies never leak stacks or schema internals.
+  Supply a custom `validation.errorRenderer` for full control.
+- 🛟 **Improved validation errors** — failures return a structured `400` with a
+  clear message and a `details` array when available. The format is consistent
+  across query, params, headers, cookies, body, and response checks.
+- ⚡ **Performance** — validation runs through a single compiled pipeline with
+  no per-request schema discovery. Coercion is a small, precomputed pass that
+  only runs when enabled.
+- 🧪 **Benchmarks** — new validation scenarios (coercion, response) live in the
+  separate `burger-api-benchmarks` repository, the official home for all
+  BurgerAPI performance benchmarks.
+
+**Migration:** None required. Every change is strictly additive. Existing Zod
+`schema` exports behave exactly as before; `req.validated` and the `400` error
+contract are unchanged. The `z.coerce.*` helpers still work — `coerce: true` is
+an optional, app-wide alternative. New slots (`headers`, `cookie`, `response`)
+and `models` are opt-in.
+
 ### Version 0.11.0 (Phase 2 — Request Context & Dead-Path Elimination)
 
 - 🍔 **`BurgerContext`** — a single, prototype-based request object allocated
   **once per request**. Lazily exposes `query`, `params`, `route`, `headers`,
   `validated`, `set` and transparently delegates the standard `Request` surface.
-  Shared, stable prototype → monomorphic hidden class (JIT-friendly).
+  Shared, stable prototype → the same object shape for every request, which
+  the JavaScript engine can optimize well.
 - ⚡ **`parseQuery`** — a fast, Bun-native querystring parser replacing the
   per-request `new URL(req.url)` in the validator. Matches `URLSearchParams`
   parity (incl. `+`→space, malformed-escape leniency). ~1.7× faster than the
@@ -13,7 +60,8 @@
 - 🎯 **`req.route`** — `{ path, pattern }` now available on **every** matched
   route, including static routes served through Bun's native routing.
 - 🔧 **`req.set`** — response-mutation surface (`status` + `headers`), merged
-  into the outgoing `Response` by `applySet` at the single pipeline exit.
+  into the outgoing `Response` by `applySet` at the single exit point of the
+  request flow.
   `applySet` is a no-op (zero allocation) when no mutation is set, and runs
   uniformly on GET **and** auto-HEAD responses.
 - 🧠 **`RouteAccessAnalyzer`** (optional) — compile-time, self-contained static

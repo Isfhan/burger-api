@@ -1,6 +1,6 @@
 # JWT Authentication Middleware
 
-JWT (JSON Web Token) authentication middleware for burger-api framework. This middleware verifies JWT tokens from requests and protects your routes from unauthorized access.
+JWT (JSON Web Token) authentication middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware verifies JWT tokens from requests and protects your routes from unauthorized access.
 
 ## Features
 

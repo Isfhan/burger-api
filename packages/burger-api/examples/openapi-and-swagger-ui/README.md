@@ -11,7 +11,8 @@ This example includes:
 -   **Automatic OpenAPI generation** - OpenAPI 3.0 spec generated from routes
 -   **Swagger UI integration** - Interactive API documentation
 -   **Route metadata** - Custom OpenAPI metadata for routes
--   **Schema validation** - Zod schemas automatically converted to OpenAPI
+-   **Schema validation** - Zod schemas (small descriptions of the expected data
+    shape) automatically converted to OpenAPI
 
 ## Features Demonstrated
 

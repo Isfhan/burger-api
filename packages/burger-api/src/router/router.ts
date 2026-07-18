@@ -8,6 +8,7 @@ import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import type { CompiledHandler, CompiledRoute, RouterConfig } from './types';
+import type { ValidatorConfig } from '../validation/types';
 
 /**
  * Public router that owns the compiled dispatch state and orchestrates
@@ -28,11 +29,14 @@ export class Router {
     private compiler: RouterCompiler;
     /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
     private compiledRoutes?: Map<string, CompiledRoute>;
+    /** Memoized `staticRoutes()` result; rebuilt on `compile()`. */
+    private cachedStaticRoutes?: Record<string, CompiledHandler>;
 
     constructor(config: RouterConfig = {}) {
         this.compiler = new RouterCompiler(
             config.globalMiddleware ?? [],
-            config.debug ?? false
+            config.debug ?? false,
+            config.validation ?? {}
         );
     }
 
@@ -47,6 +51,7 @@ export class Router {
         this.trie = result.trie;
         this.allowCache = result.allowCache;
         this.compiledRoutes = result.routes;
+        this.cachedStaticRoutes = undefined;
     }
 
     /**
@@ -71,11 +76,13 @@ export class Router {
      * native dispatch fast path — no router redesign, no perf regression.
      */
     staticRoutes(): Record<string, CompiledHandler> {
+        if (this.cachedStaticRoutes) return this.cachedStaticRoutes;
         const out: Record<string, CompiledHandler> = {};
         for (const [path, handler] of this.staticMap.entries()) {
             out[path] = (request: Request) =>
                 handler(request, { route: { path, pattern: path } });
         }
+        this.cachedStaticRoutes = out;
         return out;
     }
 

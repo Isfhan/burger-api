@@ -1,6 +1,6 @@
 # Security Headers Middleware
 
-Security headers middleware for burger-api framework. This middleware adds various security-related HTTP headers to protect your application from common web vulnerabilities like XSS, clickjacking, and more.
+Security headers middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware adds various security-related HTTP headers to protect your application from common web vulnerabilities like XSS, clickjacking, and more.
 
 ## Features
 

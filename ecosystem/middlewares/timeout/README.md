@@ -1,6 +1,6 @@
 # Timeout Middleware
 
-Request timeout middleware for burger-api framework. This middleware aborts requests that exceed a specified time limit, preventing slow requests from tying up server resources.
+Request timeout middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware aborts requests that exceed a specified time limit, preventing slow requests from tying up server resources.
 
 ## Features
 

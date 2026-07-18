@@ -43,7 +43,7 @@ function mapZodTypeToOpenAPIType(zodType: ZodType<unknown, unknown>): string {
  */
 function buildParameters(
     zodSchema: unknown,
-    location: 'path' | 'query'
+    location: 'path' | 'query' | 'header' | 'cookie'
 ): any[] {
     const parameters: any[] = [];
     if (isZodObjectSchema(zodSchema)) {
@@ -176,13 +176,16 @@ export function generateOpenAPIDocument(
                 methodMeta.operationId ||
                 `${lowerMethod}_${route.path.replace(/[\/:]/g, '_')}`;
 
-            // Build parameters for both path and query from the schema.
+            // Build parameters for path, query, headers, and cookie from the
+            // schema (Phase 3 slots). Full response-schema rendering is Phase 6.
             let parameters: any[] = [];
             if (route.schema && route.schema[lowerMethod]) {
                 const schemaDef = route.schema[lowerMethod];
                 parameters = [
                     ...buildParameters(schemaDef.params, 'path'),
                     ...buildParameters(schemaDef.query, 'query'),
+                    ...buildParameters(schemaDef.headers, 'header'),
+                    ...buildParameters(schemaDef.cookie, 'cookie'),
                 ];
             }
 

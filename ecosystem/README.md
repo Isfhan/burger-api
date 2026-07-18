@@ -107,8 +107,8 @@ middleware for Burger API applications.
 ### Agent Skills (Recommended)
 
 Located in the monorepo at `ecosystem/skills/burger-api/` — skills are
-AI-readable documentation that help agentic IDEs (Cursor, Claude Code, OpenCode,
-OpenAI Codex, GitHub Copilot) understand your BurgerAPI project.
+AI-readable documentation that help AI-assisted IDEs (Cursor, Claude Code,
+OpenCode, OpenAI Codex, GitHub Copilot) understand your BurgerAPI project.
 
 **Install in your project:**
 

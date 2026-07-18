@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+import { z } from 'zod';
 import { applySet, hasSetMutations } from '../../src/utils/response';
 import { Router } from '../../src/router/router';
 import type { RouteDefinition } from '../../src/types/index';
@@ -58,5 +59,63 @@ describe('applySet on auto-HEAD (uniform mutation)', () => {
         expect(res.headers.get('x-tag')).toBe('head');
         // Body must be stripped for HEAD.
         expect(await res.text()).toBe('');
+    });
+});
+
+describe('auto-HEAD response validation (M5)', () => {
+    it('validates the GET-derived response for HEAD when a response schema exists', async () => {
+        // enforce mode so a mismatch fails the request (proves the auto-HEAD
+        // path runs response validation instead of skipping it).
+        const config = { validation: { responseValidation: 'enforce' as const } };
+        const defs: RouteDefinition[] = [
+            {
+                path: '/items/:id',
+                schema: {
+                    get: {
+                        response: {
+                            200: z.object({ id: z.string() }),
+                        },
+                    },
+                } as any,
+                handlers: {
+                    GET: (req: any) =>
+                        Response.json({ id: req.params.id }),
+                },
+            } as any,
+        ];
+        const router = new Router(config);
+        router.compile(defs);
+
+        // Matching response -> 200 HEAD (body stripped).
+        const ok = await router.fetch(
+            new Request('http://h/items/7', { method: 'HEAD' })
+        );
+        expect(ok.status).toBe(200);
+        expect(await ok.text()).toBe('');
+
+        // Non-conforming response -> 500 (enforce mode). Before the fix the
+        // auto-HEAD branch returned before response validation, so this would
+        // have been a 200.
+        const bad: RouteDefinition[] = [
+            {
+                path: '/bad',
+                schema: {
+                    get: {
+                        response: {
+                            200: z.object({ id: z.string() }),
+                        },
+                    },
+                } as any,
+                handlers: {
+                    GET: () => Response.json({ wrong: true }),
+                },
+            } as any,
+        ];
+        const router2 = new Router(config);
+        router2.compile(bad);
+        const res = await router2.fetch(
+            new Request('http://h/bad', { method: 'HEAD' })
+        );
+        expect(res.status).toBe(500);
     });
 });

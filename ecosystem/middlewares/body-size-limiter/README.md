@@ -1,6 +1,6 @@
 # Body Size Limiter Middleware
 
-Request body size limiting middleware for burger-api framework. This middleware prevents large payload attacks by rejecting requests that exceed a specified size limit.
+Request body size limiting middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware prevents large payload attacks by rejecting requests that exceed a specified size limit.
 
 ## Features
 

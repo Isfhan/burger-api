@@ -4,6 +4,7 @@ import type {
     ContextSet,
     RouteMeta,
 } from '../context/types';
+import type { SchemaInput, ValidatorConfig } from '../validation/types';
 
 /** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
 type BunServerOptions = Parameters<typeof serve>[0];
@@ -86,11 +87,26 @@ export interface ServerOptions extends Omit<
      * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
      */
     pageRoutes?: PageDefinition[];
+
+    /**
+     * Reusable named schemas ("models") referenced by string from any route's
+     * `schema` (Phase 3). Resolved at compile time; fail-fast on missing refs.
+     * Seeded from `burger.config.ts` models by the CLI (phase3 §12.12, D10).
+     */
+    models?: Record<string, SchemaInput>;
+
+    /**
+     * Validation 2.0 configuration (Phase 3): coercion, response-validation
+     * mode, and error rendering (phase3 §14.8).
+     */
+    validation?: ValidatorConfig;
 }
 
 type DefaultRequestProperties = {
     params?: Record<string, unknown>;
     query?: Record<string, unknown>;
+    headers?: Record<string, unknown>;
+    cookie?: Record<string, unknown>;
     body?: Record<string, unknown>;
 };
 
@@ -251,9 +267,15 @@ export interface RouteDefinition {
  */
 export type RouteSchema = {
     [method: string]: {
-        params?: z.ZodTypeAny;
-        query?: z.ZodTypeAny;
-        body?: z.ZodTypeAny;
+        params?: SchemaInput | string;
+        query?: SchemaInput | string;
+        headers?: SchemaInput | string;
+        cookie?: SchemaInput | string;
+        body?: SchemaInput | string;
+        /** Per-route opt-in override for coercion (phase3 §7, §11). */
+        coerce?: boolean;
+        /** Per-status-code response schemas, validated after the handler. */
+        response?: Record<string, SchemaInput>;
     };
 };
 

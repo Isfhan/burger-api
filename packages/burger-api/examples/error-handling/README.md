@@ -10,7 +10,8 @@ This example includes:
 -   **Product API** with validation
 -   **Error handling** for invalid requests
 -   **Zod validation** for request body and parameters
--   **Route-specific middleware** for logging
+-   **Route-specific middleware** for logging (middleware is code that runs
+    around your handler)
 
 ## Features Demonstrated
 

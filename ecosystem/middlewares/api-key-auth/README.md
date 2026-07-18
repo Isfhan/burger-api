@@ -1,6 +1,6 @@
 # API Key Authentication Middleware
 
-API key authentication middleware for burger-api framework. This middleware protects your routes by verifying API keys from headers or query parameters.
+API key authentication middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware protects your routes by verifying API keys from headers or query parameters.
 
 ## Features
 

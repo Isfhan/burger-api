@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
   </a>
   <a href="https://bun.sh">
-    <img src="https://img.shields.io/badge/Bun-1.2.20-black?logo=bun" alt="Bun" />
+    <img src="https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun" alt="Bun" />
   </a>
   <a href="https://burger-api.com">
     <img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" />
@@ -26,13 +26,15 @@
 This monorepo contains the **burger-api** ecosystem - a modern, open-source API
 framework built on [Bun.js](https://bun.sh). The framework combines the
 simplicity of file-based routing with powerful features like built-in
-middleware, Zod-based schema validation, and automatic OpenAPI generation.
+  middleware (code that runs around your handler), schema validation (a schema is
+  a small description of the expected data shape), and automatic OpenAPI
+  generation.
 
 **This project is under active development and should not be used in production
 yet.** 
 
 **📌 Releases:**
-- **burger-api** 0.10.0 (July 12, 2026)
+- **burger-api** 0.12.0 (July 17, 2026)
 - **@burger-api/cli** 0.9.9 (May 16, 2026)
 
 ## 📦 Packages
@@ -48,14 +50,18 @@ published to npm.
 
 -   ⚡ **Bun-Native Hybrid Routing** - Static routes are served by Bun's native
     `routes` map (the fast path), while `:param` and `*` routes are served by
-    BurgerAPI's optimized internal trie. One shared execution pipeline for both.
+    BurgerAPI's optimized internal trie (a tree structure for fast path
+    matching). Both share one request flow (also called a pipeline).
 -   📁 **File-Based Routing** - Automatically registers API routes from your
     file structure, including dynamic `[id]` parameters and `[...slug]`
     wildcards
 -   🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+
     middlewares, reused identically for static and dynamic routes
--   ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full
-    type safety
+-   ✅ **Type-Safe Validation** - Schemas for query, params, headers, cookies,
+    and body, validated before your handler runs and exposed as typed
+    `req.validated`. Reuse shapes through a model registry, enable automatic type
+    conversion, validate responses, and support any Standard Schema library
+    (Zod v4, Valibot, ArkType). Errors follow the RFC 9457 Problem Details format.
 -   📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0
     specifications
 -   🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for
@@ -204,8 +210,9 @@ burger-api build:exec src/index.ts
 ## ⚙️ AOT Routing (How builds work)
 
 BurgerAPI uses file-based routing. In development, routes are discovered by
-scanning files at runtime. In production builds, routes are discovered at build
-time (AOT) so runtime scanning is not needed.
+scanning files when a request comes in. In production builds, routes are
+discovered when the app is built — prepared ahead of time (AOT) — so no scanning
+is needed while the server is running.
 
 Build flow:
 
@@ -244,11 +251,12 @@ BurgerAPI maps your file structure to routes automatically.
 ## ⚡ Performance
 
 -   **Static routes** use Bun-native routing — the fastest dispatch path, with
-    no framework code in the hot path.
--   **Dynamic routes** use BurgerAPI's optimized internal trie, matched in
-    `O(number of path segments)`.
--   **Shared compiled handlers** run the same middleware pipeline for static and
-    dynamic routes, so behavior (and optimizations) never drift between them.
+    no framework code in the code that runs on every request (the hot path).
+-   **Dynamic routes** use BurgerAPI's optimized internal trie (a tree structure
+    for fast path matching), matched in `O(number of path segments)`.
+-   **Shared prepared handlers** run the same middleware request flow (pipeline)
+    for static and dynamic routes, so behavior (and optimizations) never drift
+    between them.
 -   **Bun-first architecture**: the framework is built exclusively for Bun.js
     and uses `Bun.serve` as the server.
 
@@ -272,13 +280,13 @@ BurgerAPI maps your file structure to routes automatically.
   └──────────┘  │  Internal trie (:param, *)     │
                 └───────────────┬────────────────┘
                                 │
-                                ▼
-                  Shared execution pipeline (middleware → handler)
+                                 ▼
+                  Shared request flow (middleware → handler)
 ```
 
 Static routes are dispatched directly by Bun; dynamic and wildcard routes are
-dispatched by the internal trie via a single `fetch` fallback. Both paths execute
-the **same compiled handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`, and
+dispatched by the internal trie via a single `fetch` fallback. Both paths run
+the **same prepared handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`, and
 middleware behavior are identical regardless of how the route was matched.
 
 ## 🧭 Routing/Build Ownership (Contributor Guide)

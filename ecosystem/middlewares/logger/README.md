@@ -1,6 +1,6 @@
 # Logger Middleware
 
-Request logging middleware for burger-api framework. This middleware logs HTTP requests with method, URL, status code, response time, and optional additional information.
+Request logging middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware logs HTTP requests with method, URL, status code, response time, and optional additional information.
 
 ## Features
 

@@ -1,6 +1,6 @@
 # Cache Control Middleware
 
-HTTP caching middleware for burger-api framework. This middleware sets Cache-Control and related headers to control how responses are cached by browsers, CDNs, and proxy servers.
+HTTP caching middleware for burger-api framework. Middleware is code that runs around your handler — before and/or after it. This middleware sets Cache-Control and related headers to control how responses are cached by browsers, CDNs, and proxy servers.
 
 ## Features
 

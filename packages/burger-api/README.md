@@ -6,8 +6,8 @@
 
 [![Under Development](https://img.shields.io/badge/under%20development-red.svg)](https://github.com/isfhan/burger-api)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.2.20-black?logo=bun)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-0.9.7-green.svg)](https://github.com/isfhan/burger-api/releases)
+[![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
+[![Version](https://img.shields.io/badge/version-0.12.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
 **burger-api** is a modern, open source API framework built on
 [Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
@@ -53,8 +53,11 @@ burger-api is built to offer a robust developer experience through:
     -   `undefined` - Continue to next middleware
 
 -   ✅ **Type-Safe Validation:**  
-    Utilizes Zod for request validation, ensuring full type safety and automatic
-    error reporting.
+    Schemas for query, params, headers, cookies, and body are validated before
+    your handler runs and exposed as typed `req.validated`. Reuse shapes through
+    a model registry, enable automatic type conversion, validate responses, and
+    support any Standard Schema library (Zod v4, Valibot, ArkType). Errors follow
+    the RFC 9457 Problem Details format.
 
 -   📚 **Automatic OpenAPI Generation:**  
     Generates a complete OpenAPI 3.0 specification directly from your routes and
@@ -164,7 +167,7 @@ project. For more information, visit the
 
 ## 📣 Changelog
 
-### Latest Version: 0.9.7 (May 16, 2026)
+### Latest Version: 0.12.0 (July 17, 2026)
 
 -   🚀 Production builds work better and use the same route rules as
     development.
@@ -177,18 +180,18 @@ project. For more information, visit the
 
 -   ⚡ **Major Performance Improvements:**
 
-    -   middleware execution with specialized fast paths
-    -   AOT compilation with pre-computed middleware arrays
-    -   Zero runtime allocations (pre-allocated arrays)
-    -   Manual loop unrolling for 2-middleware case
-    -   Reduced code from ~110 to ~80 lines
+    -   middleware runs through specialized fast paths
+    -   middleware lists are prepared ahead of time (pre-computed arrays)
+    -   fewer memory allocations at request time (arrays are allocated once)
+    -   a direct code path for the common 2-middleware case
+    -   smaller code: reduced from ~110 to ~80 lines
 
 -   🎯 **Simplified Middleware System:**
 
     -   Clearer return types: Response, Function, or undefined
-    -   Removed complex "around" middleware pattern
+    -   Removed the complex "around" middleware pattern
     -   Dedicated fast paths for 0, 1, and 2 middlewares
-    -   Better JIT optimization
+    -   Better runtime optimization by the JavaScript engine
 
 -   📦 **Monorepo Structure:**
 

@@ -1,7 +1,8 @@
 # Zod-Based Schema Validation Example
 
 This example demonstrates Zod-based schema validation in burger-api, showing
-how to validate query parameters and request body using Zod schemas.
+how to validate query parameters and request body using Zod schemas. A schema is
+a small description of the expected data shape.
 
 ## Overview
 
@@ -11,7 +12,31 @@ This example includes:
 -   **Query parameter validation** for GET requests
 -   **Request body validation** for POST requests
 -   **Parameter validation** for dynamic routes
--   **Route-specific middleware** for logging
+-   **Route-specific middleware** for logging (middleware is code that runs
+    around your handler)
+
+## Validation 2.0
+
+This example uses the classic `schema` export (query, params, body) and stays
+backward compatible. BurgerAPI also supports a broader validation surface:
+
+-   **Headers and cookies** — validate request headers and cookie values via
+    `headers` / `cookie` schema slots.
+-   **Model registry** — define a shape once in `ServerOptions.models` and reuse
+    it by name across routes.
+-   **Automatic type conversion** — set `validation.coerce: true` (app-wide) to
+    turn `"42"` into `42` and `"true"` into `true` for query, params, headers,
+    and cookies.
+-   **Response validation** — declare a `response` schema and have BurgerAPI
+    check what your handler returns (`validation.responseValidation`:
+    `off` | `dev` | `enforce`).
+-   **Standard Schema** — any Standard Schema library (Zod v4, Valibot, ArkType)
+    works through the same `schema` export.
+-   **Problem Details** — errors follow the RFC 9457 `problem+json` format
+    (`validation.errorFormat`).
+
+See the [`validation-showcase`](../validation-showcase) example for a full
+walkthrough of these features.
 
 ## Features Demonstrated
 

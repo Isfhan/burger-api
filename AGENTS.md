@@ -5,12 +5,12 @@ Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
 
 ## Project Overview
 
-BurgerAPI is a **Bun.js-exclusive** API framework — it only works with Bun.js and cannot run on Node.js/Deno. Built by Isfhan Ahmed, it provides file-based routing, middleware architecture, Zod v4 validation, automatic OpenAPI 3.0 generation, and Swagger UI.
+BurgerAPI is a **Bun.js-exclusive** API framework — it only works with Bun.js and cannot run on Node.js/Deno. Built by Isfhan Ahmed, it provides file-based routing, a middleware architecture (middleware is code that runs around your handler), Zod v4 validation, automatic OpenAPI 3.0 generation, and Swagger UI.
 
 **Tech:** Bun >= 1.3.0, TypeScript (ESM), Zod ^4.0.17
 **Packages:** `burger-api` (core framework), `@burger-api/cli` (CLI tool)
 **Ecosystem:** Production-ready middleware in `ecosystem/middlewares/`
-**Status:** Pre-1.0 (v0.10.0), active development
+**Status:** Pre-1.0 (v0.12.0), active development
 **Homepage:** https://burger-api.com
 
 ## Essential Commands
@@ -27,12 +27,31 @@ bun test                 # Run tests in current package
 
 ## Architecture
 
-- `packages/burger-api/` — Core framework (`Burger` class, `ApiRouter`, `PageRouter`, middleware pipeline, OpenAPI generator, Swagger UI)
+- `packages/burger-api/` — Core framework (`Burger` class, `ApiRouter`, `PageRouter`, the middleware request flow (also called a pipeline), OpenAPI generator, Swagger UI)
 - `packages/cli/` — CLI tool (create, add, build, build:exec, serve)
 - `ecosystem/middlewares/` — 10 production-ready middleware (CORS, Rate Limiter, Logger, JWT Auth, etc.)
 - Uses **Bun's native `routes` API** for static route dispatch (not a catch-all fetch handler)
-- **Trie-based router** with 3-tier priority: static > dynamic (`:param`) > wildcard (`*`)
-- **AOT route discovery** in production builds — CLI scans routes at build time, no runtime filesystem access
+- **Trie-based router** (a trie is a tree structure for fast path matching) with 3-tier priority: static > dynamic (`:param`) > wildcard (`*`)
+- **Route discovery prepared ahead of time (AOT)** in production builds — the CLI scans routes when the app is built, so there is no filesystem access when a request comes in
+
+## Related Repositories
+
+BurgerAPI is split across several repositories. Do not invent work in the wrong
+repo — use the dedicated one:
+
+- **`burger-api`** (this repo) — the framework + CLI. The only place for
+  framework code, types, examples, and docs about the API itself.
+- **`burger-api-website`** — the Docusaurus documentation site and blog
+  (`https://burger-api.com`). All user-facing docs and release posts live here.
+- **`burger-api-benchmarks`** — the **dedicated, official home for all BurgerAPI
+  performance benchmarks** (`https://github.com/isfhan/burger-api-benchmarks`).
+
+  **Do not create a `bench`, `benchmark`, or similar folder inside this
+  (`burger-api`) repository.** Agents often assume benchmark code belongs next to
+  the framework because they don't know the separate repo exists. It does not —
+  all benchmark scenarios, engines, and reporters must be added to
+  `burger-api-benchmarks` (see its `AGENTS.md` Rule 8b). The framework ships no
+  benchmark implementation and no generated numbers.
 
 ## Rule 1 — Think Before Coding
 
@@ -61,7 +80,7 @@ Strong success criteria let you loop independently.
 ## Rule 5 — Use the Model Only for Judgment Calls
 
 Use me for: classification, drafting, summarization, extraction.
-Do NOT use me for: routing, retries, deterministic transforms.
+Do NOT use me for: routing, retries, predictable (deterministic) transforms — where the same input always gives the same result.
 If code can answer, code answers.
 
 ## Rule 6 — Read Before You Write
@@ -129,12 +148,12 @@ export async function GET(req: BurgerRequest) { return Response.json(data); }
 ```
 
 ### Middleware System
-Three return types:
-- `Response` — short-circuit the chain
-- `Function` (takes Response, returns Response) — transform response after handler
-- `undefined` — continue to next middleware/handler
+Each middleware can return one of three things:
+- `Response` — stop early and skip the rest of the chain (short-circuit)
+- `Function` (takes Response, returns Response) — transform the response after the handler runs
+- `undefined` — continue to the next middleware/handler
 
-After-middlewares run in reverse order, even when a middleware short-circuits.
+After-middlewares (the ones that transform the response) run in reverse order, even when a middleware stops the chain early.
 
 ### Types
 - `BurgerRequest<T>` — typed requests with validation
@@ -154,5 +173,5 @@ import type { ServerOptions, Middleware } from '@burgerTypes';
 - Pre-allocated middleware arrays (fast paths for 0, 1, 2, 3+ middleware)
 - Manual loop unrolling for common cases
 - Bun's native `routes` API for static dispatch
-- AOT route discovery in production (no filesystem scanning at runtime)
-- Trie-based matching with priority ordering
+- Route discovery prepared ahead of time (AOT) in production (no filesystem scanning when a request comes in)
+- Trie-based matching (fast tree-based path lookup) with priority ordering

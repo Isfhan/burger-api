@@ -1,8 +1,9 @@
 # Burger API Middleware Collection
 
 A comprehensive collection of production-ready middleware for the burger-api
-framework. Each middleware is designed to be easy to use, highly configurable,
-and follows best practices for web application security and performance.
+framework. Middleware is code that runs around your handler — before and/or after
+it. Each middleware is designed to be easy to use, highly configurable, and
+follows best practices for web application security and performance.
 
 ## 📦 Available Middleware
 
@@ -140,9 +141,9 @@ type BurgerNext =
 
 ### Three Return Types
 
-#### 1. Return `Response` - Short-Circuit
+#### 1. Return `Response` - Short-Circuit (stop early)
 
-Stop processing and return a response immediately:
+Stop processing and return a response immediately, skipping the rest of the chain:
 
 ```typescript
 const authMiddleware: Middleware = (req) => {
