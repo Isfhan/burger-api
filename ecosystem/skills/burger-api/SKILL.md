@@ -9,7 +9,7 @@ Always consult [burger-api.com/docs](https://burger-api.com/docs) for the latest
 
 ## Overview
 
-BurgerAPI is a Bun.js-exclusive API framework with file-based routing, a middleware request flow (also called a pipeline — middleware is code that runs around your handler), Zod v4 validation, and automatic OpenAPI 3.0 + Swagger UI. Built by Isfhan Ahmed.
+BurgerAPI is a Bun-first, compiler-driven, file-based API framework with file-based routing (a route is a directory of sibling files), a middleware request flow (also called a pipeline — middleware is infrastructure code that runs around your handler), Zod v4 / Standard Schema validation, lifecycle hooks, and automatic OpenAPI 3.0 + Swagger UI. Built by Isfhan Ahmed.
 
 **Requirements:** Bun >= 1.3.0, TypeScript (ESM)
 

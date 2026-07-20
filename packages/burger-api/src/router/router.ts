@@ -12,21 +12,29 @@ import type { ValidatorConfig } from '../validation/types';
 
 /**
  * Public router that owns the compiled dispatch state and orchestrates
- * lookup + execution (Option A — Hybrid Router).
+ * lookup + execution.
  *
  * - Static routes are served by Bun's native `routes` map (via `staticRoutes()`).
- * - Dynamic / wildcard routes are served by `fetch` (the `Bun.serve` fallback),
- *   which consults the internal trie.
+ * - Dynamic (`:param`) and wildcard (`*`) routes are ALSO served by Bun's native
+ *   `routes` map (via `nativeRoutes()`): Bun matches the pattern directly, and
+ *   the compiled handler self-extracts `params` / `wildcardParams` from the
+ *   URL. This removes the `fetch` fallback hop for the common dynamic case.
+ * - The `fetch` fallback (the `Bun.serve` fallback) still runs for unmatched,
+ *   loose-trailing-slash, and empty-param-trailing-slash requests, consulting
+ *   the internal trie so behavior is fully preserved.
  *
  * Both paths execute exactly the same compiled handler, so method dispatch,
- * 405+Allow, auto-HEAD, and middleware behavior are identical. Lookup and
- * execution are separate concerns (see ROADMAP-phase1.md §4.1).
+ * 405+Allow, auto-HEAD, and middleware behavior are identical. The native table
+ * is consumed only by the Bun adapter; non-Bun (WinterCG) adapters dispatch
+ * every route through `fetch` + trie (see ROADMAP-phase1.md §4.1).
  */
 export class Router {
     private staticMap = new StaticMap();
     private trie = new Trie();
     private allowCache = new AllowCache();
     private compiler: RouterCompiler;
+    /** Native dispatch table for `:param` / `*` routes (Bun `routes` map keys). */
+    private nativeRoutesMap = new Map<string, CompiledHandler>();
     /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
     private compiledRoutes?: Map<string, CompiledRoute>;
     /** Memoized `staticRoutes()` result; rebuilt on `compile()`. */
@@ -50,6 +58,7 @@ export class Router {
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;
+        this.nativeRoutesMap = result.nativeRoutes;
         this.compiledRoutes = result.routes;
         this.cachedStaticRoutes = undefined;
     }
@@ -83,6 +92,31 @@ export class Router {
                 handler(request, { route: { path, pattern: path } });
         }
         this.cachedStaticRoutes = out;
+        return out;
+    }
+
+    /**
+     * Returns the native dispatch table for `:param` / `*` routes, keyed by
+     * their Bun-native pattern (e.g. `/users/:id`). Each handler self-extracts
+     * `params` / `wildcardParams` from the `Request` URL, so it can be registered
+     * directly on `Bun.serve`'s `routes` map — dynamic routes then dispatch
+     * without the `fetch` fallback hop. The `fetch` fallback (trie) still covers
+     * unmatched / loose-trailing-slash / empty-param cases.
+     *
+     * This map is consumed only by the Bun adapter. Non-Bun (WinterCG) adapters
+     * dispatch every route through `Router.fetch` + trie and ignore this table,
+     * so the framework body stays runtime-agnostic.
+     */
+    nativeRoutes(): Record<string, CompiledHandler> {
+        const out: Record<string, CompiledHandler> = {};
+        for (const [pattern, handler] of this.nativeRoutesMap.entries()) {
+            // Bun invokes `routes`-map handlers with a second argument (a server
+            // context object), which would defeat the `ctxInit ?? extract`
+            // fallback in the compiled handler. Wrap to forward only the
+            // `Request`, so the handler self-extracts `params` / `wildcardParams`
+            // from the URL via `extractCtxInit`.
+            out[pattern] = (request: Request) => handler(request);
+        }
         return out;
     }
 

@@ -5,12 +5,12 @@ Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
 
 ## Project Overview
 
-BurgerAPI is a **Bun.js-exclusive** API framework — it only works with Bun.js and cannot run on Node.js/Deno. Built by Isfhan Ahmed, it provides file-based routing, a middleware architecture (middleware is code that runs around your handler), Zod v4 validation, automatic OpenAPI 3.0 generation, and Swagger UI.
+BurgerAPI is a **Bun-first, compiler-driven, file-based** API framework. It is **Bun-first** (Bun is the primary and best-supported runtime) and runs on other WinterCG runtimes (Node, Deno, Workers, Edge) through a thin **adapter seam** that speaks Web Standard `Request`/`Response`. Built by Isfhan Ahmed, it provides file-based routing where a route is a *directory* of sibling files. The request lifecycle runs through a **middleware pipeline** (`ServerOptions.globalMiddleware` + a route's `middleware` array); a `middleware.ts` route-file convention is rejected (middleware is registered as functions, not discovered as a route file). The compiler also discovers and carries `hooks.ts`, `use.ts`, and `webhook.ts` convention files, but in v0.14.0 these are **reserved** (not yet executed at runtime). It also provides Zod v4 / Standard Schema validation, automatic OpenAPI 3.0 generation, Swagger UI, and first-class webhooks (webhooks reserved).
 
 **Tech:** Bun >= 1.3.0, TypeScript (ESM), Zod ^4.0.17
 **Packages:** `burger-api` (core framework), `@burger-api/cli` (CLI tool)
 **Ecosystem:** Production-ready middleware in `ecosystem/middlewares/`
-**Status:** Pre-1.0 (v0.12.0), active development
+**Status:** Pre-1.0 (v0.14.0), active development, under a pre-1.0.0 architecture reset (see `../ROADMAP.md`)
 **Homepage:** https://burger-api.com
 
 ## Essential Commands
@@ -27,12 +27,13 @@ bun test                 # Run tests in current package
 
 ## Architecture
 
-- `packages/burger-api/` — Core framework (`Burger` class, `ApiRouter`, `PageRouter`, the middleware request flow (also called a pipeline), OpenAPI generator, Swagger UI)
+- `packages/burger-api/` — Core framework (`Burger` class, `ApiRouter`, `PageRouter`, the compiler that discovers/merges route files, the middleware request flow (also called a pipeline), OpenAPI generator, Swagger UI, adapter seam)
 - `packages/cli/` — CLI tool (create, add, build, build:exec, serve)
 - `ecosystem/middlewares/` — 10 production-ready middleware (CORS, Rate Limiter, Logger, JWT Auth, etc.)
+- **Compiler as the heart**: discovers route directories and merges their sibling files (`route.ts`, `schema.ts`, `openapi.ts`, plus the reserved `hooks.ts` / `use.ts` / `webhook.ts`) plus group inheritance into an immutable `CompiledRoute[]` at compile time. A `middleware.ts` route file is rejected; middleware is registered as functions, not discovered as a route file.
 - Uses **Bun's native `routes` API** for static route dispatch (not a catch-all fetch handler)
 - **Trie-based router** (a trie is a tree structure for fast path matching) with 3-tier priority: static > dynamic (`:param`) > wildcard (`*`)
-- **Route discovery prepared ahead of time (AOT)** in production builds — the CLI scans routes when the app is built, so there is no filesystem access when a request comes in
+- **Route discovery prepared ahead of time (AOT)** in production builds: the CLI compiles routes when the app is built, so there is no filesystem access when a request comes in
 
 ## Related Repositories
 
@@ -117,61 +118,73 @@ If you genuinely think a convention is harmful, surface it. Don't fork silently.
 "Tests pass" is wrong if any were skipped.
 Default to surfacing uncertainty, not hiding it.
 
-## Rule 12 — Bun First
+## Rule 12 — Bun First (not Bun-only)
 
-Everything is built exclusively for Bun.js. Never introduce Node.js dependencies or Node-specific APIs.
-Use `Bun.serve`, `Bun.write`, `Bun.file`, `Bun.spawn` over Node alternatives.
-Package management: `bun add`, not npm/yarn/pnpm.
+Bun is the **primary and best-supported** runtime. Prefer `Bun.serve`, `Bun.write`, `Bun.file`, `Bun.spawn` over Node alternatives, and `bun add` (not npm/yarn/pnpm). However, BurgerAPI is **not Bun-exclusive**: the core speaks Web Standard `Request`/`Response`, and other WinterCG runtimes (Node, Deno, Workers, Edge) are supported through a thin adapter seam. Do not introduce **runtime** APIs that block non-Bun runtimes in the framework core unless they are isolated behind the adapter seam. (The pre-1.0 reset explicitly does **not** guarantee backward compatibility — see `../ROADMAP.md`.)
 
 ## Code Conventions
 
 ### File Naming & Routing
-- API routes: `route.ts` — exported HTTP method handlers (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`)
+A route is a **directory**; the compiler discovers sibling files and merges them. The convention is separation-of-concerns-by-file:
+
+- `route.ts` — HTTP method handlers only (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`)
+- `schema.ts` — validation schemas only (Zod v4 / Standard Schema)
+- `openapi.ts` — OpenAPI documentation metadata only
+- `hooks.ts` — **reserved**: lifecycle hook definitions (`beforeHandle`, `afterHandle`, `onError`, `onResponse`, `provide`). Discovered and carried by the compiler, but **not executed in v0.14.0**.
+- `use.ts` — **reserved**: capabilities/plugins. Discovered and carried, but not executed in v0.14.0.
+- `webhook.ts` — **reserved**: webhook definitions (incoming/outgoing, signature verification, retry). Discovered and carried, but not executed in v0.14.0.
 - Dynamic routes: `[paramName]/route.ts` — access via `req.params.paramName`
 - Wildcard routes: `[...]/route.ts` — access via `req.wildcardParams`
-- Route groups: `(groupName)/route.ts` — doesn't affect URL path
-- Static pages: `.tsx` or `.html` in page directory
+- Route groups: `(groupName)/route.ts` — doesn't affect URL path; group `schema.ts`/`openapi.ts`/`hooks.ts`/`use.ts` are inherited (nearest-last, deterministic). A `middleware.ts` route file is rejected; middleware is registered as functions via `globalMiddleware` / route `middleware`.
 
 ### Route Template
 ```typescript
-// OpenAPI Metadata
-export const openapi = { get: { summary: '...', tags: ['...'], operationId: '...' } };
-
-// Validation Schemas (Zod v4)
-export const schema = { get: { query: z.object({ ... }) }, post: { body: z.object({ ... }) } };
-
-// Route-Specific Middleware
-export const middleware: Middleware[] = [ ... ];
-
-// HTTP Method Handlers
+// api/users/route.ts — handlers only
 export async function GET(req: BurgerRequest) { return Response.json(data); }
+
+// api/users/schema.ts — validation only
+export const get = { query: z.object({ search: z.string() }) };
+export const post = { body: z.object({ name: z.string().min(1), price: z.number().positive() }) };
+
+// api/users/hooks.ts — reserved: lifecycle hooks (carried, not executed in v0.14.0)
+export const beforeHandle = (req) => { /* auth, logging, CORS as hooks */ };
+export const provide = { user: (req) => getCurrentUser(req) };
+
+// api/users/openapi.ts — docs only
+export const get = { summary: '...', tags: ['users'], operationId: '...' };
 ```
 
-### Middleware System
-Each middleware can return one of three things:
+### Request Lifecycle: the Middleware Pipeline
+The request lifecycle runs through a single pipeline: `ServerOptions.globalMiddleware` followed by a route's `middleware` array. A middleware can stop the request early by returning a `Response`, transform the final response by returning a function, or continue by returning `undefined`. Validation runs as a middleware; `405`/`Allow`, auto-`HEAD`, and loose trailing-slash are compiled into the runtime. The `hooks.ts` / `use.ts` / `webhook.ts` data is carried on the `RouteModule` but is **not executed in v0.14.0** (reserved for later releases).
+
+Middleware return types (`BurgerNext`):
 - `Response` — stop early and skip the rest of the chain (short-circuit)
-- `Function` (takes Response, returns Response) — transform the response after the handler runs
+- `Function` (takes Response, returns a Promise<Response>) — transform the response after the handler runs (applied in reverse order)
 - `undefined` — continue to the next middleware/handler
 
-After-middlewares (the ones that transform the response) run in reverse order, even when a middleware stops the chain early.
+### Reserved: Hooks / Use / Webhooks (not yet executed)
+`hooks.ts` defines lifecycle hooks (`beforeHandle`, `afterHandle`, `onError`, `onResponse`, `provide`), and `use.ts` declares capabilities/plugins (e.g. `jwt()`, `swagger()`, `cors()`, `rateLimit()`); `provide` is intended to replace `derive`/`mapDerive`. These are discovered and carried by the compiler but are **reserved** in v0.14.0: they do not run yet. Do not document them as working v0.14.0 features.
 
 ### Types
-- `BurgerRequest<T>` — typed requests with validation
+- `BurgerRequest<T>` — typed requests with validation (interface; `BurgerContext` is the implementation)
 - `RequestHandler` — route handlers
-- `Middleware` — middleware functions
-- `BurgerNext` — middleware return types (Response | (r: Response) => Response | undefined)
+- `Middleware` — lifecycle functions registered via `globalMiddleware` / route `middleware`
+- `BurgerNext` — middleware return types (Response | (r: Response) => Promise<Response> | undefined)
+- `Hook` — reserved lifecycle hook functions (from `hooks.ts`)
+- `ProvideContribution` — reserved context values added by `provide`
+- `Plugin` — reserved capability/plugin type (from `use.ts`)
 
 ### Import Style
 ```typescript
 import { Server } from '@core/server.js';
 import { ApiRouter } from '@core/api-router.js';
-import type { ServerOptions, Middleware } from '@burgerTypes';
+import type { ServerOptions, Middleware, BurgerNext } from '@burgerTypes';
 ```
 
 ## Performance
 
-- Pre-allocated middleware arrays (fast paths for 0, 1, 2, 3+ middleware)
+- Pre-allocated middleware arrays (fast paths for 0, 1, 2, 3+ middlewares)
 - Manual loop unrolling for common cases
 - Bun's native `routes` API for static dispatch
-- Route discovery prepared ahead of time (AOT) in production (no filesystem scanning when a request comes in)
+- Route discovery prepared ahead of time in production builds (no filesystem scanning when a request comes in)
 - Trie-based matching (fast tree-based path lookup) with priority ordering

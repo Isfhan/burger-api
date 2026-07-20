@@ -4,6 +4,7 @@ import type {
     BurgerRequest,
     RequestHandler,
 } from '../types/index';
+import type { RouteModule } from '../compiler/route-module';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
 import { compileRouteSchema, clearValidatorCache } from '../validation/compiler';
 import { createValidatorMiddleware } from '../validation/validator';
@@ -16,6 +17,7 @@ import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import { ROUTE_CONSTANTS } from '../utils/routing';
 import { validateResponse } from '../validation/response';
+import { extractCtxInit } from './param-extract';
 import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
 import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
 
@@ -51,6 +53,13 @@ export class RouterCompiler {
         const staticMap = new StaticMap();
         const trie = new Trie();
         const allowCache = new AllowCache();
+        // Native dispatch table: `:param` / `*` routes keyed by their Bun-native
+        // pattern (e.g. `/users/:id`). These are handed to Bun's `routes` map so
+        // dynamic routes dispatch without the `fetch` fallback hop. The compiled
+        // handler self-extracts params (see param-extract.ts), so behavior is
+        // identical to the trie path. The trie is retained for the `fetch`
+        // fallback (unmatched / loose-slash / empty-param trailing slash).
+        const nativeRoutes = new Map<string, CompiledHandler>();
         const registeredPaths = new Set<string>();
         // Retained metadata per route (RouteAccessInfo + RouteMeta). Build-time
         // only; never read on the request hot path (see ROADMAP-phase2 §5.7).
@@ -116,7 +125,9 @@ export class RouterCompiler {
                 meta,
                 routeValidators,
                 this.config,
-                this.debug
+                this.debug,
+                path,
+                isWildcard
             );
 
             // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
@@ -158,11 +169,50 @@ export class RouterCompiler {
                     Object.keys(handlers).map((m) => m.toUpperCase())
                 );
                 trie.insert(path, compiled, methods, isWildcard);
+                // Register on Bun's native router (no `fetch` hop). The handler
+                // carries the route pattern + wildcard flag so it can derive
+                // `params` / `wildcardParams` from the URL itself.
+                nativeRoutes.set(path, compiled);
             }
         }
 
-        return { staticMap, trie, allowCache, routes: compiledRoutes };
+        return { staticMap, trie, allowCache, nativeRoutes, routes: compiledRoutes };
     }
+
+    /**
+     * Compiles a `RouteModule[]` (the canonical output of the Module Loader)
+     * into the dispatch structures. This is the Phase 1 compiler entry point
+     * for the file-based discovery pipeline
+     * (Directory Scanner → Module Loader → `RouteModule` → Compiler).
+     *
+     * Each `RouteModule` is normalized to the existing `RouteDefinition` shape
+     * (the stable contract shared with the prod prebuilt path), then compiled
+     * through {@link compile}. Convention data that is not yet compiled in
+     * Phase 1 (`hooks`/`capabilities`/`webhook`) is carried on the
+     * `RouteDefinition` for later phases and ignored at runtime here.
+     */
+    compileModules(modules: RouteModule[]): CompiledRouter {
+        return this.compile(modules.map(toRouteDefinition));
+    }
+}
+
+/**
+ * Normalizes a `RouteModule` (compiler's intermediate) into the existing
+ * `RouteDefinition` (the normalized form between the compiler and the runtime).
+ *
+ * The compiler currently drops `hooks` / `capabilities` / `webhook` (reserved,
+ * not yet executed). `middleware` comes from `ServerOptions.globalMiddleware`
+ * and the route's own `middleware` array and is wired by the caller.
+ * `schema`/`openapi`/`isWildcard` pass through unchanged.
+ */
+function toRouteDefinition(mod: RouteModule): RouteDefinition {
+    return {
+        path: mod.path,
+        handlers: mod.handlers,
+        schema: mod.schema,
+        openapi: mod.openapi,
+        isWildcard: mod.isWildcard,
+    };
 }
 
 /**
@@ -177,7 +227,9 @@ function buildCompiledHandler(
     meta: RouteAccessInfo,
     validators?: CompiledRouteValidators,
     config: ValidatorConfig = {},
-    debug = false
+    debug = false,
+    pattern: string = '',
+    isWildcard: boolean = false
 ): CompiledHandler {
     // Dev mode (observe-only for response validation) follows the server's
     // debug flag, mirroring Burger's own dev detection (phase3 D7).
@@ -186,9 +238,16 @@ function buildCompiledHandler(
         const method = request.method;
         let handler = handlers[method];
 
+        // When dispatched natively (Bun's `routes` map), no `ctxInit` is
+        // provided, so derive params / wildcardParams / route from the URL.
+        // When dispatched via the `fetch` fallback (trie) or a static wrapper,
+        // `ctxInit` is already populated.
+        const resolvedCtxInit =
+            ctxInit ?? extractCtxInit(request, pattern, isWildcard);
+
         // Create the one `BurgerContext` for this request. `meta` is accepted
         // but ignored at runtime (Phase 2).
-        const ctx = BurgerContext.create(request, ctxInit, meta);
+        const ctx = BurgerContext.create(request, resolvedCtxInit, meta);
         const burgerReq = ctx as unknown as BurgerRequest;
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.

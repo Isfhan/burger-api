@@ -69,7 +69,10 @@ describe('headers/cookie slots + response (M5)', () => {
 
     it('parses RFC 6265 quoted cookie values containing ; and =', async () => {
         const schema = {
-            get: { cookie: z.object({ session: z.string() }) },
+            // Both keys are declared so Zod retains them (default .object() strips
+            // unknown keys). This verifies the quoted value is parsed correctly
+            // AND the second cookie pair is preserved.
+            get: { cookie: z.object({ session: z.string(), csrftoken: z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);

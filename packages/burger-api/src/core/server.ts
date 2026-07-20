@@ -1,81 +1,54 @@
-// Import stuff from Bun
-import { serve } from 'bun';
-import type { HTMLBundle } from 'bun';
-
-// Import stuff from utils
-import { errorResponse } from '../utils/error';
-
+import type { ServerOptions } from '../types/index';
 import type {
-    ServerOptions,
-    FetchHandler,
-    RequestHandler,
-} from '../types/index';
+    AdapterStartOptions,
+    RuntimeAdapter,
+    ServerHandle,
+} from '../adapter/types';
+import { BunAdapter } from '../adapter/bun';
 
+/**
+ * Thin server wrapper. Owns the runtime adapter and delegates the actual
+ * bootstrap to it, so the framework keeps a single, runtime-agnostic seam
+ * (`ROADMAP.md` §4.2). Bun is the default adapter; other runtimes can be
+ * supplied later without changing `Burger`.
+ */
 export class Server {
     private options: ServerOptions;
-    private server: ReturnType<typeof serve> | null = null;
+    private adapter: RuntimeAdapter;
+    private handle?: ServerHandle;
 
-    /**
-     * Initializes a new instance of the Server class with the given options.
-     * @param options - Configuration options for the server.
-     */
-    constructor(options: ServerOptions) {
+    constructor(options: ServerOptions, adapter: RuntimeAdapter = new BunAdapter()) {
         this.options = options;
-    }
-
-    public start(
-        routes: Record<string, HTMLBundle | RequestHandler> | undefined,
-        handler: FetchHandler,
-        port: number,
-        cb?: () => void
-    ): void {
-        // Start Bun's native server using Bun.serve
-        const serveOptions = {
-            routes,
-            fetch: async (request: Request) => {
-                try {
-                    return await handler(request);
-                } catch (error) {
-                    return errorResponse(
-                        error,
-                        request,
-                        this.options.debug ?? false
-                    );
-                }
-            },
-            error(error: Error) {
-                console.error(error);
-                return new Response(`Internal Server Error: ${error.message}`, {
-                    status: 500,
-                    headers: {
-                        'Content-Type': 'text/plain',
-                    },
-                });
-            },
-            port,
-        };
-        this.server = serve(serveOptions as Parameters<typeof serve>[0]);
-        if (cb) {
-            cb();
-        } else {
-            console.log(
-                `🍔 BurgerAPI is running at: http://${
-                    this.options.hostname || 'localhost'
-                }:${port}`
-            );
-        }
+        this.adapter = adapter;
     }
 
     /**
-     * Stops the server.
-     * If the server is currently running, this method will stop the server and
-     * log a message to the console indicating that the server has been stopped.
-     * If the server is not running, this method does nothing.
+     * Starts the server via the configured adapter.
+     * @param opts adapter bootstrap options (static routes, fetch fallback, port).
+     */
+    public start(opts: AdapterStartOptions): void {
+        this.handle = this.adapter.start({
+            ...opts,
+            hostname: opts.hostname ?? this.options.hostname,
+            debug: opts.debug ?? this.options.debug,
+        });
+    }
+
+    /**
+     * Stops the running server (no-op if it was never started).
      */
     public stop(): void {
-        if (this.server) {
-            this.server.stop();
+        if (this.handle) {
+            this.handle.stop();
             console.log('Server stopped.');
+            this.handle = undefined;
         }
+    }
+
+    /**
+     * Returns true once the adapter has started a server.
+     */
+    public isRunning(): boolean {
+        return this.handle !== undefined;
     }
 }

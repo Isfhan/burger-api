@@ -34,8 +34,8 @@ simplicity of file-based routing with powerful features like built-in
 yet.** 
 
 **📌 Releases:**
-- **burger-api** 0.12.0 (July 17, 2026)
-- **@burger-api/cli** 0.9.9 (May 16, 2026)
+- **burger-api** 0.14.0 (July 21, 2026)
+- **@burger-api/cli** 0.9.9 (June 29, 2026)
 
 ## 📦 Packages
 

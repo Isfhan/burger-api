@@ -47,6 +47,15 @@ export interface CompiledRouter {
     trie: import('./trie').Trie;
     allowCache: import('./allow-cache').AllowCache;
     /**
+     * Native dispatch table for `:param` / `*` routes, keyed by their Bun-native
+     * pattern (e.g. `/users/:id`). Consumed only by the Bun adapter, which
+     * registers them on `Bun.serve`'s `routes` map so dynamic routes skip the
+     * `fetch` fallback. The handlers self-extract params (Web-Standard), so the
+     * logic is runtime-agnostic; non-Bun adapters ignore this and dispatch via
+     * the trie + `fetch` fallback.
+     */
+    nativeRoutes: Map<string, CompiledHandler>;
+    /**
      * Retained compiled-route metadata (RouteAccessInfo + RouteMeta) keyed by
      * path. Build-time only; never consulted on the request hot path.
      */

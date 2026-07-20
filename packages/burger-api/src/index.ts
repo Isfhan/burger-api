@@ -8,6 +8,11 @@ import { swaggerHtml } from './core/swagger-ui';
 // Import router (Phase 1 — Hybrid Router)
 import { Router } from './router';
 
+// Import compiler pipeline (Phase 1 — Route Module pipeline)
+import { DirectoryScanner } from './compiler/scanner';
+import { ModuleLoader } from './compiler/module-loader';
+import { RouteTree } from './compiler/route-tree';
+
 // Import utils
 import { collectRoutes, compareRoutes } from './utils/index';
 import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
@@ -37,6 +42,17 @@ export class Burger {
     private apiRouter?: ApiRouter;
 
     /**
+     * The resolved API directory (dev path) — retained so the Route Module
+     * pipeline can re-scan it without poking at ApiRouter internals.
+     */
+    private apiDir?: string;
+
+    /**
+     * The API path prefix (dev path).
+     */
+    private apiPrefix: string = 'api';
+
+    /**
      * The page router instance
      */
     private pageRouter?: PageRouter;
@@ -46,6 +62,13 @@ export class Burger {
      * Owns static dispatch (Bun map) + dynamic/wildcard dispatch (trie).
      */
     private dynamicRouter?: Router;
+
+    /**
+     * The structural route tree (Phase 1), retained for introspection and
+     * deterministic ordering. Built once from the Module Loader output; not
+     * used on the request hot path.
+     */
+    private routeTree?: import('./compiler/route-tree').RouteTree;
 
     /**
      * The global middleware
@@ -96,6 +119,8 @@ export class Burger {
             apiDir && !Array.isArray(options.apiRoutes)
                 ? new ApiRouter(apiDir, apiPrefix || 'api')
                 : undefined;
+        this.apiDir = apiDir;
+        this.apiPrefix = apiPrefix || 'api';
 
         // Initialize page router only when using runtime scanning (no prebuilt pageRoutes)
         this.pageRouter =
@@ -165,10 +190,13 @@ export class Burger {
     /**
      * Process the API routes and add them to the routes object.
      *
-     * Phase 1: routes are compiled by the Hybrid Router. Static routes are
-     * merged into Bun's native `routes` map; dynamic/wildcard routes are
-     * dispatched by `Router.fetch` (the `Bun.serve` fallback) via the internal
-     * trie. Both paths execute the same compiled handler.
+     * Routes are compiled by the Router. Static routes and dynamic (`:param` /
+     * `*`) routes are both merged into Bun's native `routes` map; dynamic
+     * routes dispatch directly (the compiled handler self-extracts params from
+     * the URL), avoiding the `fetch` fallback hop. Unmatched, loose-trailing-
+     * slash, and empty-param requests fall through to `Router.fetch` (the trie
+     * fallback). Both paths execute the same compiled handler, so method
+     * dispatch, 405+Allow, auto-HEAD, and middleware behavior are identical.
      *
      * @returns A promise that resolves to a boolean
      */
@@ -180,10 +208,23 @@ export class Burger {
                 compareRoutes(a, b)
             );
         } else {
-            // Dev path: load from filesystem via ApiRouter
-            if (!this.apiRouter) return false;
-            await this.apiRouter.loadRoutes();
-            apiRoutes = collectRoutes(this.apiRouter.routes);
+            // Dev path: Route Module pipeline
+            // (Directory Scanner → Module Loader → RouteModule → Compiler).
+            if (!this.apiDir) return false;
+            const scanned = await new DirectoryScanner(
+                this.apiDir,
+                this.apiPrefix
+            ).scan();
+            const modules = await new ModuleLoader().load(scanned);
+            // Retained for introspection (deterministic ordering, no dispatch).
+            this.routeTree = new RouteTree(modules);
+            apiRoutes = modules.map((m) => ({
+                path: m.path,
+                handlers: m.handlers,
+                schema: m.schema,
+                openapi: m.openapi,
+                isWildcard: m.isWildcard,
+            }));
         }
 
         // If there are no API routes, return false
@@ -201,8 +242,14 @@ export class Burger {
         router.compile(apiRoutes);
         this.dynamicRouter = router;
 
-        // Merge static routes into Bun's native routes map (fast path).
+        // Merge static routes into Bun's native routes map (fast path), then
+        // merge dynamic (`:param` / `*`) routes onto the same native map. Bun
+        // matches `:param` and `*` patterns directly, so dynamic routes dispatch
+        // without the `fetch` fallback hop; the compiled handler self-extracts
+        // params from the URL. Unmatched / loose-slash / empty-param requests
+        // still fall through to `Router.fetch` (the trie), preserving behavior.
         Object.assign(this.routes, router.staticRoutes());
+        Object.assign(this.routes, router.nativeRoutes());
 
         // Add special routes for OpenAPI
         this.routes['/openapi.json'] = () =>
@@ -242,7 +289,12 @@ export class Burger {
                 ? (request) => this.dynamicRouter!.fetch(request)
                 : () => this.NOT_FOUND;
 
-            this.server.start(this.routes, fetchHandler, port, cb);
+            this.server.start({
+                staticRoutes: this.routes,
+                fetch: fetchHandler,
+                port,
+                onListen: cb,
+            });
         } else {
             // If no routes were configured, log an error
             console.error(

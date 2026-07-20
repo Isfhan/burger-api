@@ -1,83 +1,88 @@
 ## 📣 Release Notes - Burger API Framework
 
-### Version 0.12.0 (Validation 2.0)
+### Version 0.14.0 (Compiler-Driven Core, Request Context & Validation 2.0)
 
-- 🧩 **Compiled validators** — each route schema is prepared once when the app
-  starts and reused on every request. Identical schemas across routes share a
-  single compiled validator, so startup cost scales with the number of unique
-  shapes, not the number of routes.
-- 🗂️ **Validator cache** — compiled validators are cached by a structural key,
-  so the same schema object (or model reference) is never compiled twice.
-- 📚 **Model registry** — define a shape once in `ServerOptions.models` and
-  reference it by name (`"Pagination"`) from any route's `schema` slot. Shared
-  contracts live in one place and reuse the compiled validator.
-- 🔌 **Standard Schema support** — any library that follows the Standard Schema
+Released 2026-07-21. This release is the architecture reset: BurgerAPI now
+compiles your file tree into an immutable, fully-compiled application. The
+compiler is the single place that understands your routes. Backward
+compatibility is not a goal (pre-1.0.0 reset).
+
+**Compiler-driven core**
+- Compiler pipeline: `Directory Scanner → Module Loader → RouteModule →
+  Compiler → CompiledRoute`. The `RouteModule` is the canonical internal
+  representation of one route directory; `CompiledRoute` is the immutable
+  runtime artifact.
+- Directory Scanner: a pure filesystem walk that inventories convention files
+  (`route.ts`, `schema.ts`, `hooks.ts`, `use.ts`, `openapi.ts`, `webhook.ts`)
+  without importing any module. Rejects `middleware.ts` (the v2 architecture
+  has no middleware concept).
+- Module Loader: imports convention files, merges group inheritance
+  (nearest-last, deterministic), overlays inline `route.ts` exports, and fails
+  fast on duplicate route paths. Auto-injects `OPTIONS` for preflight methods.
+- Runtime adapter seam: the framework body speaks only Web Standard
+  `Request`/`Response`; `BunAdapter` is the single runtime-specific surface
+  (`Bun.serve` + native `routes` map). Static routes dispatch in O(1); dynamic
+  and wildcard routes use Bun's native `routes` map with a trie fallback.
+- Native `:param` / `*` dispatch: dynamic and wildcard routes are registered
+  directly on Bun's native `routes` map, so they dispatch without the `fetch`
+  fallback hop. Param extraction uses only `Request.url` and is WinterCG-safe.
+
+**Request lifecycle (middleware pipeline)**
+- The request lifecycle runs through a single middleware pipeline:
+  `globalMiddleware` (from `ServerOptions`) followed by a route's `middleware`
+  array. A middleware can stop the request early by returning a `Response`,
+  transform the response by returning a function, or continue by returning
+  `undefined`. Validation, `405`/`Allow`, auto-`HEAD`, and loose trailing-slash
+  are compiled into the runtime.
+- `hooks.ts`, `use.ts`, and `webhook.ts` are discovered and carried through the
+  compiler but are reserved (not yet executed at runtime).
+
+**Request context (BurgerContext)**
+- `BurgerContext`: a single, prototype-based request object allocated once per
+  request. It lazily exposes `query`, `params`, `route`, `headers`, `validated`,
+  `set` and transparently delegates the standard `Request` surface. The shared,
+  stable prototype gives every request the same object structure, which the
+  JavaScript engine can optimize well.
+- `parseQuery`: a fast, Bun-native querystring parser that replaces the
+  per-request `new URL(req.url)`. It matches `URLSearchParams` parity (including
+  `+` to space and malformed-escape leniency).
+- `req.route`: `{ path, pattern }` is available on every matched route,
+  including static routes served through Bun's native routing.
+- `req.set`: a response-mutation surface (`status` + `headers`) merged into the
+  outgoing `Response` by `applySet` at the single exit point of the request
+  flow. `applySet` is a no-op (zero allocation) when no mutation is set.
+- Dead-path elimination: lazy getters mean a field a route never reads is never
+  parsed and never allocated.
+
+**Validation 2.0**
+- Compiled validators: each route schema is prepared once at startup and reused
+  on every request. Identical schemas across routes share one compiled
+  validator, so startup cost scales with the number of unique shapes, not the
+  number of routes.
+- Validator cache: compiled validators are cached by a structural key, so the
+  same schema object (or model reference) is never compiled twice.
+- Model registry: define a shape once in `ServerOptions.models` and reference it
+  by name (`"Pagination"`) from any route's `schema` slot.
+- Standard Schema support: any library that follows the Standard Schema
   contract (Zod v4, Valibot, ArkType) works through the same `schema` export.
   Zod remains the default.
-- 🔄 **Automatic type conversion (coercion)** — set `validation.coerce: true`
-  (app-wide) or `coerce: true` on a route to turn `"42"` into `42` and
-  `"true"` into `true` for query, params, headers, and cookies. Off by
-  default, so existing behavior is unchanged.
-- ↩️ **Response validation** — declare a `response` schema and BurgerAPI checks
-  what your handler returns. `validation.responseValidation` is `off` (default),
-  `dev` (observe, never break — useful in development), or `enforce` (returns a
-  safe error on mismatch).
-- 📥 **Headers validation** — validate request headers with a `headers` slot on
-  the route `schema`, attached to `req.validated.headers`.
-- 🍪 **Cookie validation** — validate cookie values with a `cookie` slot on the
-  route `schema`, attached to `req.validated.cookie`.
-- 📟 **Problem Details support** — choose the error format with
-  `validation.errorFormat`: `plain` (simple JSON) or `problem+json`
-  (RFC 9457). Production error bodies never leak stacks or schema internals.
-  Supply a custom `validation.errorRenderer` for full control.
-- 🛟 **Improved validation errors** — failures return a structured `400` with a
-  clear message and a `details` array when available. The format is consistent
-  across query, params, headers, cookies, body, and response checks.
-- ⚡ **Performance** — validation runs through a single compiled pipeline with
-  no per-request schema discovery. Coercion is a small, precomputed pass that
-  only runs when enabled.
-- 🧪 **Benchmarks** — new validation scenarios (coercion, response) live in the
-  separate `burger-api-benchmarks` repository, the official home for all
-  BurgerAPI performance benchmarks.
+- Automatic type conversion (coercion): set `validation.coerce: true` (app-wide)
+  or `coerce: true` on a route to turn `"42"` into `42` and `"true"` into
+  `true` for query, params, headers, and cookies. Off by default.
+- Response validation: declare a `response` schema and BurgerAPI checks what
+  your handler returns. `validation.responseValidation` is `off` (default),
+  `dev` (observe, never break), or `enforce` (returns a safe error on
+  mismatch).
+- Headers and cookie validation: validate request headers and cookie values
+  with `headers` / `cookie` slots on the route `schema`, attached to
+  `req.validated.headers` / `req.validated.cookie`.
+- Problem Details support: choose the error format with
+  `validation.errorFormat`: `plain` (simple JSON) or `problem+json` (RFC 9457).
+  Production error bodies never leak stacks or schema internals.
 
-**Migration:** None required. Every change is strictly additive. Existing Zod
-`schema` exports behave exactly as before; `req.validated` and the `400` error
-contract are unchanged. The `z.coerce.*` helpers still work — `coerce: true` is
-an optional, app-wide alternative. New slots (`headers`, `cookie`, `response`)
-and `models` are opt-in.
-
-### Version 0.11.0 (Phase 2 — Request Context & Dead-Path Elimination)
-
-- 🍔 **`BurgerContext`** — a single, prototype-based request object allocated
-  **once per request**. Lazily exposes `query`, `params`, `route`, `headers`,
-  `validated`, `set` and transparently delegates the standard `Request` surface.
-  Shared, stable prototype → the same object shape for every request, which
-  the JavaScript engine can optimize well.
-- ⚡ **`parseQuery`** — a fast, Bun-native querystring parser replacing the
-  per-request `new URL(req.url)` in the validator. Matches `URLSearchParams`
-  parity (incl. `+`→space, malformed-escape leniency). ~1.7× faster than the
-  previous `new URL` + `URLSearchParams` path.
-- 🎯 **`req.route`** — `{ path, pattern }` now available on **every** matched
-  route, including static routes served through Bun's native routing.
-- 🔧 **`req.set`** — response-mutation surface (`status` + `headers`), merged
-  into the outgoing `Response` by `applySet` at the single exit point of the
-  request flow.
-  `applySet` is a no-op (zero allocation) when no mutation is set, and runs
-  uniformly on GET **and** auto-HEAD responses.
-- 🧠 **`RouteAccessAnalyzer`** (optional) — compile-time, self-contained static
-  analysis of which context fields a route reads, producing a frozen
-  `RouteAccessInfo` hint. Conservative: `debug`, ambiguous, or failed analysis
-  yields the safe "all fields used" default. **Never** affects runtime correctness.
-- 🪝 **Dead-path elimination** — provided structurally by the lazy getters; a
-  field a route never reads is never parsed and never allocated.
-- 🧊 **Frozen getters** — the shared prototype's getters are frozen so they
-  cannot be replaced across requests; delegation methods stay writable so the
-  existing `req.json` reassignment and middleware custom properties keep working.
-
-**Migration:** None required. All changes are strictly additive and optional
-(`query`, `set`, `route` are new optional `BurgerRequest` fields). Existing
-`route.ts` files and the `GET(req: BurgerRequest)` signature are unchanged; the
-entire `examples/` suite passes unchanged.
+**Migration:** None required. Every change is strictly additive. Existing
+`route.ts` files and the `GET(req: BurgerRequest)` signature are unchanged;
+the entire `examples/` suite passes unchanged.
 
 ### Version 0.9.7 (May 16, 2026)
 
