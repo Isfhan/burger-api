@@ -11,21 +11,21 @@ export function composePluginHooks(
         const hooks: RouteHooks = plugin.hooks;
         const scope = plugin.scope;
 
-        if (hooks.beforeHandle) {
-            chain.addStage('beforeHandle', toHookArray(hooks.beforeHandle), scope, plugin.name);
+        if (hooks.beforeRoute) {
+            chain.addStage('beforeRoute', toHookArray(hooks.beforeRoute), scope, plugin.name);
         }
-        if (hooks.afterHandle) {
-            chain.addStage('afterHandle', toHookArray(hooks.afterHandle), scope, plugin.name);
+        if (hooks.afterRoute) {
+            chain.addStage('afterRoute', toHookArray(hooks.afterRoute), scope, plugin.name);
         }
-        if (hooks.onResponse) {
-            chain.addStage('onResponse', toHookArray(hooks.onResponse), scope, plugin.name);
+        if (hooks.mapResponse) {
+            chain.addStage('mapResponse', toHookArray(hooks.mapResponse), scope, plugin.name);
         }
         if (hooks.onError) {
             chain.addStage('onError', toHookArray(hooks.onError), scope, plugin.name);
         }
-        if (hooks.provide) {
-            // Plugin provide keys are accumulated at the plan level, not as chain
-            // nodes. The caller must merge provide records after flattening.
+        if (hooks.transform) {
+            // Plugin transform keys are accumulated at the plan level, not as chain
+            // nodes. The caller must merge transform records after flattening.
         }
     }
 }

@@ -6,9 +6,9 @@ import { BurgerContext } from '../../src/context/context';
 describe('onError (Phase 4 M2)', () => {
     it('catches a handler throw via route-level onError', async () => {
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [
                 () =>
                     new Response(JSON.stringify({ ok: true }), {
@@ -33,9 +33,9 @@ describe('onError (Phase 4 M2)', () => {
 
     it('onError that itself throws falls back to errorResponse (500)', async () => {
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [
                 () => {
                     throw new Error('onError-threw');
@@ -59,9 +59,9 @@ describe('onError (Phase 4 M2)', () => {
     it('chains errors in order: route onError runs before global onError', async () => {
         const order: string[] = [];
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [
                 // "Route" level onError (nearest first in the array)
                 () => {
@@ -91,9 +91,9 @@ describe('onError (Phase 4 M2)', () => {
     it('falls through to next onError when previous onError returns undefined', async () => {
         const order: string[] = [];
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [
                 () => {
                     order.push('first-pass');
@@ -117,15 +117,15 @@ describe('onError (Phase 4 M2)', () => {
         expect(order).toEqual(['first-pass', 'second-handles']);
     });
 
-    it('catches error from beforeHandle hook', async () => {
+    it('catches error from beforeRoute hook', async () => {
         const plan: HookPlan = {
-            beforeHandle: [
+            beforeRoute: [
                 () => {
-                    throw new Error('beforeHandle-error');
+                    throw new Error('beforeRoute-error');
                 },
             ],
-            afterHandle: [],
-            onResponse: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [
                 (err) =>
                     new Response(
@@ -143,6 +143,6 @@ describe('onError (Phase 4 M2)', () => {
         }, new Request('http://h/test'));
         expect(res.status).toBe(400);
         const data = await res.json();
-        expect(data.caught).toBe('beforeHandle-error');
+        expect(data.caught).toBe('beforeRoute-error');
     });
 });

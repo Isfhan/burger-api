@@ -21,7 +21,7 @@ afterAll(async () => {
 });
 
 describe('Plugin Usage Example', () => {
-    it('returns a greeting with auditTimestamp from plugin provide', async () => {
+    it('returns a greeting with auditTimestamp from plugin transform', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();

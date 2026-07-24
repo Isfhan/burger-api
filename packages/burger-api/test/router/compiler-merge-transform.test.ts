@@ -3,7 +3,7 @@ import { Router } from '../../src/router/router';
 import type { RouteDefinition } from '../../src/types/index';
 import type { ResolvedPlugin } from '../../src/plugin/types';
 
-describe('RouterCompiler mergeProvideRecords', () => {
+describe('RouterCompiler mergeTransformRecords', () => {
     function makeRouter(
         defs: RouteDefinition[],
         plugins?: ResolvedPlugin[]
@@ -13,7 +13,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
         return router;
     }
 
-    it('provides plugin values when no route provide exists', async () => {
+    it('provides plugin values when no route transform exists', async () => {
         const router = makeRouter(
             [
                 {
@@ -32,7 +32,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                     name: 'test-plugin',
                     scope: 'plugin' as const,
                     hooks: {
-                        provide: {
+                        transform: {
                             pluginValue: () => 'from-plugin',
                             pluginNumber: () => 42,
                         },
@@ -46,7 +46,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
         expect(data.pn).toBe(42);
     });
 
-    it('route provide overrides plugin provide on key collision', async () => {
+    it('route transform overrides plugin transform on key collision', async () => {
         const router = makeRouter(
             [
                 {
@@ -56,7 +56,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                             Response.json({ val: req.sharedKey }),
                     },
                     hooks: {
-                        provide: {
+                        transform: {
                             sharedKey: () => 'from-route',
                         },
                     },
@@ -67,7 +67,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                     name: 'plugin-a',
                     scope: 'plugin' as const,
                     hooks: {
-                        provide: {
+                        transform: {
                             sharedKey: () => 'from-plugin',
                         },
                     },
@@ -79,7 +79,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
         expect(data.val).toBe('from-route');
     });
 
-    it('merges provide from multiple plugins', async () => {
+    it('merges transform from multiple plugins', async () => {
         const router = makeRouter(
             [
                 {
@@ -98,7 +98,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                     name: 'plugin-a',
                     scope: 'plugin' as const,
                     hooks: {
-                        provide: {
+                        transform: {
                             valA: () => 'alpha',
                         },
                     },
@@ -107,7 +107,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                     name: 'plugin-b',
                     scope: 'plugin' as const,
                     hooks: {
-                        provide: {
+                        transform: {
                             valB: () => 'beta',
                         },
                     },
@@ -120,7 +120,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
         expect(data.b).toBe('beta');
     });
 
-    it('provide is undefined when no provide values exist', async () => {
+    it('transform is undefined when no transform values exist', async () => {
         const router = makeRouter(
             [
                 {
@@ -138,7 +138,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
         expect(data.ok).toBe(true);
     });
 
-    it('provide factories receive the request context', async () => {
+    it('transform factories receive the request context', async () => {
         const router = makeRouter(
             [
                 {
@@ -154,7 +154,7 @@ describe('RouterCompiler mergeProvideRecords', () => {
                     name: 'ctx-plugin',
                     scope: 'plugin' as const,
                     hooks: {
-                        provide: {
+                        transform: {
                             contextVal: (ctx: any) =>
                                 `method-${ctx.method}`,
                         },

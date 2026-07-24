@@ -1,9 +1,9 @@
-export const beforeHandle = [
+export const beforeRoute = [
     (req: any) => {
         req._globalHookRan = true;
     },
 ];
 
-export const provide = {
+export const transform = {
     globalProvide: () => 'from-global-hooks',
 };

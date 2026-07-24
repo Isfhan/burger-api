@@ -371,7 +371,7 @@ export type {
     RouteDefinition,
     PageDefinition,
     RouteHooks,
-    ProvideMap,
+    TransformMap,
 } from './types/index';
 
 // Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)

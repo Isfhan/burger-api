@@ -6,12 +6,12 @@ const port = Number(process.env.PORT) || 4000;
 const testPlugin: Plugin = {
     name: 'test-plugin',
     hooks: {
-        beforeHandle: [
+        beforeRoute: [
             (req) => {
                 (req as any)._pluginRan = true;
             },
         ],
-        provide: {
+        transform: {
             pluginValue: () => 'from-plugin',
             pluginNumber: () => 42,
         },
@@ -19,12 +19,12 @@ const testPlugin: Plugin = {
 };
 
 const testMacro: RouteHooks = {
-    beforeHandle: [
+    beforeRoute: [
         (req) => {
             (req as any)._macroRan = true;
         },
     ],
-    provide: {
+    transform: {
         macroValue: () => 'from-macro',
     },
 };

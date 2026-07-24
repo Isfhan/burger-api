@@ -405,7 +405,7 @@ export const schema = {
     ROUTE HOOKS (Optional)
 -----------------------------------------------------------------------------
 
- - Hooks run as part of the request lifecycle. Use beforeHandle for:
+ - Hooks run as part of the request lifecycle. Use beforeRoute for:
    - Logging requests
    - Checking authentication
    - Modifying the request
@@ -417,7 +417,7 @@ export const schema = {
 -----------------------------------------------------------------------------
  */
 export const hooks = {
-    beforeHandle: [
+    beforeRoute: [
         // Example: Log every request to this route
         async (req: BurgerRequest) => {
             console.log(\`[${new Date().toISOString()}] ${req.method} ${req.url}\`);
@@ -1025,13 +1025,13 @@ export function generateMiddlewareIndex(): string {
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
  * 
- * export const beforeHandle = [
+ * export const beforeRoute = [
  *     logger(),
  *     cors(),
  * ];
  */
 
-export const beforeHandle: unknown[] = [];
+export const beforeRoute: unknown[] = [];
 `;
 }
 

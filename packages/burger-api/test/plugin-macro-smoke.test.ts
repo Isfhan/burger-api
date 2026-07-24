@@ -21,21 +21,21 @@ afterAll(async () => {
 });
 
 describe('Phase 4 M5-M6 — Plugin & Macro Integration', () => {
-    it('plugin beforeHandle runs before the handler', async () => {
+    it('plugin beforeRoute runs before the handler', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();
         expect(data.pluginRan).toBe(true);
     });
 
-    it('macro beforeHandle runs before the handler', async () => {
+    it('macro beforeRoute runs before the handler', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();
         expect(data.macroRan).toBe(true);
     });
 
-    it('plugin provide values are available on the request', async () => {
+    it('plugin transform values are available on the request', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();
@@ -43,7 +43,7 @@ describe('Phase 4 M5-M6 — Plugin & Macro Integration', () => {
         expect(data.pluginNumber).toBe(42);
     });
 
-    it('macro provide values are available on the request', async () => {
+    it('macro transform values are available on the request', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();

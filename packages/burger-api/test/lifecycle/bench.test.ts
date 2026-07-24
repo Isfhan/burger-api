@@ -51,35 +51,35 @@ describe('Lifecycle performance regression checks', () => {
         expect(elapsed).toBeLessThan(5000);
     });
 
-    it(`handles ${N} requests with 1 beforeHandle hook`, async () => {
+    it(`handles ${N} requests with 1 beforeRoute hook`, async () => {
         const router = makeRouter([
             {
                 path: '/h1',
                 handlers: {
                     GET: (req: any) => Response.json({ h: req._bench }),
                 },
-                hooks: { beforeHandle: makeHooks(1) },
+                hooks: { beforeRoute: makeHooks(1) },
             } as any,
         ]);
         const elapsed = await fireN(router, '/h1', N);
         expect(elapsed).toBeLessThan(5000);
     });
 
-    it(`handles ${N} requests with 5 beforeHandle hooks`, async () => {
+    it(`handles ${N} requests with 5 beforeRoute hooks`, async () => {
         const router = makeRouter([
             {
                 path: '/h5',
                 handlers: {
                     GET: (req: any) => Response.json({ h: req._bench }),
                 },
-                hooks: { beforeHandle: makeHooks(5) },
+                hooks: { beforeRoute: makeHooks(5) },
             } as any,
         ]);
         const elapsed = await fireN(router, '/h5', N);
         expect(elapsed).toBeLessThan(5000);
     });
 
-    it(`handles ${N} requests with provide values`, async () => {
+    it(`handles ${N} requests with transform values`, async () => {
         const router = makeRouter([
             {
                 path: '/prov',
@@ -88,7 +88,7 @@ describe('Lifecycle performance regression checks', () => {
                         Response.json({ v: req.pluginValue }),
                 },
                 hooks: {
-                    provide: {
+                    transform: {
                         pluginValue: () => 'test',
                     },
                 },

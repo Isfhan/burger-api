@@ -34,7 +34,7 @@ const FIELD_KEYS: readonly ContextField[] = [
     'wildcardParams',
 ];
 
-const HOOK_STAGES = ['beforeHandle', 'afterHandle', 'onResponse', 'onError'] as const;
+const HOOK_STAGES = ['beforeRoute', 'afterRoute', 'mapResponse', 'onError'] as const;
 
 /**
  * Strips block (`/* *\/`) and line (`//`) comments so that field tokens inside

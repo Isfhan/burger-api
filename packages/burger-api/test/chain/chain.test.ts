@@ -12,9 +12,9 @@ describe('HookChain (Phase 4 M4)', () => {
     it('adds a single node', () => {
         const chain = new HookChain();
         const fn = () => undefined;
-        chain.add({ stage: 'beforeHandle', fn, scope: 'local', owner: '/test' });
+        chain.add({ stage: 'beforeRoute', fn, scope: 'local', owner: '/test' });
         expect(chain.getNodes()).toHaveLength(1);
-        expect(chain.getNodes()[0].stage).toBe('beforeHandle');
+        expect(chain.getNodes()[0].stage).toBe('beforeRoute');
         expect(chain.getNodes()[0].scope).toBe('local');
         expect(chain.getNodes()[0].owner).toBe('/test');
     });
@@ -22,7 +22,7 @@ describe('HookChain (Phase 4 M4)', () => {
     it('adds multiple nodes via addStage', () => {
         const chain = new HookChain();
         const fns = [() => undefined, () => new Response('ok')];
-        chain.addStage('afterHandle', fns, 'global', 'app');
+        chain.addStage('afterRoute', fns, 'global', 'app');
         expect(chain.getNodes()).toHaveLength(2);
         expect(chain.getNodes()[0].scope).toBe('global');
         expect(chain.getNodes()[1].scope).toBe('global');
@@ -30,7 +30,7 @@ describe('HookChain (Phase 4 M4)', () => {
 
     it('clears all nodes', () => {
         const chain = new HookChain();
-        chain.add({ stage: 'beforeHandle', fn: () => undefined, scope: 'local', owner: '/test' });
+        chain.add({ stage: 'beforeRoute', fn: () => undefined, scope: 'local', owner: '/test' });
         chain.clear();
         expect(chain.getNodes()).toHaveLength(0);
     });
@@ -40,51 +40,51 @@ describe('Flattener (Phase 4 M4)', () => {
     it('produces empty arrays for an empty chain', () => {
         const chain = new HookChain();
         const plan = flatten(chain, '/test');
-        expect(plan.beforeHandle).toHaveLength(0);
-        expect(plan.afterHandle).toHaveLength(0);
-        expect(plan.onResponse).toHaveLength(0);
+        expect(plan.beforeRoute).toHaveLength(0);
+        expect(plan.afterRoute).toHaveLength(0);
+        expect(plan.mapResponse).toHaveLength(0);
         expect(plan.onError).toHaveLength(0);
-        expect(plan.provide).toBeUndefined();
+        expect(plan.transform).toBeUndefined();
     });
 
-    it('orders beforeHandle: global → plugin → local', () => {
+    it('orders beforeRoute: global → plugin → local', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('beforeHandle', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('beforeHandle', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('beforeHandle', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage('beforeRoute', [() => { order.push('plugin'); }], 'plugin', 'p');
+        chain.addStage('beforeRoute', [() => { order.push('global'); }], 'global', 'g');
 
         const plan = flatten(chain, '/r');
-        expect(plan.beforeHandle).toHaveLength(3);
+        expect(plan.beforeRoute).toHaveLength(3);
 
-        for (const h of plan.beforeHandle) {
+        for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
         expect(order).toEqual(['global', 'plugin', 'local']);
     });
 
-    it('orders afterHandle: global → plugin → local', () => {
+    it('orders afterRoute: global → plugin → local', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('afterHandle', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('afterHandle', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage('afterRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage('afterRoute', [() => { order.push('global'); }], 'global', 'g');
 
         const plan = flatten(chain, '/r');
-        for (const h of plan.afterHandle) {
+        for (const h of plan.afterRoute) {
             (h as (req: unknown) => void)(undefined);
         }
         expect(order).toEqual(['global', 'local']);
     });
 
-    it('orders onResponse: global → plugin → local', () => {
+    it('orders mapResponse: global → plugin → local', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('onResponse', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('onResponse', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('onResponse', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage('mapResponse', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage('mapResponse', [() => { order.push('plugin'); }], 'plugin', 'p');
+        chain.addStage('mapResponse', [() => { order.push('global'); }], 'global', 'g');
 
         const plan = flatten(chain, '/r');
-        for (const h of plan.onResponse) {
+        for (const h of plan.mapResponse) {
             (h as (req: unknown) => void)(undefined);
         }
         expect(order).toEqual(['global', 'plugin', 'local']);
@@ -110,32 +110,32 @@ describe('Flattener (Phase 4 M4)', () => {
         expect(order).toEqual(['local', 'plugin', 'global']);
     });
 
-    it('pins global-scope validation at beforeHandle[0]', () => {
+    it('pins global-scope validation at beforeRoute[0]', () => {
         const chain = new HookChain();
         const routeHook = () => 'route';
         const validationHook = () => 'validation';
 
-        chain.add({ stage: 'beforeHandle', fn: validationHook, scope: 'global', owner: 'framework' });
-        chain.add({ stage: 'beforeHandle', fn: routeHook, scope: 'local', owner: '/r' });
+        chain.add({ stage: 'beforeRoute', fn: validationHook, scope: 'global', owner: 'framework' });
+        chain.add({ stage: 'beforeRoute', fn: routeHook, scope: 'local', owner: '/r' });
 
         const plan = flatten(chain, '/r');
-        expect(plan.beforeHandle).toHaveLength(2);
+        expect(plan.beforeRoute).toHaveLength(2);
         // The flattener groups global → local, so validation is first
-        expect(plan.beforeHandle[0]).toBe(validationHook);
-        expect(plan.beforeHandle[1]).toBe(routeHook);
+        expect(plan.beforeRoute[0]).toBe(validationHook);
+        expect(plan.beforeRoute[1]).toBe(routeHook);
     });
 
     it('preserves insertion order within the same scope', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('beforeHandle', [
+        chain.addStage('beforeRoute', [
             () => { order.push('a'); },
             () => { order.push('b'); },
             () => { order.push('c'); },
         ], 'local', '/r');
 
         const plan = flatten(chain, '/r');
-        for (const h of plan.beforeHandle) {
+        for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
         expect(order).toEqual(['a', 'b', 'c']);
@@ -148,15 +148,15 @@ describe('Flattener (Phase 4 M4)', () => {
         const resp: string[] = [];
         const err: string[] = [];
 
-        chain.addStage('beforeHandle', [() => { before.push('bh'); }], 'local', '/r');
-        chain.addStage('afterHandle', [() => { after.push('ah'); }], 'local', '/r');
-        chain.addStage('onResponse', [() => { resp.push('or'); }], 'local', '/r');
+        chain.addStage('beforeRoute', [() => { before.push('bh'); }], 'local', '/r');
+        chain.addStage('afterRoute', [() => { after.push('ah'); }], 'local', '/r');
+        chain.addStage('mapResponse', [() => { resp.push('or'); }], 'local', '/r');
         chain.addStage('onError', [() => { err.push('oe'); return undefined; }] as ErrorHook[], 'local', '/r');
 
         const plan = flatten(chain, '/r');
-        expect(plan.beforeHandle).toHaveLength(1);
-        expect(plan.afterHandle).toHaveLength(1);
-        expect(plan.onResponse).toHaveLength(1);
+        expect(plan.beforeRoute).toHaveLength(1);
+        expect(plan.afterRoute).toHaveLength(1);
+        expect(plan.mapResponse).toHaveLength(1);
         expect(plan.onError).toHaveLength(1);
     });
 });

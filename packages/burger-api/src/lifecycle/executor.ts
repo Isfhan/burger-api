@@ -2,14 +2,14 @@ import type { BurgerRequest, RequestHandler } from '../types/index';
 import type { HookPlan, Hook, ErrorHook } from './types';
 import { runWithMiddleware } from '../middleware/runner';
 import { methodNotAllowed } from '../utils/response';
-import { applyDerive } from './provide';
+import { applyTransform } from './transform';
 
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
  *
- * Fixed forward order (Phase 4, ROADMAP.md §4.1):
- *   beforeHandle (validation pinned at [0], then user hooks)
- *     → handler → afterHandle → onResponse
+ * Fixed forward order:
+ *   beforeRoute (validation pinned at [0], then user hooks)
+ *     → handler → afterRoute → mapResponse
  *
  * On throw the {@link HookPlan#onError} chain is dispatched nearest-first
  * (route → global). If no `onError` handles the error it re-throws so the
@@ -34,23 +34,23 @@ export async function executeHookPlan(
     }
 
     try {
-        // Phase 4 M3: `provide` runs after beforeHandle but before the handler.
-        // Wrap the handler to inject provided values between the two stages.
-        const wrappedHandler: RequestHandler = plan.provide
+        // `transform` runs after beforeRoute but before the handler.
+        // Wrap the handler to inject transformed values between the two stages.
+        const wrappedHandler: RequestHandler = plan.transform
             ? (req) => {
-                  applyDerive(req, plan.provide!);
+                  applyTransform(req, plan.transform!);
                   return handler(req);
               }
             : handler;
 
         let response = await runWithMiddleware(
             burgerReq,
-            plan.beforeHandle as unknown as Parameters<typeof runWithMiddleware>[1],
+            plan.beforeRoute as unknown as Parameters<typeof runWithMiddleware>[1],
             wrappedHandler
         );
 
-        response = await runResponsePhase(plan.afterHandle, burgerReq, response);
-        response = await runResponsePhase(plan.onResponse, burgerReq, response);
+        response = await runResponsePhase(plan.afterRoute, burgerReq, response);
+        response = await runResponsePhase(plan.mapResponse, burgerReq, response);
 
         return response;
     } catch (error) {
@@ -86,9 +86,9 @@ async function dispatchOnError(
 }
 
 /**
- * Runs one response-phase (`afterHandle` / `onResponse`). Each hook may return
+ * Runs one response-phase (`afterRoute` / `mapResponse`). Each hook may return
  * a `Response` (replace), a transform function `(res) => Response` (transform),
- * or `undefined` / `void` (continue). ROADMAP-phase4 §4.9.
+ * or `undefined` / `void` (continue).
  */
 async function runResponsePhase(
     hooks: Hook[],
@@ -110,5 +110,3 @@ async function runResponsePhase(
     }
     return res;
 }
-
-

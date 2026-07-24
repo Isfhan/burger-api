@@ -1,7 +1,7 @@
 /**
  * Middleware Re-exports
  *
- * Import middleware here and wire it in as `beforeHandle` hooks in
+ * Import middleware here and wire it in as `beforeRoute` hooks in
  * `api/hooks.ts` to apply it to every route. Example:
  *
  * ```typescript
@@ -9,6 +9,6 @@
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
  *
- * export const beforeHandle = [logger(), cors()];
+ * export const beforeRoute = [logger(), cors()];
  * ```
  */

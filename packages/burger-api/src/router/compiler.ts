@@ -9,8 +9,7 @@ import { compileRouteSchema } from '../validation/compiler';
 import { createValidatorMiddleware } from '../validation/validator';
 import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
 import { executeHookPlan } from '../lifecycle/executor';
-import type { HookPlan, Hook, RouteHooks, ProvideMap } from '../lifecycle/types';
-import { normalizeHooks } from '../lifecycle/types';
+import type { HookPlan, Hook, RouteHooks, TransformMap } from '../lifecycle/types';
 import { HookChain } from '../chain/chain';
 import { flatten } from '../chain/flattener';
 import { composePluginHooks } from '../plugin/composer';
@@ -85,12 +84,12 @@ export class RouterCompiler {
             // flattener produces the per-phase arrays with correct ordering
             // (global → local for forward phases, local → global for onError).
             // Validation is added as global scope so it pins at index 0.
-            const routeHooks = normalizeHooks(def.hooks as RouteHooks | undefined);
+            const routeHooks = def.hooks as RouteHooks | undefined;
             const chain = new HookChain();
             if (hasSchema) {
                 const validators = compileRouteSchema(def.schema!, this.config);
                 chain.add({
-                    stage: 'beforeHandle',
+                    stage: 'beforeRoute',
                     fn: createValidatorMiddleware(
                         validators,
                         this.config,
@@ -101,9 +100,9 @@ export class RouterCompiler {
                 });
                 routeValidators = validators;
             }
-            chain.addStage('beforeHandle', toHookArray(routeHooks?.beforeHandle), 'local', path);
-            chain.addStage('afterHandle', toHookArray(routeHooks?.afterHandle), 'local', path);
-            chain.addStage('onResponse', toHookArray(routeHooks?.onResponse), 'local', path);
+            chain.addStage('beforeRoute', toHookArray(routeHooks?.beforeRoute), 'local', path);
+            chain.addStage('afterRoute', toHookArray(routeHooks?.afterRoute), 'local', path);
+            chain.addStage('mapResponse', toHookArray(routeHooks?.mapResponse), 'local', path);
             // onError: reverse because ModuleLoader merges global→route but
             // onError needs route→global (nearest-first). The flattener orders
             // local → global, so reversed local nodes execute route-first.
@@ -117,9 +116,9 @@ export class RouterCompiler {
             }
 
             const plan = flatten(chain, path);
-            // Merge provide from route hooks and plugins. Route provide takes
-            // precedence over plugin provide on key collision.
-            plan.provide = mergeProvideRecords(routeHooks?.provide, plugins);
+            // Merge transform from route hooks and plugins. Route transform takes
+            // precedence over plugin transform on key collision.
+            plan.transform = mergeTransformRecords(routeHooks?.transform, plugins);
 
             // Optional, compile-time-only route field analysis. The result is
             // baked into `meta` but is unused at runtime in Phase 2, so it can
@@ -291,26 +290,26 @@ function buildCompiledHandler(
 }
 
 /**
- * Merges provide records from route hooks and plugins. Plugin provide records
- * are applied first, then route-level provide overrides on key collision.
+ * Merges transform records from route hooks and plugins. Plugin transform records
+ * are applied first, then route-level transform overrides on key collision.
  */
-function mergeProvideRecords(
-    routeProvide: ProvideMap | undefined,
+function mergeTransformRecords(
+    routeTransform: TransformMap | undefined,
     plugins?: ResolvedPlugin[]
-): ProvideMap | undefined {
-    const merged: ProvideMap = {};
+): TransformMap | undefined {
+    const merged: TransformMap = {};
     if (plugins) {
         for (const p of plugins) {
-            if (p.hooks.provide) {
-                for (const k of Object.keys(p.hooks.provide)) {
-                    merged[k] = p.hooks.provide[k];
+            if (p.hooks.transform) {
+                for (const k of Object.keys(p.hooks.transform)) {
+                    merged[k] = p.hooks.transform[k];
                 }
             }
         }
     }
-    if (routeProvide) {
-        for (const k of Object.keys(routeProvide)) {
-            merged[k] = routeProvide[k];
+    if (routeTransform) {
+        for (const k of Object.keys(routeTransform)) {
+            merged[k] = routeTransform[k];
         }
     }
     return Object.keys(merged).length > 0 ? merged : undefined;

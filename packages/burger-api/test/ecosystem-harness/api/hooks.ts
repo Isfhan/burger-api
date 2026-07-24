@@ -32,4 +32,4 @@ if (!mw) {
 }
 
 // Self-contained: dynamic middleware selection per route (test fixture pattern).
-export const beforeHandle = [mw];
+export const beforeRoute = [mw];

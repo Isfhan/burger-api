@@ -312,7 +312,7 @@ function colorize(info: LogInfo, message: string): string {
  * // api/hooks.ts
  * import { logger } from 'burger-api/middleware/logger';
  *
- * export const beforeHandle = [logger()];
+ * export const beforeRoute = [logger()];
  * ```
  */
 export function logger(): Middleware {

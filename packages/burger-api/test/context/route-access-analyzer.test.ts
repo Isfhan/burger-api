@@ -29,7 +29,7 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         const def = {
             path: '/x',
             handlers: { GET: (req: any) => void req.route },
-            hooks: { beforeHandle: [mw] },
+            hooks: { beforeRoute: [mw] },
         } as unknown as RouteDefinition;
         const info = analyzeRouteAccess(def);
         expect(info.has('headers')).toBe(true);
@@ -78,15 +78,15 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
             path: '/x',
             handlers: { GET: (req: any) => new Response('ok') },
             hooks: {
-                beforeHandle: [(req: any) => undefined],
+                beforeRoute: [(req: any) => undefined],
                 onError: [(err: any, req: any) => undefined],
             },
         } as unknown as RouteDefinition;
         const info = analyzeRouteAccess(def);
-        expect(info.hooks.has('beforeHandle')).toBe(true);
+        expect(info.hooks.has('beforeRoute')).toBe(true);
         expect(info.hooks.has('onError')).toBe(true);
-        expect(info.hooks.has('afterHandle')).toBe(false);
-        expect(info.hooks.has('onResponse')).toBe(false);
+        expect(info.hooks.has('afterRoute')).toBe(false);
+        expect(info.hooks.has('mapResponse')).toBe(false);
     });
 
     it('reports empty hooks when route has no hooks', () => {
@@ -102,9 +102,9 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         const def = {
             path: '/x',
             handlers: { GET: (req: any) => new Response('ok') },
-            hooks: { afterHandle: [(req: any) => undefined] },
+            hooks: { afterRoute: [(req: any) => undefined] },
         } as unknown as RouteDefinition;
         const info = analyzeRouteAccess(def, true);
-        expect(info.hooks.has('afterHandle')).toBe(true);
+        expect(info.hooks.has('afterRoute')).toBe(true);
     });
 });

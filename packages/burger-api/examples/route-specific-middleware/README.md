@@ -26,7 +26,7 @@ This example includes:
 
 -   Applied only to specific routes
 -   Executed after global hooks
--   Defined in route `hooks.ts` as `export const beforeHandle`
+-   Defined in route `hooks.ts` as `export const beforeRoute`
 
 ### 3. Hooks Combination
 
@@ -211,7 +211,7 @@ route-specific-middleware/
 // api/hooks.ts
 import type { BurgerRequest, BurgerNext } from 'burger-api';
 
-export const beforeHandle = [
+export const beforeRoute = [
     (req: BurgerRequest): BurgerNext => {
         console.log('Global hook executed for request:', req.url);
         return undefined;
@@ -225,7 +225,7 @@ export const beforeHandle = [
 // api/products/hooks.ts
 import type { BurgerRequest, BurgerNext } from 'burger-api';
 
-export const beforeHandle = [
+export const beforeRoute = [
     (req: BurgerRequest): BurgerNext => {
         console.log('Products route-specific hook executed');
         return undefined;
@@ -255,6 +255,6 @@ If hooks are not executing:
 
 1. **Check hooks definition**: Ensure hooks are correctly defined in `hooks.ts`
 2. **Check server logs**: Look for hooks execution messages
-3. **Check route files**: Ensure route-specific hooks are exported via `beforeHandle`
-4. **Check global hooks**: Ensure `api/hooks.ts` exports a `beforeHandle` array
+3. **Check route files**: Ensure route-specific hooks are exported via `beforeRoute`
+4. **Check global hooks**: Ensure `api/hooks.ts` exports a `beforeRoute` array
 

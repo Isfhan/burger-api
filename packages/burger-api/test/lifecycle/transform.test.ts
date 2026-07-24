@@ -3,14 +3,14 @@ import { executeHookPlan } from '../../src/lifecycle/executor';
 import type { HookPlan } from '../../src/lifecycle/types';
 import { BurgerContext } from '../../src/context/context';
 
-describe('provide (Phase 4 M3)', () => {
-    it('injects provided values onto the context before the handler', async () => {
+describe('transform (Phase 4 M3)', () => {
+    it('injects transformed values onto the context before the handler', async () => {
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [],
-            provide: {
+            transform: {
                 user: () => ({ id: 1, name: 'alice' }),
                 tenant: (req) => req.headers.get('X-Tenant') ?? 'default',
             },
@@ -31,18 +31,18 @@ describe('provide (Phase 4 M3)', () => {
         expect(captured.tenant).toBe('acme');
     });
 
-    it('does not run provide when beforeHandle short-circuits', async () => {
-        let provideRan = false;
+    it('does not run transform when beforeRoute short-circuits', async () => {
+        let transformRan = false;
         const plan: HookPlan = {
-            beforeHandle: [
+            beforeRoute: [
                 () => new Response('blocked', { status: 403 }),
             ],
-            afterHandle: [],
-            onResponse: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [],
-            provide: {
+            transform: {
                 user: () => {
-                    provideRan = true;
+                    transformRan = true;
                     return { id: 1 };
                 },
             },
@@ -55,16 +55,16 @@ describe('provide (Phase 4 M3)', () => {
             GET: () => new Response('ok', { status: 200 }),
         }, new Request('http://h/test'));
         expect(res.status).toBe(403);
-        expect(provideRan).toBe(false);
+        expect(transformRan).toBe(false);
     });
 
-    it('allows route-level provide to reference values from global provide', async () => {
+    it('allows route-level transform to reference values from global transform', async () => {
         const plan: HookPlan = {
-            beforeHandle: [],
-            afterHandle: [],
-            onResponse: [],
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [],
-            provide: {
+            transform: {
                 base: () => 10,
                 total: (req) => {
                     const ctx = req as unknown as Record<string, unknown>;
@@ -87,23 +87,23 @@ describe('provide (Phase 4 M3)', () => {
         expect(total).toBe(15);
     });
 
-    it('injects values after beforeHandle but before the handler', async () => {
+    it('injects values after beforeRoute but before the handler', async () => {
         const order: string[] = [];
         const plan: HookPlan = {
-            beforeHandle: [
+            beforeRoute: [
                 (req) => {
                     const r = req as unknown as Record<string, unknown>;
-                    // provide should NOT have run yet
+                    // transform should NOT have run yet
                     expect(r.user).toBeUndefined();
-                    order.push('beforeHandle');
+                    order.push('beforeRoute');
                 },
             ],
-            afterHandle: [],
-            onResponse: [],
+            afterRoute: [],
+            mapResponse: [],
             onError: [],
-            provide: {
+            transform: {
                 user: () => {
-                    order.push('provide');
+                    order.push('transform');
                     return { id: 1 };
                 },
             },
@@ -120,6 +120,6 @@ describe('provide (Phase 4 M3)', () => {
                 return new Response('ok', { status: 200 });
             },
         }, new Request('http://h/test'));
-        expect(order).toEqual(['beforeHandle', 'provide', 'handler']);
+        expect(order).toEqual(['beforeRoute', 'transform', 'handler']);
     });
 });

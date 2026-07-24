@@ -5,8 +5,8 @@ import type {
     RouteMeta,
 } from '../context/types';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
-import type { RouteHooks, ProvideMap } from '../lifecycle/types';
-export type { RouteHooks, ProvideMap } from '../lifecycle/types';
+import type { RouteHooks, TransformMap } from '../lifecycle/types';
+export type { RouteHooks, TransformMap } from '../lifecycle/types';
 
 /** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
 type BunServerOptions = Parameters<typeof serve>[0];
@@ -225,12 +225,12 @@ export interface RouteDefinition {
      */
     handlers: { [method: string]: RequestHandler };
     /**
-     * Lifecycle hooks declared in `hooks.ts` (Phase 4). Carried raw from the
+     * Lifecycle hooks declared in `hooks.ts`. Carried raw from the
      * compiler and compiled into a frozen `HookPlan` by RouterCompiler. Mapped
-     * onto the single pipeline: `beforeHandle` (global → route) runs before
-     * the handler; `afterHandle` / `onResponse` are response phases
-     * (ROADMAP-phase4 §4.6). `route.ts` contains handlers only — there is no
-     * per-route `middleware` export (ROADMAP.md §3.2 / §3.4).
+     * onto the single pipeline: `beforeRoute` (global → route) runs before
+     * the handler; `afterRoute` / `mapResponse` are response phases.
+     * `route.ts` contains handlers only — there is no
+     * per-route `middleware` export.
      */
     hooks?: RouteHooks;
 

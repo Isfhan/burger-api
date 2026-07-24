@@ -8,7 +8,7 @@ import type { MacroFn } from '../../src/plugin/types';
 describe('MacroRegistry (Phase 4 M6)', () => {
     it('registers and checks a macro', () => {
         const reg = new MacroRegistry();
-        reg.register('auth', () => ({ beforeHandle: [() => undefined] }));
+        reg.register('auth', () => ({ beforeRoute: [() => undefined] }));
         expect(reg.has('auth')).toBe(true);
         expect(reg.has('missing')).toBe(false);
     });
@@ -16,11 +16,11 @@ describe('MacroRegistry (Phase 4 M6)', () => {
     it('expands a registered macro into RouteHooks', () => {
         const reg = new MacroRegistry();
         reg.register('auth', () => ({
-            beforeHandle: [() => 'auth-check'],
+            beforeRoute: [() => 'auth-check'],
         }));
         const hooks = reg.expand('auth');
         expect(hooks).toBeDefined();
-        expect(hooks!.beforeHandle).toHaveLength(1);
+        expect(hooks!.beforeRoute).toHaveLength(1);
     });
 
     it('returns undefined for unknown macro', () => {
@@ -30,8 +30,8 @@ describe('MacroRegistry (Phase 4 M6)', () => {
 
     it('expandAll returns ResolvedPlugin entries with plugin scope', () => {
         const reg = new MacroRegistry();
-        reg.register('a', () => ({ beforeHandle: [() => 'a'] }));
-        reg.register('b', () => ({ beforeHandle: [() => 'b'] }));
+        reg.register('a', () => ({ beforeRoute: [() => 'a'] }));
+        reg.register('b', () => ({ beforeRoute: [() => 'b'] }));
         const result = reg.expandAll();
         expect(result).toHaveLength(2);
         for (const entry of result) {
@@ -55,19 +55,19 @@ describe('Macro hook composition (Phase 4 M6)', () => {
         const order: string[] = [];
 
         // Validation (global)
-        chain.add({ stage: 'beforeHandle', fn: () => { order.push('global'); }, scope: 'global', owner: 'fw' });
+        chain.add({ stage: 'beforeRoute', fn: () => { order.push('global'); }, scope: 'global', owner: 'fw' });
 
         // Macro expanded hooks (treated as plugin scope)
         const macroPlugins = [
-            { name: 'auth-macro', hooks: { beforeHandle: [() => { order.push('macro'); }] }, scope: 'plugin' as const },
+            { name: 'auth-macro', hooks: { beforeRoute: [() => { order.push('macro'); }] }, scope: 'plugin' as const },
         ];
         composePluginHooks(chain, macroPlugins, '/r');
 
         // Route (local)
-        chain.addStage('beforeHandle', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
 
         const plan = flatten(chain, '/r');
-        for (const h of plan.beforeHandle) {
+        for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
         expect(order).toEqual(['global', 'macro', 'local']);
@@ -78,15 +78,15 @@ describe('Macro hook composition (Phase 4 M6)', () => {
         const order: string[] = [];
 
         const allPlugins = [
-            { name: 'plugin-a', hooks: { beforeHandle: [() => { order.push('plugin-a'); }] }, scope: 'plugin' as const },
-            { name: 'macro-a', hooks: { beforeHandle: [() => { order.push('macro-a'); }] }, scope: 'plugin' as const },
-            { name: 'plugin-b', hooks: { beforeHandle: [() => { order.push('plugin-b'); }] }, scope: 'plugin' as const },
+            { name: 'plugin-a', hooks: { beforeRoute: [() => { order.push('plugin-a'); }] }, scope: 'plugin' as const },
+            { name: 'macro-a', hooks: { beforeRoute: [() => { order.push('macro-a'); }] }, scope: 'plugin' as const },
+            { name: 'plugin-b', hooks: { beforeRoute: [() => { order.push('plugin-b'); }] }, scope: 'plugin' as const },
         ];
         composePluginHooks(chain, allPlugins, '/r');
-        chain.addStage('beforeHandle', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
 
         const plan = flatten(chain, '/r');
-        for (const h of plan.beforeHandle) {
+        for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
         // Preserves insertion order within the same scope

@@ -1,3 +1,3 @@
 import { globalMiddleware1 } from '../middleware';
 
-export const beforeHandle = [globalMiddleware1];
+export const beforeRoute = [globalMiddleware1];

@@ -4,13 +4,13 @@ import type { Plugin } from '../../src/plugin/types';
 const auditLogger: Plugin = {
     name: 'audit-logger',
     hooks: {
-        beforeHandle: [
+        beforeRoute: [
             (req) => {
                 const url = new URL(req.url);
                 console.log(`[audit] ${req.method} ${url.pathname}`);
             },
         ],
-        provide: {
+        transform: {
             auditTimestamp: () => Date.now(),
         },
     },
@@ -18,7 +18,7 @@ const auditLogger: Plugin = {
 
 const burger = new Burger({
     title: 'Plugin Usage Example',
-    description: 'Demonstrates registering a plugin with beforeHandle hooks and provide values.',
+    description: 'Demonstrates registering a plugin with beforeRoute hooks and transform values.',
     apiDir: setDir(__dirname, 'api'),
 });
 

@@ -1,3 +1,3 @@
 import { globalLogger, authGuard, rateLimiter, corsMiddleware } from '../middleware';
 
-export const beforeHandle = [globalLogger, corsMiddleware, rateLimiter, authGuard];
+export const beforeRoute = [globalLogger, corsMiddleware, rateLimiter, authGuard];

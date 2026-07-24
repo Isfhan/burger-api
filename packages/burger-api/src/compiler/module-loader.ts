@@ -128,7 +128,7 @@ export class ModuleLoader {
      * Merges two already-resolved hook objects (e.g. from `hooks.ts` files and
      * inline `route.ts` `hooks`). For array-valued hook keys both arrays are
      * concatenated (base first, then override); scalar/object values are
-     * overridden by `override`. The `provide` key is deep-merged (base then
+     * overridden by `override`. The `transform` key is deep-merged (base then
      * override). Returns undefined when both are empty.
      */
     private mergeHookObjects(
@@ -139,7 +139,7 @@ export class ModuleLoader {
         for (const key of Object.keys(override ?? {})) {
             const b = result[key];
             const o = (override as Record<string, unknown>)[key];
-            if (key === 'provide') {
+            if (key === 'transform') {
                 result[key] = { ...(b as Record<string, unknown> ?? {}), ...(o as Record<string, unknown> ?? {}) };
             } else if (Array.isArray(b) && Array.isArray(o)) {
                 result[key] = [...b, ...o];

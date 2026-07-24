@@ -20,9 +20,9 @@ export function flatten(
 ): HookPlan {
     const nodes = chain.getNodes();
 
-    const beforeHandle: Hook[] = [];
-    const afterHandle: Hook[] = [];
-    const onResponse: Hook[] = [];
+    const beforeRoute: Hook[] = [];
+    const afterRoute: Hook[] = [];
+    const mapResponse: Hook[] = [];
     const onError: ErrorHook[] = [];
 
     const globalBefore: Hook[] = [];
@@ -43,21 +43,21 @@ export function flatten(
 
     for (const node of nodes) {
         switch (node.stage) {
-            case 'beforeHandle': {
+            case 'beforeRoute': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'global') globalBefore.push(fn);
                 else if (node.scope === 'plugin') pluginBefore.push(fn);
                 else localBefore.push(fn);
                 break;
             }
-            case 'afterHandle': {
+            case 'afterRoute': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'global') globalAfter.push(fn);
                 else if (node.scope === 'plugin') pluginAfter.push(fn);
                 else localAfter.push(fn);
                 break;
             }
-            case 'onResponse': {
+            case 'mapResponse': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'global') globalResp.push(fn);
                 else if (node.scope === 'plugin') pluginResp.push(fn);
@@ -74,10 +74,10 @@ export function flatten(
         }
     }
 
-    beforeHandle.push(...globalBefore, ...pluginBefore, ...localBefore);
-    afterHandle.push(...globalAfter, ...pluginAfter, ...localAfter);
-    onResponse.push(...globalResp, ...pluginResp, ...localResp);
+    beforeRoute.push(...globalBefore, ...pluginBefore, ...localBefore);
+    afterRoute.push(...globalAfter, ...pluginAfter, ...localAfter);
+    mapResponse.push(...globalResp, ...pluginResp, ...localResp);
     onError.push(...localError, ...pluginError, ...globalError);
 
-    return { beforeHandle, afterHandle, onResponse, onError };
+    return { beforeRoute, afterRoute, mapResponse, onError };
 }
