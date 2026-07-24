@@ -1,4 +1,5 @@
 import type { BurgerContext } from '../context/context';
+import type { CompiledRouteValidators } from '../validation/types';
 
 /**
  * The forward lifecycle phases that run inside the single request pipeline.
@@ -8,7 +9,7 @@ import type { BurgerContext } from '../context/context';
  *   onRequest → Routing → transform → Validation → beforeRoute
  *   → Handler → afterRoute → mapResponse → applySet
  */
-export type HookStage = 'beforeRoute' | 'afterRoute' | 'mapResponse';
+export type HookStage = 'validation' | 'beforeRoute' | 'afterRoute' | 'mapResponse';
 
 /**
  * A lifecycle hook function.
@@ -39,12 +40,17 @@ export type ErrorHook = (
  * The frozen, per-route, per-phase hook plan. Composed ONCE at compile time
  * (RouterCompiler.compile) and executed inside the single pipeline.
  *
- * `beforeRoute[0]` is reserved for the wrapped validation hook
- * (pinned first by default). `onError` is a separate error-path array — it is
- * only consulted when the forward pipeline throws.
+ * `validation` runs after `transform` but before `beforeRoute`. It is a
+ * single hook (not an array) — validation is a framework-owned stage, not
+ * a user-extensible hook point.
+ *
+ * `onError` is a separate error-path array — it is only consulted when
+ * the forward pipeline throws.
  */
 export interface HookPlan {
-    /** Runs global → route; includes the pinned validation hook at [0]. */
+    /** Framework-owned validation stage; runs after transform, before beforeRoute. */
+    validation?: Hook;
+    /** Runs global → route. */
     beforeRoute: Hook[];
     /** Response-transform phase; runs route → global. */
     afterRoute: Hook[];
@@ -57,6 +63,8 @@ export interface HookPlan {
      * Runs before the handler, after `beforeRoute`. Never mutated at runtime.
      */
     transform?: TransformMap;
+    /** Compiled route validators; used for response validation post-handler. */
+    validators?: CompiledRouteValidators;
 }
 
 /**

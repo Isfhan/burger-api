@@ -6,6 +6,7 @@ import {
     clearValidatorCache,
 } from '../../src/validation/compiler';
 import { createValidatorMiddleware } from '../../src/validation/validator';
+import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
 /** Builds a minimal BurgerContext-like object for the orchestrator. */
@@ -43,19 +44,15 @@ describe('Coercion end-to-end (M4)', () => {
         expect((req.validated as any).query).toEqual({ n: 42, b: true });
     });
 
-    it('leaves values as strings when coercion is OFF (default)', async () => {
+    it('throws ValidationError when coercion is OFF (default)', async () => {
         const schema = {
             get: { query: z.object({ n: z.number() }) },
         };
         const validators = compileRouteSchema(schema, { coerce: false });
         const middleware = createValidatorMiddleware(validators);
         const req = fakeReq('get', { n: '42' });
-        const next = await middleware(req);
-        // Without coercion, "42" is not a number => 400 error response.
-        expect(next).toBeInstanceOf(Response);
-        if (next instanceof Response) {
-            expect(next.status).toBe(400);
-        }
+        // Without coercion, "42" is not a number => ValidationError.
+        await expect(middleware(req)).rejects.toThrow(ValidationError);
     });
 
     it('does not build a coercion plan when disabled', () => {

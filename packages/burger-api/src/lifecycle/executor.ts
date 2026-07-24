@@ -4,12 +4,14 @@ import type { HookPlan, Hook, ErrorHook } from './types';
 import { runHooks } from './hook-runner';
 import { methodNotAllowed } from '../utils/response';
 import { applyTransform } from './transform';
+import { ValidationError } from '../validation/error';
+import { validateResponse } from '../validation/response';
 
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
  *
  * Fixed forward order:
- *   beforeRoute (validation pinned at [0], then user hooks)
+ *   transform → validation → beforeRoute
  *     → handler → afterRoute → mapResponse
  *
  * On throw the {@link HookPlan#onError} chain is dispatched nearest-first
@@ -34,20 +36,49 @@ export async function executeHookPlan(
     }
 
     try {
-        // `transform` runs after beforeRoute but before the handler.
-        // Wrap the handler to inject transformed values between the two stages.
-        const wrappedHandler: RequestHandler = plan.transform
-            ? (c) => {
-                  applyTransform(c, plan.transform!);
-                  return handler(c);
-              }
-            : handler;
+        // 1. Transform — inject derived values onto the context.
+        if (plan.transform) {
+            applyTransform(ctx, plan.transform);
+        }
 
+        // 2. Validation — framework-owned stage; throws ValidationError on failure.
+        if (plan.validation) {
+            await plan.validation(ctx);
+        }
+
+        // 3. beforeRoute → handler.
         let response = await runHooks(
             ctx,
             plan.beforeRoute as unknown as Hook[],
-            wrappedHandler
+            handler
         );
+
+        // 4. Response validation — post-handler, pre-afterRoute.
+        // Validates the handler's return against declared response schemas.
+        if (plan.validators?.response) {
+            try {
+                // Only validate JSON responses.
+                const ct = response.headers.get('content-type') ?? '';
+                if (ct.includes('application/json')) {
+                    // Clone to avoid consuming the body stream.
+                    const clone = response.clone();
+                    const body = await clone.json();
+                    const outcome = validateResponse(
+                        plan.validators,
+                        method,
+                        response.status,
+                        body,
+                        {},
+                        false
+                    );
+                    if (!outcome.ok && outcome.errorResponse) {
+                        return outcome.errorResponse;
+                    }
+                }
+            } catch {
+                // Response body not JSON or unparseable — skip validation.
+            }
+        }
 
         response = await runResponsePhase(plan.afterRoute, ctx, response);
         response = await runResponsePhase(plan.mapResponse, ctx, response);
@@ -63,8 +94,10 @@ export async function executeHookPlan(
  *
  * Each hook may return a `Response` to handle the error. If a hook itself
  * throws it is silently skipped (no recursion). Returns the first `Response`
- * an `onError` returns, or re-throws the original error when no hook handles
- * it — the adapter then falls through to `errorResponse`.
+ * an `onError` returns.
+ *
+ * Default fallback: unhandled `ValidationError` renders a 422 RFC 9457
+ * response (production-safe, no dev diagnostics).
  */
 async function dispatchOnError(
     error: unknown,
@@ -82,6 +115,12 @@ async function dispatchOnError(
             // onError threw — skip to next; never re-enter onError
         }
     }
+
+    // Default fallback: unhandled ValidationError → 422 RFC 9457.
+    if (error instanceof ValidationError) {
+        return error.toResponse(false);
+    }
+
     throw error;
 }
 

@@ -362,6 +362,10 @@ export { setDir } from './utils/index';
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
 
+// Export error classes (Phase 3)
+export { HTTPError } from './errors/http-error';
+export { ValidationError } from './validation/error';
+
 // Export types
 export type {
     ServerOptions,

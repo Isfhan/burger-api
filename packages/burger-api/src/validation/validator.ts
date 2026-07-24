@@ -20,9 +20,9 @@
 import type { BurgerContext } from '../context/context';
 import type { BurgerNext } from '../types/index';
 import type { Hook } from '../lifecycle/types';
-import type { CompiledRouteValidators, ValidatorConfig } from './types';
+import type { CompiledRouteValidators, ValidatorConfig, ValidationIssue, ValidationSlot } from './types';
 import { apply as applyCoercion } from './coerce';
-import { renderValidationError } from './error';
+import { ValidationError } from './error';
 
 /**
  * Splits a `Cookie` header into `name=value` pairs, honoring RFC 6265 quoted
@@ -87,11 +87,15 @@ function parseCookies(header: string): Record<string, string> {
 }
 
 /**
- * Builds the validation middleware from precompiled route validators.
+ * Builds the validation hook from precompiled route validators.
+ *
+ * On failure, throws a `ValidationError` (status 422) into the `onError`
+ * pipeline. The framework's default onError handler renders the RFC 9457
+ * response.
  *
  * @param validators - the compiled validators for this route (may be empty).
- * @param config - the validator config (error format / renderer / mode).
- * @param isDev - dev mode (observe-only, full diagnostics) flag.
+ * @param _config - reserved for future use (error format / renderer).
+ * @param _isDev - reserved for future use (dev diagnostics).
  */
 export function createValidatorMiddleware(
     validators: CompiledRouteValidators,
@@ -112,21 +116,13 @@ export function createValidatorMiddleware(
 
         const validated: Record<string, unknown> = {};
 
-        // Lazy errors — created only when a failure occurs (legacy 99).
-        let errors: {
-            params?: unknown;
-            query?: unknown;
-            headers?: unknown;
-            cookie?: unknown;
-            body?: unknown;
-        } | null = null;
+        // Track errors per slot — only populated on failure.
+        let errorsBySlot: Record<string, ValidationIssue[]> | null = null;
 
         const coercion = methodValidators.coercion;
 
         // Params
         if (methodValidators.params && ctx.params) {
-            // Apply coercion (if a plan exists) BEFORE validation so bad
-            // coercions fail loudly (phase3 §18 R2). Only when enabled.
             const input = coercion?.params
                 ? applyCoercion(coercion.params, ctx.params as any)
                 : ctx.params;
@@ -134,12 +130,12 @@ export function createValidatorMiddleware(
             if (result.success) {
                 (validated as any).params = result.data;
             } else {
-                if (!errors) errors = {};
-                errors.params = result.issues;
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.params = result.issues;
             }
         }
 
-        // Query (lazy ctx.query, fast Bun-native parser)
+        // Query
         if (methodValidators.query) {
             const queryParams = (ctx.query ?? {}) as Record<
                 string,
@@ -152,12 +148,12 @@ export function createValidatorMiddleware(
             if (result.success) {
                 (validated as any).query = result.data;
             } else {
-                if (!errors) errors = {};
-                errors.query = result.issues;
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.query = result.issues;
             }
         }
 
-        // Headers (validate header values; additive slot, phase3 §5/M5)
+        // Headers
         if (methodValidators.headers) {
             const headerRecord: Record<string, string> = {};
             ctx.headers.forEach((value, key) => {
@@ -170,12 +166,12 @@ export function createValidatorMiddleware(
             if (result.success) {
                 (validated as any).headers = result.data;
             } else {
-                if (!errors) errors = {};
-                errors.headers = result.issues;
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.headers = result.issues;
             }
         }
 
-        // Cookie (validate parsed cookie values; cookie *signing* is Phase 7)
+        // Cookie
         if (methodValidators.cookie) {
             const cookieHeader = ctx.headers.get('cookie') ?? '';
             const cookieRecord = parseCookies(cookieHeader);
@@ -186,8 +182,8 @@ export function createValidatorMiddleware(
             if (result.success) {
                 (validated as any).cookie = result.data;
             } else {
-                if (!errors) errors = {};
-                errors.cookie = result.issues;
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.cookie = result.issues;
             }
         }
 
@@ -203,40 +199,29 @@ export function createValidatorMiddleware(
                     const result = methodValidators.body.validate(bodyData);
                     if (result.success) {
                         (validated as any).body = result.data;
-                        // Patch json() to return validated body
                         ctx.json = async () => result.data;
                     } else {
-                        if (!errors) errors = {};
-                        errors.body = result.issues;
+                        if (!errorsBySlot) errorsBySlot = {};
+                        errorsBySlot.body = result.issues;
                     }
                 } catch (error: unknown) {
                     const msg =
                         error instanceof Error
                             ? error.message
                             : String(error);
-                    if (!errors) errors = {};
-                    errors.body = [{ message: msg }];
+                    if (!errorsBySlot) errorsBySlot = {};
+                    errorsBySlot.body = [{ path: [], message: msg }];
                 }
             }
         }
 
-        if (errors) {
-            // M6: render the structured error body (mode-gated, custom renderer
-            // supported, problem+json shape opt-in). The body never leaks
-            // stacks/source in production (phase3 §18 R7).
-            const allIssues = Object.values(errors).flat() as any[];
-            const result: import('./types').ValidationResult = {
-                success: false,
-                issues: allIssues,
-            };
-            return renderValidationError(result, {
-                status: 400,
-                isDev,
-                // Preserve every failing slot as its own key so consumers can
-                // read errors per slot (legacy behavior). The flat `issues`
-                // array feeds the problem+json format.
-                errorsBySlot: errors as Record<string, any[]>,
-                config,
+        if (errorsBySlot) {
+            // Throw into the onError pipeline — the framework renders the
+            // RFC 9457 response via the default onError fallback.
+            const allIssues = Object.values(errorsBySlot).flat();
+            const firstSlot = Object.keys(errorsBySlot)[0] as ValidationSlot;
+            throw new ValidationError(firstSlot, allIssues, {
+                errorsBySlot,
             });
         }
 

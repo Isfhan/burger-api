@@ -16,12 +16,12 @@ function bodyOf(res: Response): any {
 describe('renderValidationError (M6)', () => {
     it('plain format emits issues under the slot key', async () => {
         const res = renderValidationError(fail, {
-            status: 400,
+            status: 422,
             isDev: false,
             slot: 'query',
             config: {},
         });
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(422);
         const b = await bodyOf(res);
         expect(b.errors.query).toBeDefined();
         expect(b.errors.query[0].path).toEqual(['query', 'n']);
@@ -29,7 +29,7 @@ describe('renderValidationError (M6)', () => {
 
     it('problem+json emits the RFC 9457 shape (path/message only)', async () => {
         const res = renderValidationError(fail, {
-            status: 400,
+            status: 422,
             isDev: false,
             slot: 'query',
             config: { errorFormat: 'problem+json' },
@@ -38,13 +38,13 @@ describe('renderValidationError (M6)', () => {
         const b = await bodyOf(res);
         expect(b.type).toBe('about:blank');
         expect(b.title).toBe('Validation Error');
-        expect(b.status).toBe(400);
+        expect(b.status).toBe(422);
         expect(b.errors[0]).toEqual({ path: ['query', 'n'], message: 'Expected number' });
     });
 
     it('does NOT leak stacks or source in production', async () => {
         const res = renderValidationError(fail, {
-            status: 400,
+            status: 422,
             isDev: false,
             slot: 'query',
             config: {},
@@ -63,7 +63,7 @@ describe('renderValidationError (M6)', () => {
                 ),
         };
         const res = renderValidationError(fail, {
-            status: 400,
+            status: 422,
             isDev: false,
             slot: 'query',
             config,
@@ -77,14 +77,14 @@ describe('renderValidationError (M6)', () => {
         expect(() =>
             renderValidationError(
                 { success: true, data: {} },
-                { status: 400, isDev: false, slot: 'query', config: {} }
+                { status: 422, isDev: false, slot: 'query', config: {} }
             )
         ).toThrow(/renderValidationError called with a successful/);
     });
 
     it('errorsBySlot emits one key per failing slot', async () => {
         const res = renderValidationError(fail, {
-            status: 400,
+            status: 422,
             isDev: false,
             errorsBySlot: {
                 query: [

@@ -3,24 +3,111 @@
  * renderers (phase3 §12.10, §10).
  *
  * Responsibilities:
- * - Put issues into a common `ValidationError` shape.
- * - Render a response body: `plain` (default) or `problem+json` *shape*
- *   (path/message only; the full RFC 9457 `detail`/`instance` fields are
- *   reserved for Phase 6).
+ * - `ValidationError` extends `HTTPError` (status 422).
+ * - Carries structured `ValidationIssue[]` per slot.
+ * - Renders RFC 9457 Problem Details by default.
  * - Mode-gate: dev shows full issues; production strips internals.
  * - Honor a custom `errorRenderer` override (phase3 §10.4).
  *
  * Production bodies never leak stacks/source/schema internals (phase3 §18 R7).
- * The `problem+json` renderer emits only the shape — `detail`/`instance` are
- * intentionally omitted here (Phase 6 owns them).
  */
 
-import type { ValidationIssue, ValidationResult, ValidatorConfig } from './types';
+import { HTTPError } from '../errors/http-error';
+import type { ValidationIssue, ValidationResult, ValidatorConfig, ValidationSlot } from './types';
 
-/** A structured validation error carrying the slot and normalized issues. */
-export interface ValidationError {
-    slot: string;
-    issues: ValidationIssue[];
+/**
+ * A structured validation error thrown when request validation fails.
+ *
+ * Extends `HTTPError` with status 422. Carries the failing slot and
+ * normalized issues. Enters the `onError` pipeline; if no user hook
+ * handles it, the framework renders an RFC 9457 response.
+ */
+export class ValidationError extends HTTPError {
+    override readonly name = 'ValidationError';
+    override readonly status = 422 as const;
+
+    /** The primary request slot that failed validation. */
+    readonly slot: ValidationSlot | 'response';
+
+    /** Normalized field-level issues (all slots combined). */
+    readonly issues: ValidationIssue[];
+
+    /** Per-slot grouping of issues, when available. */
+    readonly errorsBySlot?: Record<string, ValidationIssue[]>;
+
+    constructor(
+        slot: ValidationSlot | 'response',
+        issues: ValidationIssue[],
+        options?: ErrorOptions & { errorsBySlot?: Record<string, ValidationIssue[]> }
+    ) {
+        const summary = issues.length === 1
+            ? issues[0].message
+            : `${issues.length} validation errors`;
+        super(422, `${slot}: ${summary}`, options);
+        this.slot = slot;
+        this.issues = issues;
+        this.errorsBySlot = options?.errorsBySlot;
+    }
+
+    /**
+     * Creates a `ValidationError` from a failed `ValidationResult`.
+     */
+    static from(
+        slot: ValidationSlot | 'response',
+        result: ValidationResult
+    ): ValidationError | null {
+        if (result.success) return null;
+        return new ValidationError(slot, result.issues);
+    }
+
+    /**
+     * Renders this error into an RFC 9457 Problem Details response.
+     *
+     * - In dev mode, includes full issue details.
+     * - In production, strips internal path information.
+     * - Honors a custom `errorRenderer` if provided.
+     */
+    toResponse(
+        isDev: boolean,
+        config: ValidatorConfig = {}
+    ): Response {
+        if (config.errorRenderer) {
+            return config.errorRenderer(
+                { success: false, issues: this.issues },
+                { slot: this.slot as ValidationSlot, status: 422 }
+            );
+        }
+
+        const format = config.errorFormat ?? 'problem+json';
+
+        // Use stored errorsBySlot if available, otherwise group by this.slot.
+        const grouped = this.errorsBySlot ?? { [this.slot]: this.issues };
+
+        if (format === 'problem+json') {
+            return new Response(
+                JSON.stringify({
+                    type: 'about:blank',
+                    title: 'Validation Error',
+                    status: 422,
+                    errors: grouped,
+                }),
+                {
+                    status: 422,
+                    headers: { 'content-type': 'application/problem+json' },
+                }
+            );
+        }
+
+        // Plain format fallback.
+        const body: Record<string, unknown> = { errors: grouped };
+        if (isDev) {
+            (body as any).dev = true;
+        }
+        return new Response(JSON.stringify(body), {
+            status: 422,
+            headers: { 'content-type': 'application/json' },
+        });
+    }
 }
 
 /** Flattens a `ValidationResult` failure into per-slot `ValidationError`s. */
@@ -29,7 +116,7 @@ export function toValidationErrors(
     slot: string
 ): ValidationError[] {
     if (result.success) return [];
-    return [{ slot, issues: result.issues }];
+    return [new ValidationError(slot as ValidationSlot, result.issues)];
 }
 
 export interface RenderContext {
@@ -60,10 +147,6 @@ export function renderValidationError(
     ctx: RenderContext
 ): Response {
     if (result.success) {
-        // This renderer is only ever called with a failed result. A success
-        // reaching here means a caller misuse (e.g. passing a successful
-        // validation to be rendered as an error) — surface it loudly rather
-        // than returning a misleading 200.
         throw new Error(
             '[burger-api] renderValidationError called with a successful ' +
                 'validation result; it only renders failures.'
@@ -108,7 +191,6 @@ export function renderValidationError(
               : { message: issues[0]?.message ?? 'Validation failed' },
     };
     if (ctx.isDev) {
-        // Dev may include the raw code for easier debugging.
         (body as any).dev = true;
     }
     return new Response(JSON.stringify(body), {

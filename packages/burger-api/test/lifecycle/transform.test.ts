@@ -31,7 +31,7 @@ describe('transform (Phase 4 M3)', () => {
         expect(captured.tenant).toBe('acme');
     });
 
-    it('does not run transform when beforeRoute short-circuits', async () => {
+    it('transform runs before beforeRoute (new lifecycle order)', async () => {
         let transformRan = false;
         const plan: HookPlan = {
             beforeRoute: [
@@ -55,7 +55,8 @@ describe('transform (Phase 4 M3)', () => {
             GET: () => new Response('ok', { status: 200 }),
         }, new Request('http://h/test'));
         expect(res.status).toBe(403);
-        expect(transformRan).toBe(false);
+        // Transform runs BEFORE beforeRoute, so it executes even if beforeRoute blocks.
+        expect(transformRan).toBe(true);
     });
 
     it('allows route-level transform to reference values from global transform', async () => {
@@ -87,14 +88,14 @@ describe('transform (Phase 4 M3)', () => {
         expect(total).toBe(15);
     });
 
-    it('injects values after beforeRoute but before the handler', async () => {
+    it('runs transform before beforeRoute in correct order', async () => {
         const order: string[] = [];
         const plan: HookPlan = {
             beforeRoute: [
                 (req) => {
                     const r = req as unknown as Record<string, unknown>;
-                    // transform should NOT have run yet
-                    expect(r.user).toBeUndefined();
+                    // transform HAS run already (new lifecycle order)
+                    expect(r.user).toEqual({ id: 1 });
                     order.push('beforeRoute');
                 },
             ],
@@ -120,6 +121,6 @@ describe('transform (Phase 4 M3)', () => {
                 return new Response('ok', { status: 200 });
             },
         }, new Request('http://h/test'));
-        expect(order).toEqual(['beforeRoute', 'transform', 'handler']);
+        expect(order).toEqual(['transform', 'beforeRoute', 'handler']);
     });
 });

@@ -109,16 +109,21 @@ export interface CoercionPlan {
 export type ResponseSchema = Record<string, SchemaInput>;
 
 /**
- * Configuration surfaced from `ServerOptions` / `burger.config.ts` into the
- * compilation step (phase3 §14.8).
+ * Configuration surfaced from `ServerOptions` into the compilation step
+ * (phase3 §14.8). Defaults match the BurgerAPI Vision:
+ *   - status: 422
+ *   - errorFormat: 'problem+json' (RFC 9457)
+ *   - responseValidation: 'dev'
  */
 export interface ValidatorConfig {
     /** Opt-in string→type coercion. Default false (phase3 §17.1). */
     coerce?: boolean;
     /** Response validation mode. Default 'dev' (phase3 §8.4). */
     responseValidation?: 'off' | 'dev' | 'enforce';
-    /** Error body shape. Default 'plain' (phase3 §10.4). */
+    /** Error body shape. Default 'problem+json' (RFC 9457, phase3 §10.4). */
     errorFormat?: 'plain' | 'problem+json';
+    /** Default HTTP status for validation errors. Default 422. */
+    status?: number;
     /** Custom renderer that fully controls the error body (phase3 §10.4). */
     errorRenderer?: (result: ValidationResult, ctx: {
         slot?: ValidationSlot;

@@ -94,7 +94,7 @@ describe('Nested Dynamic Routes Example', () => {
 
             it('should return validation error for empty user ID', async () => {
                 const response = await fetchAPI('/api/users/');
-                expect([400, 404]).toContain(response.status);
+                expect([422, 404]).toContain(response.status);
             });
         });
 
@@ -132,12 +132,12 @@ describe('Nested Dynamic Routes Example', () => {
 
             it('should return validation error for empty user ID', async () => {
                 const response = await fetchAPI('/api/users//posts/100');
-                expect([400, 404]).toContain(response.status);
+                expect([422, 404]).toContain(response.status);
             });
 
             it('should return validation error for empty post ID', async () => {
                 const response = await fetchAPI('/api/users/1/posts/');
-                expect([400, 404]).toContain(response.status);
+                expect([422, 404]).toContain(response.status);
             });
 
             it('should handle special characters in IDs', async () => {

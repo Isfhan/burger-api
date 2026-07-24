@@ -76,7 +76,7 @@ describe('Zod-Based Schema Validation Example', () => {
 
             it('should return validation error for missing search parameter', async () => {
                 const response = await fetchAPI('/api/products');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('query');
@@ -133,7 +133,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -148,7 +148,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -164,7 +164,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -180,7 +180,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -196,7 +196,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -212,7 +212,7 @@ describe('Zod-Based Schema Validation Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');

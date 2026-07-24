@@ -111,7 +111,7 @@ describe('File-Based Static Page Routing App Example', () => {
 
             it('should return validation error for non-numeric ID', async () => {
                 const response = await fetchAPI('/api/products/abc');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
             });

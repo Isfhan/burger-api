@@ -3,6 +3,38 @@ import { autoOptionsHandler } from '../utils/response';
 import type { openapi, RequestHandler, RouteSchema } from '../types/index';
 import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
 
+/** Uppercase HTTP method names for schema export detection. */
+const HTTP_METHOD_SET = new Set(HTTP_METHODS);
+
+/**
+ * Detects uppercase method exports in a schema module and normalizes them
+ * into the method-keyed `RouteSchema` format.
+ *
+ * If the module exports `GET`, `POST`, etc. (uppercase), they are merged
+ * into `{ get: { body, ... }, post: { body, ... } }`. Lowercase keys
+ * pass through unchanged for backward compatibility.
+ */
+function normalizeSchema(raw: Record<string, unknown>): RouteSchema {
+    const keys = Object.keys(raw);
+    const hasUpper = keys.some((k) => HTTP_METHOD_SET.has(k));
+
+    if (!hasUpper) {
+        // Already in method-keyed format or no recognizable methods.
+        return raw as RouteSchema;
+    }
+
+    const merged: Record<string, unknown> = {};
+    for (const key of keys) {
+        if (HTTP_METHOD_SET.has(key)) {
+            merged[key.toLowerCase()] = raw[key];
+        } else {
+            // Non-method keys pass through (e.g. `coerce`).
+            merged[key] = raw[key];
+        }
+    }
+    return merged as RouteSchema;
+}
+
 /**
  * The second stage of the compiler pipeline (`ROADMAP.md` §2.1 step 2).
  *
@@ -56,7 +88,8 @@ export class ModuleLoader {
         const handlers = this.extractHandlers(routeMod);
 
         // 2. Load convention files from this route's own directory only.
-        const schema = await this.loadOptional<RouteSchema>(route.localFiles.schema);
+        const rawSchema = await this.loadOptional<Record<string, unknown>>(route.localFiles.schema);
+        const schema = rawSchema ? normalizeSchema(rawSchema) : undefined;
         const openapi = await this.loadOptional<openapi>(route.localFiles.openapi);
         const hooks = await this.loadOptional<Record<string, unknown>>(route.localFiles.hooks);
         const config = await this.loadOptional<Record<string, unknown>>(route.localFiles.config);

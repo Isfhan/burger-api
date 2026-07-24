@@ -20,6 +20,7 @@ export function flatten(
 ): HookPlan {
     const nodes = chain.getNodes();
 
+    let validation: Hook | undefined;
     const beforeRoute: Hook[] = [];
     const afterRoute: Hook[] = [];
     const mapResponse: Hook[] = [];
@@ -43,6 +44,13 @@ export function flatten(
 
     for (const node of nodes) {
         switch (node.stage) {
+            case 'validation': {
+                // Validation is framework-owned — only one is expected.
+                // If multiple are added (e.g. plugin + framework), the last
+                // one wins (framework's).
+                validation = node.fn as Hook;
+                break;
+            }
             case 'beforeRoute': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'global') globalBefore.push(fn);
@@ -79,5 +87,7 @@ export function flatten(
     mapResponse.push(...globalResp, ...pluginResp, ...localResp);
     onError.push(...localError, ...pluginError, ...globalError);
 
-    return { beforeRoute, afterRoute, mapResponse, onError };
+    const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
+    if (validation) plan.validation = validation;
+    return plan;
 }

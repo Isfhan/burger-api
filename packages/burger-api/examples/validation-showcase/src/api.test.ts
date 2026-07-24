@@ -39,14 +39,14 @@ describe('validation demo — integration', () => {
 
     it('coercion: invalid coercion fails with 400 (loud, no silent NaN)', async () => {
         const res = await fetch(`${BASE_URL}/api/coerce?n=abc&b=true`);
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(422);
         const body = await res.json();
         expect(body.errors).toBeDefined();
     });
 
     it('headers slot: missing required header → 400', async () => {
         const res = await fetch(`${BASE_URL}/api/headers`);
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(422);
         const body = await res.json();
         expect(body.errors.headers).toBeDefined();
     });
@@ -69,7 +69,7 @@ describe('validation demo — integration', () => {
 
     it('cookie slot: missing cookie → 400', async () => {
         const res = await fetch(`${BASE_URL}/api/cookie`);
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(422);
     });
 
     it('model ref: string-ref query resolves from registry', async () => {
@@ -88,7 +88,7 @@ describe('validation demo — integration', () => {
 
     it('response validation (enforce): prod body never leaks internals', async () => {
         // Enforce mode returns a safe 500 on mismatch; this route is correct, so
-        // we assert the general invariant that a 400/500 body has no stack/source.
+        // we assert the general invariant that a 422/500 body has no stack/source.
         const bad = await fetch(`${BASE_URL}/api/coerce?n=abc`);
         const text = JSON.stringify(await bad.json());
         expect(text).not.toContain('stack');

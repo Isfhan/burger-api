@@ -93,7 +93,7 @@ describe('OpenAPI and Swagger UI Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -120,7 +120,7 @@ describe('OpenAPI and Swagger UI Example', () => {
 
             it('should return validation error for invalid ID', async () => {
                 const response = await fetchAPI('/api/products/invalid');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('params');

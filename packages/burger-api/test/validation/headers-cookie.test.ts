@@ -6,6 +6,7 @@ import {
     clearValidatorCache,
 } from '../../src/validation/compiler';
 import { createValidatorMiddleware } from '../../src/validation/validator';
+import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
 function fakeReq(
@@ -44,16 +45,20 @@ describe('headers/cookie slots + response (M5)', () => {
         expect((req.validated as any).headers).toEqual({ 'x-api-key': 'abc' });
     });
 
-    it('rejects missing header with 400', async () => {
+    it('throws ValidationError for missing header', async () => {
         const schema = {
             get: { headers: z.object({ 'x-api-key': z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
         const req = fakeReq('get', {});
-        const next = await mw(req);
-        expect(next).toBeInstanceOf(Response);
-        if (next instanceof Response) expect(next.status).toBe(400);
+        try {
+            await mw(req);
+            expect(true).toBe(false); // should not reach
+        } catch (e) {
+            expect(e).toBeInstanceOf(ValidationError);
+            expect((e as ValidationError).status).toBe(422);
+        }
     });
 
     it('validates cookie values', async () => {
@@ -69,14 +74,10 @@ describe('headers/cookie slots + response (M5)', () => {
 
     it('parses RFC 6265 quoted cookie values containing ; and =', async () => {
         const schema = {
-            // Both keys are declared so Zod retains them (default .object() strips
-            // unknown keys). This verifies the quoted value is parsed correctly
-            // AND the second cookie pair is preserved.
             get: { cookie: z.object({ session: z.string(), csrftoken: z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        // Quoted value contains ';' and '=' which must not split the pair.
         const req = fakeReq('get', { cookie: 'session="a;b=c"; csrftoken=token' });
         await mw(req);
         expect((req.validated as any).cookie).toEqual({
@@ -95,7 +96,7 @@ describe('headers/cookie slots + response (M5)', () => {
         expect((req.validated as any).headers).toBeUndefined();
     });
 
-    it('multiple failing slots report each under its own key', async () => {
+    it('multiple failing slots report issues in ValidationError', async () => {
         const schema = {
             get: {
                 params: z.object({ id: z.number() }),
@@ -109,15 +110,15 @@ describe('headers/cookie slots + response (M5)', () => {
             params: { id: 'abc' },
             query: { n: 'xyz' },
         });
-        const next = await mw(req);
-        expect(next).toBeInstanceOf(Response);
-        if (next instanceof Response) {
-            expect(next.status).toBe(400);
-            const body = await next.json();
-            expect(body.errors.params).toBeDefined();
-            expect(body.errors.query).toBeDefined();
-            // Issues must not be collapsed under a single slot key.
-            expect(Object.keys(body.errors)).toEqual(['params', 'query']);
+        try {
+            await mw(req);
+            expect(true).toBe(false); // should not reach
+        } catch (e) {
+            expect(e).toBeInstanceOf(ValidationError);
+            const ve = e as ValidationError;
+            expect(ve.status).toBe(422);
+            // Issues from both slots should be present.
+            expect(ve.issues.length).toBeGreaterThan(0);
         }
     });
 });

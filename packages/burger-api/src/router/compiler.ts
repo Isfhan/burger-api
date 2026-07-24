@@ -88,7 +88,7 @@ export class RouterCompiler {
             if (hasSchema) {
                 const validators = compileRouteSchema(def.schema!, this.config);
                 chain.add({
-                    stage: 'beforeRoute',
+                    stage: 'validation',
                     fn: createValidatorMiddleware(
                         validators,
                         this.config,
@@ -118,6 +118,11 @@ export class RouterCompiler {
             // Merge transform from route hooks and plugins. Route transform takes
             // precedence over plugin transform on key collision.
             plan.transform = mergeTransformRecords(routeHooks?.transform, plugins);
+
+            // Attach compiled validators for response validation post-handler.
+            if (routeValidators) {
+                plan.validators = routeValidators;
+            }
 
             // Optional, compile-time-only route field analysis. The result is
             // baked into `meta` but is unused at runtime in Phase 2, so it can
