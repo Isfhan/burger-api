@@ -6,7 +6,7 @@ import {
     clearValidatorCache,
 } from '../../src/validation/compiler';
 import { createValidatorMiddleware } from '../../src/validation/validator';
-import type { BurgerRequest } from '../../src/types/index';
+import type { BurgerContext } from '../../src/context/context';
 
 function fakeReq(
     method: string,
@@ -16,7 +16,7 @@ function fakeReq(
         headers?: Record<string, string>;
         cookie?: string;
     } = {}
-): BurgerRequest {
+): BurgerContext {
     const headers = new Headers();
     if (opts.headers) for (const [k, v] of Object.entries(opts.headers)) headers.set(k, v);
     if (opts.cookie) headers.set('cookie', opts.cookie);
@@ -27,7 +27,7 @@ function fakeReq(
         headers,
         validated: undefined,
         json: async () => ({}),
-    } as unknown as BurgerRequest;
+    } as unknown as BurgerContext;
 }
 
 describe('headers/cookie slots + response (M5)', () => {

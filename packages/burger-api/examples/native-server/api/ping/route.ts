@@ -1,6 +1,6 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
 /** Minimal route so the dev server stays up (Burger requires at least one route to listen). */
-export async function GET(_req: BurgerRequest) {
+export async function GET(_ctx: BurgerContext) {
     return Response.json({ ping: 'ok' });
 }

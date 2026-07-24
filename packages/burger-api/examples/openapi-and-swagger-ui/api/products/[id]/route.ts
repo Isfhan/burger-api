@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerRequest, BurgerNext, Middleware } from '../../../../../src/index';
+import type { BurgerContext, BurgerNext } from '../../../../../src/index';
 
 // OpenAPI Metadata
 // Developers can provide custom metadata to enrich the docs.
@@ -37,23 +37,20 @@ export const schema = {
 };
 
 // Route-Specific Middleware
-export const middleware: Middleware[] = [
-    (req: BurgerRequest): BurgerNext => {
+export const beforeRoute = [
+    (ctx: BurgerContext): BurgerNext => {
         console.log('Product Detail Middleware');
         return undefined;
     },
 ];
 
 export async function GET(
-    req: BurgerRequest<{
-        params: z.infer<typeof schema.get.params>;
-        query: z.infer<typeof schema.get.query>;
-    }>
+    ctx: BurgerContext
 ) {
     console.log('[GET] Product Detail route invoked');
 
-    const validatedParams = req.validated.params;
-    const query = req.validated.query;
+    const validatedParams = (ctx.validated!.params as any);
+    const query = (ctx.validated!.query as any);
 
     return Response.json({
         id: validatedParams.id,

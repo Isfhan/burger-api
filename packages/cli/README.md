@@ -388,16 +388,16 @@ Create a new file in the `api/` folder:
 
 ```typescript
 // api/users/route.ts
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     return Response.json({
         users: ['Alice', 'Bob', 'Charlie'],
     });
 }
 
-export async function POST(req: BurgerRequest) {
-    const body = await req.json();
+export async function POST(ctx: BurgerContext) {
+    const body = await ctx.request.json();
     return Response.json({
         message: 'User created',
         data: body,

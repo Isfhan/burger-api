@@ -1,7 +1,7 @@
-import type { BurgerRequest } from '../../../src/types/index';
+import type { BurgerContext } from '../../../src/index';
 
-export async function GET(req: BurgerRequest) {
-    const ts = (req as any).auditTimestamp;
+export async function GET(ctx: BurgerContext) {
+    const ts = (ctx as any).auditTimestamp;
     return Response.json({
         message: 'Hello from plugin-usage example!',
         auditTimestamp: typeof ts === 'number' ? ts : null,

@@ -6,14 +6,14 @@ import {
     clearValidatorCache,
 } from '../../src/validation/compiler';
 import { createValidatorMiddleware } from '../../src/validation/validator';
-import type { BurgerRequest } from '../../src/types/index';
+import type { BurgerContext } from '../../src/context/context';
 
-/** Builds a minimal BurgerRequest-like object for the orchestrator. */
+/** Builds a minimal BurgerContext-like object for the orchestrator. */
 function fakeReq(
     method: string,
     query: Record<string, string> = {},
     params: Record<string, string> = {}
-): BurgerRequest {
+): BurgerContext {
     const headers = new Headers();
     return {
         method,
@@ -22,7 +22,7 @@ function fakeReq(
         headers,
         validated: undefined,
         json: async () => ({}),
-    } as unknown as BurgerRequest;
+    } as unknown as BurgerContext;
 }
 
 describe('Coercion end-to-end (M4)', () => {

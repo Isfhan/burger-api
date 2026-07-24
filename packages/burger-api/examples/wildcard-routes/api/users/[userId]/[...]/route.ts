@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../../../src/index';
+import type { BurgerContext } from '../../../../../../src/index';
 import { z } from 'zod';
 
 /**
@@ -21,10 +21,10 @@ export const schema = {
  * Note: This route will handle the path (/api/users/[userId]/[...]) with the dynamic user id and the wildcard parameters
  */
 export async function GET(
-    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+    ctx: BurgerContext
 ) {
-    const { userId } = req.validated.params;
-    const wildcardParams = req.wildcardParams || [];
+    const { userId } = (ctx.validated!.params as any);
+    const wildcardParams = ctx.wildcardParams || [];
     return Response.json({
         message: 'Wildcard route example working',
         level: 'wildcard route inside dynamic route folder example',

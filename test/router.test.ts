@@ -3,14 +3,14 @@ import { Router } from '../packages/burger-api/src/router';
 import { AllowCache } from '../packages/burger-api/src/router/allow-cache';
 import type {
     RouteDefinition,
-    BurgerRequest,
+    RequestHandler,
 } from '../packages/burger-api/src/types/index';
 /**
  * Builds a RouteDefinition from a map of method → handler.
  */
 function route(
     path: string,
-    handlers: { [method: string]: (req: BurgerRequest) => Response | Promise<Response> },
+    handlers: { [method: string]: RequestHandler },
     extra: Partial<RouteDefinition> = {}
 ): RouteDefinition {
     return { path, handlers, ...extra };

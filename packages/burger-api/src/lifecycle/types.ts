@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../types/index';
+import type { BurgerContext } from '../context/context';
 
 /**
  * The forward lifecycle phases that run inside the single request pipeline.
@@ -19,7 +19,7 @@ export type HookStage = 'beforeRoute' | 'afterRoute' | 'mapResponse';
  *  - `afterRoute` / `mapResponse` — `Response` replaces the response;
  *    `(res) => Response` transforms it; `undefined` / `void` continues.
  */
-export type Hook = (req: BurgerRequest) => unknown;
+export type Hook = (ctx: BurgerContext) => unknown;
 
 /**
  * An error-path interceptor hook. Runs when the pipeline throws (beforeRoute,
@@ -32,19 +32,19 @@ export type Hook = (req: BurgerRequest) => unknown;
  */
 export type ErrorHook = (
     error: Error,
-    req: BurgerRequest
+    ctx: BurgerContext
 ) => Response | void | undefined;
 
 /**
  * The frozen, per-route, per-phase hook plan. Composed ONCE at compile time
  * (RouterCompiler.compile) and executed inside the single pipeline.
  *
- * `beforeRoute[0]` is reserved for the wrapped validation middleware
+ * `beforeRoute[0]` is reserved for the wrapped validation hook
  * (pinned first by default). `onError` is a separate error-path array — it is
  * only consulted when the forward pipeline throws.
  */
 export interface HookPlan {
-    /** Runs global → route; includes the pinned validation middleware at [0]. */
+    /** Runs global → route; includes the pinned validation hook at [0]. */
     beforeRoute: Hook[];
     /** Response-transform phase; runs route → global. */
     afterRoute: Hook[];
@@ -61,18 +61,18 @@ export interface HookPlan {
 
 /**
  * A record of factory functions keyed by the context field name to inject.
- * Each factory receives the {@link BurgerRequest} and returns the value to
+ * Each factory receives the {@link BurgerContext} and returns the value to
  * shallow-merge onto the context instance.
  *
  * Example:
  * ```ts
  * export const transform = {
- *   user: (req) => loadUser(req),
- *   tenant: (req) => req.headers.get('X-Tenant'),
+ *   user: (ctx) => loadUser(ctx),
+ *   tenant: (ctx) => ctx.headers.get('X-Tenant'),
  * };
  * ```
  */
-export type TransformMap = Record<string, (req: BurgerRequest) => unknown>;
+export type TransformMap = Record<string, (ctx: BurgerContext) => unknown>;
 
 /**
  * The raw, uncompiled hook object carried on a `RouteModule` / `RouteDefinition`

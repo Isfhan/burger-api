@@ -1,7 +1,7 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
-export const beforeRoute = (req: BurgerRequest) => {
-    const r = req as unknown as { hookRan: string };
+export const beforeRoute = (ctx: BurgerContext) => {
+    const r = ctx as unknown as { hookRan: string };
     r.hookRan = 'before';
     return undefined;
 };

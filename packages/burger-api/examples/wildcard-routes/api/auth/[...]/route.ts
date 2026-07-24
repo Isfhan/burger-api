@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../../src/index';
+import type { BurgerContext } from '../../../../../src/index';
 
 /**
  * Documentation wildcard route (no static sibling)
@@ -15,8 +15,8 @@ import type { BurgerRequest } from '../../../../../src/index';
  * - /api/auth/verify-email (with segments)
  */
 
-export async function GET(req: BurgerRequest) {
-    const wildcardParams = req.wildcardParams || [];
+export async function GET(ctx: BurgerContext) {
+    const wildcardParams = ctx.wildcardParams || [];
     return Response.json({
         message: 'Auth wildcard route',
         wildcardParams: wildcardParams,

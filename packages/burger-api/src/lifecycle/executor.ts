@@ -1,6 +1,7 @@
-import type { BurgerRequest, RequestHandler } from '../types/index';
+import type { BurgerContext } from '../context/context';
+import type { RequestHandler } from '../types/index';
 import type { HookPlan, Hook, ErrorHook } from './types';
-import { runWithMiddleware } from '../middleware/runner';
+import { runHooks } from './hook-runner';
 import { methodNotAllowed } from '../utils/response';
 import { applyTransform } from './transform';
 
@@ -18,12 +19,11 @@ import { applyTransform } from './transform';
  * `applySet` (always last) is applied by the caller (`buildCompiledHandler`).
  */
 export async function executeHookPlan(
-    ctx: unknown,
+    ctx: BurgerContext,
     plan: HookPlan,
     handlers: { [method: string]: RequestHandler },
     request: Request
 ): Promise<Response> {
-    const burgerReq = ctx as unknown as BurgerRequest;
     const method = request.method;
 
     let handler = handlers[method];
@@ -37,24 +37,24 @@ export async function executeHookPlan(
         // `transform` runs after beforeRoute but before the handler.
         // Wrap the handler to inject transformed values between the two stages.
         const wrappedHandler: RequestHandler = plan.transform
-            ? (req) => {
-                  applyTransform(req, plan.transform!);
-                  return handler(req);
+            ? (c) => {
+                  applyTransform(c, plan.transform!);
+                  return handler(c);
               }
             : handler;
 
-        let response = await runWithMiddleware(
-            burgerReq,
-            plan.beforeRoute as unknown as Parameters<typeof runWithMiddleware>[1],
+        let response = await runHooks(
+            ctx,
+            plan.beforeRoute as unknown as Hook[],
             wrappedHandler
         );
 
-        response = await runResponsePhase(plan.afterRoute, burgerReq, response);
-        response = await runResponsePhase(plan.mapResponse, burgerReq, response);
+        response = await runResponsePhase(plan.afterRoute, ctx, response);
+        response = await runResponsePhase(plan.mapResponse, ctx, response);
 
         return response;
     } catch (error) {
-        return dispatchOnError(error, plan.onError, burgerReq);
+        return dispatchOnError(error, plan.onError, ctx);
     }
 }
 
@@ -69,12 +69,12 @@ export async function executeHookPlan(
 async function dispatchOnError(
     error: unknown,
     onErrorHooks: ErrorHook[],
-    req: BurgerRequest
+    ctx: BurgerContext
 ): Promise<Response> {
     const err = error instanceof Error ? error : new Error(String(error));
     for (const hook of onErrorHooks) {
         try {
-            const result = await hook(err, req);
+            const result = await hook(err, ctx);
             if (result instanceof Response) {
                 return result;
             }
@@ -92,12 +92,12 @@ async function dispatchOnError(
  */
 async function runResponsePhase(
     hooks: Hook[],
-    req: BurgerRequest,
+    ctx: BurgerContext,
     response: Response
 ): Promise<Response> {
     let res = response;
     for (let i = 0; i < hooks.length; i++) {
-        const result = await hooks[i](req);
+        const result = await hooks[i](ctx);
         if (result instanceof Response) {
             res = result;
             continue;

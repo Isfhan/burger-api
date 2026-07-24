@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
 // afterRoute receives the Response and returns a transform function
 // `(res) => Response` that reshapes the outgoing body.

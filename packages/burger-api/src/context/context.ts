@@ -1,4 +1,3 @@
-import type { BurgerRequest } from '../types/index';
 import type {
     ContextInit,
     ContextSet,
@@ -6,29 +5,29 @@ import type {
     RouteMeta,
 } from './types';
 import { parseQuery } from './query-parser';
+import { parseCookies } from './cookie-parser';
 
 /**
- * `BurgerContext` — the prototype-based request implementation introduced in
- * Phase 2.
+ * `BurgerContext` — the public request context type.
  *
- * Design (see ROADMAP-phase2.md §4, §6):
- * - Exactly **one** instance is allocated per request, via the static
- *   `BurgerContext.create` entry point. It is never re-allocated inside the
- *   middleware loop.
+ * Exactly **one** instance is allocated per request, via the static
+ * `BurgerContext.create` entry point. It is never re-allocated inside the
+ * hook pipeline.
+ *
+ * Design:
  * - One **shared, frozen prototype** carries every lazy getter and every
  *   delegated `Request` method. Per-request instances hold **only mutable
- *   state** (`_raw`, `_query`, `validated`, `set`, `_ctxInit`), so every
- *   instance has an identical shape — preserving the monomorphic hidden class
- *   (§4.2 invariant #14).
+ *   state** (`_raw`, `_query`, `_cookies`, `validated`, `set`, `services`,
+ *   `_ctxInit`), so every instance has an identical shape — preserving the
+ *   monomorphic hidden class.
  * - Fields are parsed **lazily** and **at most once** (single-parse guarantee);
  *   a field a route never reads is never parsed and never allocated.
  * - The standard `Request` surface is **delegated** to the underlying `Request`
  *   (`_raw`); `BurgerContext` does not extend `Request` and does not copy its
  *   state.
  *
- * `BurgerContext` is the object that flows through `runWithMiddleware` and into
- * handlers. Because `BurgerRequest` is an interface, a `BurgerContext` instance
- * satisfies it structurally.
+ * `BurgerContext` is the object that flows through the hook pipeline and into
+ * handlers.
  */
 export class BurgerContext {
     /**
@@ -44,22 +43,39 @@ export class BurgerContext {
      */
     private _ctxInit!: ContextInit;
 
-    /** Cached parsed query (lazy). `undefined` until first `req.query` access. */
+    /** Cached parsed query (lazy). `undefined` until first access. */
     private _query?: Record<string, string | string[]>;
 
+    /** Cached parsed cookies (lazy). `undefined` until first access. */
+    private _cookies?: Record<string, string>;
+
     /**
-     * Validated data attached by the validation middleware. Mutable instance
-     * state, shared by the shared-instance middleware contract. Starts
-     * `undefined` so the validation middleware runs (it short-circuits when
-     * `req.validated` is already truthy), exactly as in Phase 1.
+     * Validated data attached by the validation hook. Mutable instance
+     * state. Starts `undefined` so the validation hook runs (it
+     * short-circuits when `ctx.validated` is already truthy).
      */
     validated: Record<string, unknown> | undefined = undefined;
 
     /**
-     * The response-mutation object exposed through `req.set`. Mutable instance
+     * The response-mutation object exposed through `ctx.set`. Mutable instance
      * state; merged into the response by `applySet` at the pipeline exit.
+     * `cookies` is reserved for Phase 7.
      */
-    set: ContextSet = {};
+    set: ContextSet = Object.create(null);
+
+    /**
+     * Injected application services. Populated by `burger.provide()` (Phase 4).
+     * Typed via module augmentation:
+     * ```ts
+     * declare module "burger-api" {
+     *   interface BurgerServices {
+     *     db: Database;
+     *     mailer: Mailer;
+     *   }
+     * }
+     * ```
+     */
+    services: Record<string, unknown> = Object.create(null);
 
     /**
      * The single context creation entry point. Thin static method on
@@ -79,8 +95,10 @@ export class BurgerContext {
         ctx._raw = raw;
         ctx._ctxInit = ctxInit ?? {};
         ctx._query = undefined;
+        ctx._cookies = undefined;
         ctx.validated = undefined;
-        ctx.set = {};
+        ctx.set = Object.create(null);
+        ctx.services = Object.create(null);
         return ctx;
     }
 
@@ -93,6 +111,19 @@ export class BurgerContext {
             this._query = parseQuery(search);
         }
         return this._query;
+    }
+
+    /** Lazily parsed cookie record. Parsed once on first access, then cached. */
+    get cookies(): Record<string, string> {
+        if (this._cookies === undefined) {
+            this._cookies = parseCookies(this._raw.headers.get('Cookie'));
+        }
+        return this._cookies;
+    }
+
+    /** The underlying raw `Request`. */
+    get request(): Request {
+        return this._raw;
     }
 
     /** Route path params (seeded from `ctxInit`). Undefined for non-param routes. */

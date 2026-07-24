@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the logger middleware.
@@ -53,7 +53,7 @@ export interface LoggerOptions {
      * Skip logging for specific paths (e.g., health checks).
      * Can be a string, regex, or function.
      */
-    skip?: string | RegExp | ((req: BurgerRequest) => boolean);
+    skip?: string | RegExp | ((ctx: BurgerContext) => boolean);
 }
 
 /**
@@ -122,7 +122,7 @@ const colors = {
  * });
  * ```
  */
-export function createLogger(options: LoggerOptions = {}): Middleware {
+export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         colors: useColors = true,
         logHeaders = false,
@@ -133,16 +133,16 @@ export function createLogger(options: LoggerOptions = {}): Middleware {
         skip,
     } = options;
 
-    return (req: BurgerRequest): BurgerNext => {
+    return (ctx: BurgerContext): BurgerNext => {
         // Check if we should skip logging for this request
         if (skip) {
-            if (typeof skip === 'string' && req.url.includes(skip)) {
+            if (typeof skip === 'string' && ctx.url.includes(skip)) {
                 return undefined;
             }
-            if (skip instanceof RegExp && skip.test(req.url)) {
+            if (skip instanceof RegExp && skip.test(ctx.url)) {
                 return undefined;
             }
-            if (typeof skip === 'function' && skip(req)) {
+            if (typeof skip === 'function' && skip(ctx)) {
                 return undefined;
             }
         }
@@ -152,8 +152,8 @@ export function createLogger(options: LoggerOptions = {}): Middleware {
         const startTime = typeof Bun !== 'undefined' && Bun.nanoseconds
             ? Bun.nanoseconds()
             : Date.now() * 1_000_000; // Convert to nanoseconds
-        const method = req.method;
-        const url = req.url;
+        const method = ctx.method;
+        const url = ctx.url;
 
         // Extract path and query from URL
         const urlObj = new URL(url);
@@ -186,17 +186,17 @@ export function createLogger(options: LoggerOptions = {}): Middleware {
             }
 
             if (logHeaders) {
-                logInfo.headers = Object.fromEntries(req.headers.entries());
+                logInfo.headers = Object.fromEntries(ctx.headers.entries());
             }
 
             if (logBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
                 try {
                     // Try to parse body if it's JSON
                     // Note: This consumes the request body stream
-                    const contentType = req.headers.get('content-type');
+                    const contentType = ctx.headers.get('content-type');
                     if (contentType?.includes('application/json')) {
                         // Clone the request to avoid consuming the original body
-                        const clonedReq = req.clone();
+                        const clonedReq = ctx.clone();
                         logInfo.body = await clonedReq.json();
                     }
                 } catch {
@@ -315,7 +315,7 @@ function colorize(info: LogInfo, message: string): string {
  * export const beforeRoute = [logger()];
  * ```
  */
-export function logger(): Middleware {
+export function logger(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return createLogger();
 }
 

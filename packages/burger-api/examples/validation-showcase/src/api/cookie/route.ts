@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // Cookie slot (phase3 §5): validates parsed cookie *values* (signing is Phase 7).
 export const schema = {
@@ -10,6 +10,6 @@ export const schema = {
     },
 };
 
-export function GET(req: BurgerRequest) {
-    return Response.json({ session: req.validated.cookie!.session });
+export function GET(ctx: BurgerContext) {
+    return Response.json({ session: (ctx.validated!.cookie as any).session });
 }

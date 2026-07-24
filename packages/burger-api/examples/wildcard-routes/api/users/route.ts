@@ -1,11 +1,10 @@
 import type {
     BurgerNext,
-    BurgerRequest,
-    Middleware,
+    BurgerContext,
 } from '../../../../src/index';
 
-export const middleware: Middleware[] = [
-    (req: BurgerRequest): BurgerNext => {
+export const beforeRoute = [
+    (ctx: BurgerContext): BurgerNext => {
         console.log('Route middleware executed');
         return undefined;
     },
@@ -17,7 +16,7 @@ export const middleware: Middleware[] = [
  *
  * Note: This route will handle the base path (/api/users)
  */
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     return Response.json({
         message: 'Users list route working',
         note: 'This route handles the base path (/api/users)',

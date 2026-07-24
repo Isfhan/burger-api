@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // Coercion scenario (phase3 §7, §16.2): query strings are always strings;
 // with `coerce: true` (app-wide in this example) `"42"` → 42, `"true"` → true.
@@ -13,7 +13,7 @@ export const schema = {
     },
 };
 
-export function GET(req: BurgerRequest) {
-    const q = req.validated.query!;
+export function GET(ctx: BurgerContext) {
+    const q = (ctx.validated!.query as any);
     return Response.json({ n: q.n, b: q.b, typeN: typeof q.n, typeB: typeof q.b });
 }

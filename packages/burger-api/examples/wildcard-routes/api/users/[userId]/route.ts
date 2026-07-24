@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from '../../../../../src/index';
+import type { BurgerContext } from '../../../../../src/index';
 
 // Dummy users data
 const users = [
@@ -30,9 +30,9 @@ export const schema = {
  * Note: This route will handle the path (/api/users/[userId]) with the dynamic user id
  */
 export async function GET(
-    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+    ctx: BurgerContext
 ) {
-    const { userId } = req.validated.params;
+    const { userId } = (ctx.validated!.params as any);
     const user = users.find((user) => user.id === parseInt(userId)) || null;
     if (!user) {
         return Response.json(

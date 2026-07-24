@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the compression middleware.
@@ -68,7 +68,7 @@ export interface CompressionOptions {
  * });
  * ```
  */
-export function compress(options: CompressionOptions = {}): Middleware {
+export function compress(options: CompressionOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         threshold = 1024, // 1KB
         encodings = ['gzip', 'deflate'],
@@ -76,8 +76,8 @@ export function compress(options: CompressionOptions = {}): Middleware {
         excludeContentTypes = ['image/', 'video/', 'audio/', 'font/'],
     } = options;
 
-    return (req: BurgerRequest): BurgerNext => {
-        const acceptEncoding = req.headers.get('Accept-Encoding') || '';
+    return (ctx: BurgerContext): BurgerNext => {
+        const acceptEncoding = ctx.headers.get('Accept-Encoding') || '';
 
         // Determine which encoding to use based on client support and preference
         let selectedEncoding: 'gzip' | 'deflate' | 'br' | null = null;

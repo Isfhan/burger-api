@@ -10,11 +10,11 @@ Burger API is a modern, high-performance API framework built on Bun.js. It combi
 
 - ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
 - 📁 **File-Based Routing** - Automatically registers API routes from your file structure
-- 🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+ middlewares
+- 🚀 **Optimized Hooks** - Specialized fast paths for 0, 1, 2, and 3+ hooks
 - ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full type safety
 - 📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0 specifications
 - 🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for interactive API docs
-- 🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy to understand
+- 🎯 **Developer Friendly** - Simple, clear hook patterns that are easy to understand
 
 ---
 url: 'https://burger-api.com/docs/core/burger-class'
@@ -44,8 +44,8 @@ interface ServerOptions {
     pageDir?: string;              // Directory path to load page routes from
     pagePrefix?: string;           // Prefix for page routes (default: '/')
     
-    // Middleware
-    globalMiddleware?: Middleware[]; // Global middleware to execute before each request
+    // Hooks
+    globalMiddleware?: HookFunction[]; // Global hooks to execute before each request
     
     // OpenAPI Documentation
     title?: string;                // API title for OpenAPI docs
@@ -90,12 +90,12 @@ url: 'https://burger-api.com/docs/core/types'
 
 # Type Definitions
 
-## BurgerRequest
+## BurgerContext
 
 Extends Bun's `BunRequest` with additional properties for Burger API.
 
 ```typescript
-interface BurgerRequest<RequestValidatedProperties = DefaultRequestProperties> 
+interface BurgerContext<RequestValidatedProperties = DefaultRequestProperties> 
     extends Omit<BunRequest<string>, 'params'> {
     /**
      * URL parameters extracted from the request path.
@@ -121,18 +121,16 @@ interface BurgerRequest<RequestValidatedProperties = DefaultRequestProperties>
 }
 ```
 
-## Middleware
+## HookFunction
 
-A middleware function that processes HTTP requests.
+A hook function that processes HTTP requests.
 
 ```typescript
-type Middleware = 
-    | ((request: BurgerRequest) => Promise<BurgerNext>)
-    | ((request: BurgerRequest) => BurgerNext);
+type HookFunction = (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext;
 ```
 
 **Return Types:**
-- `undefined` - Continue to next middleware/handler
+- `undefined` - Continue to next hook/handler
 - `Response` - Stop and send this response immediately
 - `Function` - Transform the final response after handler runs
 
@@ -149,19 +147,19 @@ A request handler function that processes incoming HTTP requests.
 
 ```typescript
 type RequestHandler = (
-    request: BurgerRequest
+    ctx: BurgerContext
 ) => Promise<Response> | Response;
 ```
 
 ## RouteDefinition
 
-Defines a route with its handlers, middleware, and schema.
+Defines a route with its handlers, hooks, and schema.
 
 ```typescript
 interface RouteDefinition {
     path: string;                          // Route path
     handlers: { [method: string]: RequestHandler }; // HTTP method handlers
-    middleware?: Middleware[];             // Route-specific middleware
+    beforeRoute?: HookFunction[];         // Route-specific hooks
     schema?: RouteSchema;                  // Zod validation schema
     openapi?: openapi;                     // OpenAPI metadata
     isWildcard?: boolean;                   // True for wildcard routes
@@ -170,7 +168,7 @@ interface RouteDefinition {
 interface PageDefinition {
     path: string;
     handler: RequestHandler;
-    middleware?: Middleware[];
+    beforeRoute?: HookFunction[];
 }
 ```
 
@@ -219,13 +217,13 @@ Each `route.ts` file can export:
 
 1. **HTTP Method Handlers** - Functions named after HTTP methods (GET, POST, PUT, DELETE, etc.)
 2. **Schema** - Zod validation schema (optional)
-3. **Middleware** - Route-specific middleware (optional)
+3. **Hooks** - Route-specific hooks (optional)
 4. **OpenAPI Metadata** - Documentation metadata (optional)
 
 ```typescript
 // api/users/route.ts
 import { z } from 'zod';
-import type { BurgerRequest, Middleware } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 export const schema = {
     get: {
@@ -235,14 +233,14 @@ export const schema = {
     },
 };
 
-export const middleware: Middleware[] = [
-    async (req) => {
-        console.log('Route middleware');
+export const beforeRoute = [
+    async (ctx) => {
+        console.log('Route hook');
         return undefined;
     },
 ];
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     return Response.json({ users: [] });
 }
 ```
@@ -291,10 +289,10 @@ api/
 
 **File:** `api/users/[id]/route.ts`
 ```typescript
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
-    const { id } = req.params || {};
+export async function GET(ctx: BurgerContext) {
+    const { id } = ctx.params || {};
     return Response.json({ userId: id });
 }
 ```
@@ -315,8 +313,8 @@ api/
 
 **File:** `api/users/[userId]/posts/[postId]/route.ts`
 ```typescript
-export async function GET(req: BurgerRequest) {
-    const { userId, postId } = req.params || {};
+export async function GET(ctx: BurgerContext) {
+    const { userId, postId } = ctx.params || {};
     return Response.json({ userId, postId });
 }
 ```
@@ -340,10 +338,10 @@ api/
 
 **File:** `api/files/[...]/route.ts`
 ```typescript
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
-    const segments = req.wildcardParams || [];
+export async function GET(ctx: BurgerContext) {
+    const segments = ctx.wildcardParams || [];
     return Response.json({ path: segments });
 }
 ```
@@ -363,9 +361,9 @@ api/
 
 **File:** `api/users/[userId]/[...]/route.ts`
 ```typescript
-export async function GET(req: BurgerRequest) {
-    const { userId } = req.params || {};
-    const segments = req.wildcardParams || [];
+export async function GET(ctx: BurgerContext) {
+    const { userId } = ctx.params || {};
+    const segments = ctx.wildcardParams || [];
     return Response.json({ userId, path: segments });
 }
 ```
@@ -420,22 +418,22 @@ For parity with runtime routing behavior, the CLI scanner enforces these rules:
 url: 'https://burger-api.com/docs/middleware/system'
 ---
 
-# Middleware System
+# Hook System
 
-Burger API's middleware system is simple and powerful. Middleware functions run before route handlers and can control the request flow.
+Burger API's hook system is simple and powerful. Hook functions run before route handlers and can control the request flow.
 
-## Middleware Return Types
+## Hook Return Types
 
-Middleware can return three types:
+Hooks can return three types:
 
 ### 1. `undefined` - Continue
 
-Allows the request to continue to the next middleware or handler.
+Allows the request to continue to the next hook or handler.
 
 ```typescript
-const logger: Middleware = async (req) => {
-    console.log(`${req.method} ${req.url}`);
-    return undefined; // Continue to next middleware/handler
+const logger: HookFunction = async (ctx) => {
+    console.log(`${ctx.method} ${ctx.url}`);
+    return undefined; // Continue to next hook/handler
 };
 ```
 
@@ -444,8 +442,8 @@ const logger: Middleware = async (req) => {
 Stops the request and sends a response immediately.
 
 ```typescript
-const auth: Middleware = async (req) => {
-    const token = req.headers.get('Authorization');
+const auth: HookFunction = async (ctx) => {
+    const token = ctx.headers.get('Authorization');
     if (!token) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -458,7 +456,7 @@ const auth: Middleware = async (req) => {
 Transforms the final response after the handler runs.
 
 ```typescript
-const cors: Middleware = async (req) => {
+const cors: HookFunction = async (ctx) => {
     // Continue processing
     return undefined;
     
@@ -470,11 +468,11 @@ const cors: Middleware = async (req) => {
 };
 ```
 
-## Middleware Execution Flow
+## Hook Execution Flow
 
-1. Global middleware runs first (in order)
-2. Route-specific middleware runs next (in order)
-3. Validation middleware runs (if schema is defined)
+1. Global hooks run first (in order)
+2. Route-specific hooks run next (in order)
+3. Validation runs (if schema is defined)
 4. Route handler runs
 5. "After" functions run in reverse order (response transformation)
 
@@ -482,16 +480,16 @@ const cors: Middleware = async (req) => {
 url: 'https://burger-api.com/docs/middleware/global'
 ---
 
-# Global Middleware
+# Global Hooks
 
-Global middleware runs before every request. Define it when creating the Burger instance.
+Global hooks run before every request. Define them when creating the Burger instance.
 
 ## Example
 
 ```typescript
 import { Burger } from 'burger-api';
-import { cors } from './middleware/cors';
-import { logger } from './middleware/logger';
+import { cors } from './hooks/cors';
+import { logger } from './hooks/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -504,14 +502,14 @@ const app = new Burger({
 await app.serve(4000);
 ```
 
-## Creating Global Middleware
+## Creating Global Hooks
 
 ```typescript
-import type { Middleware } from 'burger-api';
+import type { HookFunction } from 'burger-api';
 
-export function logger(): Middleware {
-    return async (req) => {
-        console.log(`${req.method} ${req.url}`);
+export function logger(): HookFunction {
+    return async (ctx) => {
+        console.log(`${ctx.method} ${ctx.url}`);
         return undefined; // Continue
     };
 }
@@ -521,19 +519,19 @@ export function logger(): Middleware {
 url: 'https://burger-api.com/docs/middleware/route-specific'
 ---
 
-# Route-Specific Middleware
+# Route-Specific Hooks
 
-Route-specific middleware runs only for specific routes. Export it from the route file.
+Route-specific hooks run only for specific routes. Export them from the route file.
 
 ## Example
 
 ```typescript
 // api/protected/route.ts
-import type { Middleware, BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export const middleware: Middleware[] = [
-    async (req) => {
-        const token = req.headers.get('Authorization');
+export const beforeRoute = [
+    async (ctx) => {
+        const token = ctx.headers.get('Authorization');
         if (!token) {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -548,23 +546,23 @@ export async function GET() {
 
 ## Execution Order
 
-1. Global middleware
-2. Route-specific middleware
-3. Validation middleware (if schema exists)
+1. Global hooks
+2. Route-specific hooks
+3. Validation (if schema exists)
 4. Route handler
 
 ---
 url: 'https://burger-api.com/docs/middleware/after'
 ---
 
-# After Middleware (Response Transformation)
+# After Hooks (Response Transformation)
 
-After middleware transforms the final response after the handler runs. Return a function from middleware to use this feature.
+After hooks transform the final response after the handler runs. Return a function from a hook to use this feature.
 
 ## Example
 
 ```typescript
-const cors: Middleware = async (req) => {
+const cors: HookFunction = async (ctx) => {
     // Continue processing
     return undefined;
     
@@ -579,19 +577,19 @@ const cors: Middleware = async (req) => {
 
 ## Multiple After Functions
 
-If multiple middleware return functions, they execute in reverse order:
+If multiple hooks return functions, they execute in reverse order:
 
 ```typescript
-// Middleware 1: Add CORS headers
-const cors: Middleware = async () => {
+// Hook 1: Add CORS headers
+const cors: HookFunction = async () => {
     return (response) => {
         response.headers.set('Access-Control-Allow-Origin', '*');
         return response;
     };
 };
 
-// Middleware 2: Add custom header
-const customHeader: Middleware = async () => {
+// Hook 2: Add custom header
+const customHeader: HookFunction = async () => {
     return (response) => {
         response.headers.set('X-Custom-Header', 'value');
         return response;
@@ -685,13 +683,13 @@ url: 'https://burger-api.com/docs/validation/accessing-validated-data'
 
 # Accessing Validated Data
 
-After validation, access validated data through `req.validated`.
+After validation, access validated data through `ctx.validated`.
 
 ## Example
 
 ```typescript
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 export const schema = {
     get: {
@@ -706,14 +704,14 @@ export const schema = {
     },
 };
 
-export async function GET(req: BurgerRequest) {
-    const { id } = req.validated?.params || {};
-    const { page } = req.validated?.query || {};
+export async function GET(ctx: BurgerContext) {
+    const { id } = ctx.validated?.params || {};
+    const { page } = ctx.validated?.query || {};
     return Response.json({ id, page });
 }
 
-export async function POST(req: BurgerRequest) {
-    const { name, email } = req.validated?.body || {};
+export async function POST(ctx: BurgerContext) {
+    const { name, email } = ctx.validated?.body || {};
     return Response.json({ name, email }, { status: 201 });
 }
 ```
@@ -724,10 +722,10 @@ Use TypeScript generics for full type safety:
 
 ```typescript
 export async function POST(
-    req: BurgerRequest<{ body: z.infer<typeof schema.post.body> }>
+    ctx: BurgerContext<{ body: z.infer<typeof schema.post.body> }>
 ) {
-    // TypeScript knows the exact shape of req.validated.body
-    const { name, email } = req.validated.body;
+    // TypeScript knows the exact shape of ctx.validated.body
+    const { name, email } = ctx.validated.body;
     return Response.json({ name, email });
 }
 ```
@@ -909,7 +907,7 @@ url: 'https://burger-api.com/docs/cli/installation'
 
 # CLI Installation
 
-The Burger API CLI tool helps you create projects and manage middleware.
+The Burger API CLI tool helps you create projects and manage hooks.
 
 ## Quick Install
 
@@ -990,7 +988,7 @@ my-api/
 │   └── pages/                # Page routes (if enabled)
 │       └── index.html
 ├── ecosystem/
-│   └── middleware/           # Ecosystem middleware
+│   └── hooks/           # Ecosystem hooks
 ├── burger.config.ts          # Build/config (used by burger-api build)
 ├── package.json
 ├── tsconfig.json
@@ -1003,7 +1001,7 @@ url: 'https://burger-api.com/docs/cli/list'
 
 # CLI: List Command
 
-Shows all available middleware from the ecosystem.
+Shows all available hooks from the ecosystem.
 
 ## Usage
 
@@ -1015,7 +1013,7 @@ burger-api ls  # Alias
 ## Output
 
 ```
-Available Middleware
+Available Hooks
 ────────────────────────────────
 
 Name            Description
@@ -1034,7 +1032,7 @@ body-size-limiter Request body size limits
 
 ## Usage Instructions
 
-After running `list`, the CLI shows how to add middleware:
+After running `list`, the CLI shows how to add hooks:
 
 ```bash
 burger-api add <middleware-name>
@@ -1048,7 +1046,7 @@ url: 'https://burger-api.com/docs/cli/add'
 
 # CLI: Add Command
 
-Adds one or more middleware to your project.
+Adds one or more hooks to your project.
 
 ## Usage
 
@@ -1059,30 +1057,30 @@ burger-api add <middleware...>
 ## Examples
 
 ```bash
-# Add a single middleware
+# Add a single hook
 burger-api add cors
 
-# Add multiple middleware at once
+# Add multiple hooks at once
 burger-api add cors logger rate-limiter
 
-# Add authentication middleware
+# Add authentication hooks
 burger-api add jwt-auth api-key-auth
 ```
 
 ## What It Does
 
-1. Downloads middleware code from GitHub
-2. Copies files to `ecosystem/middleware/` folder
+1. Downloads hook code from GitHub
+2. Copies files to `ecosystem/hooks/` folder
 3. Shows you example code to use it
 
 ## After Adding
 
-The CLI shows you exactly how to use the middleware:
+The CLI shows you exactly how to use the hook:
 
 ```typescript
 import { Burger } from 'burger-api';
-import { cors } from './ecosystem/middleware/cors/cors';
-import { logger } from './ecosystem/middleware/logger/logger';
+import { cors } from './ecosystem/hooks/cors/cors';
+import { logger } from './ecosystem/hooks/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -1090,11 +1088,11 @@ const app = new Burger({
 });
 ```
 
-## Middleware Location
+## Hooks Location
 
-Middleware is added to:
+Hooks are added to:
 ```
-ecosystem/middleware/
+ecosystem/hooks/
 ├── cors/
 │   ├── cors.ts
 │   └── README.md
@@ -1104,7 +1102,7 @@ ecosystem/middleware/
 └── ...
 ```
 
-Check each middleware's README for configuration options.
+Check each hook's README for configuration options.
 
 ---
 url: 'https://burger-api.com/docs/cli/serve'
@@ -1248,7 +1246,7 @@ A complete example showing all route features.
 ```typescript
 // api/products/route.ts
 import { z } from 'zod';
-import type { BurgerRequest, Middleware } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // OpenAPI metadata
 export const openapi = {
@@ -1292,17 +1290,17 @@ export const schema = {
     },
 };
 
-// Route-specific middleware
-export const middleware: Middleware[] = [
-    async (req) => {
-        console.log(`[${req.method}] ${req.url}`);
+// Route-specific hooks
+export const beforeRoute = [
+    async (ctx) => {
+        console.log(`[${ctx.method}] ${ctx.url}`);
         return undefined;
     },
 ];
 
 // GET handler
-export async function GET(req: BurgerRequest) {
-    const { page, limit, search } = req.validated?.query || {};
+export async function GET(ctx: BurgerContext) {
+    const { page, limit, search } = ctx.validated?.query || {};
     
     // Mock data
     const products = [
@@ -1333,8 +1331,8 @@ export async function GET(req: BurgerRequest) {
 }
 
 // POST handler
-export async function POST(req: BurgerRequest) {
-    const { name, price, category } = req.validated?.body || {};
+export async function POST(ctx: BurgerContext) {
+    const { name, price, category } = ctx.validated?.body || {};
     
     const newProduct = {
         id: crypto.randomUUID(),
@@ -1372,7 +1370,7 @@ my-api/
 │   └── pages/
 │       └── index.html
 ├── ecosystem/
-│   └── middleware/
+│   └── hooks/
 │       ├── cors/
 │       └── logger/
 ├── package.json
@@ -1384,8 +1382,8 @@ my-api/
 ```typescript
 // src/index.ts
 import { Burger } from 'burger-api';
-import { cors } from '../ecosystem/middleware/cors/cors';
-import { logger } from '../ecosystem/middleware/logger/logger';
+import { cors } from '../ecosystem/hooks/cors/cors';
+import { logger } from '../ecosystem/hooks/logger/logger';
 
 const app = new Burger({
     apiDir: './src/api',
@@ -1413,7 +1411,7 @@ await app.serve(port, () => {
 ```typescript
 // src/api/users/route.ts
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 export const schema = {
     get: {
@@ -1429,13 +1427,13 @@ export const schema = {
     },
 };
 
-export async function GET(req: BurgerRequest) {
-    const { page } = req.validated?.query || {};
+export async function GET(ctx: BurgerContext) {
+    const { page } = ctx.validated?.query || {};
     return Response.json({ users: [], page });
 }
 
-export async function POST(req: BurgerRequest) {
-    const { name, email } = req.validated?.body || {};
+export async function POST(ctx: BurgerContext) {
+    const { name, email } = ctx.validated?.body || {};
     return Response.json({ name, email }, { status: 201 });
 }
 ```
@@ -1460,11 +1458,11 @@ Burger API is optimized for performance with several built-in optimizations.
 
 ## Fast Paths
 
-The framework uses specialized fast paths for common middleware counts:
-- 0 middlewares - Ultra-fast path with no middleware overhead
-- 1 middleware - Single middleware fast path
-- 2 middlewares - Manual loop unrolling
-- 3+ middlewares - General path with pre-allocated arrays
+The framework uses specialized fast paths for common hook counts:
+- 0 hooks - Ultra-fast path with no hook overhead
+- 1 hook - Single hook fast path
+- 2 hooks - Manual loop unrolling
+- 3+ hooks - General path with pre-allocated arrays
 
 ## AOT Compilation
 
@@ -1521,10 +1519,10 @@ Internal Server Error
 
 ## Custom Error Handling
 
-Handle errors in middleware:
+Handle errors in hooks:
 
 ```typescript
-const errorHandler: Middleware = async (req) => {
+const errorHandler: HookFunction = async (ctx) => {
     try {
         return undefined; // Continue
     } catch (error) {
@@ -1540,11 +1538,11 @@ const errorHandler: Middleware = async (req) => {
 url: 'https://burger-api.com/docs/ecosystem/middleware'
 ---
 
-# Available Middleware
+# Available Hooks
 
-Burger API ecosystem includes production-ready middleware.
+Burger API ecosystem includes production-ready hooks.
 
-## Core Middleware
+## Core Hooks
 
 - **cors** - Cross-Origin Resource Sharing
 - **logger** - Request/response logging
@@ -1557,17 +1555,17 @@ Burger API ecosystem includes production-ready middleware.
 - **timeout** - Request timeout
 - **body-size-limiter** - Request body size limits
 
-## Installing Middleware
+## Installing Hooks
 
 ```bash
 burger-api add cors logger rate-limiter
 ```
 
-## Using Middleware
+## Using Hooks
 
 ```typescript
-import { cors } from './ecosystem/middleware/cors/cors';
-import { logger } from './ecosystem/middleware/logger/logger';
+import { cors } from './ecosystem/hooks/cors/cors';
+import { logger } from './ecosystem/hooks/logger/logger';
 
 const app = new Burger({
     apiDir: './api',
@@ -1578,7 +1576,7 @@ const app = new Burger({
 });
 ```
 
-Each middleware includes a README with configuration options.
+Each hook includes a README with configuration options.
 
 ---
 url: 'https://burger-api.com/docs/troubleshooting'
@@ -1608,9 +1606,9 @@ irm https://burger-api.com/install.ps1 | iex
 burger-api create my-api-v2
 ```
 
-## "Could not get middleware list from GitHub"
+## "Could not get hooks list from GitHub"
 
-**Solution:** Check your internet connection. The CLI needs internet to download middleware.
+**Solution:** Check your internet connection. The CLI needs internet to download hooks.
 
 ## "Entry file not found: index.ts"
 
@@ -1733,7 +1731,7 @@ Visit `http://localhost:4000` to see your API!
 
 ## Next Steps
 
-- Add middleware: `burger-api add cors logger`
+- Add hooks: `burger-api add cors logger`
 - Create routes in `src/api/`
 - View API docs at `http://localhost:4000/docs`
 - Check OpenAPI spec at `http://localhost:4000/openapi.json`

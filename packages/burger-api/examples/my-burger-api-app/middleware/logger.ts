@@ -1,10 +1,10 @@
-import type { Middleware, BurgerNext, BurgerRequest } from '../../../src/index';
+import type { BurgerContext } from '../../../src/index';
 
 // Global middleware example: a simple logger.
-export const globalLogger: Middleware = (
-    request: BurgerRequest
-): BurgerNext => {
-    // console.log(`[Global Logger] ${request.method} ${request.url}`);
+export const globalLogger = (
+    ctx: BurgerContext
+) => {
+    // console.log(`[Global Logger] ${ctx.method} ${ctx.url}`);
     let a = 2 + Math.random();
     // return new Response(a.toString());
     console.log(a);

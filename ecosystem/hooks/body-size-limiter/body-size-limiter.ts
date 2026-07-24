@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext} from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the body size limiter middleware.
@@ -72,7 +72,7 @@ export interface BodySizeLimiterOptions {
  * });
  * ```
  */
-export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): Middleware {
+export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         maxSize = 1048576, // 1MB
         mode = 'header',
@@ -80,15 +80,15 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): Middlewar
         includeLimit = true,
     } = options;
 
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
         // Skip check for methods that typically don't have bodies
-        if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(req.method)) {
+        if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(ctx.method)) {
             return undefined;
         }
 
         if (mode === 'header') {
             // Fast mode: Check Content-Length header only
-            const contentLength = req.headers.get('Content-Length');
+            const contentLength = ctx.headers.get('Content-Length');
 
             if (contentLength) {
                 const size = parseInt(contentLength, 10);
@@ -112,13 +112,13 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): Middlewar
             // Stream mode: Actually read and measure the body
             // This is more accurate but slower and requires reading the body
 
-            if (!req.body) {
+            if (!ctx.body) {
                 return undefined; // No body to check
             }
 
             try {
                 // Read the body as array buffer
-                const bodyBuffer = await req.arrayBuffer();
+                const bodyBuffer = await ctx.arrayBuffer();
                 const size = bodyBuffer.byteLength;
 
                 if (size > maxSize) {
@@ -128,7 +128,7 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): Middlewar
                 // Recreate request with the consumed body
                 // Note: This might not work perfectly with all request types
                 // For production, consider using a streaming approach
-                (req as any)._bodyBuffer = bodyBuffer;
+                (ctx as any)._bodyBuffer = bodyBuffer;
 
                 return undefined;
             } catch (error) {
@@ -169,28 +169,28 @@ function defaultErrorHandler(size: number, maxSize: number): Response {
 /**
  * Preset: Small payloads (100KB) - for text-based APIs
  */
-export function smallPayloadLimit(): Middleware {
+export function smallPayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return bodySizeLimiter({ maxSize: 102400 }); // 100KB
 }
 
 /**
  * Preset: Medium payloads (1MB) - default, good for most APIs
  */
-export function mediumPayloadLimit(): Middleware {
+export function mediumPayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return bodySizeLimiter({ maxSize: 1048576 }); // 1MB
 }
 
 /**
  * Preset: Large payloads (10MB) - for file uploads
  */
-export function largePayloadLimit(): Middleware {
+export function largePayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return bodySizeLimiter({ maxSize: 10485760 }); // 10MB
 }
 
 /**
  * Preset: Extra large payloads (50MB) - for large file uploads
  */
-export function extraLargePayloadLimit(): Middleware {
+export function extraLargePayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return bodySizeLimiter({ maxSize: 52428800 }); // 50MB
 }
 

@@ -1,6 +1,5 @@
 import type {
     RouteDefinition,
-    BurgerRequest,
 } from '../types/index';
 import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
 import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';

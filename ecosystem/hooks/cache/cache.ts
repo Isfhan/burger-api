@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the cache control middleware.
@@ -105,7 +105,7 @@ export interface CacheControlOptions {
  * });
  * ```
  */
-export function cacheControl(options: CacheControlOptions = {}): Middleware {
+export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         directive = 'no-cache',
         maxAge,
@@ -119,7 +119,7 @@ export function cacheControl(options: CacheControlOptions = {}): Middleware {
         vary,
     } = options;
 
-    return (_req: BurgerRequest): BurgerNext => {
+    return (_ctx: BurgerContext): BurgerNext => {
         // Transform response to add cache headers
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
@@ -195,7 +195,7 @@ export function cacheControl(options: CacheControlOptions = {}): Middleware {
 /**
  * Preset: No caching (default, secure)
  */
-export function noCache(): Middleware {
+export function noCache(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return cacheControl({
         directive: 'no-store',
         custom: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
@@ -205,7 +205,7 @@ export function noCache(): Middleware {
 /**
  * Preset: Public cache with configurable max-age
  */
-export function publicCache(maxAge: number = 3600): Middleware {
+export function publicCache(maxAge: number = 3600): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return cacheControl({
         directive: 'public',
         maxAge,
@@ -215,7 +215,7 @@ export function publicCache(maxAge: number = 3600): Middleware {
 /**
  * Preset: Private cache (for user-specific data)
  */
-export function privateCache(maxAge: number = 300): Middleware {
+export function privateCache(maxAge: number = 300): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return cacheControl({
         directive: 'private',
         maxAge,
@@ -226,7 +226,7 @@ export function privateCache(maxAge: number = 300): Middleware {
 /**
  * Preset: Immutable cache (for static assets with fingerprints)
  */
-export function immutableCache(): Middleware {
+export function immutableCache(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return cacheControl({
         directive: 'public',
         maxAge: 31536000, // 1 year
@@ -237,7 +237,7 @@ export function immutableCache(): Middleware {
 /**
  * Preset: CDN cache with different browser/CDN durations
  */
-export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600): Middleware {
+export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return cacheControl({
         directive: 'public',
         maxAge: browserMaxAge,

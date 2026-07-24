@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../../../../src/index';
+import type { BurgerContext } from '../../../../../../../src/index';
 import { z } from 'zod';
 
 /**
@@ -22,9 +22,9 @@ export const schema = {
  * Note: This route will return the post details for the given user id and post id
  */
 export async function GET(
-    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+    ctx: BurgerContext
 ) {
-    const { userId, postId } = req.validated.params;
+    const { userId, postId } = (ctx.validated!.params as any);
     return Response.json({
         message:
             'Nested dynamic route and wildcard route sibling example working',

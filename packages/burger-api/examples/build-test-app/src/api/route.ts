@@ -15,7 +15,7 @@
 
 
 import { z } from 'zod';
-import type { BurgerRequest, Middleware, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 
 /*
@@ -98,7 +98,7 @@ export const openapi = {
 - Schemas define what data your API accepts. BurgerAPI automatically:
  - Validates incoming data against these schemas
  - Returns a 400 error if validation fails
- - Puts the validated data in req.validated for you to use
+ - Puts the validated data in ctx.validated for you to use
 
  - You can validate:
    - 'query'  → URL query parameters like ?search=hello&page=1
@@ -194,10 +194,10 @@ export const schema = {
  - Return a 'Response' to stop and send that response immediately
 -----------------------------------------------------------------------------
 */
-export const middleware: Middleware[] = [
+export const beforeRoute = [
     // Example: Log every request to this route
-    async (req: BurgerRequest): Promise<BurgerNext> => {
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    async (ctx: BurgerContext): Promise<BurgerNext> => {
+        console.log(`[${new Date().toISOString()}] ${ctx.method} ${ctx.url}`);
         
         // Return undefined to continue to the next middleware/handler
         // If you return a Response here, it stops and sends that response
@@ -211,7 +211,7 @@ export const middleware: Middleware[] = [
 -----------------------------------------------------------------------------
 
  - These functions handle the actual requests. They receive:
-   - req: The request object with validated data in req.validated
+   - ctx: The context object with validated data in ctx.validated
  - They must return a Response object. Use Response.json() for JSON responses.
 -----------------------------------------------------------------------------
 */
@@ -224,9 +224,9 @@ export const middleware: Middleware[] = [
  * - GET /api?limit=5   → Get first 5 items  
  * - GET /api?search=burger&page=2 → Search for "burger", page 2
  */
-export async function GET(req: BurgerRequest<{ query: z.infer<typeof schema.get.query> }>) {
+export async function GET(ctx: BurgerContext) {
     // Access validated query parameters from the schema
-    const { search, limit, page } = req.validated.query;
+    const { search, limit, page } = (ctx.validated!.query as any);
     
     // Mock data (replace with your database query)
     const mockItems = [
@@ -271,9 +271,9 @@ export async function GET(req: BurgerRequest<{ query: z.infer<typeof schema.get.
  *   "category": "food"
  * }
  */
-export async function POST(req: BurgerRequest<{ body: z.infer<typeof schema.post.body> }>) {
+export async function POST(ctx: BurgerContext) {
     // Get validated body data - already checked by Zod schema!
-    const { name, description, price, category, isAvailable } = req.validated.body;
+    const { name, description, price, category, isAvailable } = (ctx.validated!.body as any);
     
     // Create the item (replace with your database insert)
     const newItem = {
@@ -300,12 +300,12 @@ export async function POST(req: BurgerRequest<{ body: z.infer<typeof schema.post
  * Example: PUT /api?id=123
  * Body: { "name": "Updated Name", "price": 15.99 }
  */
-export async function PUT(req: BurgerRequest<{ query: z.infer<typeof schema.put.query>, body: z.infer<typeof schema.put.body> }>) {
+export async function PUT(ctx: BurgerContext) {
     // Get the item ID from query parameters
-    const { id } = req.validated.query;
+    const { id } = (ctx.validated!.query as any);
     
     // Get the fields to update from the request body
-    const updates = req.validated.body;
+    const updates = (ctx.validated!.body as any);
     
     // Find and update the item (replace with your database update)
     // Here we're just simulating an update
@@ -327,9 +327,9 @@ export async function PUT(req: BurgerRequest<{ query: z.infer<typeof schema.put.
  * 
  * Example: DELETE /api?id=123
  */
-export async function DELETE(req: BurgerRequest<{ query: z.infer<typeof schema.delete.query> }>) {
+export async function DELETE(ctx: BurgerContext) {
     // Get the item ID from query parameters
-    const { id } = req.validated.query;
+    const { id } = (ctx.validated!.query as any);
     
     // Delete the item (replace with your database delete)
     // Here we're just returning a success message

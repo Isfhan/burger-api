@@ -1,9 +1,9 @@
-import type { BurgerRequest } from '../../../../../../src/index';
+import type { BurgerContext } from '../../../../../../src/index';
 
-// Demonstrates `req.params` and `req.route` for a dynamic route.
-export async function GET(req: BurgerRequest) {
+// Demonstrates `ctx.params` and `ctx.route` for a dynamic route.
+export async function GET(ctx: BurgerContext) {
     return Response.json({
-        id: req.params!.id,
-        route: req.route,
+        id: ctx.params!.id,
+        route: ctx.route,
     });
 }

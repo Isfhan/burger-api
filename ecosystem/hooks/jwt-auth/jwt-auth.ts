@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the JWT authentication middleware.
@@ -37,7 +37,7 @@ export interface JWTAuthOptions {
      * @param req - The request object
      * @returns The JWT token or null if not found
      */
-    getToken?: (req: BurgerRequest) => string | null;
+    getToken?: (ctx: BurgerContext) => string | null;
 
     /**
      * Custom error handler for authentication failures.
@@ -96,7 +96,7 @@ export interface JWTPayload {
  * });
  * ```
  */
-export function jwt(options: JWTAuthOptions): Middleware {
+export function jwt(options: JWTAuthOptions): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         secret,
         algorithm = 'HS256',
@@ -111,30 +111,30 @@ export function jwt(options: JWTAuthOptions): Middleware {
         throw new Error('JWT secret is required');
     }
 
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
         // Extract token from request
         let token: string | null = null;
 
         if (getToken) {
             // Use custom token extractor
-            token = getToken(req);
+            token = getToken(ctx);
         } else {
             // Default token extraction logic
             // 1. Check Authorization header (Bearer token)
-            const authHeader = req.headers.get('Authorization');
+            const authHeader = ctx.headers.get('Authorization');
             if (authHeader?.startsWith('Bearer ')) {
                 token = authHeader.substring(7);
             }
 
             // 2. Check cookie if specified
             if (!token && cookie) {
-                const cookies = parseCookies(req.headers.get('Cookie') || '');
+                const cookies = parseCookies(ctx.headers.get('Cookie') || '');
                 token = cookies[cookie] || null;
             }
 
             // 3. Check query parameter if specified
             if (!token && queryParam) {
-                const url = new URL(req.url);
+                const url = new URL(ctx.url);
                 token = url.searchParams.get(queryParam);
             }
         }
@@ -159,7 +159,7 @@ export function jwt(options: JWTAuthOptions): Middleware {
             }
 
             // Attach decoded user data to request
-            (req as any)[requestProperty] = payload;
+            (ctx as any)[requestProperty] = payload;
 
             // Continue to next middleware/handler
             return undefined;

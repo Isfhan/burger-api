@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../src/index';
+import type { BurgerContext } from '../../../src/index';
 
 export async function GET() {
     // console.log('Hello world');

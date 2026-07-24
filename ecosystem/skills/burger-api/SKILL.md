@@ -183,7 +183,7 @@ ecosystem/skills/
 
 ## Legacy names (avoid in new code)
 
-`BurgerRequest`, `beforeHandle`/`afterHandle`/`onResponse`, lifecycle `provide`, `globalMiddleware`, `burger.config.ts`, route `use.ts`/`webhook.ts`, lowercase schema `get`/`post` as primary pattern, group inheritance.
+`BurgerRequest`, `Middleware` type, `beforeHandle`/`afterHandle`/`onResponse`, lifecycle `provide`, `globalMiddleware`, `burger.config.ts`, route `use.ts`/`webhook.ts`, lowercase schema `get`/`post` as primary pattern, group inheritance.
 
 Prefer: `BurgerContext`, vision hook names, `burger.build.ts`, `config.ts`, uppercase method exports.
 

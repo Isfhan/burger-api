@@ -1,5 +1,5 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
-export function GET(_req: BurgerRequest) {
+export function GET(_ctx: BurgerContext) {
     return Response.json({ ok: true });
 }

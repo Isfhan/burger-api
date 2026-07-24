@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the rate limiter middleware.
@@ -23,7 +23,7 @@ export interface RateLimiterOptions {
      * @param req - The request object
      * @returns A unique identifier for the client
      */
-    keyGenerator?: (req: BurgerRequest) => string;
+    keyGenerator?: (ctx: BurgerContext) => string;
 
     /**
      * Custom handler for when rate limit is exceeded.
@@ -32,7 +32,7 @@ export interface RateLimiterOptions {
      * @param req - The request object
      * @returns Response to send when rate limit is exceeded
      */
-    handler?: (req: BurgerRequest) => Response;
+    handler?: (ctx: BurgerContext) => Response;
 
     /**
      * Whether to skip failed requests (requests that throw errors).
@@ -77,19 +77,19 @@ interface RateLimitRecord {
  *
  * // Custom key generator (e.g., by API key)
  * const rateLimiter = rateLimit({
- *   keyGenerator: (req) => req.headers.get('X-API-Key') || 'anonymous'
+ *   keyGenerator: (ctx) => ctx.headers.get('X-API-Key') || 'anonymous'
  * });
  *
  * // Custom error response
  * const rateLimiter = rateLimit({
- *   handler: (req) => Response.json(
+ *   handler: (ctx) => Response.json(
  *     { error: 'Too many requests, please try again later' },
  *     { status: 429 }
  *   )
  * });
  * ```
  */
-export function rateLimit(options: RateLimiterOptions = {}): Middleware {
+export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         windowMs = 60000, // 1 minute
         maxRequests = 100,
@@ -122,8 +122,8 @@ export function rateLimit(options: RateLimiterOptions = {}): Middleware {
         }
     }
 
-    return (req: BurgerRequest): BurgerNext => {
-        const key = keyGenerator(req);
+    return (ctx: BurgerContext): BurgerNext => {
+        const key = keyGenerator(ctx);
         const now = Date.now();
 
         // Get or create rate limit record
@@ -148,7 +148,7 @@ export function rateLimit(options: RateLimiterOptions = {}): Middleware {
         // Check if rate limit is exceeded
         if (record.count > maxRequests) {
             // Return 429 Too Many Requests
-            const response = handler(req);
+            const response = handler(ctx);
             const headers = new Headers(response.headers);
 
             // Add rate limit headers
@@ -239,16 +239,16 @@ function hashKey(key: string): string {
 /**
  * Default key generator that extracts the client's IP address.
  */
-function defaultKeyGenerator(req: BurgerRequest): string {
+function defaultKeyGenerator(ctx: BurgerContext): string {
     // Try to get real IP from common proxy headers
-    const forwarded = req.headers.get('X-Forwarded-For');
+    const forwarded = ctx.headers.get('X-Forwarded-For');
     if (forwarded) {
         const ip = forwarded.split(',')[0].trim();
         // Hash the IP for privacy (optional, but recommended)
         return hashKey(ip);
     }
 
-    const realIp = req.headers.get('X-Real-IP');
+    const realIp = ctx.headers.get('X-Real-IP');
     if (realIp) {
         return hashKey(realIp);
     }
@@ -260,7 +260,7 @@ function defaultKeyGenerator(req: BurgerRequest): string {
 /**
  * Default handler for rate limit exceeded.
  */
-function defaultHandler(_req: BurgerRequest): Response {
+function defaultHandler(_ctx: BurgerContext): Response {
     return Response.json(
         {
             error: 'Too Many Requests',

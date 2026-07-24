@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the security headers middleware.
@@ -160,7 +160,7 @@ export interface SecurityHeadersOptions {
  * });
  * ```
  */
-export function securityHeaders(options: SecurityHeadersOptions = {}): Middleware {
+export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         contentSecurityPolicy,
         strictTransportSecurity = { maxAge: 31536000, includeSubDomains: true },
@@ -174,7 +174,7 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): Middlewar
         permittedCrossDomainPolicies = 'none',
     } = options;
 
-    return (_req: BurgerRequest): BurgerNext => {
+    return (_ctx: BurgerContext): BurgerNext => {
         // Transform response to add security headers
         return (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
@@ -273,7 +273,7 @@ function camelToKebab(str: string): string {
 /**
  * Preset: Strict security (recommended for production)
  */
-export function strictSecurity(): Middleware {
+export function strictSecurity(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return securityHeaders({
         contentSecurityPolicy: {
             defaultSrc: ["'self'"],
@@ -306,7 +306,7 @@ export function strictSecurity(): Middleware {
 /**
  * Preset: Relaxed security (for development)
  */
-export function relaxedSecurity(): Middleware {
+export function relaxedSecurity(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     return securityHeaders({
         contentSecurityPolicy: false,
         strictTransportSecurity: false,

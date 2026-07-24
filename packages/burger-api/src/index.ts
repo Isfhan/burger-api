@@ -29,7 +29,6 @@ import type { Scope } from './chain/node';
 // Import types
 import type {
     ServerOptions,
-    Middleware,
     RequestHandler,
     RouteDefinition,
     RouteHooks,
@@ -360,18 +359,22 @@ export class Burger {
 // Export utils
 export { setDir } from './utils/index';
 
+// Export BurgerContext (the public request context type)
+export { BurgerContext } from './context/context';
+
 // Export types
 export type {
     ServerOptions,
     RequestHandler,
-    BurgerRequest,
     BurgerNext,
-    Middleware,
     openapi,
     RouteDefinition,
     PageDefinition,
     RouteHooks,
     TransformMap,
+    ContextSet,
+    RouteMeta,
+    ContextField,
 } from './types/index';
 
 // Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)

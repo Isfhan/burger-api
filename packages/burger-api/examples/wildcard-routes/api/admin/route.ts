@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
 /**
  * Static admin route example
@@ -6,7 +6,7 @@ import type { BurgerRequest } from '../../../../src/index';
  *
  * Note: This route will handle the base path (/api/admin) since a static route exists as a sibling
  */
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     return Response.json({
         message: 'Static admin route working',
         note: 'This route handles base path (/api/admin) since a static route exists as a sibling',

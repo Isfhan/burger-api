@@ -1,6 +1,6 @@
 # Burger API - Modern API Framework for Bun
 
-> A modern, high-performance API framework built on Bun.js with file-based routing, built-in middleware, Zod validation, and automatic OpenAPI generation.
+> A modern, high-performance API framework built on Bun.js with file-based routing, built-in hooks, Zod validation, and automatic OpenAPI generation.
 
 ## Table of Contents
 
@@ -26,13 +26,13 @@
 - [Route Groups - Burger API](https://burger-api.com/docs/routing/route-groups)
 - [Nested Routes - Burger API](https://burger-api.com/docs/routing/nested-routes)
 
-### Middleware
+### Hooks
 
-- [Middleware System - Burger API](https://burger-api.com/docs/middleware/system)
-- [Global Middleware - Burger API](https://burger-api.com/docs/middleware/global)
-- [Route-Specific Middleware - Burger API](https://burger-api.com/docs/middleware/route-specific)
-- [Middleware Return Types - Burger API](https://burger-api.com/docs/middleware/return-types)
-- [After Middleware - Burger API](https://burger-api.com/docs/middleware/after)
+- [Hook System - Burger API](https://burger-api.com/docs/hooks/system)
+- [Global Hooks - Burger API](https://burger-api.com/docs/hooks/global)
+- [Route-Specific Hooks - Burger API](https://burger-api.com/docs/hooks/route-specific)
+- [Hook Return Types - Burger API](https://burger-api.com/docs/hooks/return-types)
+- [After Hooks - Burger API](https://burger-api.com/docs/hooks/after)
 
 ### Validation
 
@@ -62,15 +62,15 @@
 ### Examples
 
 - [Basic Route Example - Burger API](https://burger-api.com/docs/examples/basic-route)
-- [Middleware Example - Burger API](https://burger-api.com/docs/examples/middleware)
+- [Hooks Example - Burger API](https://burger-api.com/docs/examples/hooks)
 - [Validation Example - Burger API](https://burger-api.com/docs/examples/validation)
 - [Complete Project Example - Burger API](https://burger-api.com/docs/examples/complete-project)
 
 ### Ecosystem
 
-- [Available Middleware - Burger API](https://burger-api.com/docs/ecosystem/middleware)
-- [CORS Middleware - Burger API](https://burger-api.com/docs/ecosystem/cors)
-- [Logger Middleware - Burger API](https://burger-api.com/docs/ecosystem/logger)
+- [Available Hooks - Burger API](https://burger-api.com/docs/ecosystem/hooks)
+- [CORS Hook - Burger API](https://burger-api.com/docs/ecosystem/cors)
+- [Logger Hook - Burger API](https://burger-api.com/docs/ecosystem/logger)
 - [Rate Limiter - Burger API](https://burger-api.com/docs/ecosystem/rate-limiter)
 - [JWT Auth - Burger API](https://burger-api.com/docs/ecosystem/jwt-auth)
 - [API Key Auth - Burger API](https://burger-api.com/docs/ecosystem/api-key-auth)

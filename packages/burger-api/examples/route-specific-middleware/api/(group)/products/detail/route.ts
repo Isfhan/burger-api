@@ -1,6 +1,6 @@
-import type { BurgerRequest } from '../../../../../../src/index';
+import type { BurgerContext } from '../../../../../../src/index';
 
-export function GET(req: BurgerRequest) {
+export function GET(ctx: BurgerContext) {
     return Response.json({
         message: 'Product Detail',
     });

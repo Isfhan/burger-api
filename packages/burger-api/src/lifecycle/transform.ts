@@ -1,10 +1,11 @@
-import type { BurgerRequest } from '../types/index';
+import type { BurgerContext } from '../context/context';
 import type { TransformMap } from './types';
 
 const RESERVED = new Set([
     'params',
     'wildcardParams',
     'query',
+    'cookies',
     'headers',
     'method',
     'url',
@@ -14,15 +15,18 @@ const RESERVED = new Set([
     'validated',
     'set',
     'route',
+    'request',
+    'services',
     '_raw',
     '_ctxInit',
     '_query',
+    '_cookies',
 ]);
 
 /**
  * Applies `transform` factories onto a context instance.
  *
- * For each entry in the transform map, the factory is called with the request
+ * For each entry in the transform map, the factory is called with the context
  * and the result is shallow-assigned onto the context object. Reserved keys
  * (built-in properties like `params`, `query`, `body`, etc.) are silently
  * dropped with a `console.warn` in debug mode.
@@ -32,7 +36,7 @@ const RESERVED = new Set([
  * (so route can reference or override global-transformed values).
  */
 export function applyTransform(
-    ctx: object,
+    ctx: BurgerContext,
     transformMap: TransformMap,
     debug = false
 ): void {
@@ -45,7 +49,7 @@ export function applyTransform(
             }
             continue;
         }
-        const value = transformMap[key](ctx as unknown as BurgerRequest);
-        (ctx as Record<string, unknown>)[key] = value;
+        const value = transformMap[key](ctx);
+        (ctx as unknown as Record<string, unknown>)[key] = value;
     }
 }

@@ -15,20 +15,20 @@ Routes are matched in this order:
 
 ```typescript
 // api/users/[id]/route.ts
-export async function GET(req: BurgerRequest) {
-    const { id } = req.validated?.params || {};
+export async function GET(ctx: BurgerContext) {
+    const { id } = ctx.validated?.params || {};
     return Response.json({ userId: id });
 }
 ```
 
-Dynamic segments are accessed via `req.params` (unvalidated) or `req.validated.params` (after Zod validation).
+Dynamic segments are accessed via `ctx.params` (unvalidated) or `ctx.validated.params` (after Zod validation).
 
 ## Wildcard Routes
 
 ```typescript
 // api/files/[...]/route.ts
-export async function GET(req: BurgerRequest) {
-    const segments = req.wildcardParams || [];
+export async function GET(ctx: BurgerContext) {
+    const segments = ctx.wildcardParams || [];
     return Response.json({ path: segments.join('/') });
 }
 ```
@@ -50,8 +50,8 @@ Groups can be nested and are useful for organizing routes by feature, version, o
 
 ```typescript
 // api/posts/[postId]/comments/[commentId]/route.ts
-export async function GET(req: BurgerRequest) {
-    const { postId, commentId } = req.validated?.params || {};
+export async function GET(ctx: BurgerContext) {
+    const { postId, commentId } = ctx.validated?.params || {};
     return Response.json({ postId, commentId });
 }
 ```

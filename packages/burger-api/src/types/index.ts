@@ -1,9 +1,6 @@
-import type { BunRequest, Server } from 'bun';
+import type { Server } from 'bun';
 import type { serve } from 'bun';
-import type {
-    ContextSet,
-    RouteMeta,
-} from '../context/types';
+import type { BurgerContext } from '../context/context';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
 import type { RouteHooks, TransformMap } from '../lifecycle/types';
 export type { RouteHooks, TransformMap } from '../lifecycle/types';
@@ -99,76 +96,11 @@ export interface ServerOptions extends Omit<
     validation?: ValidatorConfig;
 }
 
-type DefaultRequestProperties = {
-    params?: Record<string, unknown>;
-    query?: Record<string, unknown>;
-    headers?: Record<string, unknown>;
-    cookie?: Record<string, unknown>;
-    body?: Record<string, unknown>;
-};
-
-export interface BurgerRequest<
-    RequestValidatedProperties extends DefaultRequestProperties =
-        DefaultRequestProperties,
-> extends Omit<BunRequest<string>, 'params'> {
-    /**
-     * Contains URL parameters extracted from the request path.
-     * This property is only present if the request path matches a route
-     * with dynamic parameters.
-     *
-     * For example, if the route is `/users/:id`, and the request path is
-     * `/users/123`, then the `params` property will be `{ id: '123' }`.
-     */
-    params?: Record<string, string>;
-
-    /**
-     * Contains validated data for the request.
-     * This is an optional property that will only be present if
-     * a middleware has validated the request data and attached the
-     * validated data to the request.
-     *
-     * Properties:
-     * - `params`: Validated URL parameters.
-     * - `query`: Validated query string parameters.
-     * - `body`: Validated request body (if JSON).
-     */
-    validated: RequestValidatedProperties;
-
-    /**
-     * Contains the wildcard parameters.
-     * This is an optional property that will only be present if
-     * the request path matches a route with a wildcard parameter.
-     * For example, if the route is `/users/[...]`, and the request path is
-     * `/users/123/456`, then the `wildcardParams` property will be `['123', '456']`.
-     */
-    wildcardParams?: string[];
-
-    /**
-     * The lazily parsed query string record.
-     * Added in Phase 2 — optional and additive. Parsed on first access via the
-     * fast Bun-native `parseQuery` parser (no `URL`/`URLSearchParams` allocation).
-     */
-    query?: Record<string, string | string[]>;
-
-    /**
-     * The response mutation object (`status` + `headers` only in Phase 2).
-     * Added in Phase 2 — optional and additive. Merged into the response by
-     * `applySet` at the pipeline exit. `cookies` is reserved for Phase 7.
-     */
-    set?: ContextSet;
-
-    /**
-     * The matched-route identity (`path` + `pattern`).
-     * Added in Phase 2 — optional and additive. Present on every matched route.
-     */
-    route?: RouteMeta;
-}
-
 /**
- * Represents what a middleware can return to control the request flow:
+ * Represents what a hook can return to control the request flow:
  * - Response: Stop here, send this response back to the client
  * - Function(Response): Continue processing, but transform the final response after handler runs
- * - undefined: I'm done, continue to the next middleware or handler
+ * - undefined: I'm done, continue to the next hook or handler
  */
 export type BurgerNext =
     | Response
@@ -176,31 +108,12 @@ export type BurgerNext =
     | undefined;
 
 /**
- * A middleware function that processes HTTP requests.
- *
- * What middleware can do:
- * - Check if the request is valid (auth, validation, etc.)
- * - Stop the request by returning a Response
- * - Let the request continue by returning undefined
- * - Transform the final response by returning a function
- *
- * @param request - The HTTP request with Burger framework enhancements
- * @returns One of three things:
- *          - Response: Stop here, send this response back
- *          - Function: Transform the final response after handler runs
- *          - undefined: Continue to the next middleware or handler
- */
-export type Middleware =
-    | ((request: BurgerRequest) => Promise<BurgerNext>)
-    | ((request: BurgerRequest) => BurgerNext);
-
-/**
  * A request handler function that processes incoming HTTP requests.
- * @param request - The BurgerRequest object containing request object.
+ * @param ctx - The BurgerContext object containing request data and services.
  * @returns A Response object or a Promise that resolves to a Response object.
  */
 export type RequestHandler = (
-    request: BurgerRequest
+    ctx: BurgerContext
 ) => Promise<Response> | Response;
 
 /**
@@ -309,7 +222,6 @@ export type openapi = {
 export interface PageDefinition {
     path: string;
     handler: RequestHandler;
-    middleware?: Middleware[];
 }
 
 export interface TrieNode {

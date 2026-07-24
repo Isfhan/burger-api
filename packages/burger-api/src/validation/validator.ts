@@ -17,7 +17,9 @@
  *   structured rendering).
  */
 
-import type { Middleware, BurgerRequest, BurgerNext } from '../types/index';
+import type { BurgerContext } from '../context/context';
+import type { BurgerNext } from '../types/index';
+import type { Hook } from '../lifecycle/types';
 import type { CompiledRouteValidators, ValidatorConfig } from './types';
 import { apply as applyCoercion } from './coerce';
 import { renderValidationError } from './error';
@@ -95,20 +97,20 @@ export function createValidatorMiddleware(
     validators: CompiledRouteValidators,
     config: ValidatorConfig = {},
     isDev = false
-): Middleware {
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
-        // If the request has already been validated, continue (legacy 63).
-        if (req.validated) {
+): Hook {
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
+        // If the request has already been validated, continue.
+        if (ctx.validated) {
             return undefined;
         }
 
-        const method = (req.method || 'get').toLowerCase();
+        const method = (ctx.method || 'get').toLowerCase();
         const methodValidators = validators.methods[method];
         if (!methodValidators) {
             return undefined;
         }
 
-        const validated: BurgerRequest['validated'] = {};
+        const validated: Record<string, unknown> = {};
 
         // Lazy errors — created only when a failure occurs (legacy 99).
         let errors: {
@@ -122,12 +124,12 @@ export function createValidatorMiddleware(
         const coercion = methodValidators.coercion;
 
         // Params
-        if (methodValidators.params && req.params) {
+        if (methodValidators.params && ctx.params) {
             // Apply coercion (if a plan exists) BEFORE validation so bad
             // coercions fail loudly (phase3 §18 R2). Only when enabled.
             const input = coercion?.params
-                ? applyCoercion(coercion.params, req.params as any)
-                : req.params;
+                ? applyCoercion(coercion.params, ctx.params as any)
+                : ctx.params;
             const result = methodValidators.params.validate(input);
             if (result.success) {
                 (validated as any).params = result.data;
@@ -137,9 +139,9 @@ export function createValidatorMiddleware(
             }
         }
 
-        // Query (lazy req.query, fast Bun-native parser — legacy 117)
+        // Query (lazy ctx.query, fast Bun-native parser)
         if (methodValidators.query) {
-            const queryParams = (req.query ?? {}) as Record<
+            const queryParams = (ctx.query ?? {}) as Record<
                 string,
                 string | string[]
             >;
@@ -158,7 +160,7 @@ export function createValidatorMiddleware(
         // Headers (validate header values; additive slot, phase3 §5/M5)
         if (methodValidators.headers) {
             const headerRecord: Record<string, string> = {};
-            req.headers.forEach((value, key) => {
+            ctx.headers.forEach((value, key) => {
                 headerRecord[key.toLowerCase()] = value;
             });
             const input = coercion?.headers
@@ -175,7 +177,7 @@ export function createValidatorMiddleware(
 
         // Cookie (validate parsed cookie values; cookie *signing* is Phase 7)
         if (methodValidators.cookie) {
-            const cookieHeader = req.headers.get('cookie') ?? '';
+            const cookieHeader = ctx.headers.get('cookie') ?? '';
             const cookieRecord = parseCookies(cookieHeader);
             const input = coercion?.cookie
                 ? applyCoercion(coercion.cookie, cookieRecord)
@@ -189,20 +191,20 @@ export function createValidatorMiddleware(
             }
         }
 
-        // Body (gated on JSON content-type — legacy 138)
+        // Body (gated on JSON content-type)
         if (methodValidators.body) {
             const contentType =
-                req.headers.get('content-type') ??
-                req.headers.get('Content-Type') ??
+                ctx.headers.get('content-type') ??
+                ctx.headers.get('Content-Type') ??
                 '';
             if (contentType.includes('application/json')) {
                 try {
-                    const bodyData = await req.json();
+                    const bodyData = await ctx.json();
                     const result = methodValidators.body.validate(bodyData);
                     if (result.success) {
                         (validated as any).body = result.data;
-                        // Patch json() to return validated body (legacy 153)
-                        req.json = async () => result.data;
+                        // Patch json() to return validated body
+                        ctx.json = async () => result.data;
                     } else {
                         if (!errors) errors = {};
                         errors.body = result.issues;
@@ -238,7 +240,7 @@ export function createValidatorMiddleware(
             });
         }
 
-        req.validated = validated;
+        ctx.validated = validated;
         return undefined;
     };
 }

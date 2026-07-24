@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 // Allowed HTTP methods for type safety
 export type HttpMethod =
@@ -109,7 +109,7 @@ export interface CorsOptions {
  * });
  * ```
  */
-export function cors(options: CorsOptions = {}): Middleware {
+export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         origin = '*',
         methods = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -198,8 +198,8 @@ export function cors(options: CorsOptions = {}): Middleware {
         error: 'Insecure origin not allowed',
     });
 
-    return (req: BurgerRequest): BurgerNext => {
-        const requestOrigin = req.headers.get('Origin');
+    return (ctx: BurgerContext): BurgerNext => {
+        const requestOrigin = ctx.headers.get('Origin');
 
         /**
          * Fast path: no origin header (same-origin request)
@@ -213,7 +213,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         // Fast path: wildcard origin
         if (isWildcard) {
             return handlePreflightOrResponse(
-                req,
+                ctx,
                 '*',
                 preflightHeadersBase,
                 credentialsHeader,
@@ -287,7 +287,7 @@ export function cors(options: CorsOptions = {}): Middleware {
         }
 
         return handlePreflightOrResponse(
-            req,
+            ctx,
             allowedOrigin,
             preflightHeadersBase,
             credentialsHeader,
@@ -299,7 +299,7 @@ export function cors(options: CorsOptions = {}): Middleware {
 
     // --- Optimized preflight and response handler ---
     function handlePreflightOrResponse(
-        req: BurgerRequest,
+        ctx: BurgerContext,
         allowedOrigin: string,
         preflightHeadersBase: Record<string, string>,
         credentialsHeader: Record<string, string>,
@@ -308,9 +308,9 @@ export function cors(options: CorsOptions = {}): Middleware {
         debug: boolean
     ): BurgerNext {
         // --- Preflight request optimization ---
-        if (req.method === 'OPTIONS') {
+        if (ctx.method === 'OPTIONS') {
             // Optimize header parsing - avoid unnecessary operations
-            const requestedHeadersRaw = req.headers.get(
+            const requestedHeadersRaw = ctx.headers.get(
                 'Access-Control-Request-Headers'
             );
             let requestedHeaders: string[];
@@ -345,7 +345,7 @@ export function cors(options: CorsOptions = {}): Middleware {
 
             if (debug) {
                 console.log('[CORS] Preflight:', {
-                    origin: req.headers.get('Origin'),
+                    origin: ctx.headers.get('Origin'),
                     allowed: !!allowedOrigin,
                     requestedHeaders,
                 });
@@ -394,7 +394,7 @@ export function cors(options: CorsOptions = {}): Middleware {
 
             if (debug) {
                 console.log('[CORS] Applied to response:', {
-                    origin: req.headers.get('Origin'),
+                    origin: ctx.headers.get('Origin'),
                     allowedOrigin,
                     credentials,
                     exposedHeaders: exposedHeadersString,

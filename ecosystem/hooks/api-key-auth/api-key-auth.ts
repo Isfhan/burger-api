@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the API key authentication middleware.
@@ -44,7 +44,7 @@ export interface APIKeyAuthOptions {
      * @param req - The request object
      * @returns The API key or null if not found
      */
-    getKey?: (req: BurgerRequest) => string | null;
+    getKey?: (ctx: BurgerContext) => string | null;
 
     /**
      * Custom error handler for authentication failures.
@@ -97,14 +97,14 @@ export interface APIKeyAuthOptions {
  * const apiKeyAuth = apiKey({
  *   keys: ['key1', 'key2'],
  *   header: 'Authorization',
- *   getKey: (req) => {
- *     const auth = req.headers.get('Authorization');
+ *   getKey: (ctx) => {
+ *     const auth = ctx.headers.get('Authorization');
  *     return auth?.startsWith('ApiKey ') ? auth.substring(7) : null;
  *   }
  * });
  * ```
  */
-export function apiKey(options: APIKeyAuthOptions): Middleware {
+export function apiKey(options: APIKeyAuthOptions): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         keys,
         header = 'X-API-Key',
@@ -118,21 +118,21 @@ export function apiKey(options: APIKeyAuthOptions): Middleware {
     // Convert keys to Set for faster lookups if it's an array
     const keysSet = Array.isArray(keys) ? new Set(keys) : keys;
 
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
         // Extract API key from request
         let key: string | null = null;
 
         if (getKey) {
             // Use custom key extractor
-            key = getKey(req);
+            key = getKey(ctx);
         } else {
             // Default key extraction logic
             // 1. Check specified header
-            key = req.headers.get(header);
+            key = ctx.headers.get(header);
 
             // 2. Check query parameter if specified
             if (!key && queryParam) {
-                const url = new URL(req.url);
+                const url = new URL(ctx.url);
                 key = url.searchParams.get(queryParam);
             }
         }
@@ -166,7 +166,7 @@ export function apiKey(options: APIKeyAuthOptions): Middleware {
         }
 
         // Attach API key to request
-        (req as any)[requestProperty] = key;
+        (ctx as any)[requestProperty] = key;
 
         // Continue to next middleware/handler
         return undefined;
@@ -202,7 +202,7 @@ export function apiKeyWithRateLimit(
         windowMs?: number;
         maxRequests?: number;
     } = {}
-): Middleware {
+): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const { windowMs = 60000, maxRequests = 100 } = rateLimit;
 
     // Store for tracking requests per API key
@@ -214,15 +214,15 @@ export function apiKeyWithRateLimit(
     // Create base API key auth middleware
     const baseAuth = apiKey(authOptions);
 
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
         // First, authenticate the API key
-        const authResult = await baseAuth(req);
+        const authResult = await baseAuth(ctx);
         if (authResult instanceof Response) {
             return authResult; // Authentication failed
         }
 
         // Get the validated API key
-        const key = (req as any)[authOptions.requestProperty || 'apiKey'];
+        const key = (ctx as any)[authOptions.requestProperty || 'apiKey'];
 
         // Check rate limit for this specific API key
         const now = Date.now();

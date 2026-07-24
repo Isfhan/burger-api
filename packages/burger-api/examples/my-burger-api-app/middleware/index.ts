@@ -1,14 +1,14 @@
-import type { Middleware, BurgerNext, BurgerRequest } from '../../../src/index';
+import type { BurgerContext } from '../../../src/index';
 
 // Export logger
 export { globalLogger } from './logger';
 
 // Auth guard middleware
-export const authGuard: Middleware = (
-    request: BurgerRequest
-): BurgerNext => {
+export const authGuard = (
+    ctx: BurgerContext
+) => {
     // Simple demo auth check
-    const authHeader = request.headers.get('authorization');
+    const authHeader = ctx.headers.get('authorization');
     if (!authHeader) {
         console.log('[Auth Guard] No auth header - allowing request for demo');
     }
@@ -16,18 +16,18 @@ export const authGuard: Middleware = (
 };
 
 // Rate limiter middleware
-export const rateLimiter: Middleware = (
-    request: BurgerRequest
-): BurgerNext => {
+export const rateLimiter = (
+    ctx: BurgerContext
+) => {
     // Demo rate limiting
-    console.log('[Rate Limiter] Checking rate limits for:', request.url);
+    console.log('[Rate Limiter] Checking rate limits for:', ctx.url);
     return undefined; // Continue to next middleware
 };
 
 // CORS middleware
-export const corsMiddleware: Middleware = (
-    request: BurgerRequest
-): BurgerNext => {
+export const corsMiddleware = (
+    ctx: BurgerContext
+) => {
     // Return a function to add CORS headers to the response
     return async (response: Response) => {
         const headers = new Headers(response.headers);

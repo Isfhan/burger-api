@@ -1,4 +1,4 @@
-import type { BurgerRequest } from '../../../../../src/index';
+import type { BurgerContext } from '../../../../../src/index';
 
 /**
  * Admin wildcard route example
@@ -7,8 +7,8 @@ import type { BurgerRequest } from '../../../../../src/index';
  * Note: This route will match any path that starts with /api/admin/
  */
 
-export async function GET(req: BurgerRequest) {
-    const wildcardParams = req.wildcardParams || [];
+export async function GET(ctx: BurgerContext) {
+    const wildcardParams = ctx.wildcardParams || [];
     return Response.json({
         message: 'Admin wildcard route working',
         wildcardParams: wildcardParams,

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerRequest } from '../../../../src/index';
+import type { BurgerContext } from '../../../../src/index';
 
 // OpenAPI Metadata
 export const openapi = {
@@ -43,9 +43,9 @@ export async function GET() {
 }
 
 // POST handler: creates a new product.
-export async function POST(req: BurgerRequest<{ body: ReqBody }>) {
+export async function POST(ctx: BurgerContext) {
     // Use validated body
-    const body = req.validated.body;
+    const body = (ctx.validated!.body as any);
 
     // Return response with the validated body.
     return Response.json({

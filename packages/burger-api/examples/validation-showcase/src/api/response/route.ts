@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // Response validation scenario (phase3 §8, §16.2). This example runs with
 // `responseValidation: 'enforce'` app-wide, so a handler returning a body that
@@ -11,6 +11,6 @@ export const schema = {
     },
 };
 
-export function GET(_req: BurgerRequest) {
+export function GET(_ctx: BurgerContext) {
     return Response.json({ ok: true });
 }

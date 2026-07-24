@@ -17,8 +17,8 @@ Hook functions can return three values:
 Place hooks in the root `api/hooks.ts` — they apply to every route under `api/`:
 
 ```typescript
-// api/hooks.ts
-export const beforeHandle = [
+// src/hooks.ts
+export const onRequest = [
     logger(),
     cors({ origin: '*' }),
     rateLimiter({ max: 100, window: 60000 }),
@@ -27,13 +27,13 @@ export const beforeHandle = [
 
 ## Route-Specific Hooks
 
-Place hooks in a route directory's `hooks.ts` — they apply only to that route (and append to inherited hooks via group inheritance):
+Place hooks in a route directory's `hooks.ts` — they apply only to that route:
 
 ```typescript
 // api/protected/hooks.ts
-export const beforeHandle = [
-    async (req) => {
-        const token = req.headers.get('Authorization');
+export const onRequest = [
+    async (ctx: BurgerContext) => {
+        const token = ctx.headers.get('Authorization');
         if (!token) {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -48,8 +48,8 @@ When a hook returns a function, that function runs after the route handler (and 
 
 ```typescript
 // api/<route>/hooks.ts
-export const beforeHandle = [
-    async (req) => {
+export const afterRoute = [
+    async (ctx: BurgerContext) => {
         return (response: Response) => {
             response.headers.set('Access-Control-Allow-Origin', '*');
             return response;
@@ -73,11 +73,11 @@ The hook pipeline has specialized fast paths:
 
 Pre-allocated arrays are used to avoid dynamic resizing.
 
-## Ecosystem Middleware
+## Ecosystem Hooks
 
-Available via `burger-api add <name>` — these are **hook factories** wired into `hooks.ts` as `beforeHandle` entries:
+Available via `burger-api add <name>` — these are **hook factories** wired into `hooks.ts`:
 
-| Middleware | Description |
+| Hook | Description |
 |---|---|
 | cors | Cross-Origin Resource Sharing |
 | logger | Request/response logging |
@@ -89,5 +89,3 @@ Available via `burger-api add <name>` — these are **hook factories** wired int
 | timeout | Request timeout |
 | cache-control | HTTP caching headers |
 | body-size-limiter | Request body size limits |
-
-> **Note:** Ecosystem middleware currently exports functions returning `Middleware` type (compatible with the `beforeHandle` hook contract). In a future milestone they will graduate into `use.ts` capabilities.

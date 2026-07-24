@@ -1,16 +1,18 @@
-import type { BurgerRequest, Middleware, RequestHandler } from '../types/index';
+import type { BurgerContext } from '../context/context';
+import type { BurgerNext, RequestHandler } from '../types/index';
+import type { Hook } from './types';
 
 /**
- * Runs a single middleware followed by the handler.
+ * Runs a single hook followed by the handler.
  * Reused by the router compiler so the compiled handlers share the exact
- * same middleware execution semantics as the legacy inline handlers.
+ * same hook execution semantics.
  */
-export async function runSingleMiddleware(
-    request: BurgerRequest,
-    middleware: Middleware,
+async function runSingleHook(
+    ctx: BurgerContext,
+    hook: Hook,
     handler: RequestHandler
 ): Promise<Response> {
-    const result = await middleware(request);
+    const result = await hook(ctx) as BurgerNext;
 
     // Short-circuit with Response
     if (result instanceof Response) {
@@ -19,43 +21,43 @@ export async function runSingleMiddleware(
 
     // Transform response after handler
     if (typeof result === 'function') {
-        return result(await handler(request));
+        return result(await handler(ctx));
     }
 
     // Continue to handler
-    return handler(request);
+    return handler(ctx);
 }
 
 /**
- * Runs an ordered middleware chain followed by the handler.
+ * Runs an ordered hook chain followed by the handler.
  *
  * How it works:
- * 1. Run each middleware in order
- * 2. If middleware returns Response → stop and send that response
- * 3. If middleware returns undefined → continue to next middleware
- * 4. If middleware returns function → save it to transform the final response later
- * 5. After all middlewares, run the handler
+ * 1. Run each hook in order
+ * 2. If hook returns Response → stop and send that response
+ * 3. If hook returns undefined → continue to next hook
+ * 4. If hook returns function → save it to transform the final response later
+ * 5. After all hooks, run the handler
  * 6. Apply all saved "after" functions to the response (in reverse order)
  */
-export async function runMiddleware(
-    request: BurgerRequest,
-    middlewares: Middleware[],
+async function runHookChain(
+    ctx: BurgerContext,
+    hooks: Hook[],
     handler: RequestHandler
 ): Promise<Response> {
-    const len = middlewares.length;
+    const len = hooks.length;
 
-    // Fast path: two middlewares (common: CORS + logger, or auth + logger)
+    // Fast path: two hooks (common: CORS + logger, or auth + logger)
     if (len === 2) {
-        // First middleware
-        const result1 = await middlewares[0](request);
+        // First hook
+        const result1 = await hooks[0](ctx) as BurgerNext;
         if (result1 instanceof Response) {
             return result1;
         }
 
-        // Second middleware
-        const result2 = await middlewares[1](request);
+        // Second hook
+        const result2 = await hooks[1](ctx) as BurgerNext;
         if (result2 instanceof Response) {
-            // Apply first middleware's after function if exists
+            // Apply first hook's after function if exists
             if (typeof result1 === 'function') {
                 return result1(result2);
             }
@@ -63,7 +65,7 @@ export async function runMiddleware(
         }
 
         // Run handler
-        let response = await handler(request);
+        let response = await handler(ctx);
 
         // Apply after functions in reverse order (manual unroll)
         if (typeof result2 === 'function') {
@@ -76,14 +78,14 @@ export async function runMiddleware(
         return response;
     }
 
-    // General path: 3+ middlewares (less common)
+    // General path: 3+ hooks (less common)
     // Pre-allocate array with exact size to avoid dynamic resizing
     const afterStack = new Array(len);
     let afterCount = 0;
 
-    // Run each middleware
+    // Run each hook
     for (let i = 0; i < len; i++) {
-        const result = await middlewares[i](request);
+        const result = await hooks[i](ctx) as BurgerNext;
 
         // Short-circuit with Response (check first - most common early exit)
         if (result instanceof Response) {
@@ -107,8 +109,8 @@ export async function runMiddleware(
         // undefined - continue (implicit, no check needed)
     }
 
-    // All middlewares passed - run handler
-    let response = await handler(request);
+    // All hooks passed - run handler
+    let response = await handler(ctx);
 
     // Apply "after" functions in reverse order
     // Fast paths for common cases
@@ -128,16 +130,16 @@ export async function runMiddleware(
 }
 
 /**
- * Runs the middleware chain (if any) for a compiled handler.
- * Preserves the 0/1/2/3+ fast paths from the legacy implementation.
+ * Runs the hook chain (if any) for a compiled handler.
+ * Preserves the 0/1/2/3+ fast paths.
  */
-export function runWithMiddleware(
-    request: BurgerRequest,
-    middlewares: Middleware[],
+export function runHooks(
+    ctx: BurgerContext,
+    hooks: Hook[],
     handler: RequestHandler
 ): Promise<Response> {
-    if (middlewares.length === 0) return Promise.resolve(handler(request));
-    if (middlewares.length === 1)
-        return runSingleMiddleware(request, middlewares[0], handler);
-    return runMiddleware(request, middlewares, handler);
+    if (hooks.length === 0) return Promise.resolve(handler(ctx));
+    if (hooks.length === 1)
+        return runSingleHook(ctx, hooks[0], handler);
+    return runHookChain(ctx, hooks, handler);
 }

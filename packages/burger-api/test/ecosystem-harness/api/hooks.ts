@@ -1,4 +1,4 @@
-import type { Middleware } from '../../../src/types/index';
+import type { Hook } from '../../../src/lifecycle/types';
 import { cors } from '../../../../../ecosystem/hooks/cors/cors';
 import { logger } from '../../../../../ecosystem/hooks/logger/logger';
 import { rateLimit } from '../../../../../ecosystem/hooks/rate-limiter/rate-limiter';
@@ -12,7 +12,7 @@ import { bodySizeLimiter } from '../../../../../ecosystem/hooks/body-size-limite
 
 const name = process.env.TEST_MW ?? 'cors';
 
-const middlewareByName: Record<string, Middleware> = {
+const middlewareByName: Record<string, Hook> = {
     cors: cors({ origin: '*' }),
     logger: logger(),
     'rate-limiter': rateLimit({ windowMs: 60_000, maxRequests: 3 }),

@@ -1,14 +1,14 @@
-import type { BurgerRequest } from '../../../../../src/index';
+import type { BurgerContext } from '../../../../../src/index';
 
-export function GET(req: BurgerRequest) {
-    const query = new URL(req.url).searchParams;
+export function GET(ctx: BurgerContext) {
+    const query = new URL(ctx.url).searchParams;
     return Response.json({
         query: Object.fromEntries(query),
         name: 'John Doe',
     });
 }
 
-export async function POST(req: BurgerRequest) {
-    const body = await req.json();
+export async function POST(ctx: BurgerContext) {
+    const body = await ctx.json();
     return Response.json(body);
 }

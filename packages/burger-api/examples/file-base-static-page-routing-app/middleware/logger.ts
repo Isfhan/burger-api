@@ -1,9 +1,9 @@
-import type { BurgerRequest, Middleware, BurgerNext } from '../../../src/index';
+import type { BurgerContext } from '../../../src/index';
 
 // Global middleware example: a simple logger.
-export const globalLogger: Middleware = (
-    req: BurgerRequest
-): BurgerNext => {
-    console.log(`[Global Logger] ${req.method} ${req.url}`);
+export const globalLogger = (
+    ctx: BurgerContext
+) => {
+    console.log(`[Global Logger] ${ctx.method} ${ctx.url}`);
     return undefined;
 };

@@ -1,9 +1,8 @@
 /**
- * Internal types for the prototype-based Phase 2 request context.
+ * Internal types for the prototype-based request context.
  *
- * These types are framework-internal. `BurgerRequest` (in `../types/index`)
- * re-exports the public-facing ones (`ContextSet`, `RouteMeta`) and gains the
- * additive optional fields `query` / `set` / `route`.
+ * These types are framework-internal. `BurgerContext` (in `./context`)
+ * re-exports the public-facing ones (`ContextSet`, `RouteMeta`).
  */
 
 /**
@@ -13,11 +12,14 @@
 export type ContextField =
     | 'params'
     | 'query'
+    | 'cookies'
     | 'headers'
     | 'json'
     | 'validated'
     | 'set'
     | 'route'
+    | 'services'
+    | 'request'
     | 'wildcardParams';
 
 /**

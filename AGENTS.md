@@ -81,9 +81,9 @@ ecosystem/skills/    # AI skills
 **Not planned:** group/folder inheritance, route `use.ts` / `webhook.ts`, ORM, dedicated webhook router.  
 **Planned later:** file-based WebSocket router under `src/websocket/`.
 
-### Legacy code (do not extend)
+### Legacy code (removed in Phase 2)
 
-Until migrated, the monorepo may still contain: `BurgerRequest`, `beforeHandle`/`afterHandle`/`onResponse`/`provide`, group inheritance, `burger.config.ts`, `use.ts`/`webhook.ts` discovery, validation returning 400 Responses. Treat as **legacy**. New work targets the vision names and rules above.
+The following have been removed: `BurgerRequest`, `Middleware` type, `beforeHandle`/`afterHandle`/`onResponse`/`provide`, group inheritance, `burger.config.ts`, `use.ts`/`webhook.ts` discovery. All public API now uses `BurgerContext`, hooks (`beforeRoute`/`afterRoute`/`mapResponse`/`transform`/`onRequest`/`onError`), and plugins.
 
 ---
 
@@ -165,7 +165,7 @@ Prefer Bun APIs. Core stays WinterCG-portable behind adapters. Node 24+ / edge s
 
 ## Rule 13 — Vision Wins
 
-Do not reintroduce: middleware layer, group inheritance, lowercase schema method objects as the primary pattern, `BurgerRequest` as the primary public type in new docs, lifecycle hook named `provide`, route-level `use.ts` as the plugin system, first-class `webhook.ts`.
+Do not reintroduce: middleware layer/type, group inheritance, lowercase schema method objects as the primary pattern, `BurgerRequest` as a public type, lifecycle hook named `provide`, route-level `use.ts` as the plugin system, first-class `webhook.ts`.
 
 ## Code Conventions (target)
 

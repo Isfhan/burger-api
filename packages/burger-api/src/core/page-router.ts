@@ -144,14 +144,12 @@ export class PageRouter {
                         const pageDefWithSlash: PageDefinition = {
                             path: cleanedRoutePath + '/',
                             handler: pageModule.default,
-                            middleware: pageModule.middleware,
                         };
 
                         // Create page definition
                         const pageDef: PageDefinition = {
                             path: cleanedRoutePath,
                             handler: pageModule.default,
-                            middleware: pageModule.middleware,
                         };
 
                         // Add the page definition to the pages array

@@ -14,7 +14,6 @@ import { autoOptionsHandler } from '../utils/response';
 
 // Import types
 import type {
-    Middleware,
     RequestHandler,
     RouteDefinition,
     TrieNode,

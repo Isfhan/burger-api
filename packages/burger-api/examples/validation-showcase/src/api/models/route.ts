@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // Model ref scenario (phase3 §9, §16.2): `query` references a named model by
 // string. Resolved at compile time from ServerOptions.models; shares the
@@ -10,6 +10,6 @@ export const schema = {
     },
 };
 
-export function GET(req: BurgerRequest) {
-    return Response.json({ page: req.validated.query!.page, limit: req.validated.query!.limit });
+export function GET(ctx: BurgerContext) {
+    return Response.json({ page: (ctx.validated!.query as any).page, limit: (ctx.validated!.query as any).limit });
 }

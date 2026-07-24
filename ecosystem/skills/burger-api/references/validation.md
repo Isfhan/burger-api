@@ -44,9 +44,9 @@ export const schema = {
 ## Accessing Validated Data
 
 ```typescript
-export async function POST(req: BurgerRequest) {
-    const params = req.validated?.params;  // { id: string }
-    const body = req.validated?.body;       // { name: string, email: string }
+export async function POST(ctx: BurgerContext) {
+    const params = ctx.validated?.params;  // { id: string }
+    const body = ctx.validated?.body;       // { name: string, email: string }
     // `params` and `body` are fully typed based on the Zod schema
     return Response.json(body, { status: 201 });
 }

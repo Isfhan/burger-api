@@ -1,6 +1,5 @@
 import type {
     RouteDefinition,
-    BurgerRequest,
     RequestHandler,
 } from '../types/index';
 import type { RouteModule } from '../compiler/route-module';
@@ -9,7 +8,7 @@ import { compileRouteSchema } from '../validation/compiler';
 import { createValidatorMiddleware } from '../validation/validator';
 import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
 import { executeHookPlan } from '../lifecycle/executor';
-import type { HookPlan, Hook, RouteHooks, TransformMap } from '../lifecycle/types';
+import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types';
 import { HookChain } from '../chain/chain';
 import { flatten } from '../chain/flattener';
 import { composePluginHooks } from '../plugin/composer';
@@ -94,7 +93,7 @@ export class RouterCompiler {
                         validators,
                         this.config,
                         this.debug === true
-                    ) as unknown as Hook,
+                    ),
                     scope: 'global',
                     owner: 'framework',
                 });
@@ -254,7 +253,6 @@ function buildCompiledHandler(
         // Create the one `BurgerContext` for this request. `meta` is accepted
         // but ignored at runtime (Phase 2).
         const ctx = BurgerContext.create(request, resolvedCtxInit, meta);
-        const burgerReq = ctx as unknown as BurgerRequest;
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {

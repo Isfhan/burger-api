@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerNext, BurgerRequest, Middleware } from '../../../../../src/index';
+import type { BurgerNext, BurgerContext } from '../../../../../src/index';
 
 // Export a schema for GET requests.
 export const schema = {
@@ -14,21 +14,21 @@ export const schema = {
 };
 
 // Route-specific middleware
-export const middleware: Middleware[] = [
-    (req: BurgerRequest): BurgerNext => {
+export const beforeRoute = [
+    (ctx: BurgerContext): BurgerNext => {
         console.log(
             'Product Detail Route-specific middleware executed for request:',
-            req.url
+            ctx.url
         );
         return undefined;
     },
 ];
 
 export async function GET(
-    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+    ctx: BurgerContext
 ) {
     return Response.json({
-        id: req.validated?.params.id,
+        id: (ctx.validated!.params as any).id,
         name: 'John Doe',
     });
 }

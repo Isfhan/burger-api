@@ -1,6 +1,6 @@
-import type { BurgerRequest } from '../../../src/types/index';
+import type { BurgerContext } from '../../../src/context/context';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(req: BurgerContext) {
     return Response.json({
         pluginRan: (req as any)._pluginRan === true,
         macroRan: (req as any)._macroRan === true,

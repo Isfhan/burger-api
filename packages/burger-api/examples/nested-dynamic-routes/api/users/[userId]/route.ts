@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BurgerRequest } from '../../../../../src/index';
+import type { BurgerContext } from '../../../../../src/index';
 
 export const schema = {
     get: {
@@ -10,8 +10,8 @@ export const schema = {
 };
 
 export async function GET(
-    req: BurgerRequest<{ params: z.infer<typeof schema.get.params> }>
+    ctx: BurgerContext
 ) {
-    const { userId } = req.validated.params;
+    const { userId } = (ctx.validated!.params as any);
     return Response.json({ message: 'User details', userId, level: 'user' });
 }

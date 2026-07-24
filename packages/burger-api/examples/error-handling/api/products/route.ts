@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Import types
-import type { BurgerRequest, BurgerNext, Middleware } from '../../../../src/index';
+import type { BurgerContext, BurgerNext } from '../../../../src/index';
 
 // OpenAPI Metadata
 // Developers can provide custom metadata to enrich the docs.
@@ -28,8 +28,8 @@ export const schema = {
 };
 
 // Route-Specific Middleware
-export const middleware: Middleware[] = [
-    (req: BurgerRequest): BurgerNext => {
+export const beforeRoute = [
+    (ctx: BurgerContext): BurgerNext => {
         console.log('Products Middleware');
         return undefined;
     },
@@ -37,10 +37,10 @@ export const middleware: Middleware[] = [
 
 // POST handler: creates a new product.
 export async function POST(
-    req: BurgerRequest<{ body: z.infer<typeof schema.post.body> }>
+    ctx: BurgerContext
 ) {
     console.log('[POST] Products route invoked');
     // Use validated body if available; otherwise, parse the JSON body.
-    const body = req.validated?.body || (await req.json());
+    const body = ctx.validated?.body || (await ctx.json());
     return Response.json(body);
 }

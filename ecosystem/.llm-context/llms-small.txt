@@ -30,8 +30,8 @@ await app.serve(4000);
 ### Core Types
 
 ```typescript
-// BurgerRequest extends BunRequest with additional properties
-interface BurgerRequest {
+// BurgerContext extends BunRequest with additional properties
+interface BurgerContext {
     params?: Record<string, string>;      // URL parameters (e.g., /users/:id)
     validated?: {                          // Validated data from Zod schemas
         params?: Record<string, unknown>;
@@ -42,12 +42,12 @@ interface BurgerRequest {
     // ... all standard Request properties (url, method, headers, etc.)
 }
 
-// Middleware return types
-type Middleware = (request: BurgerRequest) => Promise<BurgerNext> | BurgerNext;
+// Hook return types
+type HookFunction = (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext;
 type BurgerNext = Response | ((response: Response) => Promise<Response>) | undefined;
 
 // Request handler
-type RequestHandler = (request: BurgerRequest) => Promise<Response> | Response;
+type RequestHandler = (ctx: BurgerContext) => Promise<Response> | Response;
 ```
 
 ## File-Based Routing
@@ -73,7 +73,7 @@ api/
 
 ```typescript
 import { z } from 'zod';
-import type { BurgerRequest, Middleware } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
 // OpenAPI metadata (optional)
 export const openapi = {
@@ -104,22 +104,22 @@ export const schema = {
     },
 };
 
-// Route-specific middleware (optional)
-export const middleware: Middleware[] = [
-    async (req) => {
-        console.log(`Request to ${req.url}`);
+// Route-specific hooks (optional)
+export const beforeRoute = [
+    async (ctx) => {
+        console.log(`Request to ${ctx.url}`);
         return undefined; // Continue to handler
     },
 ];
 
 // HTTP method handlers
-export async function GET(req: BurgerRequest) {
-    const { page, limit } = req.validated?.query || {};
+export async function GET(ctx: BurgerContext) {
+    const { page, limit } = ctx.validated?.query || {};
     return Response.json({ page, limit, users: [] });
 }
 
-export async function POST(req: BurgerRequest) {
-    const { name, email } = req.validated?.body || {};
+export async function POST(ctx: BurgerContext) {
+    const { name, email } = ctx.validated?.body || {};
     return Response.json({ name, email }, { status: 201 });
 }
 ```
@@ -134,13 +134,13 @@ api/users/route.ts → /api/users
 **Dynamic Routes:**
 ```
 api/users/[id]/route.ts → /api/users/:id
-// Access via req.params.id
+// Access via ctx.params.id
 ```
 
 **Wildcard Routes:**
 ```
 api/files/[...]/route.ts → /api/files/*
-// Access via req.wildcardParams (array of path segments)
+// Access via ctx.wildcardParams (array of path segments)
 ```
 
 **Route Groups (for organization, not in URL):**
@@ -153,26 +153,26 @@ Build-time route scanner rules:
 - Do not mix wildcard (`[...]`) and dynamic (`[id]`) folders in the same API directory level.
 - Do not create multiple dynamic folders (e.g., `[id]` and `[slug]`) in the same directory level.
 
-## Middleware System
+## Hook System
 
-### Middleware Return Types
+### Hook Return Types
 
-Middleware can return three types:
+Hooks can return three types:
 
-1. **`undefined`** - Continue to next middleware/handler
+1. **`undefined`** - Continue to next hook/handler
 2. **`Response`** - Stop and send this response immediately
 3. **`Function`** - Transform the final response after handler runs
 
 ```typescript
 // Example: Continue
-const logger: Middleware = async (req) => {
-    console.log(`${req.method} ${req.url}`);
+const logger: HookFunction = async (ctx) => {
+    console.log(`${ctx.method} ${ctx.url}`);
     return undefined; // Continue
 };
 
 // Example: Stop early
-const auth: Middleware = async (req) => {
-    const token = req.headers.get('Authorization');
+const auth: HookFunction = async (ctx) => {
+    const token = ctx.headers.get('Authorization');
     if (!token) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -180,7 +180,7 @@ const auth: Middleware = async (req) => {
 };
 
 // Example: Transform response
-const cors: Middleware = async (req) => {
+const cors: HookFunction = async (ctx) => {
     return undefined; // Continue, but transform response later
     // Return function to transform final response
     return (response: Response) => {
@@ -190,7 +190,7 @@ const cors: Middleware = async (req) => {
 };
 ```
 
-### Global Middleware
+### Global Hooks
 
 ```typescript
 import { cors } from './middleware/cors';
@@ -230,16 +230,16 @@ export const schema = {
 ### Accessing Validated Data
 
 ```typescript
-export async function GET(req: BurgerRequest) {
-    // Validated data is available in req.validated
-    const { id } = req.validated?.params || {};
-    const { page } = req.validated?.query || {};
+export async function GET(ctx: BurgerContext) {
+    // Validated data is available in ctx.validated
+    const { id } = ctx.validated?.params || {};
+    const { page } = ctx.validated?.query || {};
     
     return Response.json({ id, page });
 }
 
-export async function POST(req: BurgerRequest) {
-    const { name, email } = req.validated?.body || {};
+export async function POST(ctx: BurgerContext) {
+    const { name, email } = ctx.validated?.body || {};
     return Response.json({ name, email }, { status: 201 });
 }
 ```
@@ -288,7 +288,7 @@ Interactive prompts for:
 - Page directory name (default: pages)
 - Page prefix (default: /)
 
-### Add Middleware
+### Add Hooks
 
 ```bash
 # List available middleware
@@ -350,19 +350,19 @@ export const schema = {
     },
 };
 
-export async function GET(req: BurgerRequest) {
-    const { id } = req.validated?.params || {};
+export async function GET(ctx: BurgerContext) {
+    const { id } = ctx.validated?.params || {};
     return Response.json({ userId: id });
 }
 ```
 
-### Route with Middleware
+### Route with Hooks
 
 ```typescript
 // api/protected/route.ts
-export const middleware: Middleware[] = [
-    async (req) => {
-        const token = req.headers.get('Authorization');
+export const beforeRoute = [
+    async (ctx) => {
+        const token = ctx.headers.get('Authorization');
         if (!token) {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -401,7 +401,7 @@ await app.serve(4000);
 
 - ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
 - 📁 **File-Based Routing** - Automatic route registration from file structure
-- 🔄 **Middleware System** - Global and route-specific middleware
+- 🔄 **Hook System** - Global and route-specific hooks
 - ✅ **Type-Safe Validation** - Zod schemas with automatic type inference
 - 📚 **Automatic OpenAPI** - Generates OpenAPI 3.0 specs from routes
 - 🔍 **Swagger UI** - Built-in interactive API documentation at `/docs`

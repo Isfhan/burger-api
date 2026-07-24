@@ -1,4 +1,4 @@
-import type { Middleware, BurgerRequest, BurgerNext } from 'burger-api';
+import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
  * Configuration options for the timeout middleware.
@@ -57,14 +57,14 @@ export interface TimeoutOptions {
  * });
  * ```
  */
-export function requestTimeout(options: TimeoutOptions = {}): Middleware {
+export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
     const {
         ms = 30000, // 30 seconds
         onTimeout,
         message = 'Request timeout',
     } = options;
 
-    return (req: BurgerRequest): BurgerNext => {
+    return (ctx: BurgerContext): BurgerNext => {
         // Start timer when middleware runs
         const startTime = Date.now();
 
