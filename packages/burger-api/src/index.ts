@@ -90,6 +90,12 @@ export class Burger {
     private macroRegistry = new MacroRegistry();
 
     /**
+     * Application services registered via `burger.provide()`. Injected into
+     * `ctx.services` for every request at context creation time.
+     */
+    private providers = new Map<string, unknown>();
+
+    /**
      * The OpenAPI document
      */
     private openApiDoc: any = null;
@@ -176,6 +182,19 @@ export class Burger {
      */
     macro(name: string, fn: MacroFn): this {
         this.macroRegistry.register(name, fn);
+        return this;
+    }
+
+    /**
+     * Registers an application service. Services are created once at startup
+     * and injected into `ctx.services` for every request.
+     *
+     * @param name  Service name (accessed as `ctx.services[name]`).
+     * @param service  The service instance.
+     * @returns `this` for chaining.
+     */
+    provide(name: string, service: unknown): this {
+        this.providers.set(name, service);
         return this;
     }
 
@@ -282,7 +301,19 @@ export class Burger {
         const resolvedPlugins = await this.pluginRegistry.resolveAll();
         const expandedMacros = this.macroRegistry.expandAll();
         const allHooks = [...resolvedPlugins, ...expandedMacros];
-        router.compile(apiRoutes, allHooks);
+
+        // Extract onRequest hooks from plugins — these run before routing
+        // (pre-routing, app-level). They are NOT per-route HookPlan entries.
+        const onRequestHooks: import('./lifecycle/types').Hook[] = [];
+        for (const plugin of allHooks) {
+            const h = plugin.hooks.onRequest;
+            if (h) {
+                if (Array.isArray(h)) onRequestHooks.push(...h);
+                else onRequestHooks.push(h);
+            }
+        }
+
+        router.compile(apiRoutes, allHooks, this.providers, onRequestHooks);
         this.dynamicRouter = router;
 
         // Merge static routes into Bun's native routes map (fast path), then
@@ -361,6 +392,7 @@ export { setDir } from './utils/index';
 
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
+export type { BurgerServices } from './context/context';
 
 // Export error classes (Phase 3)
 export { HTTPError } from './errors/http-error';

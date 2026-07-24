@@ -80,7 +80,8 @@ describe('ModuleLoader — assembly (self-contained routes)', () => {
 
     it('loads route-local schema', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        expect(users.schema).toMatchObject({ POST: { body: {} } });
+        // normalizeSchema() converts uppercase exports to lowercase keys
+        expect(users.schema).toMatchObject({ post: { body: {} } });
     });
 
     it('loads route-local config', () => {

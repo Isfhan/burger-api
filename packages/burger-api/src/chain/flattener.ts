@@ -3,15 +3,17 @@ import type { HookChain } from './chain';
 import type { ChainNode } from './node';
 
 const SCOPE_RANK: Record<string, number> = {
-    global: 0,
-    plugin: 1,
-    local: 2,
+    framework: 0,
+    global: 1,
+    plugin: 2,
+    local: 3,
 };
 
 const SCOPE_RANK_ERROR: Record<string, number> = {
     local: 0,
     plugin: 1,
     global: 2,
+    framework: 3,
 };
 
 export function flatten(
@@ -26,14 +28,17 @@ export function flatten(
     const mapResponse: Hook[] = [];
     const onError: ErrorHook[] = [];
 
+    const frameworkBefore: Hook[] = [];
     const globalBefore: Hook[] = [];
     const pluginBefore: Hook[] = [];
     const localBefore: Hook[] = [];
 
+    const frameworkAfter: Hook[] = [];
     const globalAfter: Hook[] = [];
     const pluginAfter: Hook[] = [];
     const localAfter: Hook[] = [];
 
+    const frameworkResp: Hook[] = [];
     const globalResp: Hook[] = [];
     const pluginResp: Hook[] = [];
     const localResp: Hook[] = [];
@@ -41,33 +46,34 @@ export function flatten(
     const localError: ErrorHook[] = [];
     const pluginError: ErrorHook[] = [];
     const globalError: ErrorHook[] = [];
+    const frameworkError: ErrorHook[] = [];
 
     for (const node of nodes) {
         switch (node.stage) {
             case 'validation': {
-                // Validation is framework-owned — only one is expected.
-                // If multiple are added (e.g. plugin + framework), the last
-                // one wins (framework's).
                 validation = node.fn as Hook;
                 break;
             }
             case 'beforeRoute': {
                 const fn = node.fn as Hook;
-                if (node.scope === 'global') globalBefore.push(fn);
+                if (node.scope === 'framework') frameworkBefore.push(fn);
+                else if (node.scope === 'global') globalBefore.push(fn);
                 else if (node.scope === 'plugin') pluginBefore.push(fn);
                 else localBefore.push(fn);
                 break;
             }
             case 'afterRoute': {
                 const fn = node.fn as Hook;
-                if (node.scope === 'global') globalAfter.push(fn);
+                if (node.scope === 'framework') frameworkAfter.push(fn);
+                else if (node.scope === 'global') globalAfter.push(fn);
                 else if (node.scope === 'plugin') pluginAfter.push(fn);
                 else localAfter.push(fn);
                 break;
             }
             case 'mapResponse': {
                 const fn = node.fn as Hook;
-                if (node.scope === 'global') globalResp.push(fn);
+                if (node.scope === 'framework') frameworkResp.push(fn);
+                else if (node.scope === 'global') globalResp.push(fn);
                 else if (node.scope === 'plugin') pluginResp.push(fn);
                 else localResp.push(fn);
                 break;
@@ -76,16 +82,17 @@ export function flatten(
                 const fn = node.fn as ErrorHook;
                 if (node.scope === 'local') localError.push(fn);
                 else if (node.scope === 'plugin') pluginError.push(fn);
-                else globalError.push(fn);
+                else if (node.scope === 'global') globalError.push(fn);
+                else frameworkError.push(fn);
                 break;
             }
         }
     }
 
-    beforeRoute.push(...globalBefore, ...pluginBefore, ...localBefore);
-    afterRoute.push(...globalAfter, ...pluginAfter, ...localAfter);
-    mapResponse.push(...globalResp, ...pluginResp, ...localResp);
-    onError.push(...localError, ...pluginError, ...globalError);
+    beforeRoute.push(...frameworkBefore, ...globalBefore, ...pluginBefore, ...localBefore);
+    afterRoute.push(...frameworkAfter, ...globalAfter, ...pluginAfter, ...localAfter);
+    mapResponse.push(...frameworkResp, ...globalResp, ...pluginResp, ...localResp);
+    onError.push(...localError, ...pluginError, ...globalError, ...frameworkError);
 
     const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
     if (validation) plan.validation = validation;

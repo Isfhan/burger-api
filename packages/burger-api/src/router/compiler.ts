@@ -45,7 +45,7 @@ export class RouterCompiler {
         this.config = config;
     }
 
-    compile(defs: RouteDefinition[], plugins?: ResolvedPlugin[]): CompiledRouter {
+    compile(defs: RouteDefinition[], plugins?: ResolvedPlugin[], providers?: Map<string, unknown>): CompiledRouter {
         const staticMap = new StaticMap();
         const trie = new Trie();
         const allowCache = new AllowCache();
@@ -136,7 +136,9 @@ export class RouterCompiler {
                 allow,
                 meta,
                 path,
-                isWildcard
+                isWildcard,
+                providers,
+                def.config
             );
 
             // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
@@ -219,6 +221,7 @@ function toRouteDefinition(mod: RouteModule): RouteDefinition {
         openapi: mod.openapi,
         hooks: mod.hooks as RouteHooks | undefined,
         isWildcard: mod.isWildcard,
+        config: mod.config,
     };
 }
 
@@ -242,7 +245,9 @@ function buildCompiledHandler(
     allow: string,
     meta: RouteAccessInfo,
     pattern: string = '',
-    isWildcard: boolean = false
+    isWildcard: boolean = false,
+    providers?: Map<string, unknown>,
+    config?: Record<string, unknown>
 ): CompiledHandler {
     return async (request: Request, ctxInit?: ContextInit): Promise<Response> => {
         const method = request.method;
@@ -257,7 +262,7 @@ function buildCompiledHandler(
 
         // Create the one `BurgerContext` for this request. `meta` is accepted
         // but ignored at runtime (Phase 2).
-        const ctx = BurgerContext.create(request, resolvedCtxInit, meta);
+        const ctx = BurgerContext.create(request, resolvedCtxInit, meta, providers, config);
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {

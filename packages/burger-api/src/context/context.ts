@@ -8,6 +8,21 @@ import { parseQuery } from './query-parser';
 import { parseCookies } from './cookie-parser';
 
 /**
+ * Empty interface for module augmentation. Users extend this to type
+ * `ctx.services`:
+ *
+ * ```ts
+ * declare module "burger-api" {
+ *   interface BurgerServices {
+ *     db: Database;
+ *     logger: Logger;
+ *   }
+ * }
+ * ```
+ */
+export interface BurgerServices {}
+
+/**
  * `BurgerContext` — the public request context type.
  *
  * Exactly **one** instance is allocated per request, via the static
@@ -65,7 +80,7 @@ export class BurgerContext {
 
     /**
      * Injected application services. Populated by `burger.provide()` (Phase 4).
-     * Typed via module augmentation:
+     * Typed via module augmentation of `BurgerServices`:
      * ```ts
      * declare module "burger-api" {
      *   interface BurgerServices {
@@ -76,6 +91,12 @@ export class BurgerContext {
      * ```
      */
     services: Record<string, unknown> = Object.create(null);
+
+    /**
+     * Route-specific configuration from `config.ts`. Read-only at runtime.
+     * Used by hooks/plugins to read route-level settings (auth, cache, timeout, …).
+     */
+    private _config?: Record<string, unknown>;
 
     /**
      * The single context creation entry point. Thin static method on
@@ -89,7 +110,9 @@ export class BurgerContext {
     static create(
         raw: Request,
         ctxInit?: ContextInit,
-        _meta?: RouteAccessInfo
+        _meta?: RouteAccessInfo,
+        providers?: Map<string, unknown>,
+        config?: Record<string, unknown>
     ): BurgerContext {
         const ctx = new BurgerContext();
         ctx._raw = raw;
@@ -98,7 +121,8 @@ export class BurgerContext {
         ctx._cookies = undefined;
         ctx.validated = undefined;
         ctx.set = Object.create(null);
-        ctx.services = Object.create(null);
+        ctx.services = providers ? Object.fromEntries(providers) : Object.create(null);
+        ctx._config = config;
         return ctx;
     }
 
@@ -139,6 +163,11 @@ export class BurgerContext {
     /** The matched-route identity (seeded from `ctxInit`). Always present in Phase 2. */
     get route(): RouteMeta | undefined {
         return this._ctxInit.route;
+    }
+
+    /** Route-specific configuration from `config.ts`. */
+    get config(): Record<string, unknown> | undefined {
+        return this._config;
     }
 
     // --- Delegated standard `Request` surface (read-only accessors) ---

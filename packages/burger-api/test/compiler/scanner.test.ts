@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { DirectoryScanner } from '../../src/compiler/scanner';
 import { CONVENTION_FILES } from '../../src/compiler/conventions';
+import type { ScannedRoute } from '../../src/compiler/route-module';
 
 /**
  * Tests for the Directory Scanner: pure filesystem inventory, convention
@@ -35,12 +36,13 @@ function makeTree(): string {
 
 describe('DirectoryScanner — inventory', () => {
     let root: string;
-    let routes: Awaited<ReturnType<DirectoryScanner['scan']>>;
+    let routes: ScannedRoute[];
 
     beforeEach(async () => {
         root = makeTree();
         const scanner = new DirectoryScanner(root, 'api');
-        routes = await scanner.scan();
+        const result = await scanner.scan();
+        routes = result.routes;
     });
     afterEach(() => rmSync(root, { recursive: true, force: true }));
 

@@ -170,6 +170,13 @@ export interface RouteDefinition {
      * This property is used internally to identify wildcard routes.
      */
     isWildcard?: boolean;
+
+    /**
+     * Route-specific configuration from `config.ts`. Available as `ctx.config`
+     * at runtime. Used by hooks/plugins to read route-level settings (auth,
+     * cache, timeout, responseValidation, …).
+     */
+    config?: Record<string, unknown>;
 }
 
 /**

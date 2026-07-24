@@ -88,6 +88,8 @@ export type TransformMap = Record<string, (ctx: BurgerContext) => unknown>;
  * the plan is built.
  */
 export interface RouteHooks {
+    /** Pre-routing hook — runs before the route is matched. App-level only. */
+    onRequest?: Hook | Hook[];
     beforeRoute?: Hook | Hook[];
     afterRoute?: Hook | Hook[];
     mapResponse?: Hook | Hook[];
