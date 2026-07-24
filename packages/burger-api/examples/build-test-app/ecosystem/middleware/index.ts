@@ -1,16 +1,14 @@
 /**
- * Global Middleware Configuration
- * 
- * Import and export middleware here to use them in your app.
- * Example:
- * 
+ * Middleware Re-exports
+ *
+ * Import middleware here and wire it in as `beforeHandle` hooks in
+ * `api/hooks.ts` to apply it to every route. Example:
+ *
+ * ```typescript
+ * // api/hooks.ts
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
- * 
- * export const globalMiddleware = [
- *     logger(),
- *     cors(),
- * ];
+ *
+ * export const beforeHandle = [logger(), cors()];
+ * ```
  */
-
-export const globalMiddleware: any[] = [];

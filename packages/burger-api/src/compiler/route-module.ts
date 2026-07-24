@@ -8,17 +8,14 @@ import type { ConventionFile } from './conventions';
  * consumed by the Compiler. Users never see it; it exists so the compiler has a
  * single object to discover, validate, optimize, and emit (`ROADMAP.md` §2.1).
  *
- * Phase 1 carries the convention data through verbatim. Later phases compile
- * each field:
- * - `schema`       → Phase 3 (validation compilation)
- * - `hooks`        → Phase 4 (hook compilation into a frozen `HookPlan`)
- * - `capabilities` → Phase 4 (plugin composition from `use.ts`)
- * - `openapi`      → Phase 6 (OpenAPI generation)
- * - `webhook`      → Phase 7 (webhook runtime)
+ * Each route directory is **self-contained** — no parent/group inheritance.
+ * Convention data is loaded from the route's own files only.
  *
- * Until those phases land, the fields are kept in their raw, uncompiled form
- * (typed loosely) so the pipeline is end-to-end operational without executing
- * any future-phase logic.
+ * Fields are carried raw through Phase 1 and compiled in later phases:
+ * - `schema`  → Phase 3 (validation compilation)
+ * - `hooks`   → Phase 4 (hook compilation into a frozen `HookPlan`)
+ * - `openapi` → Phase 6 (OpenAPI generation)
+ * - `config`  → Attached for runtime use (auth, cache, timeout, …)
  */
 export interface RouteModule {
     /**
@@ -43,26 +40,14 @@ export interface RouteModule {
     hooks?: Record<string, unknown>;
 
     /**
-     * Capability/plugin declarations from `use.ts` (uncompiled; Phase 4).
-     * Typically the module's default export array; kept raw here.
-     */
-    capabilities?: unknown;
-
-    /**
      * Documentation metadata from `openapi.ts` (uncompiled; Phase 6).
      */
     openapi?: openapi;
 
     /**
-     * Webhook definition from `webhook.ts` (uncompiled; Phase 7).
+     * Per-route configuration from `config.ts` (auth, cache, timeout, …).
      */
-    webhook?: unknown;
-
-    /**
-     * The chain of ancestor group folder names, ordered root → nearest.
-     * Used by the Module Loader to resolve group inheritance (nearest-last).
-     */
-    groupChain: string[];
+    config?: Record<string, unknown>;
 
     /**
      * Absolute paths of the convention files that were loaded for this module,
@@ -77,22 +62,12 @@ export interface RouteModule {
 }
 
 /**
- * A group-level inheritance source: the convention files discovered in one
- * ancestor group directory. `closest` is false for root-ward groups and true
- * for the nearest ancestor; the Module Loader merges nearest-last.
- */
-export interface GroupInheritanceSource {
-    /** Absolute path of the group directory. */
-    dir: string;
-    /** Convention files present in this group directory. */
-    files: Partial<Record<ConventionFile, string>>;
-}
-
-/**
  * The Directory Scanner's output for a single route directory (one that
  * contains a `route.ts`). It is the *input* to the Module Loader — a pure
- * inventory plus the resolved route path and the inheritance chain. No module
- * code is imported by the scanner; only the Module Loader imports.
+ * inventory plus the resolved route path. No module code is imported by the
+ * scanner; only the Module Loader imports.
+ *
+ * Each route directory is self-contained — no group inheritance chain.
  */
 export interface ScannedRoute {
     /** Resolved API route path, e.g. `/api/users/:id`. */
@@ -101,17 +76,16 @@ export interface ScannedRoute {
     routeDir: string;
     /** Convention files present directly in this route directory. */
     localFiles: Partial<Record<ConventionFile, string>>;
-    /**
-     * Ancestor group directories (root → nearest) and their inheritable
-     * convention files. Empty when the route has no group ancestors.
-     */
-    groupFiles: GroupInheritanceSource[];
-    /**
-     * The chain of group folder names, ordered root → nearest. Mirrors the
-     * names encoded in {@link groupFiles} and is retained for introspection
-     * and deterministic conflict reporting.
-     */
-    groupChain: string[];
     /** True when the route path contains a wildcard (`*`) segment. */
     isWildcard: boolean;
+}
+
+/**
+ * The Directory Scanner's full output — a list of routes plus the path to
+ * the global hooks file (if any) at the app root.
+ */
+export interface ScanResult {
+    routes: ScannedRoute[];
+    /** Absolute path to the global `hooks.ts` file (sibling of index.ts), or undefined. */
+    globalHooks?: string;
 }

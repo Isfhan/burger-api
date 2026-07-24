@@ -133,6 +133,6 @@ describe('generateVirtualEntrySource', () => {
             "import { burgerOptions as __burgerOptions } from '/tmp/__burger_build_options__.ts';"
         );
         expect(source).toContain('...__burgerOptions');
-        expect(source).not.toContain('globalMiddleware: []');
+        expect(source).not.toContain('globalMiddleware');
     });
 });

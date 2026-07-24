@@ -33,7 +33,7 @@ Download middleware from the ecosystem into the project:
 burger-api add cors logger rate-limiter
 ```
 
-Downloads to `ecosystem/middleware/<name>/`. Shows import instructions after success.
+Downloads to `ecosystem/hooks/<name>/`. Shows import instructions after success.
 
 ### `skills install [name]`
 

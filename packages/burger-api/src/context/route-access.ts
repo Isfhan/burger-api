@@ -9,12 +9,15 @@ import type { ContextField, RouteAccessInfo } from './types';
  */
 export function freezeRouteAccessInfo(
     fields: Iterable<ContextField>,
-    unknown = false
+    unknown = false,
+    hooks?: Iterable<string>
 ): RouteAccessInfo {
     const access = new Set<ContextField>(fields);
+    const hookSet = new Set<string>(hooks ?? []);
     const info: RouteAccessInfo = {
         access,
         unknown,
+        hooks: hookSet,
         has(field: ContextField): boolean {
             return unknown || access.has(field);
         },

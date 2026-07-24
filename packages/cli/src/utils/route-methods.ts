@@ -89,3 +89,58 @@ export async function detectExportedMethods(
     );
     return methods.length > 0 ? methods : undefined;
 }
+
+/** Lifecycle hook export names recognized in `hooks.ts` (Phase 4). */
+export const HOOK_NAMES = [
+    'beforeHandle',
+    'afterHandle',
+    'onResponse',
+    'onError',
+    'provide',
+] as const;
+
+/** Matches `export const beforeHandle = ...` (and the other hook names). */
+const EXPORT_HOOK_CONST_RE =
+    /export\s+const\s+(beforeHandle|afterHandle|onResponse|onError|provide)\s*=/g;
+
+/** Matches `export function beforeHandle( ...` (and the other hook names). */
+const EXPORT_HOOK_FUNCTION_RE =
+    /export\s+(?:async\s+)?function\s+(beforeHandle|afterHandle|onResponse|onError|provide)\s*\(/g;
+
+/**
+ * Detect which lifecycle hook names a `hooks.ts` module exports. Mirrors
+ * {@link detectExportedMethods} but for hook exports rather than HTTP methods
+ * (Phase 4). Used by the build scanner to decide whether a route directory
+ * carries a usable `hooks.ts`.
+ */
+export async function detectExportedHookNames(
+    filePath: string
+): Promise<string[] | undefined> {
+    let content: string;
+    try {
+        content = await readFile(filePath, 'utf-8');
+    } catch {
+        return undefined;
+    }
+
+    const contentWithoutComments = stripComments(content);
+    const found = new Set<string>();
+
+    let match: RegExpExecArray | null;
+    EXPORT_HOOK_CONST_RE.lastIndex = 0;
+    while ((match = EXPORT_HOOK_CONST_RE.exec(contentWithoutComments)) !== null) {
+        if (match[1]) found.add(match[1]);
+    }
+
+    EXPORT_HOOK_FUNCTION_RE.lastIndex = 0;
+    while (
+        (match = EXPORT_HOOK_FUNCTION_RE.exec(contentWithoutComments)) !== null
+    ) {
+        if (match[1]) found.add(match[1]);
+    }
+
+    const hooks = [...found].filter((h) =>
+        (HOOK_NAMES as readonly string[]).includes(h)
+    );
+    return hooks.length > 0 ? hooks : undefined;
+}

@@ -1,5 +1,31 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
+
+Released 2026-07-24.
+
+**Global hooks**
+- `hooks.ts` at app root (sibling of `index.ts`) auto-discovered by scanner.
+- When `apiDir` is `./src/api`, global hooks in `./src/hooks.ts`.
+- When `apiDir` is `./api`, global hooks in `./hooks.ts`.
+- Global hooks run first, then route hooks (execution priority).
+
+**Hook name aliases**
+- Vision names work: `beforeRoute`, `afterRoute`, `mapResponse`, `transform`.
+- Legacy names still work: `beforeHandle`, `afterHandle`, `onResponse`, `provide`.
+- Normalizer applied at compile time; vision names take precedence when legacy
+  names are absent.
+
+**Self-contained routes (enforced)**
+- Group/folder inheritance removed. Groups only strip URL path.
+- Convention files: `use.ts` and `webhook.ts` removed; `config.ts` added.
+
+**Scanner and module-loader**
+- Scanner returns `ScanResult` with `routes` + `globalHooks` path.
+- ModuleLoader loads global hooks once, merges with each route's hooks.
+- Router compiler normalizes hooks before building the chain.
+- CLI scanner aligned (no `globalHooksPath` inside `apiDir`).
+
 ### Version 0.14.0 (Compiler-Driven Core, Request Context & Validation 2.0)
 
 Released 2026-07-21. This release is the architecture reset: BurgerAPI now

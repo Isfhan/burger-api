@@ -128,7 +128,7 @@ export const createCommand = new Command('create')
             info('Creating project with the following configuration:');
             newline();
             console.log(`  Name: ${projectName}`);
-            console.log(`  Config File: burger.config.ts`);
+            console.log(`  Config File: burger.build.ts`);
             if (options.useApi) {
                 console.log(`  API Routes: ${options.apiDir || 'api'}`);
             }
@@ -157,7 +157,7 @@ export const createCommand = new Command('create')
             command('bun run dev');
             newline();
             console.log(`  3. Edit config if needed:`);
-            command('burger.config.ts');
+            command('burger.build.ts');
             newline();
             console.log(`  4. Open your browser:`);
             console.log(`     ${highlight('http://localhost:4000')}`);

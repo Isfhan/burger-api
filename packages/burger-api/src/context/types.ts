@@ -42,8 +42,8 @@ export interface ContextSet {
 
 /**
  * The immutable information produced by `RouteAccessAnalyzer` describing which
- * request fields a route reads. It is an optimization hint only — the framework
- * never reads it at runtime in Phase 2.
+ * request fields and lifecycle hooks a route uses. It is an optimization hint
+ * only — the framework never reads it at runtime in Phase 2.
  */
 export interface RouteAccessInfo {
     /** The set of fields the analyzer determined the route reads. */
@@ -54,6 +54,8 @@ export interface RouteAccessInfo {
      * default.
      */
     unknown: boolean;
+    /** The set of lifecycle hook stages the route uses (Phase 4 M7). */
+    hooks: ReadonlySet<string>;
     /** Reports whether `field` is considered accessed by this route. */
     has(field: ContextField): boolean;
 }

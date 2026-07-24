@@ -23,12 +23,15 @@
 
 ## 📖 About
 
-This monorepo contains the **burger-api** ecosystem - a modern, open-source API
-framework built on [Bun.js](https://bun.sh). The framework combines the
-simplicity of file-based routing with powerful features like built-in
-  middleware (code that runs around your handler), schema validation (a schema is
-  a small description of the expected data shape), and automatic OpenAPI
-  generation.
+This monorepo contains **BurgerAPI**: a Bun-first, WinterCG-compatible TypeScript
+API framework with file-based routing, a **hook-based** request lifecycle,
+Standard Schema validation (Zod default), plugins/providers, and OpenAPI.
+
+**Architecture source of truth:** `../burger-api-roadmaps/BURGERAPI_VISION.md`  
+When docs or code disagree with the vision, **the vision wins**.
+
+**Hooks** control the request lifecycle. **Plugins** extend the application.
+They are separate concepts (not a middleware framework).
 
 **This project is under active development and should not be used in production
 yet.** 
@@ -55,19 +58,15 @@ published to npm.
 -   📁 **File-Based Routing** - Automatically registers API routes from your
     file structure, including dynamic `[id]` parameters and `[...slug]`
     wildcards
--   🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+
-    middlewares, reused identically for static and dynamic routes
--   ✅ **Type-Safe Validation** - Schemas for query, params, headers, cookies,
-    and body, validated before your handler runs and exposed as typed
-    `req.validated`. Reuse shapes through a model registry, enable automatic type
-    conversion, validate responses, and support any Standard Schema library
-    (Zod v4, Valibot, ArkType). Errors follow the RFC 9457 Problem Details format.
--   📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0
-    specifications
--   🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for
-    interactive API docs
--   🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy
-    to understand
+-   🪝 **Hook lifecycle** - `onRequest`, `transform`, `beforeRoute`, `afterRoute`,
+     `mapResponse`, `onError` (target API; see vision)
+-   ✅ **Type-Safe Validation** - Optional `schema.ts` with per-method exports;
+     Standard Schema (Zod default); `ctx.validated`; RFC 9457 errors (target: throw
+     `ValidationError` → 422 via `onError`)
+-   📚 **Automatic OpenAPI Generation** - OpenAPI 3.0 + docs UI
+-   🔌 **Plugins & providers** - `src/plugins.ts` / `src/providers.ts` (target)
+-   🎯 **Route convention files** - `route.ts`, `schema.ts`, `hooks.ts`,
+     `openapi.ts`, `config.ts` (self-contained routes, no group inheritance)
 -   🔀 **Automatic HEAD** - `HEAD` requests are derived from `GET` automatically
     (same handler, body stripped)
 -   ❌ **Proper 405 Responses** - a known route requested with an unsupported

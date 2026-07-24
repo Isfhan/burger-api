@@ -1,5 +1,5 @@
 /**
- * CORS example — verifies server starts and CORS headers on API + OPTIONS.
+ * CORS example (self-contained route) — verifies CORS headers on API + OPTIONS.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import {

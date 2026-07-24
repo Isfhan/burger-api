@@ -6,9 +6,9 @@ import { DirectoryScanner } from '../../src/compiler/scanner';
 import { CONVENTION_FILES } from '../../src/compiler/conventions';
 
 /**
- * M1 tests for the Directory Scanner: pure filesystem inventory, convention
- * validation, dynamic/wildcard conflict detection, group inheritance chain,
- * and `middleware.ts` rejection. No module code is imported by the scanner.
+ * Tests for the Directory Scanner: pure filesystem inventory, convention
+ * validation, dynamic/wildcard conflict detection, and `middleware.ts` rejection.
+ * Each route directory is self-contained — no group inheritance chain.
  */
 
 function makeTree(): string {
@@ -18,13 +18,11 @@ function makeTree(): string {
         mkdirSync(path.dirname(full), { recursive: true });
         writeFileSync(full, contents);
     };
-    // api/users/route.ts
+    // api/users/route.ts + config.ts + schema.ts (self-contained)
     write('users/route.ts');
-    // api/users/schema.ts
     write('users/schema.ts');
-    // api/admin/route.ts + group-level hooks/use
-    write('(admin)/hooks.ts');
-    write('(admin)/use.ts');
+    write('users/config.ts', `export default { auth: false };`);
+    // api/dashboard/route.ts (inside (admin) group — URL stripped, no inheritance)
     write('(admin)/dashboard/route.ts');
     // api/posts/[id]/route.ts (dynamic)
     write('posts/[id]/route.ts');
@@ -64,6 +62,7 @@ describe('DirectoryScanner — inventory', () => {
         const users = routes.find((r) => r.routePath === '/api/users')!;
         expect(users.localFiles.route).toBeDefined();
         expect(users.localFiles.schema).toBeDefined();
+        expect(users.localFiles.config).toBeDefined();
         expect(users.localFiles.hooks).toBeUndefined();
     });
 
@@ -74,18 +73,21 @@ describe('DirectoryScanner — inventory', () => {
         expect(dynamic.isWildcard).toBe(false);
     });
 
-    it('builds the group inheritance chain (root → nearest)', () => {
+    it('groups only affect URL path (no inheritance chain)', () => {
         const dashboard = routes.find(
             (r) => r.routePath === '/api/dashboard'
         )!;
-        // (admin) is the only group ancestor.
-        expect(dashboard.groupChain).toEqual(['(admin)']);
-        // The group's inheritable files are present in groupFiles.
-        expect(dashboard.groupFiles.length).toBe(1);
-        expect(dashboard.groupFiles[0].files.hooks).toBeDefined();
-        expect(dashboard.groupFiles[0].files.use).toBeDefined();
-        // route.ts is never inherited.
-        expect(dashboard.groupFiles[0].files.route).toBeUndefined();
+        // (admin) group is stripped from URL — route path is /api/dashboard
+        expect(dashboard.routePath).toBe('/api/dashboard');
+        // No groupFiles or groupChain — self-contained
+        expect(dashboard).not.toHaveProperty('groupFiles');
+        expect(dashboard).not.toHaveProperty('groupChain');
+    });
+
+    it('discovers config.ts as a local convention file', () => {
+        const users = routes.find((r) => r.routePath === '/api/users')!;
+        expect(users.localFiles.config).toBeDefined();
+        expect(users.localFiles.config).toContain('config.ts');
     });
 });
 
@@ -123,9 +125,14 @@ describe('DirectoryScanner — convention validation', () => {
 });
 
 describe('DirectoryScanner — recognized conventions', () => {
-    it('exposes the canonical convention file list', () => {
+    it('exposes the canonical convention file list (vision-aligned)', () => {
         expect([...CONVENTION_FILES].sort()).toEqual(
-            ['hooks', 'openapi', 'route', 'schema', 'use', 'webhook'].sort()
+            ['config', 'hooks', 'openapi', 'route', 'schema'].sort()
         );
+    });
+
+    it('does not include use or webhook in convention files', () => {
+        expect(CONVENTION_FILES).not.toContain('use');
+        expect(CONVENTION_FILES).not.toContain('webhook');
     });
 });

@@ -1,5 +1,4 @@
 import type {
-    Middleware,
     RouteDefinition,
     BurgerRequest,
 } from '../types/index';
@@ -66,7 +65,6 @@ export interface CompiledRouter {
  * Configuration for the Router / RouterCompiler.
  */
 export interface RouterConfig {
-    globalMiddleware?: Middleware[];
     /** When true, the optional RouteAccessAnalyzer is skipped at compile time. */
     debug?: boolean;
     /** Phase 3 validation configuration (coercion / response / errors). */

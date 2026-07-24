@@ -34,6 +34,8 @@ const FIELD_KEYS: readonly ContextField[] = [
     'wildcardParams',
 ];
 
+const HOOK_STAGES = ['beforeHandle', 'afterHandle', 'onResponse', 'onError'] as const;
+
 /**
  * Strips block (`/* *\/`) and line (`//`) comments so that field tokens inside
  * comments are not mistaken for live access.
@@ -94,22 +96,49 @@ export function analyzeRouteAccess(
     def: RouteDefinition,
     debug = false
 ): RouteAccessInfo {
+    // Phase 4 M7: detect hook stages before debug/field analysis so hooks are
+    // always recorded even in debug mode or when field analysis is skipped.
+    const usedHooks: string[] = [];
+    const hooks = def.hooks;
+    if (hooks) {
+        for (let i = 0; i < HOOK_STAGES.length; i++) {
+            const stage = HOOK_STAGES[i];
+            const val = (hooks as Record<string, unknown>)[stage];
+            if (val !== undefined) {
+                usedHooks.push(stage);
+            }
+        }
+    }
+
     // `debug` disables analysis per Phase 2 contract and forces the safe
     // "all fields used" default (ROADMAP-phase2 §6.3.1).
     if (debug) {
-        return freezeRouteAccessInfo([], /* unknown */ true);
+        return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
     }
 
     try {
-        // Concatenate the source of every handler and route middleware.
+        // Concatenate the source of every handler and every lifecycle hook
+        // (ROADMAP.md §3.4 — lifecycle lives in `hooks.ts`, not a `middleware`
+        // export). Keeps field-access detection accurate for routes that read
+        // context fields inside hooks.
         let source = '';
         const handlers = def.handlers ?? {};
         for (const key of Object.keys(handlers)) {
             source += '\n' + safeToString(handlers[key]);
         }
-        const middleware = def.middleware ?? [];
-        for (let i = 0; i < middleware.length; i++) {
-            source += '\n' + safeToString(middleware[i]);
+
+        if (hooks) {
+            const hookValues = Object.values(hooks);
+            for (let i = 0; i < hookValues.length; i++) {
+                const h = hookValues[i];
+                if (Array.isArray(h)) {
+                    for (let j = 0; j < h.length; j++) {
+                        source += '\n' + safeToString(h[j]);
+                    }
+                } else if (typeof h === 'function') {
+                    source += '\n' + safeToString(h);
+                }
+            }
         }
 
         // Strip comments before scanning so commented-out fields don't count.
@@ -117,7 +146,7 @@ export function analyzeRouteAccess(
 
         // Ambiguous access we cannot resolve → safe "all fields used" default.
         if (isAmbiguous(source)) {
-            return freezeRouteAccessInfo([], /* unknown */ true);
+            return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
         }
 
         const accessed: ContextField[] = [];
@@ -128,10 +157,10 @@ export function analyzeRouteAccess(
             }
         }
 
-        return freezeRouteAccessInfo(accessed, /* unknown */ false);
+        return freezeRouteAccessInfo(accessed, /* unknown */ false, usedHooks);
     } catch {
         // Safe default: empty set, `unknown: true` → `has()` returns true for
         // every field. Cannot affect runtime correctness.
-        return freezeRouteAccessInfo([], /* unknown */ true);
+        return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
     }
 }

@@ -1,12 +1,15 @@
 /**
  * Build-time route scanner. Discovers route.ts and page files without loading modules.
- * Path conversion rules match the framework (api-router, page-router).
+ * Path conversion rules match the framework (scanner, module-loader).
+ *
+ * Vision: each route directory is self-contained — no group inheritance.
+ * Groups only affect URL path stripping.
  */
 
 import { readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
-import { detectExportedMethods } from './route-methods';
+import { detectExportedMethods, detectExportedHookNames } from './route-methods';
 import { ROUTE_CONSTANTS } from './route-conventions';
 import {
     filePathToApiRoutePath,
@@ -21,6 +24,8 @@ export interface ApiRouteScanEntry {
     isWildcard: boolean;
     /** HTTP methods exported by the route module (set by method detection; omit = emit all) */
     methods?: string[];
+    /** Absolute import path of a sibling `hooks.ts`, if the route declares lifecycle hooks (Phase 4). */
+    hooksPath?: string;
 }
 
 export interface PageRouteScanEntry {
@@ -31,7 +36,10 @@ export interface PageRouteScanEntry {
 
 /**
  * Scan apiDir for route.ts files and return entries for codegen.
- * Uses same path/convention rules as framework ApiRouter.
+ * Uses same path/convention rules as framework DirectoryScanner.
+ *
+ * Each route directory is self-contained — no global tier detection.
+ * Groups only affect URL path stripping.
  */
 export async function scanApiRoutes(
     cwd: string,
@@ -116,6 +124,17 @@ async function scanApiDir(
             };
             if (methods !== undefined) {
                 scanEntry.methods = methods;
+            }
+            // Capture a sibling `hooks.ts` so the build entry can wire
+            // lifecycle hooks (Phase 4). Only when it actually exports hooks.
+            const hooksFile = path.join(dir, 'hooks.ts');
+            if (existsSync(hooksFile)) {
+                const hookNames = await detectExportedHookNames(hooksFile);
+                if (hookNames) {
+                    scanEntry.hooksPath = hooksFile
+                        .split(path.sep)
+                        .join('/');
+                }
             }
             out.push(scanEntry);
         }

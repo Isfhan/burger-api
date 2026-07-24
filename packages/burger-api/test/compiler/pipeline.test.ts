@@ -12,10 +12,12 @@ import { ModuleLoader } from '../../src/compiler/module-loader';
 import { Router } from '../../src/router/router';
 
 /**
- * M5 end-to-end pipeline test (no live server):
+ * End-to-end pipeline test (no live server):
  * Directory Scanner → Module Loader → RouteModule → RouterCompiler → Router.
- * Verifies the whole Phase 1 pipeline produces a working dispatch table that
- * handles static, dynamic, wildcard, 405+Allow, and auto-HEAD correctly.
+ * Verifies the whole pipeline produces a working dispatch table that handles
+ * static, dynamic, wildcard, 405+Allow, and auto-HEAD correctly.
+ *
+ * Each route directory is self-contained — no group inheritance.
  */
 
 function makeTree(): string {
@@ -31,6 +33,10 @@ function makeTree(): string {
 export const POST = () => new Response('created', { status: 201 });`
     );
     write(
+        'users/config.ts',
+        `export default { auth: true };`
+    );
+    write(
         'users/[id]/route.ts',
         `export const GET = (req) => Response.json({ id: req.params.id });`
     );
@@ -41,7 +47,7 @@ export const POST = () => new Response('created', { status: 201 });`
     return root;
 }
 
-describe('Phase 1 pipeline — end to end', () => {
+describe('Pipeline — end to end (self-contained routes)', () => {
     let root: string;
     let router: Router;
 
@@ -107,5 +113,26 @@ describe('Phase 1 pipeline — end to end', () => {
         );
         expect(res.status).toBe(200);
         expect(res.headers.get('content-length')).toBeDefined();
+    });
+});
+
+describe('Pipeline — config.ts discovery', () => {
+    it('config.ts is loaded and attached to RouteModule', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-config-'));
+        try {
+            const write = (rel: string, contents: string) => {
+                const full = path.join(root, rel);
+                mkdirSync(path.dirname(full), { recursive: true });
+                writeFileSync(full, contents);
+            };
+            write('items/route.ts', `export const GET = () => new Response('items');`);
+            write('items/config.ts', `export default { cache: true, timeout: 5000 };`);
+            const scanned = await new DirectoryScanner(root, 'api').scan();
+            const modules = await new ModuleLoader().load(scanned);
+            const items = modules.find((m) => m.path === '/api/items')!;
+            expect(items.config).toEqual({ cache: true, timeout: 5000 });
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });

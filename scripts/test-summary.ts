@@ -45,8 +45,23 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'lifecycle',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:lifecycle'],
+        kind: 'tests',
+    },
+    {
         label: 'context',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:context'],
+        kind: 'tests',
+    },
+    {
+        label: 'router-unit',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:router'],
+        kind: 'tests',
+    },
+    {
+        label: 'smoke',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:smoke'],
         kind: 'tests',
     },
     {

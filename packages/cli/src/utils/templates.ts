@@ -166,7 +166,6 @@ export function generateIndexFile(options: CreateOptions): string {
         lines.push('    debug: true,');
     }
 
-    lines.push('    globalMiddleware: [],');
     lines.push('});');
     lines.push('');
 
@@ -182,11 +181,11 @@ export function generateIndexFile(options: CreateOptions): string {
 }
 
 /**
- * Generate burger.config.ts from create command answers.
+ * Generate burger.build.ts from create command answers.
  * This keeps build/runtime config explicit in scaffolded projects.
  *
  * @param options - Project configuration from user prompts
- * @returns burger.config.ts content as a string
+ * @returns burger.build.ts content as a string
  */
 export function generateBurgerConfig(options: CreateOptions): string {
     const apiDir = `./src/${options.apiDir || 'api'}`;
@@ -403,29 +402,28 @@ export const schema = {
 
 /*
 -----------------------------------------------------------------------------
-    ROUTE-SPECIFIC MIDDLEWARE (Optional)
+    ROUTE HOOKS (Optional)
 -----------------------------------------------------------------------------
 
- - Middleware runs BEFORE your route handler. Use it for:
+ - Hooks run as part of the request lifecycle. Use beforeHandle for:
    - Logging requests
    - Checking authentication
    - Modifying the request
    - Blocking unauthorized access
 
- - Return 'undefined' to continue to the next middleware/handler
+ - Return 'undefined' to continue to the handler
  - Return a 'Response' to stop and send that response immediately
+ - Define hooks in a hooks.ts file or export hooks from this route module
 -----------------------------------------------------------------------------
-*/
-export const middleware: Middleware[] = [
-    // Example: Log every request to this route
-    async (req: BurgerRequest): Promise<BurgerNext> => {
-        console.log(\`[\${new Date().toISOString()}] \${req.method} \${req.url}\`);
-        
-        // Return undefined to continue to the next middleware/handler
-        // If you return a Response here, it stops and sends that response
-        return undefined;
-    },
-];
+ */
+export const hooks = {
+    beforeHandle: [
+        // Example: Log every request to this route
+        async (req: BurgerRequest) => {
+            console.log(\`[${new Date().toISOString()}] ${req.method} ${req.url}\`);
+        },
+    ],
+};
 
 /*
 -----------------------------------------------------------------------------
@@ -1020,23 +1018,20 @@ export function generateIndexPage(options: CreateOptions): string {
  */
 export function generateMiddlewareIndex(): string {
     return `/**
- * Global Middleware Configuration
+ * Route Hooks
  * 
- * Import and export middleware here to use them in your app.
- * Example:
+ * Define lifecycle hooks in hooks.ts files. Example (api/hooks.ts):
  * 
  * import { cors } from './cors/cors';
  * import { logger } from './logger/logger';
  * 
- * export const globalMiddleware: Middleware[] = [
+ * export const beforeHandle = [
  *     logger(),
  *     cors(),
  * ];
  */
 
-import type { Middleware } from 'burger-api';
-
-export const globalMiddleware: Middleware[] = [];
+export const beforeHandle: unknown[] = [];
 `;
 }
 
@@ -1066,7 +1061,7 @@ export async function createProject(
             generatePrettierConfig()
         );
         await Bun.write(
-            join(targetDir, 'burger.config.ts'),
+            join(targetDir, 'burger.build.ts'),
             generateBurgerConfig(options)
         );
 
@@ -1105,15 +1100,10 @@ export async function createProject(
             // Logo is loaded from https://burger-api.com/img/logo.png
         }
 
-        // Create ecosystem/middleware directory for installed middleware
-        // Users can also create their own middleware/ folder for custom middleware
-        const ecosystemMiddlewareDir = join(
-            targetDir,
-            'ecosystem',
-            'middleware'
-        );
+        // Create ecosystem/hooks directory for installed hooks
+        const ecosystemHooksDir = join(targetDir, 'ecosystem', 'hooks');
         await Bun.write(
-            join(ecosystemMiddlewareDir, 'index.ts'),
+            join(ecosystemHooksDir, 'index.ts'),
             generateMiddlewareIndex()
         );
 

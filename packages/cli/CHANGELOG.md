@@ -2,6 +2,14 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 0.10.0 - (July 24, 2026)
+
+-   **Changed** – Scanner no longer detects `globalHooksPath` inside `apiDir`.
+    Global hooks now live at app root (sibling of `index.ts`), not inside the
+    routes directory.
+-   **Changed** – Virtual-entry: removed global tier hooks merge logic.
+-   **Aligned** – With `burger-api` 0.15.0 self-contained route architecture.
+
 ## Version 0.9.9 - (June 29, 2026)
 
 -   **Added** – `burger-api skills install [name]` to download AI agent skills

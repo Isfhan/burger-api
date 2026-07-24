@@ -5,6 +5,8 @@ import type {
     RouteMeta,
 } from '../context/types';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
+import type { RouteHooks, ProvideMap } from '../lifecycle/types';
+export type { RouteHooks, ProvideMap } from '../lifecycle/types';
 
 /** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
 type BunServerOptions = Parameters<typeof serve>[0];
@@ -57,11 +59,6 @@ export interface ServerOptions extends Omit<
      * If not specified, the default prefix is 'pages'.
      */
     pagePrefix?: string;
-
-    /**
-     * Global middleware to be executed before each request.
-     */
-    globalMiddleware?: Middleware[];
 
     /**
      * The version of the API. This is an optional property that can be used
@@ -228,10 +225,14 @@ export interface RouteDefinition {
      */
     handlers: { [method: string]: RequestHandler };
     /**
-     * An array of middleware functions to run before the request handler.
-     * The middleware functions will be run in the order they are specified.
+     * Lifecycle hooks declared in `hooks.ts` (Phase 4). Carried raw from the
+     * compiler and compiled into a frozen `HookPlan` by RouterCompiler. Mapped
+     * onto the single pipeline: `beforeHandle` (global → route) runs before
+     * the handler; `afterHandle` / `onResponse` are response phases
+     * (ROADMAP-phase4 §4.6). `route.ts` contains handlers only — there is no
+     * per-route `middleware` export (ROADMAP.md §3.2 / §3.4).
      */
-    middleware?: Middleware[];
+    hooks?: RouteHooks;
 
     /**
      * An optional route schema to validate the request data against.

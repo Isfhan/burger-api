@@ -1,15 +1,4 @@
-import type { BurgerNext, BurgerRequest, Middleware } from '../../../../../../src/index';
-
-// Route-specific middleware
-export const middleware: Middleware[] = [
-    (req: BurgerRequest): BurgerNext => {
-        console.log(
-            'Profile Route-specific middleware executed for request:',
-            req.url
-        );
-        return undefined;
-    },
-];
+import type { BurgerRequest } from '../../../../../../src/index';
 
 export function GET(req: BurgerRequest) {
     const query = new URL(req.url).searchParams;

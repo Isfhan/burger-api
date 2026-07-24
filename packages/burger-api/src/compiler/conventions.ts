@@ -2,13 +2,14 @@
  * File-based routing conventions for the compiler pipeline.
  *
  * These are the single source of truth for which sibling files the
- * Directory Scanner recognizes inside a route (or group) directory, and
- * which names are explicitly forbidden.
+ * Directory Scanner recognizes inside a route directory, and which names
+ * are explicitly forbidden.
  *
- * Per the frozen v2 architecture (`ROADMAP.md` §3):
- * - A route directory is a module; sibling files are discovered by convention.
+ * Vision (`BURGERAPI_VISION.md` §7):
+ * - A route directory is self-contained; sibling files are discovered by convention.
  * - There is **no `middleware.ts`**. Infrastructure is written as hooks.
- * - `use.ts` declares capabilities (plugins); `hooks.ts` holds the lifecycle.
+ * - There is **no `use.ts`** or **`webhook.ts`**. Use ecosystem plugins instead.
+ * - `config.ts` provides per-route options (auth, cache, timeout, …).
  */
 
 /** The convention files the scanner recognizes (without the `.ts` extension). */
@@ -16,21 +17,12 @@ export const CONVENTION_FILES = [
     'route',
     'schema',
     'hooks',
-    'use',
     'openapi',
-    'webhook',
+    'config',
 ] as const;
 
 /** A recognized convention file stem (the part before `.ts`). */
 export type ConventionFile = (typeof CONVENTION_FILES)[number];
-
-/** Files that may participate in group inheritance (no `route.ts`). */
-export const INHERITABLE_FILES: readonly ConventionFile[] = [
-    'schema',
-    'hooks',
-    'use',
-    'openapi',
-];
 
 /**
  * The one forbidden file. The v2 architecture removes the separate middleware

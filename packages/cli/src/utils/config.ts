@@ -1,5 +1,5 @@
 /**
- * Build config resolution: conventions-first with optional burger.config.ts
+ * Build config resolution: conventions-first with optional burger.build.ts
  *
  * Used by the CLI build pipeline to discover apiDir, pageDir, and prefixes
  * without parsing the user's entry file.
@@ -19,11 +19,17 @@ const CONVENTION_DEFAULTS: BuildConfig = {
     debug: false,
 };
 
-const CONFIG_NAMES = ['burger.config.ts', 'burger.config.js'];
+const CONFIG_NAMES = [
+    'burger.build.ts',
+    'burger.build.js',
+    // legacy names (read-only fallback during migration)
+    'burger.config.ts',
+    'burger.config.js',
+];
 
 /**
  * Resolve build configuration from the project directory.
- * Uses convention defaults; overrides with burger.config.ts / burger.config.js if present.
+ * Uses convention defaults; overrides with burger.build.ts (or legacy burger.config.ts) if present.
  *
  * @param cwd - Project root (e.g. process.cwd())
  * @returns BuildConfig with resolved paths and prefixes

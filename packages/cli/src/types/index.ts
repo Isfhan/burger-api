@@ -71,7 +71,7 @@ export interface GitHubFile {
 }
 
 /**
- * Build-time configuration for Burger API (conventions or burger.config.ts).
+ * Build-time configuration for Burger API (conventions or burger.build.ts).
  * Used by the CLI when generating the virtual entry and scanning routes.
  */
 export interface BuildConfig {

@@ -1,5 +1,5 @@
 import { Burger, setDir } from '../../src/index';
-import { globalLogger, authGuard, rateLimiter, corsMiddleware } from './middleware';
+
 
 // Create a new burger instance demonstrating a complete production application
 const burger = new Burger({
@@ -26,7 +26,6 @@ Perfect for developers building real-world applications!
     version: '2.0.0',
     apiDir: setDir(__dirname, 'api'),
     apiPrefix: 'api',
-    globalMiddleware: [globalLogger, corsMiddleware, rateLimiter, authGuard],
     debug: true,
 });
 

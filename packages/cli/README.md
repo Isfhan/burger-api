@@ -70,7 +70,7 @@ installed!
 -   ✅ Full project structure
 -   ✅ TypeScript configured
 -   ✅ Dependencies installed
--   ✅ `burger.config.ts` generated from your answers
+-   ✅ `burger.build.ts` generated from your answers (build-time only)
 -   ✅ Example routes
 -   ✅ Ready to run!
 -   ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
@@ -89,14 +89,18 @@ export default {
 };
 ```
 
-Edit `burger.config.ts` anytime to change routes, prefixes, or debug mode.
+Edit `burger.build.ts` anytime to change routes, prefixes, or debug mode.
+Runtime options belong in `new Burger({...})`, `src/plugins.ts`, and route `config.ts`.
 
 ---
 
 ### `burger-api list`
 
-Show all available middleware you can add to your project. (Middleware is code
-that runs around your handler — before and/or after it.)
+Show official ecosystem packages you can add (hooks under `ecosystem/hooks/`,
+plugins under `ecosystem/plugins/` when available).
+
+**Hooks** control the request lifecycle. **Plugins** extend the application.
+They are separate concepts.
 
 **Example:**
 

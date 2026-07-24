@@ -1,22 +1,26 @@
 import type {
-    Middleware,
     RouteDefinition,
     BurgerRequest,
     RequestHandler,
 } from '../types/index';
 import type { RouteModule } from '../compiler/route-module';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
-import { compileRouteSchema, clearValidatorCache } from '../validation/compiler';
+import { compileRouteSchema } from '../validation/compiler';
 import { createValidatorMiddleware } from '../validation/validator';
-import { runWithMiddleware } from '../middleware/runner';
 import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
+import { executeHookPlan } from '../lifecycle/executor';
+import type { HookPlan, Hook, RouteHooks, ProvideMap } from '../lifecycle/types';
+import { normalizeHooks } from '../lifecycle/types';
+import { HookChain } from '../chain/chain';
+import { flatten } from '../chain/flattener';
+import { composePluginHooks } from '../plugin/composer';
+import type { ResolvedPlugin } from '../plugin/types';
 import { BurgerContext } from '../context/context';
 import { analyzeRouteAccess } from '../analysis/route-access-analyzer';
 import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import { ROUTE_CONSTANTS } from '../utils/routing';
-import { validateResponse } from '../validation/response';
 import { extractCtxInit } from './param-extract';
 import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
 import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
@@ -35,21 +39,15 @@ import type { CompiledRouteValidators, ValidatorConfig } from '../validation/typ
  * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
  */
 export class RouterCompiler {
-    private globalMiddleware: Middleware[];
     private debug: boolean;
     private config: ValidatorConfig;
 
-    constructor(
-        globalMiddleware: Middleware[] = [],
-        debug = false,
-        config: ValidatorConfig = {}
-    ) {
-        this.globalMiddleware = globalMiddleware;
+    constructor(debug = false, config: ValidatorConfig = {}) {
         this.debug = debug;
         this.config = config;
     }
 
-    compile(defs: RouteDefinition[]): CompiledRouter {
+    compile(defs: RouteDefinition[], plugins?: ResolvedPlugin[]): CompiledRouter {
         const staticMap = new StaticMap();
         const trie = new Trie();
         const allowCache = new AllowCache();
@@ -77,40 +75,51 @@ export class RouterCompiler {
             const allow = allowCache.compute(allowMethods);
             allowCache.set(path, allow);
 
-            // Build the middleware array: global → validation → route-specific.
-            const routeMiddleware = def.middleware ?? [];
             const hasSchema = !!def.schema;
             let routeValidators:
                 | import('../validation/types').CompiledRouteValidators
                 | undefined;
-            const total =
-                this.globalMiddleware.length +
-                (hasSchema ? 1 : 0) +
-                routeMiddleware.length;
 
-            const middlewares: Middleware[] = new Array(total);
-            let idx = 0;
-            for (let i = 0; i < this.globalMiddleware.length; i++) {
-                middlewares[idx++] = this.globalMiddleware[i];
-            }
+            // Compose the frozen `HookPlan` once at compile time (Phase 4 M4).
+            // The HookChain collects ChainNodes tagged with scope + owner; the
+            // flattener produces the per-phase arrays with correct ordering
+            // (global → local for forward phases, local → global for onError).
+            // Validation is added as global scope so it pins at index 0.
+            const routeHooks = normalizeHooks(def.hooks as RouteHooks | undefined);
+            const chain = new HookChain();
             if (hasSchema) {
-                // Phase 3: compile the schema ONCE here (before serve()),
-                // then wrap the precompiled validators in the orchestrator.
-                // The same compiled validators are retained on the route.
-                const validators = compileRouteSchema(
-                    def.schema!,
-                    this.config
-                );
-                middlewares[idx++] = createValidatorMiddleware(
-                    validators,
-                    this.config,
-                    this.debug === true
-                );
+                const validators = compileRouteSchema(def.schema!, this.config);
+                chain.add({
+                    stage: 'beforeHandle',
+                    fn: createValidatorMiddleware(
+                        validators,
+                        this.config,
+                        this.debug === true
+                    ) as unknown as Hook,
+                    scope: 'global',
+                    owner: 'framework',
+                });
                 routeValidators = validators;
             }
-            for (let i = 0; i < routeMiddleware.length; i++) {
-                middlewares[idx++] = routeMiddleware[i];
+            chain.addStage('beforeHandle', toHookArray(routeHooks?.beforeHandle), 'local', path);
+            chain.addStage('afterHandle', toHookArray(routeHooks?.afterHandle), 'local', path);
+            chain.addStage('onResponse', toHookArray(routeHooks?.onResponse), 'local', path);
+            // onError: reverse because ModuleLoader merges global→route but
+            // onError needs route→global (nearest-first). The flattener orders
+            // local → global, so reversed local nodes execute route-first.
+            chain.addStage('onError', toHookArray(routeHooks?.onError).reverse(), 'local', path);
+
+            // Phase 4 M5: compose plugin hooks into the chain.
+            // Plugin hooks are scoped (plugin by default) and the flattener
+            // orders them between global (validation) and local (route).
+            if (plugins) {
+                composePluginHooks(chain, plugins, path);
             }
+
+            const plan = flatten(chain, path);
+            // Merge provide from route hooks and plugins. Route provide takes
+            // precedence over plugin provide on key collision.
+            plan.provide = mergeProvideRecords(routeHooks?.provide, plugins);
 
             // Optional, compile-time-only route field analysis. The result is
             // baked into `meta` but is unused at runtime in Phase 2, so it can
@@ -120,12 +129,9 @@ export class RouterCompiler {
             const isWildcard = def.isWildcard === true;
             const compiled = buildCompiledHandler(
                 handlers,
-                middlewares,
+                plan,
                 allow,
                 meta,
-                routeValidators,
-                this.config,
-                this.debug,
                 path,
                 isWildcard
             );
@@ -156,7 +162,7 @@ export class RouterCompiler {
                 // Optional: cache provably-constant OPTIONS responses natively.
                 // (Loose trailing-slash equivalence is resolved at lookup time in
                 //  Router.fetch, so it never shadows a `:param` empty-value match.)
-                registerNativeOptions(path, def, this.globalMiddleware, routeMiddleware, hasSchema);
+                registerNativeOptions(path, def, hasSchema);
             } else {
                 if (registeredPaths.has(path)) {
                     throw new Error(
@@ -187,9 +193,8 @@ export class RouterCompiler {
      *
      * Each `RouteModule` is normalized to the existing `RouteDefinition` shape
      * (the stable contract shared with the prod prebuilt path), then compiled
-     * through {@link compile}. Convention data that is not yet compiled in
-     * Phase 1 (`hooks`/`capabilities`/`webhook`) is carried on the
-     * `RouteDefinition` for later phases and ignored at runtime here.
+     * through {@link compile}. Convention data not yet compiled in Phase 1
+     * (`hooks`) is carried for later phases. `config` is attached for runtime use.
      */
     compileModules(modules: RouteModule[]): CompiledRouter {
         return this.compile(modules.map(toRouteDefinition));
@@ -200,10 +205,8 @@ export class RouterCompiler {
  * Normalizes a `RouteModule` (compiler's intermediate) into the existing
  * `RouteDefinition` (the normalized form between the compiler and the runtime).
  *
- * The compiler currently drops `hooks` / `capabilities` / `webhook` (reserved,
- * not yet executed). `middleware` comes from `ServerOptions.globalMiddleware`
- * and the route's own `middleware` array and is wired by the caller.
- * `schema`/`openapi`/`isWildcard` pass through unchanged.
+ * Convention data not yet compiled in Phase 1 (`hooks`) is carried on the
+ * `RouteDefinition` for later phases. `config` is attached for runtime use.
  */
 function toRouteDefinition(mod: RouteModule): RouteDefinition {
     return {
@@ -211,8 +214,18 @@ function toRouteDefinition(mod: RouteModule): RouteDefinition {
         handlers: mod.handlers,
         schema: mod.schema,
         openapi: mod.openapi,
+        hooks: mod.hooks as RouteHooks | undefined,
         isWildcard: mod.isWildcard,
     };
+}
+
+/**
+ * Normalizes a single hook value (function or array) into an array.
+ * Generic so it works for both `Hook` and `ErrorHook`.
+ */
+function toHookArray<T>(h: T | T[] | undefined): T[] {
+    if (h === undefined) return [];
+    return Array.isArray(h) ? h : [h];
 }
 
 /**
@@ -222,18 +235,12 @@ function toRouteDefinition(mod: RouteModule): RouteDefinition {
  */
 function buildCompiledHandler(
     handlers: { [method: string]: RequestHandler },
-    middlewares: Middleware[],
+    plan: HookPlan,
     allow: string,
     meta: RouteAccessInfo,
-    validators?: CompiledRouteValidators,
-    config: ValidatorConfig = {},
-    debug = false,
     pattern: string = '',
     isWildcard: boolean = false
 ): CompiledHandler {
-    // Dev mode (observe-only for response validation) follows the server's
-    // debug flag, mirroring Burger's own dev detection (phase3 D7).
-    const isDev = debug === true;
     return async (request: Request, ctxInit?: ContextInit): Promise<Response> => {
         const method = request.method;
         let handler = handlers[method];
@@ -253,33 +260,14 @@ function buildCompiledHandler(
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {
             handler = handlers.GET;
-            const response = await runWithMiddleware(
-                burgerReq,
-                middlewares,
-                handler
+            const response = await executeHookPlan(
+                ctx,
+                plan,
+                handlers,
+                request
             );
-            // Response validation applies to HEAD too: a route declaring a
-            // `response` schema on GET must still pass the same response
-            // validation when derived from GET (phase3 M5 — single pipeline,
-            // no fork). The GET-derived response is validated before the body
-            // is stripped, so the schema sees the real payload. We validate
-            // against the GET response schema (HEAD is derived from GET).
-            if (validators?.response) {
-                const body = await safeJson(response);
-                const outcome = validateResponse(
-                    validators,
-                    'get',
-                    response.status,
-                    body,
-                    config,
-                    isDev
-                );
-                if (!outcome.ok && outcome.errorResponse) {
-                    return outcome.errorResponse;
-                }
-            }
-            // Uniform response mutation (ROADMAP-phase2 §8.7): apply `ctx.set`
-            // first, then strip the body from the mutated response.
+            // Uniform response mutation (ROADMAP-phase2 §8.7): apply `ctx.set`,
+            // then strip the body from the mutated response.
             const mutated = applySet(response, ctx.set);
             return new Response(null, {
                 status: mutated.status,
@@ -292,50 +280,40 @@ function buildCompiledHandler(
             return methodNotAllowed(allow);
         }
 
-        const response = await runWithMiddleware(burgerReq, middlewares, handler);
-        // Phase 3 (M5): response validation as a post-handler step inside the
-        // same single pipeline (no fork). Early-returns when no response schema.
-        if (validators?.response) {
-            const body = await safeJson(response);
-            const outcome = validateResponse(
-                validators,
-                method.toLowerCase(),
-                response.status,
-                body,
-                config,
-                isDev
-            );
-            if (!outcome.ok && outcome.errorResponse) {
-                return outcome.errorResponse;
-            }
-            // `safeJson` may have consumed the response stream. If it parsed a
-            // JSON body, rebuild the Response from it so the body is not lost
-            // (phase3 §8.4 — dev/observe passes the handler response through).
-            // For non-JSON responses `body` is undefined; return original.
-            if (body !== undefined) {
-                const rebuilt = new Response(JSON.stringify(body), {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: response.headers,
-                });
-                return applySet(rebuilt, ctx.set);
-            }
-        }
-        // The only response-path mutation added in Phase 2: merge `ctx.set`.
+        const response = await executeHookPlan(
+            ctx,
+            plan,
+            handlers,
+            request
+        );
         return applySet(response, ctx.set);
     };
 }
 
-/** Reads a JSON body for response validation without consuming the stream
- * when it is not JSON. Falls back to undefined (validation sees no body). */
-async function safeJson(response: Response): Promise<unknown> {
-    const ct = response.headers.get('content-type') ?? '';
-    if (!ct.includes('application/json')) return undefined;
-    try {
-        return await response.json();
-    } catch {
-        return undefined;
+/**
+ * Merges provide records from route hooks and plugins. Plugin provide records
+ * are applied first, then route-level provide overrides on key collision.
+ */
+function mergeProvideRecords(
+    routeProvide: ProvideMap | undefined,
+    plugins?: ResolvedPlugin[]
+): ProvideMap | undefined {
+    const merged: ProvideMap = {};
+    if (plugins) {
+        for (const p of plugins) {
+            if (p.hooks.provide) {
+                for (const k of Object.keys(p.hooks.provide)) {
+                    merged[k] = p.hooks.provide[k];
+                }
+            }
+        }
     }
+    if (routeProvide) {
+        for (const k of Object.keys(routeProvide)) {
+            merged[k] = routeProvide[k];
+        }
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**
@@ -358,8 +336,6 @@ function isStaticPath(path: string): boolean {
 function registerNativeOptions(
     path: string,
     def: RouteDefinition,
-    globalMiddleware: Middleware[],
-    routeMiddleware: Middleware[],
     hasSchema: boolean
 ): void {
     // Optional optimization: `Bun.nativeStaticResponse` may not exist in all
@@ -375,7 +351,7 @@ function registerNativeOptions(
     if (typeof nativeStaticResponse !== 'function') {
         return;
     }
-    if (globalMiddleware.length > 0 || routeMiddleware.length > 0 || hasSchema) {
+    if (hasSchema) {
         return;
     }
     const opt = def.handlers['OPTIONS'];

@@ -20,12 +20,19 @@ import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 // Import validation (Phase 3)
 import { schemaRegistry } from './validation/registry';
 
+// Import plugin system (Phase 4 M5)
+import { PluginRegistry } from './plugin/registry';
+import { MacroRegistry } from './plugin/macro';
+import type { Plugin, MacroFn } from './plugin/types';
+import type { Scope } from './chain/node';
+
 // Import types
 import type {
     ServerOptions,
     Middleware,
     RequestHandler,
     RouteDefinition,
+    RouteHooks,
     FetchHandler,
 } from './types/index';
 import type { HTMLBundle } from 'bun';
@@ -71,9 +78,17 @@ export class Burger {
     private routeTree?: import('./compiler/route-tree').RouteTree;
 
     /**
-     * The global middleware
+     * Plugin registry (Phase 4 M5). Populated via `.use()` before `serve()`;
+     * resolved into `HookChain` nodes during `processApiRoutes()`.
      */
-    private globalMiddleware: Middleware[] = [];
+    private pluginRegistry = new PluginRegistry();
+
+    /**
+     * Macro registry (Phase 4 M6). Populated via `.macro()` before `serve()`;
+     * expanded into `ResolvedPlugin` entries during `processApiRoutes()` and
+     * composed into the HookChain alongside plugins.
+     */
+    private macroRegistry = new MacroRegistry();
 
     /**
      * The OpenAPI document
@@ -104,15 +119,13 @@ export class Burger {
      * - port: The port number to listen on.
      * - apiDir: The directory path to load API routes from.
      * - pageDir: The directory path to load page routes from.
-     * - middleware: An array of global middleware functions.
      */
     constructor(private options: ServerOptions) {
         // Create server instance
         this.server = new Server(options);
 
         // Fast initialization for routers with nullish coalescing
-        const { apiDir, pageDir, apiPrefix, pagePrefix, globalMiddleware } =
-            options;
+        const { apiDir, pageDir, apiPrefix, pagePrefix } = options;
 
         // Initialize API router only when using runtime scanning (no prebuilt apiRoutes)
         this.apiRouter =
@@ -128,11 +141,6 @@ export class Burger {
                 ? new PageRouter(pageDir, pagePrefix || '')
                 : undefined;
 
-        // Add global middleware if any
-        this.globalMiddleware = globalMiddleware?.length
-            ? globalMiddleware.slice()
-            : [];
-
         // Phase 3: seed the schema registry from ServerOptions.models so model
         // refs in route schemas resolve at compile time (phase3 §12.12, D10).
         // Seeded before routes compile (the registry is read-only after).
@@ -141,6 +149,35 @@ export class Burger {
                 schemaRegistry.register(name, options.models[name]);
             }
         }
+    }
+
+    /**
+     * Registers a plugin. Plugin hooks are compiled into the HookChain for
+     * every route (scoped according to the plugin's scope). The same plugin
+     * (name + seed) is deduplicated — calling `.use()` twice with the same
+     * identity is a no-op.
+     *
+     * @param plugin  The plugin object or a factory function returning one.
+     * @param scope   Optional scope override (default: `'plugin'`).
+     * @param seed    Optional disambiguation string (e.g. two JWT plugins).
+     * @returns `this` for chaining.
+     */
+    use(plugin: Plugin, scope?: Scope, seed?: string): this {
+        this.pluginRegistry.register(plugin, scope ?? 'plugin', seed);
+        return this;
+    }
+
+    /**
+     * Registers a reusable hook factory (macro). Macros are expanded at compile
+     * time into plugin-scoped hooks that apply to every route.
+     *
+     * @param name  Unique macro name.
+     * @param fn    Factory function that returns `RouteHooks`.
+     * @returns `this` for chaining.
+     */
+    macro(name: string, fn: MacroFn): this {
+        this.macroRegistry.register(name, fn);
+        return this;
     }
 
     /**
@@ -223,6 +260,7 @@ export class Burger {
                 handlers: m.handlers,
                 schema: m.schema,
                 openapi: m.openapi,
+                hooks: m.hooks as RouteHooks | undefined,
                 isWildcard: m.isWildcard,
             }));
         }
@@ -235,11 +273,17 @@ export class Burger {
 
         // Compile routes into the Hybrid Router.
         const router = new Router({
-            globalMiddleware: this.globalMiddleware,
             debug: this.options.debug,
             validation: this.options.validation ?? {},
         });
-        router.compile(apiRoutes);
+        // Phase 4 M5/M6: resolve plugins and expand macros, then merge both
+        // into a single list passed to the compiler. Macro hooks are treated as
+        // plugin-scoped entries, so the flattener orders them between global
+        // (validation) and local (route) hooks.
+        const resolvedPlugins = await this.pluginRegistry.resolveAll();
+        const expandedMacros = this.macroRegistry.expandAll();
+        const allHooks = [...resolvedPlugins, ...expandedMacros];
+        router.compile(apiRoutes, allHooks);
         this.dynamicRouter = router;
 
         // Merge static routes into Bun's native routes map (fast path), then
@@ -326,4 +370,10 @@ export type {
     openapi,
     RouteDefinition,
     PageDefinition,
+    RouteHooks,
+    ProvideMap,
 } from './types/index';
+
+// Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)
+export type { Plugin, MacroFn } from './plugin/types';
+export type { Scope } from './chain/node';

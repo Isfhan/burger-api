@@ -59,7 +59,7 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 
 /**
  * Get list of available middleware from GitHub
- * This scans the ecosystem/middlewares folder and returns what's available
+ * This scans the ecosystem/hooks folder and returns what's available
  *
  * @returns Promise with array of middleware names
  * @throws Error if GitHub is unreachable or request fails
@@ -71,7 +71,7 @@ export async function getMiddlewareList(): Promise<string[]> {
     try {
         // Use Bun's native fetch - no node-fetch package needed!
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares`,
+            `${API_URL}/contents/ecosystem/hooks`,
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -116,7 +116,7 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
     try {
         // Get list of files in the middleware directory
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares/${name}`,
+            `${API_URL}/contents/ecosystem/hooks/${name}`,
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -161,7 +161,7 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
         return {
             name,
             description,
-            path: `ecosystem/middlewares/${name}`,
+            path: `ecosystem/hooks/${name}`,
             files: files.map((f) => f.name),
         };
     } catch (err) {
@@ -175,12 +175,12 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
 /**
  * Download a file from GitHub
  *
- * @param path - Path in the repo (e.g., 'ecosystem/middlewares/cors/cors.ts')
+ * @param path - Path in the repo (e.g., 'ecosystem/hooks/cors/cors.ts')
  * @param destination - Where to save it on your computer
  * @returns Promise that resolves when download is complete
  * @throws Error if download fails
  * @example
- * await downloadFile('ecosystem/middlewares/cors/cors.ts', './middleware/cors.ts');
+ * await downloadFile('ecosystem/hooks/cors/cors.ts', './middleware/cors.ts');
  */
 export async function downloadFile(
     path: string,
@@ -280,7 +280,7 @@ export async function downloadMiddleware(
 export async function middlewareExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares/${name}`,
+            `${API_URL}/contents/ecosystem/hooks/${name}`,
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',

@@ -82,7 +82,7 @@ afterAll(async () => {
 });
 
 describe('Build integration: preserve user Burger options', () => {
-    it('keeps globalMiddleware from the entry file in the built output', async () => {
+    it('keeps route hooks (api/hooks.ts) in the built output', async () => {
         const res = await fetch(`${baseUrl}/api`);
         expect(res.status).toBe(418);
         expect(await res.text()).toContain('blocked by global middleware');

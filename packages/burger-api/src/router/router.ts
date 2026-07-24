@@ -9,6 +9,7 @@ import { StaticMap } from './static-map';
 import { Trie } from './trie';
 import type { CompiledHandler, CompiledRoute, RouterConfig } from './types';
 import type { ValidatorConfig } from '../validation/types';
+import type { ResolvedPlugin } from '../plugin/types';
 
 /**
  * Public router that owns the compiled dispatch state and orchestrates
@@ -42,7 +43,6 @@ export class Router {
 
     constructor(config: RouterConfig = {}) {
         this.compiler = new RouterCompiler(
-            config.globalMiddleware ?? [],
             config.debug ?? false,
             config.validation ?? {}
         );
@@ -53,8 +53,11 @@ export class Router {
      * Replaces all tables wholesale (no incremental merge) so hot reload
      * cannot leak stale routes.
      */
-    compile(defs: import('../types/index').RouteDefinition[]): void {
-        const result = this.compiler.compile(defs);
+    compile(
+        defs: import('../types/index').RouteDefinition[],
+        plugins?: ResolvedPlugin[]
+    ): void {
+        const result = this.compiler.compile(defs, plugins);
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;

@@ -258,15 +258,9 @@ describe('Router — Hybrid Router dispatch', () => {
         });
     });
 
-    describe('middleware delegation', () => {
-        it('runs global + route middleware in order before the handler', async () => {
-            const r = new Router({
-                globalMiddleware: [
-                    async (request) => {
-                        (request as any).order = 'g';
-                    },
-                ],
-            });
+    describe('lifecycle hook delegation', () => {
+        it('runs multiple beforeHandle hooks in order before the handler', async () => {
+            const r = new Router();
             r.compile([
                 route(
                     '/mw',
@@ -275,11 +269,16 @@ describe('Router — Hybrid Router dispatch', () => {
                             new Response((request as any).order || 'none'),
                     },
                     {
-                        middleware: [
-                            async (request) => {
-                                (request as any).order += '>r';
-                            },
-                        ],
+                        hooks: {
+                            beforeHandle: [
+                                async (request) => {
+                                    (request as any).order = 'g';
+                                },
+                                async (request) => {
+                                    (request as any).order += '>r';
+                                },
+                            ],
+                        },
                     }
                 ),
             ]);
@@ -287,7 +286,7 @@ describe('Router — Hybrid Router dispatch', () => {
             expect(await res.text()).toBe('g>r');
         });
 
-        it('supports multiple route middlewares (3+ fast path)', async () => {
+        it('supports multiple beforeHandle hooks (3+ fast path)', async () => {
             const r = new Router();
             const seen: string[] = [];
             r.compile([
@@ -297,17 +296,19 @@ describe('Router — Hybrid Router dispatch', () => {
                         GET: () => new Response(seen.join(',')),
                     },
                     {
-                        middleware: [
-                            async () => {
-                                seen.push('a');
-                            },
-                            async () => {
-                                seen.push('b');
-                            },
-                            async () => {
-                                seen.push('c');
-                            },
-                        ],
+                        hooks: {
+                            beforeHandle: [
+                                async () => {
+                                    seen.push('a');
+                                },
+                                async () => {
+                                    seen.push('b');
+                                },
+                                async () => {
+                                    seen.push('c');
+                                },
+                            ],
+                        },
                     }
                 ),
             ]);

@@ -1,37 +1,37 @@
-# Route-Specific Middleware Example
+# Route-Specific Hooks Example
 
-This example demonstrates route-specific middleware in burger-api, showing
-how to apply middleware to specific routes in addition to global middleware.
-Middleware is code that runs around your handler — before and/or after it.
+This example demonstrates route-specific hooks in burger-api, showing
+how to apply hooks to specific routes in addition to global hooks.
+Hooks are code that runs around your handler — before and/or after it.
 
 ## Overview
 
 This example includes:
 
--   **Global middleware** - Applied to all routes
--   **Route-specific middleware** - Applied only to specific routes
--   **Middleware combination** - Global and route-specific middleware working
+-   **Global hooks** - Applied to all routes
+-   **Route-specific hooks** - Applied only to specific routes
+-   **Hooks combination** - Global and route-specific hooks working
     together
 -   **Route groups** - Using `(group)` folders to organize routes
 
 ## Features Demonstrated
 
-### 1. Global Middleware
+### 1. Global Hooks
 
 -   Applied to all routes
--   Executed before route-specific middleware
--   Defined in `globalMiddleware` option
+-   Executed before route-specific hooks
+-   Defined in `api/hooks.ts`
 
-### 2. Route-Specific Middleware
+### 2. Route-Specific Hooks
 
 -   Applied only to specific routes
--   Executed after global middleware
--   Defined in route file as `export const middleware`
+-   Executed after global hooks
+-   Defined in route `hooks.ts` as `export const beforeHandle`
 
-### 3. Middleware Combination
+### 3. Hooks Combination
 
--   Global middleware executes first
--   Route-specific middleware executes after
+-   Global hooks execute first
+-   Route-specific hooks execute after
 -   Both can modify request/response
 
 ## Running the Example
@@ -58,7 +58,7 @@ Loading route: /api/profile/:id
 Open another terminal and test the endpoints:
 
 ```bash
-# Get products list (global + route-specific middleware)
+# Get products list (global + route-specific hooks)
 curl http://localhost:4000/api/products
 
 # Get products with query parameters
@@ -69,19 +69,19 @@ curl -X POST http://localhost:4000/api/products \
   -H "Content-Type: application/json" \
   -d '{"name": "Test Product", "price": 99.99}'
 
-# Get product detail (global + route-specific middleware)
+# Get product detail (global + route-specific hooks)
 curl http://localhost:4000/api/products/detail
 
-# Get profile by ID (global + route-specific middleware)
+# Get profile by ID (global + route-specific hooks)
 curl http://localhost:4000/api/profile/1
 ```
 
-### Step 3: Check Middleware Execution
+### Step 3: Check Hooks Execution
 
-Watch the server terminal to see middleware execution logs:
+Watch the server terminal to see hooks execution logs:
 
--   Global middleware logs for all requests
--   Route-specific middleware logs for specific routes
+-   Global hooks log for all requests
+-   Route-specific hooks log for specific routes
 
 ## Running Tests
 
@@ -125,8 +125,8 @@ bun test --test-name-pattern "Products" examples/route-specific-middleware/api.t
 # Run only Profile tests
 bun test --test-name-pattern "Profile" examples/route-specific-middleware/api.test.ts
 
-# Run only Middleware tests
-bun test --test-name-pattern "Middleware" examples/route-specific-middleware/api.test.ts
+# Run only Hooks tests
+bun test --test-name-pattern "Hooks" examples/route-specific-middleware/api.test.ts
 ```
 
 ## Test Coverage
@@ -139,19 +139,19 @@ The test suite includes **12 tests** covering:
 -   Query parameters handling
 -   POST product creation
 -   GET product detail
--   Route-specific middleware execution
+-   Route-specific hooks execution
 
 ### ✅ Profile API (3 tests)
 
 -   GET profile by ID
 -   Different profile IDs
--   Route-specific middleware execution
+-   Route-specific hooks execution
 
-### ✅ Middleware Behavior (3 tests)
+### ✅ Hooks Behavior (3 tests)
 
--   Global middleware execution
--   Route-specific middleware execution
--   Middleware combination
+-   Global hooks execution
+-   Route-specific hooks execution
+-   Hooks combination
 
 ### ✅ Error Handling (2 tests)
 
@@ -160,17 +160,17 @@ The test suite includes **12 tests** covering:
 
 ## API Endpoints
 
-| Method | Endpoint                | Description                    | Middleware                    |
+| Method | Endpoint                | Description                    | Hooks                        |
 | ------ | ----------------------- | ------------------------------ | ----------------------------- |
 | GET    | `/api/products`         | Get products list               | Global + Route-specific       |
 | POST   | `/api/products`         | Create a new product           | Global + Route-specific       |
 | GET    | `/api/products/detail`  | Get product detail             | Global + Route-specific       |
 | GET    | `/api/profile/:id`      | Get profile by ID              | Global + Route-specific       |
 
-## Middleware Execution Order
+## Hooks Execution Order
 
-1. **Global middleware** (executes first)
-2. **Route-specific middleware** (executes after global)
+1. **Global hooks** (executes first)
+2. **Route-specific hooks** (executes after global)
 3. **Route handler** (executes last)
 
 ## File Structure
@@ -183,43 +183,51 @@ route-specific-middleware/
 ├── api/                  # API routes
 │   └── (group)/          # Route group (ignored in path)
 │       ├── products/
-│       │   ├── route.ts  # GET/POST /api/products (with middleware)
-│       │   └── detail/
-│       │       └── route.ts  # GET /api/products/detail (with middleware)
+│   │   ├── route.ts  # GET/POST /api/products
+│   │   ├── hooks.ts  # Route-specific hooks
+│   │   └── detail/
+│   │       └── route.ts  # GET /api/products/detail
 │       └── profile/
 │           └── [id]/
-│               └── route.ts  # GET /api/profile/:id (with middleware)
-└── middleware/
-    └── index.ts         # Global middleware
+│               ├── route.ts  # GET /api/profile/:id
+│               └── hooks.ts  # Route-specific hooks
+└── api/
+    └── hooks.ts         # Global hooks
 ```
 
 ## Key Concepts
 
-1. **Global Middleware**: Applied to all routes
-2. **Route-Specific Middleware**: Applied only to specific routes
-3. **Middleware Order**: Global executes before route-specific
-4. **Middleware Combination**: Both can be used together
-5. **Request/Response Modification**: Middleware can modify request/response
+1. **Global Hooks**: Applied to all routes (defined in `api/hooks.ts`)
+2. **Route-Specific Hooks**: Applied only to specific routes (defined in route `hooks.ts`)
+3. **Hooks Order**: Global executes before route-specific
+4. **Hooks Combination**: Both can be used together
+5. **Request/Response Modification**: Hooks can modify request/response
 
-## Middleware Example
+## Hooks Example
 
-### Global Middleware
+### Global Hooks
 
 ```typescript
-// middleware/index.ts
-export const globalMiddleware1: Middleware = (req: BurgerRequest): BurgerNext => {
-    console.log('Global middleware executed for request:', req.url);
-    return undefined;
-};
+// api/hooks.ts
+import type { BurgerRequest, BurgerNext } from 'burger-api';
+
+export const beforeHandle = [
+    (req: BurgerRequest): BurgerNext => {
+        console.log('Global hook executed for request:', req.url);
+        return undefined;
+    },
+];
 ```
 
-### Route-Specific Middleware
+### Route-Specific Hooks
 
 ```typescript
-// api/products/route.ts
-export const middleware: Middleware[] = [
+// api/products/hooks.ts
+import type { BurgerRequest, BurgerNext } from 'burger-api';
+
+export const beforeHandle = [
     (req: BurgerRequest): BurgerNext => {
-        console.log('Products Route-specific middleware executed');
+        console.log('Products route-specific hook executed');
         return undefined;
     },
 ];
@@ -241,12 +249,12 @@ If you see:
 bun run examples/route-specific-middleware/index.ts
 ```
 
-### Middleware Not Executing
+### Hooks Not Executing
 
-If middleware is not executing:
+If hooks are not executing:
 
-1. **Check middleware definition**: Ensure middleware is correctly defined
-2. **Check server logs**: Look for middleware execution messages
-3. **Check route files**: Ensure route-specific middleware is exported
-4. **Check global middleware**: Ensure global middleware is configured
+1. **Check hooks definition**: Ensure hooks are correctly defined in `hooks.ts`
+2. **Check server logs**: Look for hooks execution messages
+3. **Check route files**: Ensure route-specific hooks are exported via `beforeHandle`
+4. **Check global hooks**: Ensure `api/hooks.ts` exports a `beforeHandle` array
 

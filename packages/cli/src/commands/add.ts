@@ -1,9 +1,7 @@
 /**
  * Add Command
  *
- * Downloads middleware from the ecosystem and adds it to the user's project.
- * Users can add multiple middleware at once!
- *
+ * Downloads hooks (and later plugins) from the ecosystem into the project.
  * Example: burger-api add cors logger rate-limiter
  */
 
@@ -30,10 +28,10 @@ import {
  * Downloads middleware from GitHub and copies to project
  */
 export const addCommand = new Command('add')
-    .description('Add middleware from the ecosystem')
-    .argument('<middleware...>', 'Names of middleware to add')
-    .action(async (middlewareNames: string[]) => {
-        clack.intro('Add middleware to your project');
+    .description('Add a hook or plugin from the ecosystem')
+    .argument('<names...>', 'Names of ecosystem packages to add')
+    .action(async (packageNames: string[]) => {
+        clack.intro('Add ecosystem packages to your project');
 
         // Make sure we're in a BurgerAPI project
         if (!existsSync('package.json')) {
@@ -45,28 +43,25 @@ export const addCommand = new Command('add')
             process.exit(1);
         }
 
-        // Create ecosystem/middleware directory if it doesn't exist
-        // Ecosystem middleware goes here, user's custom middleware can go in middleware/
+        // Hooks install under ecosystem/hooks/ (plugins under ecosystem/plugins/ when available)
         const ecosystemDir = join(process.cwd(), 'ecosystem');
-        const middlewareDir = join(ecosystemDir, 'middleware');
-        if (!existsSync(middlewareDir)) {
-            // Create it with a proper starter file
+        const hooksDir = join(ecosystemDir, 'hooks');
+        if (!existsSync(hooksDir)) {
             await Bun.write(
-                join(middlewareDir, 'index.ts'),
+                join(hooksDir, 'index.ts'),
                 generateMiddlewareIndex()
             );
-            info('Created ecosystem/middleware/ directory');
+            info('Created ecosystem/hooks/ directory');
             newline();
         }
 
-        // Process each middleware
         const results = {
             success: [] as string[],
             failed: [] as string[],
             skipped: [] as string[],
         };
 
-        for (const name of middlewareNames) {
+        for (const name of packageNames) {
             try {
                 // Check if it exists on GitHub
                 let spin = spinner(`Checking ${name}...`);
@@ -84,15 +79,14 @@ export const addCommand = new Command('add')
                 }
 
                 if (!exists) {
-                    spin.stop(`Middleware "${name}" not found`, true);
+                    spin.stop(`Package "${name}" not found`, true);
                     results.failed.push(name);
                     continue;
                 }
 
                 spin.update(`Downloading ${name}...`);
 
-                // Check if it already exists locally
-                const targetDir = join(middlewareDir, name);
+                const targetDir = join(hooksDir, name);
                 if (existsSync(targetDir)) {
                     spin.stop();
                     // Ask if they want to overwrite
@@ -109,7 +103,6 @@ export const addCommand = new Command('add')
                     spin = spinner(`Downloading ${name}...`);
                 }
 
-                // Download the middleware
                 try {
                     const filesDownloaded = await downloadMiddleware(
                         name,
@@ -146,35 +139,29 @@ export const addCommand = new Command('add')
         // Show summary
         newline();
         if (results.success.length > 0) {
-            success(`Successfully added ${results.success.length} middleware:`);
+            success(`Successfully added ${results.success.length} package(s):`);
             results.success.forEach((name) => bullet(name));
             newline();
 
-            // Show usage instructions
             header('How to Use');
-            info('Import and use the middleware in your index.ts:');
+            info('Import hooks and register them in src/hooks.ts:');
             newline();
-            code('import { Burger } from "burger-api";');
             results.success.forEach((name) => {
                 code(
-                    `import { ${name} } from "./ecosystem/middleware/${name}/${name}";`
+                    `import { ${name} } from "./ecosystem/hooks/${name}/${name}";`
                 );
             });
             newline();
-            code('const app = new Burger({');
-            code('    apiDir: "./api",');
-            code('    globalMiddleware: [');
+            code('// src/hooks.ts');
+            code('export const onRequest = [');
             results.success.forEach((name) => {
-                code(`        ${name}(),`);
+                code(`    ${name}(),`);
             });
-            code('    ],');
-            code('});');
+            code('];');
             newline();
-            newline();
-
-            info('Check each middleware README for configuration options:');
+            info('See each package README for options:');
             results.success.forEach((name) => {
-                bullet(`ecosystem/middleware/${name}/README.md`);
+                bullet(`ecosystem/hooks/${name}/README.md`);
             });
             newline();
         }

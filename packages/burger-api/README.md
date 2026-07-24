@@ -9,12 +9,15 @@
 [![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-0.14.0-green.svg)](https://github.com/isfhan/burger-api/releases)
 
-**burger-api** is a modern, open source API framework built on
-[Bun.js](https://bun.sh). It combines the simplicity of file-based routing with
-powerful features like built-in middleware, Zod-based schema validation, and
-automatic OpenAPI generation. Designed for high performance and ease-of-use,
-burger-api leverages Bun's native modules to deliver blazing-fast API responses
-while keeping your codebase clean and maintainable.
+**burger-api** is a Bun-first, WinterCG-compatible TypeScript API framework with
+file-based routing, a hook-based request lifecycle, Standard Schema validation
+(Zod default), plugins/providers, and OpenAPI generation.
+
+**Architecture source of truth:** `../../burger-api-roadmaps/BURGERAPI_VISION.md`  
+When this README and the vision disagree, **the vision wins**.
+
+**Hooks** control the request lifecycle. **Plugins** extend the application.
+They are separate concepts.
 
 **This project is under active development and should not be used in production
 yet.**
@@ -44,13 +47,21 @@ burger-api is built to offer a robust developer experience through:
     Automatically registers API routes from your file structure using a clear
     naming convention.
 
--   🔄 **Middleware Architecture:**  
-    Supports both global and route-specific middleware. Simple, powerful
-    middleware system with three return types:
+-   🔄 **Hook lifecycle (target):**  
+    `onRequest` → `transform` → validation → `beforeRoute` → handler →
+    `afterRoute` → `mapResponse` (`onError` on failure). Global hooks live in
+    `src/hooks.ts`; route hooks in `api/**/hooks.ts`. Route convention files:
+    `route.ts`, `schema.ts`, `hooks.ts`, `openapi.ts`, `config.ts` (no group
+    inheritance). Public context type: **`BurgerContext`**.
+
+-   🔄 **Legacy note:**  
+    The currently published package may still expose older names
+    (`BurgerRequest`, `beforeHandle`, group inheritance). Prefer the vision API
+    for new docs and features. Historical pipeline detail:
 
     -   `Response` - Stop here, send this response
     -   `Function` - Transform the final response after handler runs
-    -   `undefined` - Continue to next middleware
+    -   `undefined` - Continue to the next hook or handler
 
 -   ✅ **Type-Safe Validation:**  
     Schemas for query, params, headers, cookies, and body are validated before
@@ -131,20 +142,20 @@ cd my-api
 bun run dev
 ```
 
-### Installing Middleware
+### Installing Ecosystem Hooks
 
-The CLI makes it easy to add production-ready middleware to your project. Browse
-available middleware and install them with a single command:
+The CLI makes it easy to add production-ready hooks (CORS, JWT auth, rate limiting,
+etc.) to your project. These are hook factories you wire into your `api/hooks.ts`:
 
 ```bash
-# List all available middleware
+# List all available hooks
 burger-api list
 
-# Add middleware to your project
+# Add hooks to your project
 burger-api add cors logger rate-limiter
 ```
 
-**Popular Middleware Available:**
+**Popular Hook Factories Available:**
 
 -   **`cors`** - Cross-Origin Resource Sharing for handling cross-origin
     requests

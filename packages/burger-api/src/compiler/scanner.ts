@@ -3,23 +3,24 @@ import * as path from 'node:path';
 import { ROUTE_CONSTANTS } from '../utils/routing';
 import { filePathToApiRoutePath } from '../utils/pathConversion';
 import {
-    CONVENTION_FILES,
-    INHERITABLE_FILES,
     assertConventionFile,
     isConventionFile,
     type ConventionFile,
 } from './conventions';
-import type { GroupInheritanceSource, ScannedRoute } from './route-module';
+import type { ScannedRoute, ScanResult } from './route-module';
 
 /**
  * Walks a route directory tree and produces a pure inventory of route
  * directories — the first stage of the compiler pipeline
  * (`ROADMAP.md` §2.1 step 1).
  *
- * The scanner only enumerates files and computes route paths / inheritance
- * chains. It performs **no `import()`** of any module; loading module code is
- * the exclusive responsibility of the Module Loader. This keeps the filesystem
- * walk cheap, deterministic, and side-effect free.
+ * The scanner only enumerates files and computes route paths. It performs
+ * **no `import()`** of any module; loading module code is the exclusive
+ * responsibility of the Module Loader. This keeps the filesystem walk
+ * cheap, deterministic, and side-effect free.
+ *
+ * Each route directory is **self-contained** — no group inheritance chain.
+ * Groups only affect URL path stripping.
  *
  * Convention rules enforced here (fail fast):
  * - Only recognized convention files are acknowledged; `middleware.ts` is forbidden.
@@ -38,27 +39,43 @@ export class DirectoryScanner {
     }
 
     /**
-     * Scans the tree and returns one {@link ScannedRoute} per directory that
-     * contains a `route.ts`.
+     * Scans the tree and returns a {@link ScanResult} containing:
+     * - `routes`: one {@link ScannedRoute} per directory that contains a `route.ts`
+     * - `globalHooks`: path to `hooks.ts` at the root of the routes directory (if any)
      * @throws on forbidden files or conflicting dynamic/wildcard folders.
      */
-    async scan(): Promise<ScannedRoute[]> {
-        const results: ScannedRoute[] = [];
-        await this.walk(this.routesDir, [], results);
-        return results;
+    async scan(): Promise<ScanResult> {
+        const routes: ScannedRoute[] = [];
+        await this.walk(this.routesDir, routes);
+
+        // Detect global hooks at the app root (sibling of index.ts).
+        // When apiDir is `./src/api`, global hooks live in `./src/hooks.ts`.
+        // When apiDir is `./api`, global hooks live in `./hooks.ts`.
+        let globalHooks: string | undefined;
+        try {
+            const parentDir = path.dirname(this.routesDir);
+            const rootEntries = await readdir(parentDir, { withFileTypes: true });
+            for (const entry of rootEntries) {
+                if (!entry.isFile()) continue;
+                if (entry.name === 'hooks.ts') {
+                    globalHooks = path.resolve(path.join(parentDir, entry.name));
+                    break;
+                }
+            }
+        } catch {
+            // Parent directory may not exist — ignore.
+        }
+
+        return { routes, globalHooks };
     }
 
     /**
-     * Recursively walks `dir`, tracking the chain of **group** folder names
-     * (for inheritance) and emitting a `ScannedRoute` whenever a `route.ts`
-     * is found.
-     *
-     * @param groupChain group folder names from root down to (but not
-     *        including) the current directory.
+     * Recursively walks `dir` and emits a `ScannedRoute` whenever a `route.ts`
+     * is found. Group folders `(name)` are traversed for URL stripping but
+     * do NOT build an inheritance chain.
      */
     private async walk(
         dir: string,
-        groupChain: string[],
         out: ScannedRoute[]
     ): Promise<void> {
         let dynamicFolderFound = false;
@@ -122,8 +139,7 @@ export class DirectoryScanner {
             if (isWildcard) wildcardFolderFound = true;
         }
 
-        // Gather this directory's convention files and build the inheritance
-        // chain (group files are collected from every ancestor directory).
+        // Gather this directory's convention files.
         const localFiles: Partial<Record<ConventionFile, string>> = {};
         let hasRoute = false;
 
@@ -147,13 +163,10 @@ export class DirectoryScanner {
                 relativeFilePath,
                 this.prefix
             );
-            const groupFiles = await this.collectGroupFiles(dir, groupChain);
             out.push({
                 routePath,
                 routeDir: path.resolve(dir),
                 localFiles,
-                groupFiles,
-                groupChain: [...groupChain],
                 isWildcard: routePath.includes(
                     ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
                 ),
@@ -170,59 +183,10 @@ export class DirectoryScanner {
             ) {
                 continue;
             }
-            // Group folders do not affect the URL path but DO extend the
-            // inheritance chain for descendants.
-            const isGroup =
-                name.startsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_START) &&
-                name.endsWith(ROUTE_CONSTANTS.GROUPING_FOLDER_END);
-            const childChain = isGroup
-                ? [...groupChain, name]
-                : groupChain;
-            await this.walk(childPath, childChain, out);
+            await this.walk(childPath, out);
         }
-    }
-
-    /**
-     * Collects inheritable convention files from every ancestor group
-     * directory, ordered root → nearest. Only `INHERITABLE_FILES`
-     * (`schema`/`hooks`/`use`/`openapi`) participate in group inheritance;
-     * `route.ts` and `webhook.ts` are route-local and never inherited.
-     */
-    private async collectGroupFiles(
-        routeDir: string,
-        groupChain: string[]
-    ): Promise<GroupInheritanceSource[]> {
-        const sources: GroupInheritanceSource[] = [];
-        if (groupChain.length === 0) return sources;
-
-        // `groupChain` holds folder names root → nearest. Walk from the root
-        // (routesDir + first group) down to the nearest ancestor.
-        let current = this.routesDir;
-        for (const groupName of groupChain) {
-            current = path.join(current, groupName);
-            const files: Partial<Record<ConventionFile, string>> = {};
-            let entries;
-            try {
-                entries = await readdir(current, { withFileTypes: true });
-            } catch {
-                continue;
-            }
-            for (const entry of entries) {
-                if (!entry.isFile()) continue;
-                const stem = entry.name.replace(/\.ts$/, '');
-                if (!isConventionFile(stem)) continue;
-                assertConventionFile(stem);
-                if (
-                    (INHERITABLE_FILES as readonly string[]).includes(stem)
-                ) {
-                    files[stem] = path.resolve(path.join(current, entry.name));
-                }
-            }
-            sources.push({ dir: path.resolve(current), files });
-        }
-        return sources;
     }
 }
 
 /** Re-exported for convenience / symmetry with the module loader. */
-export { CONVENTION_FILES };
+export { CONVENTION_FILES } from './conventions';

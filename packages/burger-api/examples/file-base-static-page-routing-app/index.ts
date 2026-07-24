@@ -2,7 +2,7 @@
 import { Burger, setDir } from '../../src/index';
 
 // Import middleware
-import { globalLogger } from './middleware/logger';
+
 
 // Create a new Burger instance with OpenAPI metadata and global middleware.
 const burger = new Burger({
@@ -11,7 +11,6 @@ const burger = new Burger({
         'This is a demo API demonstrating all available options in burger-api.',
     apiDir: setDir(__dirname, 'api'),
     pageDir: setDir(__dirname, 'pages'),
-    globalMiddleware: [globalLogger],
     version: '1.0.0',
     debug: true,
 });

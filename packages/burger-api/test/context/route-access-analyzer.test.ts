@@ -21,7 +21,7 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         expect(info.has('route')).toBe(false);
     });
 
-    it('scans route middleware source in addition to handlers', () => {
+    it('scans route hook source in addition to handlers', () => {
         const mw = (req: any) => {
             void req.headers;
             return undefined;
@@ -29,7 +29,7 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         const def = {
             path: '/x',
             handlers: { GET: (req: any) => void req.route },
-            middleware: [mw],
+            hooks: { beforeHandle: [mw] },
         } as unknown as RouteDefinition;
         const info = analyzeRouteAccess(def);
         expect(info.has('headers')).toBe(true);
@@ -70,5 +70,41 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         expect(Object.isFrozen(info)).toBe(true);
         expect(info.has('query')).toBe(false);
         expect(info.has('params')).toBe(false);
+    });
+
+    // Phase 4 M7: hook stage detection
+    it('detects which hook stages a route uses', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: (req: any) => new Response('ok') },
+            hooks: {
+                beforeHandle: [(req: any) => undefined],
+                onError: [(err: any, req: any) => undefined],
+            },
+        } as unknown as RouteDefinition;
+        const info = analyzeRouteAccess(def);
+        expect(info.hooks.has('beforeHandle')).toBe(true);
+        expect(info.hooks.has('onError')).toBe(true);
+        expect(info.hooks.has('afterHandle')).toBe(false);
+        expect(info.hooks.has('onResponse')).toBe(false);
+    });
+
+    it('reports empty hooks when route has no hooks', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: (req: any) => new Response('ok') },
+        } as unknown as RouteDefinition;
+        const info = analyzeRouteAccess(def);
+        expect(info.hooks.size).toBe(0);
+    });
+
+    it('includes hooks even when debug mode treats fields as unknown', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: (req: any) => new Response('ok') },
+            hooks: { afterHandle: [(req: any) => undefined] },
+        } as unknown as RouteDefinition;
+        const info = analyzeRouteAccess(def, true);
+        expect(info.hooks.has('afterHandle')).toBe(true);
     });
 });

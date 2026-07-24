@@ -3,188 +3,213 @@
 These rules apply to every task in this project unless explicitly overridden.
 Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
 
+## Source of truth
+
+**Architecture and product decisions live in:**
+
+`../burger-api-roadmaps/BURGERAPI_VISION.md`
+
+When code, docs, or this file disagree with the vision, **the vision wins**.  
+Do not invent architecture. If unclear, stop and ask.
+
+Also see: `../burger-api-roadmaps/ARCHITECTURE.md`, `../burger-api-roadmaps/ROADMAP.md`.
+
+---
+
 ## Project Overview
 
-BurgerAPI is a **Bun-first, compiler-driven, file-based** API framework. It is **Bun-first** (Bun is the primary and best-supported runtime) and runs on other WinterCG runtimes (Node, Deno, Workers, Edge) through a thin **adapter seam** that speaks Web Standard `Request`/`Response`. Built by Isfhan Ahmed, it provides file-based routing where a route is a *directory* of sibling files. The request lifecycle runs through a **middleware pipeline** (`ServerOptions.globalMiddleware` + a route's `middleware` array); a `middleware.ts` route-file convention is rejected (middleware is registered as functions, not discovered as a route file). The compiler also discovers and carries `hooks.ts`, `use.ts`, and `webhook.ts` convention files, but in v0.14.0 these are **reserved** (not yet executed at runtime). It also provides Zod v4 / Standard Schema validation, automatic OpenAPI 3.0 generation, Swagger UI, and first-class webhooks (webhooks reserved).
+BurgerAPI is a **Bun-first**, WinterCG-compatible, **file-based** TypeScript API framework: file-based routing, end-to-end type safety, hook-based request lifecycle, small core + rich ecosystem.
 
-**Tech:** Bun >= 1.3.0, TypeScript (ESM), Zod ^4.0.17
-**Packages:** `burger-api` (core framework), `@burger-api/cli` (CLI tool)
-**Ecosystem:** Production-ready middleware in `ecosystem/middlewares/`
-**Status:** Pre-1.0 (v0.14.0), active development, under a pre-1.0.0 architecture reset (see `../ROADMAP.md`)
+**Tech:** Bun >= 1.3.0 (primary), Node 24+ / edge where practical · TypeScript ESM · Zod ^4 / Standard Schema  
+**Packages:** `burger-api`, `@burger-api/cli`  
+**Status:** Pre-1.0 — vision locked; implementation may still use legacy names until migrated  
 **Homepage:** https://burger-api.com
+
+### Target public architecture (vision)
+
+**App files:**
+
+```
+src/index.ts
+src/plugins.ts      # burger.usePlugin(...)
+src/providers.ts    # burger.provide(name, service) → ctx.services
+src/hooks.ts        # global hooks (all 6 points)
+src/api/**/         # routes
+burger.build.ts     # build-time only (CLI) — not runtime config
+```
+
+**Route convention files (first-class, no inheritance):**
+
+| File | Role |
+|------|------|
+| `route.ts` | Handlers: `export async function GET(ctx: BurgerContext)` |
+| `schema.ts` | Per-method named exports: `export const GET = { body, query, ... }` |
+| `hooks.ts` | Route hooks only for that route |
+| `openapi.ts` | Per-method OpenAPI metadata |
+| `config.ts` | Route options: auth, cache, timeout, … |
+
+Per-method named exports (`GET`, `POST`, …) replace lowercase method objects in route/schema/openapi.
+
+**Hooks (lifecycle) vs plugins (extensions):**
+
+- **Hooks** control request execution: `onRequest`, `transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`
+- **Plugins** extend the app (may register hooks, providers, context types)
+
+They are separate. Do not describe plugins as “middleware replacement.”
+
+**Lifecycle:**
+
+```
+onRequest → Routing → transform → Validation → beforeRoute
+  → Handler → afterRoute → mapResponse
+```
+
+Error → `onError`. Scopes: Framework → Plugin → Global → Route (response/error reversed).
+
+**Context:** public type **`BurgerContext`**. Standard Web **`Response`** only.  
+**Validation:** throw `ValidationError` → onError → default 422 + RFC 9457.  
+**Ecosystem:**
+
+```
+ecosystem/hooks/     # request lifecycle factories (cors, logger, …)
+ecosystem/plugins/   # app integrations (jwt, session, env, …)
+ecosystem/skills/    # AI skills
+```
+
+**Auth:** ecosystem plugins under `ecosystem/plugins/`, integrating with hooks + `config.ts`. Core is auth-agnostic.
+
+**Not planned:** group/folder inheritance, route `use.ts` / `webhook.ts`, ORM, dedicated webhook router.  
+**Planned later:** file-based WebSocket router under `src/websocket/`.
+
+### Legacy code (do not extend)
+
+Until migrated, the monorepo may still contain: `BurgerRequest`, `beforeHandle`/`afterHandle`/`onResponse`/`provide`, group inheritance, `burger.config.ts`, `use.ts`/`webhook.ts` discovery, validation returning 400 Responses. Treat as **legacy**. New work targets the vision names and rules above.
+
+---
 
 ## Essential Commands
 
 ```bash
-bun install              # Install all workspace dependencies
-bun run typecheck        # Typecheck the burger-api framework
-bun run test:all         # Full test suite (framework + CLI + typecheck)
-bun run test:framework   # Framework tests only
-bun run build            # Build burger-api framework
-bun run dev              # Run burger-api dev server
-bun test                 # Run tests in current package
+bun install
+bun run typecheck
+bun run test:all
+bun run test:framework
+bun run build
+bun run dev
+bun test
 ```
 
-## Architecture
+## Architecture (code layout)
 
-- `packages/burger-api/` — Core framework (`Burger` class, `ApiRouter`, `PageRouter`, the compiler that discovers/merges route files, the middleware request flow (also called a pipeline), OpenAPI generator, Swagger UI, adapter seam)
-- `packages/cli/` — CLI tool (create, add, build, build:exec, serve)
-- `ecosystem/middlewares/` — 10 production-ready middleware (CORS, Rate Limiter, Logger, JWT Auth, etc.)
-- **Compiler as the heart**: discovers route directories and merges their sibling files (`route.ts`, `schema.ts`, `openapi.ts`, plus the reserved `hooks.ts` / `use.ts` / `webhook.ts`) plus group inheritance into an immutable `CompiledRoute[]` at compile time. A `middleware.ts` route file is rejected; middleware is registered as functions, not discovered as a route file.
-- Uses **Bun's native `routes` API** for static route dispatch (not a catch-all fetch handler)
-- **Trie-based router** (a trie is a tree structure for fast path matching) with 3-tier priority: static > dynamic (`:param`) > wildcard (`*`)
-- **Route discovery prepared ahead of time (AOT)** in production builds: the CLI compiles routes when the app is built, so there is no filesystem access when a request comes in
+- `packages/burger-api/` — core (`Burger`, compiler, router, lifecycle, OpenAPI, adapters). Live discovery: `compiler/scanner.ts` + `compiler/module-loader.ts`. Do not build on legacy `core/api-router.ts`.
+- `packages/cli/` — create, add, build, serve (migrate toward vision: `dev`/`start`/`generate`/`inspect`/`doctor`, `burger.build.ts`)
+- `ecosystem/hooks/` — official lifecycle hooks
+- `ecosystem/plugins/` — official plugins (add as they land)
+- Hybrid router: Bun static routes + trie (static > `:param` > `*`)
+- AOT route discovery in production builds
 
 ## Related Repositories
 
-BurgerAPI is split across several repositories. Do not invent work in the wrong
-repo — use the dedicated one:
-
-- **`burger-api`** (this repo) — the framework + CLI. The only place for
-  framework code, types, examples, and docs about the API itself.
-- **`burger-api-website`** — the Docusaurus documentation site and blog
-  (`https://burger-api.com`). All user-facing docs and release posts live here.
-- **`burger-api-benchmarks`** — the **dedicated, official home for all BurgerAPI
-  performance benchmarks** (`https://github.com/isfhan/burger-api-benchmarks`).
-
-  **Do not create a `bench`, `benchmark`, or similar folder inside this
-  (`burger-api`) repository.** Agents often assume benchmark code belongs next to
-  the framework because they don't know the separate repo exists. It does not —
-  all benchmark scenarios, engines, and reporters must be added to
-  `burger-api-benchmarks` (see its `AGENTS.md` Rule 8b). The framework ships no
-  benchmark implementation and no generated numbers.
+- **`burger-api`** (this repo) — framework + CLI
+- **`burger-api-website`** — docs site
+- **`burger-api-benchmarks`** — **only** place for benchmarks (never add `bench/` here)
+- **`burger-api-roadmaps`** — vision, architecture, roadmaps
 
 ## Rule 1 — Think Before Coding
 
-State assumptions explicitly. If uncertain, ask rather than guess.
-Present multiple interpretations when ambiguity exists.
-Push back when a simpler approach exists. Stop when confused. Name what's unclear.
+State assumptions. If uncertain, ask. Push back on overengineering. Stop when confused.
 
 ## Rule 2 — Simplicity First
 
-Minimum code that solves the problem. Nothing speculative.
-No features beyond what was asked. No abstractions for single-use code.
-Test: would a senior engineer say this is overcomplicated? If yes, simplify.
+Minimum code. No speculative features. No single-use abstractions.
 
 ## Rule 3 — Surgical Changes
 
-Touch only what you must. Clean up only your own mess.
-Don't "improve" adjacent code, comments, or formatting.
-Don't refactor what isn't broken. Match existing style.
+Touch only what you must. Match existing style in local code; match **vision** for public API/docs.
 
 ## Rule 4 — Goal-Driven Execution
 
 Define success criteria. Loop until verified.
-Don't follow steps. Define success and iterate.
-Strong success criteria let you loop independently.
 
 ## Rule 5 — Use the Model Only for Judgment Calls
 
-Use me for: classification, drafting, summarization, extraction.
-Do NOT use me for: routing, retries, predictable (deterministic) transforms — where the same input always gives the same result.
-If code can answer, code answers.
+Prefer code for deterministic transforms.
 
 ## Rule 6 — Read Before You Write
 
-Before adding code, read exports, immediate callers, shared utilities.
-"Looks orthogonal" is dangerous. If unsure why code is structured a way, ask.
-Key files to read first: `packages/burger-api/src/index.ts`, `core/api-router.ts`, `types/index.ts`.
+Read exports, callers, utilities first. Key files: `packages/burger-api/src/index.ts`, `compiler/*`, `router/*`, `lifecycle/*`, `types/index.ts`.
 
 ## Rule 7 — Surface Conflicts, Don't Average Them
 
-If two patterns contradict, pick one (more recent / more tested). Explain why. Flag the other for cleanup.
-Don't blend conflicting patterns.
+If patterns contradict, pick vision for product API; pick tested code for local style. Flag debt.
 
-## Rule 8 — Tests Verify Intent, Not Just Behavior
+## Rule 8 — Tests Verify Intent
 
-Tests must encode WHY behavior matters, not just WHAT it does.
-A test that can't fail when business logic changes is wrong.
-When changing route/path logic, run `bun run test:route-sync` from root.
+When changing route/path logic, run `bun run test:route-sync`.
 
-## Rule 9 — Checkpoint After Every Significant Step
+## Rule 9 — Checkpoint After Significant Steps
 
-Summarize what was done, what's verified, what's left.
-Don't continue from a state you can't describe back.
-If you lose track, stop and restate.
+Summarize done / verified / left.
 
-## Rule 10 — Match the Codebase's Conventions, Even If You Disagree
+## Rule 10 — Match Conventions
 
-Conformance > taste inside the codebase.
-If you genuinely think a convention is harmful, surface it. Don't fork silently.
+Inside codebase: local style. For user-facing API and docs: vision terminology.
 
 ## Rule 11 — Fail Loud
 
-"Completed" is wrong if anything was skipped silently.
-"Tests pass" is wrong if any were skipped.
-Default to surfacing uncertainty, not hiding it.
+Do not claim done if skipped silently.
 
 ## Rule 12 — Bun First (not Bun-only)
 
-Bun is the **primary and best-supported** runtime. Prefer `Bun.serve`, `Bun.write`, `Bun.file`, `Bun.spawn` over Node alternatives, and `bun add` (not npm/yarn/pnpm). However, BurgerAPI is **not Bun-exclusive**: the core speaks Web Standard `Request`/`Response`, and other WinterCG runtimes (Node, Deno, Workers, Edge) are supported through a thin adapter seam. Do not introduce **runtime** APIs that block non-Bun runtimes in the framework core unless they are isolated behind the adapter seam. (The pre-1.0 reset explicitly does **not** guarantee backward compatibility — see `../ROADMAP.md`.)
+Prefer Bun APIs. Core stays WinterCG-portable behind adapters. Node 24+ / edge supported where practical.
 
-## Code Conventions
+## Rule 13 — Vision Wins
 
-### File Naming & Routing
-A route is a **directory**; the compiler discovers sibling files and merges them. The convention is separation-of-concerns-by-file:
+Do not reintroduce: middleware layer, group inheritance, lowercase schema method objects as the primary pattern, `BurgerRequest` as the primary public type in new docs, lifecycle hook named `provide`, route-level `use.ts` as the plugin system, first-class `webhook.ts`.
 
-- `route.ts` — HTTP method handlers only (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`)
-- `schema.ts` — validation schemas only (Zod v4 / Standard Schema)
-- `openapi.ts` — OpenAPI documentation metadata only
-- `hooks.ts` — **reserved**: lifecycle hook definitions (`beforeHandle`, `afterHandle`, `onError`, `onResponse`, `provide`). Discovered and carried by the compiler, but **not executed in v0.14.0**.
-- `use.ts` — **reserved**: capabilities/plugins. Discovered and carried, but not executed in v0.14.0.
-- `webhook.ts` — **reserved**: webhook definitions (incoming/outgoing, signature verification, retry). Discovered and carried, but not executed in v0.14.0.
-- Dynamic routes: `[paramName]/route.ts` — access via `req.params.paramName`
-- Wildcard routes: `[...]/route.ts` — access via `req.wildcardParams`
-- Route groups: `(groupName)/route.ts` — doesn't affect URL path; group `schema.ts`/`openapi.ts`/`hooks.ts`/`use.ts` are inherited (nearest-last, deterministic). A `middleware.ts` route file is rejected; middleware is registered as functions via `globalMiddleware` / route `middleware`.
+## Code Conventions (target)
 
-### Route Template
+### Routing
+
+- Dynamic: `[paramName]` → `ctx.params`
+- Wildcard: `[...]` → `ctx.wildcardParams`
+- Groups: `(name)` — URL only, **no file inheritance**
+
+### Route template
+
 ```typescript
-// api/users/route.ts — handlers only
-export async function GET(req: BurgerRequest) { return Response.json(data); }
+// route.ts
+export async function GET(ctx: BurgerContext): Promise<Response> {
+  return Response.json({ ok: true });
+}
 
-// api/users/schema.ts — validation only
-export const get = { query: z.object({ search: z.string() }) };
-export const post = { body: z.object({ name: z.string().min(1), price: z.number().positive() }) };
+// schema.ts
+export const GET = { query: z.object({ q: z.string().optional() }) };
+export const POST = { body: z.object({ name: z.string() }) };
 
-// api/users/hooks.ts — reserved: lifecycle hooks (carried, not executed in v0.14.0)
-export const beforeHandle = (req) => { /* auth, logging, CORS as hooks */ };
-export const provide = { user: (req) => getCurrentUser(req) };
+// openapi.ts
+export const GET = { summary: "...", tags: ["users"] };
 
-// api/users/openapi.ts — docs only
-export const get = { summary: '...', tags: ['users'], operationId: '...' };
+// config.ts
+export default { auth: false };
+
+// hooks.ts
+export const beforeRoute = async (ctx: BurgerContext) => { /* ... */ };
 ```
 
-### Request Lifecycle: the Middleware Pipeline
-The request lifecycle runs through a single pipeline: `ServerOptions.globalMiddleware` followed by a route's `middleware` array. A middleware can stop the request early by returning a `Response`, transform the final response by returning a function, or continue by returning `undefined`. Validation runs as a middleware; `405`/`Allow`, auto-`HEAD`, and loose trailing-slash are compiled into the runtime. The `hooks.ts` / `use.ts` / `webhook.ts` data is carried on the `RouteModule` but is **not executed in v0.14.0** (reserved for later releases).
+### Types (target)
 
-Middleware return types (`BurgerNext`):
-- `Response` — stop early and skip the rest of the chain (short-circuit)
-- `Function` (takes Response, returns a Promise<Response>) — transform the response after the handler runs (applied in reverse order)
-- `undefined` — continue to the next middleware/handler
+- `BurgerContext` — public request lifecycle object
+- Hook point names per vision
+- `HTTPError` / `ValidationError` / … error classes
 
-### Reserved: Hooks / Use / Webhooks (not yet executed)
-`hooks.ts` defines lifecycle hooks (`beforeHandle`, `afterHandle`, `onError`, `onResponse`, `provide`), and `use.ts` declares capabilities/plugins (e.g. `jwt()`, `swagger()`, `cors()`, `rateLimit()`); `provide` is intended to replace `derive`/`mapDerive`. These are discovered and carried by the compiler but are **reserved** in v0.14.0: they do not run yet. Do not document them as working v0.14.0 features.
+### Imports (user projects)
 
-### Types
-- `BurgerRequest<T>` — typed requests with validation (interface; `BurgerContext` is the implementation)
-- `RequestHandler` — route handlers
-- `Middleware` — lifecycle functions registered via `globalMiddleware` / route `middleware`
-- `BurgerNext` — middleware return types (Response | (r: Response) => Promise<Response> | undefined)
-- `Hook` — reserved lifecycle hook functions (from `hooks.ts`)
-- `ProvideContribution` — reserved context values added by `provide`
-- `Plugin` — reserved capability/plugin type (from `use.ts`)
-
-### Import Style
 ```typescript
-import { Server } from '@core/server.js';
-import { ApiRouter } from '@core/api-router.js';
-import type { ServerOptions, Middleware, BurgerNext } from '@burgerTypes';
+import { Burger } from "burger-api";
+import type { BurgerContext } from "burger-api";
 ```
 
 ## Performance
 
-- Pre-allocated middleware arrays (fast paths for 0, 1, 2, 3+ middlewares)
-- Manual loop unrolling for common cases
-- Bun's native `routes` API for static dispatch
-- Route discovery prepared ahead of time in production builds (no filesystem scanning when a request comes in)
-- Trie-based matching (fast tree-based path lookup) with priority ordering
+AOT routes, static dispatch, efficient hook plans, small footprint. Benchmarks only in `burger-api-benchmarks`.

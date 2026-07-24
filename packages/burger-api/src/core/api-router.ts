@@ -70,7 +70,7 @@ export class ApiRouter {
 
     /**
      * Inserts a route definition into the trie structure.
-     * @param routeDef The route definition to insert, containing path, handlers, middleware, schema, and OpenAPI metadata.
+     * @param routeDef The route definition to insert, containing path, handlers, hooks, schema, and OpenAPI metadata.
      * @throws {Error} If the route definition is invalid or causes a conflict in the trie.
      */
     private insertRoute(routeDef: RouteDefinition) {
@@ -253,7 +253,6 @@ export class ApiRouter {
             const routeDef: RouteDefinition = {
                 path: routePath,
                 handlers,
-                middleware: routeModule.middleware as Middleware[],
                 schema: routeModule.schema,
                 openapi: routeModule.openapi,
                 isWildcard: routePath.includes(

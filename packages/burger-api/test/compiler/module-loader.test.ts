@@ -12,9 +12,9 @@ import { ModuleLoader } from '../../src/compiler/module-loader';
 import { RouteTree } from '../../src/compiler/route-tree';
 
 /**
- * M2 tests for the Module Loader + Route Tree: assembles RouteModule from the
- * scanner inventory, merges group inheritance (nearest-last), overrides
- * route-local files, auto-injects OPTIONS, and fails fast on duplicate paths.
+ * Tests for the Module Loader + Route Tree: assembles RouteModule from the
+ * scanner inventory. Each route directory is self-contained — no group
+ * inheritance merging. Auto-injects OPTIONS, fails fast on duplicate paths.
  */
 
 function makeTree(): string {
@@ -24,29 +24,27 @@ function makeTree(): string {
         mkdirSync(path.dirname(full), { recursive: true });
         writeFileSync(full, contents);
     };
-    // Global group (api root) + (admin) group + route
+    // Self-contained route: users with own config, schema, hooks
     write(
-        '(admin)/hooks.ts',
-        `export const beforeHandle = ['groupAdmin'];`
-    );
-    write(
-        '(admin)/dashboard/route.ts',
-        `export const GET = () => new Response('admin-dashboard');`
-    );
-    // users route lives INSIDE the (api) group, so it inherits (api)/hooks.ts
-    write('(api)/hooks.ts', `export const beforeHandle = ['apiRoot'];`);
-    write(
-        '(api)/users/route.ts',
+        'users/route.ts',
         `export const GET = () => new Response('users');
 export const POST = () => new Response('created', { status: 201 });`
     );
-    write('(api)/users/schema.ts', `export const get = { query: {} };`);
-    write('(api)/users/hooks.ts', `export const beforeHandle = ['usersHook'];`);
-    write('(api)/users/use.ts', `export default ['cors'];`);
+    write('users/schema.ts', `export const POST = { body: {} };`);
+    write(
+        'users/hooks.ts',
+        `export const beforeRoute = ['auth'];`
+    );
+    write('users/config.ts', `export default { auth: true };`);
+    // Self-contained route: dashboard with no extra files
+    write(
+        'dashboard/route.ts',
+        `export const GET = () => new Response('admin-dashboard');`
+    );
     return root;
 }
 
-describe('ModuleLoader — assembly & inheritance', () => {
+describe('ModuleLoader — assembly (self-contained routes)', () => {
     let root: string;
     let modules: Awaited<ReturnType<ModuleLoader['load']>>;
 
@@ -73,28 +71,32 @@ describe('ModuleLoader — assembly & inheritance', () => {
         expect(typeof users.handlers.OPTIONS).toBe('function');
     });
 
-    it('merges group hooks nearest-last (append)', () => {
+    it('loads route-local hooks (no group inheritance)', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        // (api) group hook first, then route-local hook.
         expect(users.hooks).toMatchObject({
-            beforeHandle: ['apiRoot', 'usersHook'],
+            beforeRoute: ['auth'],
         });
     });
 
-    it('appends capability arrays group → route', () => {
+    it('loads route-local schema', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        // No group (api)/use.ts in this fixture, so only the route's.
-        expect(users.capabilities).toEqual(['cors']);
+        expect(users.schema).toMatchObject({ POST: { body: {} } });
     });
 
-    it('carries route-local schema', () => {
+    it('loads route-local config', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        expect(users.schema).toMatchObject({ get: { query: {} } });
+        expect(users.config).toEqual({ auth: true });
     });
 
-    it('records the group chain', () => {
+    it('route without config still works (config is optional)', () => {
+        const dashboard = modules.find((m) => m.path === '/api/dashboard')!;
+        expect(dashboard.config).toBeUndefined();
+    });
+
+    it('does not have groupChain or groupFiles (self-contained)', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        expect(users.groupChain).toEqual(['(api)']);
+        expect(users).not.toHaveProperty('groupChain');
+        expect(users).not.toHaveProperty('groupFiles');
     });
 });
 

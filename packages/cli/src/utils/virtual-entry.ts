@@ -1,6 +1,9 @@
 /**
  * Generate the in-memory virtual entrypoint source for Bun.build().
  * Uses static imports so the bundler traces and embeds all route modules.
+ *
+ * Vision: each route directory is self-contained — no global tier hooks.
+ * Groups only affect URL path stripping.
  */
 
 import type { BuildConfig } from '../types/index';
@@ -59,6 +62,14 @@ export function generateVirtualEntrySource(
         pushImportLines(lines, pageEntries, 'p');
     }
 
+    // Import a sibling `hooks.ts` for any route that declares lifecycle hooks
+    // (Phase 4). Each route is self-contained — no global tier merging.
+    apiEntries.forEach((e, i) => {
+        if (e.hooksPath) {
+            lines.push(`import * as _h${i} from '${e.hooksPath}';`);
+        }
+    });
+
     lines.push('');
     lines.push('const apiRoutes = [');
 
@@ -78,9 +89,9 @@ export function generateVirtualEntrySource(
             );
         }
         lines.push('    },');
-        lines.push(`    middleware: _r${i}.middleware,`);
         lines.push(`    schema: _r${i}.schema,`);
         lines.push(`    openapi: _r${i}.openapi,`);
+        lines.push(`    hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
         lines.push(`    isWildcard: ${e.isWildcard},`);
         lines.push('  },');
     });

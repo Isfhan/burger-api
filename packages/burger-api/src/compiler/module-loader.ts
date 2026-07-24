@@ -1,25 +1,20 @@
 import { HTTP_METHODS } from '../utils/routing';
 import { autoOptionsHandler } from '../utils/response';
 import type { openapi, RequestHandler, RouteSchema } from '../types/index';
-import {
-    INHERITABLE_FILES,
-    type ConventionFile,
-} from './conventions';
-import type { RouteModule, ScannedRoute } from './route-module';
+import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
 
 /**
  * The second stage of the compiler pipeline (`ROADMAP.md` §2.1 step 2).
  *
  * Consumes the pure inventory produced by {@link DirectoryScanner} and, for
- * each route directory, `import()`s its convention files, merges group
- * inheritance (nearest-last, deterministic), and assembles one
+ * each route directory, `import()`s its convention files and assembles one
  * {@link RouteModule}.
  *
- * Phase 1 keeps the convention data raw — `hooks`/`capabilities`/`webhook` are
- * carried through verbatim and compiled in later phases (4/7). Group merging
- * here is structural only:
- * - `schema` / `openapi`: route-local overrides the inherited file (no deep merge).
- * - `hooks` / `capabilities`: arrays are appended group → route (nearest-last).
+ * Each route directory is **self-contained** — no group inheritance merging.
+ * Only the route's own files are loaded.
+ *
+ * Phase 1 keeps convention data raw — `hooks` are carried through verbatim
+ * and compiled in Phase 4. `config` is attached for runtime use.
  *
  * The loader fails fast on duplicate resolved route paths, matching the
  * compiler's "loud and early" contract (`ROADMAP.md` §6.3).
@@ -29,12 +24,17 @@ export class ModuleLoader {
      * Loads and assembles every scanned route into a `RouteModule`.
      * @throws on duplicate resolved route paths.
      */
-    async load(scanned: ScannedRoute[]): Promise<RouteModule[]> {
+    async load(scanned: ScanResult): Promise<RouteModule[]> {
         const modules: RouteModule[] = [];
         const seenPaths = new Set<string>();
 
-        for (const route of scanned) {
-            const mod = await this.loadOne(route);
+        // Load global hooks once (shared across all routes).
+        const globalHooks = scanned.globalHooks
+            ? await this.loadOptional<Record<string, unknown>>(scanned.globalHooks)
+            : undefined;
+
+        for (const route of scanned.routes) {
+            const mod = await this.loadOne(route, globalHooks);
             if (seenPaths.has(mod.path)) {
                 throw new Error(
                     `Duplicate route path registered: "${mod.path}". ` +
@@ -47,70 +47,45 @@ export class ModuleLoader {
         return modules;
     }
 
-    private async loadOne(route: ScannedRoute): Promise<RouteModule> {
+    private async loadOne(
+        route: ScannedRoute,
+        globalHooks?: Record<string, unknown>
+    ): Promise<RouteModule> {
         // 1. Import route.ts (handlers + any inline convention exports).
         const routeMod = await import(route.localFiles.route!);
         const handlers = this.extractHandlers(routeMod);
 
-        // 2. Collect inheritable group files (root → nearest) for merging.
-        const inherited: Partial<Record<ConventionFile, string>> = {};
-        for (const group of route.groupFiles) {
-            for (const key of INHERITABLE_FILES) {
-                const file = group.files[key];
-                if (file) inherited[key] = file; // nearest wins (override order)
-            }
-        }
+        // 2. Load convention files from this route's own directory only.
+        const schema = await this.loadOptional<RouteSchema>(route.localFiles.schema);
+        const openapi = await this.loadOptional<openapi>(route.localFiles.openapi);
+        const hooks = await this.loadOptional<Record<string, unknown>>(route.localFiles.hooks);
+        const config = await this.loadOptional<Record<string, unknown>>(route.localFiles.config);
 
-        // 3. Merge each concern from separate convention files (group → local).
-        const fileSchema = await this.mergeOverride<RouteSchema>(
-            inherited.schema,
-            route.localFiles.schema
-        );
-        const fileOpenapi = await this.mergeOverride<openapi>(
-            inherited.openapi,
-            route.localFiles.openapi
-        );
-        const fileHooks = await this.mergeHooks(
-            inherited.hooks,
-            route.localFiles.hooks
-        );
-        const fileCapabilities = await this.mergeCapabilities(
-            inherited.use,
-            route.localFiles.use
-        );
-        const fileWebhook = route.localFiles.webhook
-            ? (await import(route.localFiles.webhook)).default
-            : undefined;
-
-        // 4. Overlay inline exports from route.ts. Route-local inline wins over
-        //    separate files; matches the original ApiRouter, which read schema/
-        //    openapi/middleware as named exports from route.ts.
-        const schema = (routeMod.schema as RouteSchema) ?? fileSchema;
-        const openapi = (routeMod.openapi as openapi) ?? fileOpenapi;
-        const hooks = this.mergeHookObjects(
-            fileHooks,
+        // 3. Overlay inline exports from route.ts. Route-local inline wins
+        //    over separate files.
+        const finalSchema = (routeMod.schema as RouteSchema) ?? schema;
+        const finalOpenapi = (routeMod.openapi as openapi) ?? openapi;
+        const routeHooks = this.mergeHookObjects(
+            hooks,
             routeMod.hooks as Record<string, unknown> | undefined
         );
-        const capabilities = this.mergeCapabilityArrays(
-            fileCapabilities,
-            routeMod.use as unknown
-        );
-        const webhook = (routeMod.webhook as unknown) ?? fileWebhook;
 
-        const sourceFiles: Partial<Record<ConventionFile, string>> = {
-            ...inherited,
-            ...route.localFiles,
-        };
+        // 4. Merge global hooks with route-specific hooks.
+        //    Global hooks run first, then route hooks (execution priority).
+        const finalHooks = this.mergeHookObjects(
+            globalHooks,
+            routeHooks
+        );
+
+        const sourceFiles = { ...route.localFiles };
 
         return {
             path: route.routePath,
             handlers,
-            schema,
-            openapi,
-            hooks,
-            capabilities,
-            webhook,
-            groupChain: [...route.groupChain],
+            schema: finalSchema,
+            openapi: finalOpenapi,
+            hooks: finalHooks,
+            config,
             sourceFiles,
             isWildcard: route.isWildcard,
         };
@@ -140,84 +115,21 @@ export class ModuleLoader {
     }
 
     /**
-     * Route-local file overrides the inherited one (no deep merge). Returns
-     * undefined when neither exists.
+     * Loads a module from an optional file path. Returns undefined when
+     * the path is not provided.
      */
-    private async mergeOverride<T>(
-        inheritedFile?: string,
-        localFile?: string
-    ): Promise<T | undefined> {
-        if (localFile) {
-            const mod = await import(localFile);
-            return (mod.default ?? mod) as T;
-        }
-        if (inheritedFile) {
-            const mod = await import(inheritedFile);
-            return (mod.default ?? mod) as T;
-        }
-        return undefined;
-    }
-
-    /**
-     * Merges `hooks.ts` across group → route. For array-valued hook keys the
-     * group array is concatenated before the route array (nearest-last
-     * append); scalar/object values are overridden by the route-local file.
-     */
-    private async mergeHooks(
-        inheritedFile?: string,
-        localFile?: string
-    ): Promise<Record<string, unknown> | undefined> {
-        const result: Record<string, unknown> = {};
-        const inherited = inheritedFile
-            ? await import(inheritedFile)
-            : undefined;
-        const local = localFile ? await import(localFile) : undefined;
-
-        const keys = new Set([
-            ...(inherited ? Object.keys(inherited) : []),
-            ...(local ? Object.keys(local) : []),
-        ]);
-        for (const key of keys) {
-            const g = inherited?.[key];
-            const r = local?.[key];
-            if (Array.isArray(g) && Array.isArray(r)) {
-                result[key] = [...g, ...r];
-            } else if (r !== undefined) {
-                result[key] = r;
-            } else if (g !== undefined) {
-                result[key] = g;
-            }
-        }
-        return Object.keys(result).length > 0 ? result : undefined;
-    }
-
-    /**
-     * Merges `use.ts` capability arrays across group → route (nearest-last
-     * append). Each `use.ts` exports its capabilities as the default export.
-     */
-    private async mergeCapabilities(
-        inheritedFile?: string,
-        localFile?: string
-    ): Promise<unknown[] | undefined> {
-        const out: unknown[] = [];
-        if (inheritedFile) {
-            const mod = await import(inheritedFile);
-            const caps = mod.default;
-            if (Array.isArray(caps)) out.push(...caps);
-        }
-        if (localFile) {
-            const mod = await import(localFile);
-            const caps = mod.default;
-            if (Array.isArray(caps)) out.push(...caps);
-        }
-        return out.length > 0 ? out : undefined;
+    private async loadOptional<T>(filePath?: string): Promise<T | undefined> {
+        if (!filePath) return undefined;
+        const mod = await import(filePath);
+        return (mod.default ?? mod) as T;
     }
 
     /**
      * Merges two already-resolved hook objects (e.g. from `hooks.ts` files and
      * inline `route.ts` `hooks`). For array-valued hook keys both arrays are
      * concatenated (base first, then override); scalar/object values are
-     * overridden by `override`. Returns undefined when both are empty.
+     * overridden by `override`. The `provide` key is deep-merged (base then
+     * override). Returns undefined when both are empty.
      */
     private mergeHookObjects(
         base: Record<string, unknown> | undefined,
@@ -227,27 +139,20 @@ export class ModuleLoader {
         for (const key of Object.keys(override ?? {})) {
             const b = result[key];
             const o = (override as Record<string, unknown>)[key];
-            if (Array.isArray(b) && Array.isArray(o)) {
+            if (key === 'provide') {
+                result[key] = { ...(b as Record<string, unknown> ?? {}), ...(o as Record<string, unknown> ?? {}) };
+            } else if (Array.isArray(b) && Array.isArray(o)) {
                 result[key] = [...b, ...o];
+            } else if (Array.isArray(b)) {
+                result[key] = [...b, o];
+            } else if (Array.isArray(o)) {
+                result[key] = b !== undefined ? [b, ...o] : o;
+            } else if (b !== undefined) {
+                result[key] = [b, o];
             } else {
                 result[key] = o;
             }
         }
         return Object.keys(result).length > 0 ? result : undefined;
-    }
-
-    /**
-     * Merges two already-resolved capability arrays (e.g. from `use.ts` files
-     * and inline `route.ts` `use`). The override (route-local) array is appended
-     * after the base (group-inherited) array (nearest-last).
-     */
-    private mergeCapabilityArrays(
-        base: unknown[] | undefined,
-        override: unknown
-    ): unknown[] | undefined {
-        const out: unknown[] = [];
-        if (Array.isArray(base)) out.push(...base);
-        if (Array.isArray(override)) out.push(...override);
-        return out.length > 0 ? out : undefined;
     }
 }

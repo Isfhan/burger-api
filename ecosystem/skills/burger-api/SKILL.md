@@ -1,219 +1,193 @@
 ---
 name: burger-api
-description: Build APIs with BurgerAPI, a Bun-native framework with file-based routing, Zod v4 validation, middleware system, and automatic OpenAPI generation. Use when creating API routes, adding validation, configuring middleware, or building/deploying a BurgerAPI project.
+description: Build APIs with BurgerAPI — Bun-first, file-based routing, Standard Schema validation, hook lifecycle, plugins/providers, OpenAPI. Use when creating routes, schema.ts, hooks, config.ts, plugins, or CLI workflows.
 ---
 
 # BurgerAPI Development Skill
 
-Always consult [burger-api.com/docs](https://burger-api.com/docs) for the latest API reference and guides.
+**Source of truth:** `burger-api-roadmaps/BURGERAPI_VISION.md` (vision wins on conflict).  
+Docs: [burger-api.com/docs](https://burger-api.com/docs)
 
 ## Overview
 
-BurgerAPI is a Bun-first, compiler-driven, file-based API framework with file-based routing (a route is a directory of sibling files), a middleware request flow (also called a pipeline — middleware is infrastructure code that runs around your handler), Zod v4 / Standard Schema validation, lifecycle hooks, and automatic OpenAPI 3.0 + Swagger UI. Built by Isfhan Ahmed.
+BurgerAPI is a Bun-first, WinterCG-compatible TypeScript framework:
 
-**Requirements:** Bun >= 1.3.0, TypeScript (ESM)
+- File-based routing (route = directory of sibling files)
+- **Hooks** = request lifecycle
+- **Plugins** = application extensions
+- Standard Schema validation (Zod default)
+- OpenAPI generation
+- Handlers return standard Web `Response`
+- Public context type: **`BurgerContext`**
 
-## Quick Start
+## Target project structure
 
-```typescript
-import { Burger } from 'burger-api';
+```
+burger.build.ts              # build-time only
+src/
+  index.ts
+  plugins.ts                 # burger.usePlugin(...)
+  providers.ts               # burger.provide(...) → ctx.services
+  hooks.ts                   # global hooks
+  api/<path>/
+    route.ts
+    schema.ts
+    hooks.ts
+    openapi.ts
+    config.ts
+ecosystem/
+  hooks/
+  plugins/
+  skills/
+```
+
+Route directories are **self-contained** (no parent/group inheritance).  
+Groups `(name)` only strip from the URL.
+
+### Route convention files (first-class)
+
+| File | Role |
+|------|------|
+| `route.ts` | `export async function GET(ctx: BurgerContext)` |
+| `schema.ts` | `export const GET = { body, query, params, ... }` |
+| `hooks.ts` | Route hooks |
+| `openapi.ts` | `export const GET = { summary, tags, ... }` |
+| `config.ts` | Route options (auth, cache, timeout, …) |
+
+Per-method named exports (`GET`, `POST`, …) on route/schema/openapi.
+
+## Quick start
+
+```ts
+import { Burger } from "burger-api";
 
 const app = new Burger({
-    apiDir: './api',
-    apiPrefix: '/api',
-    globalMiddleware: [],
-    title: 'My API',
-    version: '1.0.0',
+  apiDir: "./src/api",
+  apiPrefix: "/api",
+  title: "My API",
+  version: "1.0.0",
 });
 
 await app.serve(4000);
 ```
 
-## File-Based Routing
+## Routing
 
-Routes are discovered from the filesystem when a request comes in (dev) or built into the app when it is prepared (production).
+- Dynamic: `api/users/[id]/route.ts` → `/api/users/:id` → `ctx.params.id`
+- Wildcard: `api/files/[...]/route.ts` → `/api/files/*` → `ctx.wildcardParams`
+- Priority: static > param > wildcard
 
-### Route File Structure
-
-```
-api/
-├── route.ts              → GET /api
-├── users/
-│   ├── route.ts          → GET /api/users
-│   └── [id]/
-│       └── route.ts      → GET /api/users/:id
-└── files/
-    └── [...]
-        └── route.ts      → GET /api/files/*
-```
-
-### Route File Exports
-
-Each `route.ts` exports optional metadata, validation schemas, middleware, and HTTP method handlers:
-
-```typescript
-import { z } from 'zod';
-import type { BurgerRequest, Middleware } from 'burger-api';
-
-// OpenAPI metadata (optional)
-export const openapi = {
-    get: { summary: 'List items', tags: ['Items'], operationId: 'listItems' },
-};
-
-// Zod v4 validation schemas (optional, per-method)
-export const schema = {
-    get: { query: z.object({ page: z.coerce.number().default(1) }) },
-    post: { body: z.object({ name: z.string().min(1) }) },
-};
-
-// Route-specific middleware (optional)
-export const middleware: Middleware[] = [
-    async (req) => { console.log(req.method, req.url); return undefined; },
-];
-
-// HTTP method handlers
-export async function GET(req: BurgerRequest) {
-    return Response.json({ message: 'Hello' });
-}
-export async function POST(req: BurgerRequest) {
-    const body = req.validated?.body;
-    return Response.json(body, { status: 201 });
+```ts
+// route.ts
+export async function GET(ctx: BurgerContext): Promise<Response> {
+  return Response.json({ id: ctx.params.id });
 }
 ```
 
-### Routing Patterns
+## Validation (`schema.ts`)
 
-| Pattern | Syntax | Example URL | Access |
-|---|---|---|---|
-| Static | `route.ts` | `/api/users` | — |
-| Dynamic | `[id]/route.ts` | `/api/users/42` | `req.params.id` |
-| Wildcard | `[...]/route.ts` | `/api/files/a/b/c` | `req.wildcardParams` |
-| Group | `(admin)/route.ts` | `/api/users` (group ignored) | — |
-| Nested dynamic+wildcard | `[userId]/[...]/route.ts` | `/api/users/42/files/a` | `req.params.userId`, `req.wildcardParams` |
-
-Rules:
-- Do not mix `[...]` and `[id]` at the same directory level.
-- Do not create multiple dynamic folders (e.g., `[id]` and `[slug]`) in the same level.
-- Groups `(name)` are ignored in URL paths (for organization only).
-
-### OpenAPI Metadata
-
-```typescript
-export const openapi = {
-    get: {
-        summary: 'Short description',
-        description: 'Longer description',
-        tags: ['Category'],
-        operationId: 'uniqueId',
-        deprecated: false,
-        responses: {
-            '200': { description: 'Success' },
-            '400': { description: 'Bad Request' },
-        },
-    },
+```ts
+export const POST = {
+  body: z.object({ name: z.string() }),
+  response: z.object({ id: z.string(), name: z.string() }),
 };
 ```
 
-## Zod v4 Validation
+- After `transform`, before `beforeRoute`
+- Failure: throw `ValidationError` → `onError` → default **422** + RFC 9457
 
-Schemas are defined per HTTP method, per validation target:
+## Hooks (6)
 
-```typescript
-export const schema = {
-    get: {
-        params: z.object({ id: z.string() }),
-        query: z.object({ page: z.coerce.number().min(1) }),
-    },
-    post: {
-        body: z.object({ name: z.string().min(1), email: z.string().email() }),
-    },
+`onRequest` → routing → `transform` → validation → `beforeRoute` → handler → `afterRoute` → `mapResponse`  
+Errors → `onError`
+
+| Scope | Where |
+|-------|--------|
+| Global | `src/hooks.ts` |
+| Route | `api/**/hooks.ts` |
+| Plugin | via plugins |
+| Framework | internal |
+
+```ts
+// src/hooks.ts
+export const onRequest = [/* ... */];
+export const onError = (err, ctx) => { /* ... */ };
+```
+
+## Plugins vs hooks
+
+- Hooks: when code runs on a request  
+- Plugins: extend the app (`src/plugins.ts`)
+
+```ts
+// src/plugins.ts
+export default (burger) => {
+  burger.usePlugin(/* official plugin */);
 };
 ```
 
-Access validated data via `req.validated.params`, `req.validated.query`, `req.validated.body`.
+## Providers
 
-Validation errors return 400 with structured error details automatically.
+```ts
+// src/providers.ts
+export default (burger) => {
+  burger.provide("db", db);
+};
 
-## Middleware System
-
-Each middleware can return one of three things:
-- **`undefined`** — continue to next middleware/handler
-- **`Response`** — stop early and send immediately (short-circuit)
-- **`Function`** `(response: Response) => Response` — transform the final response after the handler runs
-
-After-middlewares (function return type) run in reverse order, even when a previous middleware stops the chain early.
-
-### Global Middleware
-
-```typescript
-const app = new Burger({
-    globalMiddleware: [logger(), cors({ origin: '*' })],
-});
+// route
+const db = ctx.services.db;
 ```
 
-### Route-Specific Middleware
+## Auth
 
-```typescript
-export const middleware: Middleware[] = [
-    async (req) => {
-        const token = req.headers.get('Authorization');
-        if (!token) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-        return undefined;
-    },
-    async (req) => {
-        // After-middleware: transforms response
-        return (response: Response) => {
-            response.headers.set('X-Custom', 'value');
-            return response;
-        };
-    },
-];
+Implemented through official **ecosystem plugins** under `ecosystem/plugins/` (JWT, session, API key, basic, OIDC). They use hooks + `config.ts`. Core is auth-agnostic.
+
+```ts
+// config.ts
+export default { auth: false };
+// or { auth: { required: true, roles: ["admin"] } }
 ```
 
-## OpenAPI & Swagger UI
+## OpenAPI
 
-Automatic at no extra cost:
-- `GET /openapi.json` — OpenAPI 3.0 specification
-- `GET /docs` — Interactive Swagger UI
+- Global metadata on `new Burger({ title, version, servers, ... })`
+- Per-route `openapi.ts` with per-method exports
+- `/openapi.json`, `/docs` (dev default)
 
-## CLI Commands
+## CLI
 
 ```bash
-burger-api create <name>           # Scaffold new project
-burger-api add <middleware...>     # Add ecosystem middleware
-burger-api skills install [name]   # Install AI agent skills
-burger-api skills list             # List installed skills
-burger-api skills available        # List skills available on GitHub
-burger-api list                    # List available middleware
-burger-api serve                   # Dev server with hot reload
-burger-api build <file>            # Bundle for production (routes prepared ahead of time, AOT)
-burger-api build:exec <file>       # Compile to standalone executable
+burger-api create <name>
+burger-api dev | build | start
+burger-api add <hook-or-plugin>
+burger-api generate route users   # alias: g
+burger-api inspect | doctor
+burger-api skills install|list|available
+burger-api list
 ```
 
-## Essential Commands
+`burger.build.ts` is build-time only (dirs, prefixes, debug).
 
-```bash
-bun install              # Install dependencies
-bun run typecheck        # Typecheck the framework
-bun run test:all         # Full test suite
-bun run build            # Build framework
-bun run dev              # Dev server
-bun test                 # Run tests in current package
+## Ecosystem layout
+
+```
+ecosystem/hooks/     # cors, logger, rate-limiter, ...
+ecosystem/plugins/   # jwt, session, env, ...
+ecosystem/skills/
 ```
 
-## Architecture
+## Planned / not planned
 
-- **`Burger` class** — main entry point, the coordinator (orchestrator) for the server, routers, and middleware request flow
-- **`ApiRouter`** — trie-based (a tree structure for fast path matching), filesystem-scanned, 3-tier priority (static > dynamic > wildcard)
-- **`PageRouter`** — serves HTML pages (`.tsx` or `.html`) from a page directory
-- **Middleware request flow** — optimized fast paths for 0, 1, 2, 3+ middleware
-- **OpenAPI generator** — converts Zod schemas + route metadata to OpenAPI 3.0
+- **Planned:** file-based WebSocket router (`src/websocket/**/ws.ts`)
+- **Not planned:** dedicated webhook router (use HTTP routes), ORM, group inheritance
+
+## Legacy names (avoid in new code)
+
+`BurgerRequest`, `beforeHandle`/`afterHandle`/`onResponse`, lifecycle `provide`, `globalMiddleware`, `burger.config.ts`, route `use.ts`/`webhook.ts`, lowercase schema `get`/`post` as primary pattern, group inheritance.
+
+Prefer: `BurgerContext`, vision hook names, `burger.build.ts`, `config.ts`, uppercase method exports.
 
 ## References
 
-See the `references/` directory for detailed documentation:
-- `routing.md` — File-based routing patterns and examples
-- `validation.md` — Zod v4 validation details
-- `middleware.md` — Middleware system deep dive
-- `cli.md` — CLI command reference
-- `openapi.md` — OpenAPI & Swagger UI configuration
+- Vision: `BURGERAPI_VISION.md`
+- `references/routing.md`, `validation.md`, `openapi.md`, `cli.md` (update if they lag vision)
