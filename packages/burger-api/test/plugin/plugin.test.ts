@@ -114,7 +114,7 @@ describe('Plugin composition (Phase 4 M5)', () => {
         expect(plan.onError).toHaveLength(1);
     });
 
-    it('plugin onError runs after route onError (local → plugin → global)', () => {
+    it('plugin onError runs after route onError (local → global → plugin)', () => {
         const chain = new HookChain();
         const order: string[] = [];
 
@@ -138,7 +138,7 @@ describe('Plugin composition (Phase 4 M5)', () => {
         for (const h of plan.onError) {
             (h as (err: Error, req: unknown) => void)(new Error('t'), undefined);
         }
-        expect(order).toEqual(['local', 'plugin', 'global']);
+        expect(order).toEqual(['local', 'global', 'plugin']);
     });
 
     it('plugin hooks with global scope run before plugin-scoped hooks', () => {

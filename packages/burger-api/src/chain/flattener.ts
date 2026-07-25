@@ -89,10 +89,13 @@ export function flatten(
         }
     }
 
+    // Request hooks: Framework → Global → Plugin → Route (forward)
     beforeRoute.push(...frameworkBefore, ...globalBefore, ...pluginBefore, ...localBefore);
-    afterRoute.push(...frameworkAfter, ...globalAfter, ...pluginAfter, ...localAfter);
-    mapResponse.push(...frameworkResp, ...globalResp, ...pluginResp, ...localResp);
-    onError.push(...localError, ...pluginError, ...globalError, ...frameworkError);
+    // Response hooks: Route → Global → Plugin → Framework (reversed)
+    afterRoute.push(...localAfter, ...globalAfter, ...pluginAfter, ...frameworkAfter);
+    mapResponse.push(...localResp, ...globalResp, ...pluginResp, ...frameworkResp);
+    // Error hooks: Route → Global → Plugin → Framework (reversed, nearest-first)
+    onError.push(...localError, ...globalError, ...pluginError, ...frameworkError);
 
     const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
     if (validation) plan.validation = validation;

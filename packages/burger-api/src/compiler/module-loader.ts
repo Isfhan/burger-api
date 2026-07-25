@@ -2,6 +2,7 @@ import { HTTP_METHODS } from '../utils/routing';
 import { autoOptionsHandler } from '../utils/response';
 import type { openapi, RequestHandler, RouteSchema } from '../types/index';
 import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
+import type { Hook } from '../lifecycle/types';
 
 /** Uppercase HTTP method names for schema export detection. */
 const HTTP_METHOD_SET = new Set(HTTP_METHODS);
@@ -64,6 +65,15 @@ export class ModuleLoader {
         const globalHooks = scanned.globalHooks
             ? await this.loadOptional<Record<string, unknown>>(scanned.globalHooks)
             : undefined;
+
+        // Extract onRequest from global hooks — these run before routing
+        // (pre-routing, app-level) and must NOT be merged per-route.
+        const globalOnRequest = this.extractOnRequest(globalHooks);
+        if (globalOnRequest.length > 0) {
+            scanned.globalOnRequest = globalOnRequest;
+            // Strip onRequest from merged global hooks so it's not duplicated per-route
+            delete globalHooks?.onRequest;
+        }
 
         for (const route of scanned.routes) {
             const mod = await this.loadOne(route, globalHooks);
@@ -145,6 +155,18 @@ export class ModuleLoader {
             handlers.OPTIONS = autoOptionsHandler;
         }
         return handlers;
+    }
+
+    /**
+     * Extracts `onRequest` hooks from a raw hook object.
+     * Returns them as an array (normalizing single hook or array).
+     */
+    private extractOnRequest(
+        hooks?: Record<string, unknown>
+    ): Hook[] {
+        if (!hooks?.onRequest) return [];
+        const h = hooks.onRequest;
+        return Array.isArray(h) ? (h as Hook[]) : [h as Hook];
     }
 
     /**

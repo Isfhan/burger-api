@@ -258,6 +258,7 @@ export class Burger {
     private async processApiRoutes(): Promise<boolean> {
         // Production path: use pre-built API routes (no filesystem scan)
         let apiRoutes: RouteDefinition[];
+        let globalOnRequest: import('./lifecycle/types').Hook[] | undefined;
         if (Array.isArray(this.options.apiRoutes)) {
             apiRoutes = [...this.options.apiRoutes].sort((a, b) =>
                 compareRoutes(a, b)
@@ -271,6 +272,7 @@ export class Burger {
                 this.apiPrefix
             ).scan();
             const modules = await new ModuleLoader().load(scanned);
+            globalOnRequest = scanned.globalOnRequest;
             // Retained for introspection (deterministic ordering, no dispatch).
             this.routeTree = new RouteTree(modules);
             apiRoutes = modules.map((m) => ({
@@ -304,7 +306,10 @@ export class Burger {
 
         // Extract onRequest hooks from plugins — these run before routing
         // (pre-routing, app-level). They are NOT per-route HookPlan entries.
-        const onRequestHooks: import('./lifecycle/types').Hook[] = [];
+        // Global onRequest from src/hooks.ts is merged in (runs first).
+        const onRequestHooks: import('./lifecycle/types').Hook[] = [
+            ...(globalOnRequest ?? []),
+        ];
         for (const plugin of allHooks) {
             const h = plugin.hooks.onRequest;
             if (h) {

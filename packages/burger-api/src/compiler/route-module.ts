@@ -1,5 +1,6 @@
 import type { RequestHandler, RouteSchema, openapi } from '../types/index';
 import type { ConventionFile } from './conventions';
+import type { Hook } from '../lifecycle/types';
 
 /**
  * The compiler's internal view of ONE route directory.
@@ -88,4 +89,10 @@ export interface ScanResult {
     routes: ScannedRoute[];
     /** Absolute path to the global `hooks.ts` file (sibling of index.ts), or undefined. */
     globalHooks?: string;
+    /**
+     * `onRequest` hooks extracted from global `src/hooks.ts`. These run
+     * before routing (pre-routing, app-level) and must NOT be merged per-route.
+     * Extracted by the ModuleLoader during `load()`.
+     */
+    globalOnRequest?: Hook[];
 }
