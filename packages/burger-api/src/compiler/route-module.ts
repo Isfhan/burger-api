@@ -95,4 +95,6 @@ export interface ScanResult {
      * Extracted by the ModuleLoader during `load()`.
      */
     globalOnRequest?: Hook[];
+    /** Absolute path to `openapi.config.ts` (sibling of entry point), or undefined. */
+    openAPIConfigPath?: string;
 }

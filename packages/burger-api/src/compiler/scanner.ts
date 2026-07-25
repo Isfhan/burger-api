@@ -48,10 +48,12 @@ export class DirectoryScanner {
         const routes: ScannedRoute[] = [];
         await this.walk(this.routesDir, routes);
 
-        // Detect global hooks at the app root (sibling of index.ts).
-        // When apiDir is `./src/api`, global hooks live in `./src/hooks.ts`.
-        // When apiDir is `./api`, global hooks live in `./hooks.ts`.
+        // Detect global hooks and openapi.config.ts at the app root
+        // (sibling of entry point).
+        // When apiDir is `./src/api`, these live in `./src/`.
+        // When apiDir is `./api`, these live in `./`.
         let globalHooks: string | undefined;
+        let openAPIConfigPath: string | undefined;
         try {
             const parentDir = path.dirname(this.routesDir);
             const rootEntries = await readdir(parentDir, { withFileTypes: true });
@@ -59,14 +61,19 @@ export class DirectoryScanner {
                 if (!entry.isFile()) continue;
                 if (entry.name === 'hooks.ts') {
                     globalHooks = path.resolve(path.join(parentDir, entry.name));
-                    break;
                 }
+                if (entry.name === 'openapi.config.ts') {
+                    openAPIConfigPath = path.resolve(
+                        path.join(parentDir, entry.name)
+                    );
+                }
+                if (globalHooks && openAPIConfigPath) break;
             }
         } catch {
             // Parent directory may not exist — ignore.
         }
 
-        return { routes, globalHooks };
+        return { routes, globalHooks, openAPIConfigPath };
     }
 
     /**

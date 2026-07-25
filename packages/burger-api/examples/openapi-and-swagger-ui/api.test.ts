@@ -171,21 +171,21 @@ describe('OpenAPI and Swagger UI Example', () => {
         });
 
         describe('GET /docs', () => {
-            it('should return Swagger UI HTML', async () => {
+            it('should return docs UI HTML (Scalar)', async () => {
                 const response = await fetchAPI('/docs');
                 expect(response.status).toBe(200);
                 expect(response.headers.get('Content-Type')).toContain(
                     'text/html'
                 );
                 const html = await response.text();
-                expect(html).toContain('swagger-ui');
+                expect(html).toContain('api-reference');
                 expect(html).toContain('openapi.json');
             });
 
-            it('should include Swagger UI configuration', async () => {
+            it('should include Scalar API reference configuration', async () => {
                 const response = await fetchAPI('/docs');
                 const html = await response.text();
-                expect(html).toContain('SwaggerUIBundle');
+                expect(html).toContain('api-reference');
                 expect(html).toContain('/openapi.json');
             });
         });

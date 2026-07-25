@@ -34,6 +34,7 @@ src/index.ts
 src/plugins.ts      # burger.usePlugin(...)
 src/providers.ts    # burger.provide(name, service) → ctx.services
 src/hooks.ts        # global hooks (all 6 points)
+src/openapi.config.ts # OpenAPI metadata, docs UI, docs auth
 src/api/**/         # routes
 burger.build.ts     # build-time only (CLI) — not runtime config
 ```

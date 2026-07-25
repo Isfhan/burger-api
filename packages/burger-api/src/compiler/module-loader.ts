@@ -1,6 +1,11 @@
 import { HTTP_METHODS } from '../utils/routing';
 import { autoOptionsHandler } from '../utils/response';
-import type { openapi, RequestHandler, RouteSchema } from '../types/index';
+import type {
+    openapi,
+    OpenAPIConfig,
+    RequestHandler,
+    RouteSchema,
+} from '../types/index';
 import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
 import type { Hook } from '../lifecycle/types';
 
@@ -177,6 +182,16 @@ export class ModuleLoader {
         if (!filePath) return undefined;
         const mod = await import(filePath);
         return (mod.default ?? mod) as T;
+    }
+
+    /**
+     * Loads the `openapi.config.ts` convention file from the scanned result.
+     * Returns the config object, or undefined if no config file was discovered.
+     */
+    async loadOpenAPIConfig(
+        scanned: ScanResult
+    ): Promise<OpenAPIConfig | undefined> {
+        return this.loadOptional<OpenAPIConfig>(scanned.openAPIConfigPath);
     }
 
     /**

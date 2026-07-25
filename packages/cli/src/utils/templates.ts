@@ -1036,6 +1036,35 @@ export const beforeRoute: unknown[] = [];
 }
 
 /**
+ * Generate openapi.config.ts content
+ * Convention file for OpenAPI metadata, docs UI, and docs auth.
+ *
+ * @param options - Project configuration from user prompts
+ * @returns openapi.config.ts content as a string
+ */
+export function generateOpenAPIConfig(options: CreateOptions): string {
+    const lines: string[] = [];
+
+    lines.push("import type { OpenAPIConfig } from 'burger-api';");
+    lines.push('');
+    lines.push('export default {');
+    lines.push(`    title: '${options.name || 'Burger API'}',`);
+    lines.push(`    description: '${options.name || 'Burger API'} documentation',`);
+    lines.push(`    version: '1.0.0',`);
+    lines.push('');
+    lines.push('    // Uncomment to protect docs with basic auth:');
+    lines.push('    // docsAuth: { username: "admin", password: "changeme" },');
+    lines.push('');
+    lines.push('    // Uncomment to use Swagger UI instead of Scalar:');
+    lines.push("    // import { swaggerDocs } from 'burger-api';");
+    lines.push('    // provider: swaggerDocs(),');
+    lines.push('} satisfies OpenAPIConfig;');
+    lines.push('');
+
+    return lines.join('\n');
+}
+
+/**
  * Create a new project with all necessary files
  * This is the main function that sets up everything
  *
@@ -1069,6 +1098,12 @@ export async function createProject(
         await Bun.write(
             join(targetDir, 'src', 'index.ts'),
             generateIndexFile(options)
+        );
+
+        // Create openapi.config.ts in src/
+        await Bun.write(
+            join(targetDir, 'src', 'openapi.config.ts'),
+            generateOpenAPIConfig(options)
         );
 
         // Create API directory and files if requested

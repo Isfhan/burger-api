@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:smoke",
+    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:smoke",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
     "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
     "test:lifecycle": "bun test --timeout 30000 test/lifecycle/**/*.test.ts",
@@ -26,6 +26,7 @@
     "test:chain": "bun test --timeout 30000 test/chain/**/*.test.ts",
     "test:plugin": "bun test --timeout 30000 test/plugin/**/*.test.ts",
     "test:router": "bun test --timeout 30000 test/router/**/*.test.ts",
+    "test:core": "bun test --timeout 30000 test/core/**/*.test.ts",
     "test:smoke": "bun test --timeout 30000 test/plugin-macro-smoke.test.ts",
     "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
   },

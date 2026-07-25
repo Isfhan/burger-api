@@ -4,6 +4,7 @@ import type { BurgerContext } from '../context/context';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
 import type { RouteHooks, TransformMap } from '../lifecycle/types';
 export type { RouteHooks, TransformMap } from '../lifecycle/types';
+import type { OpenAPIConfig } from './openapi-config';
 
 /** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
 type BunServerOptions = Parameters<typeof serve>[0];
@@ -94,6 +95,14 @@ export interface ServerOptions extends Omit<
      * mode, and error rendering (phase3 §14.8).
      */
     validation?: ValidatorConfig;
+
+    /**
+     * OpenAPI configuration for production builds. When using pre-built
+     * `apiRoutes`, the convention file cannot be discovered from the filesystem,
+     * so the config must be passed here. In dev mode, `openapi.config.ts` is
+     * auto-discovered and this field is ignored.
+     */
+    openapi?: OpenAPIConfig;
 }
 
 /**
@@ -249,3 +258,16 @@ export type {
     RouteAccessInfo,
     RouteMeta,
 } from '../context/types';
+
+// Re-export OpenAPI config types (Phase 5)
+export type {
+    OpenAPIConfig,
+    DocsProvider,
+    OpenAPIObject,
+    JsonSchemaConverter,
+    DocsAuth,
+    OpenAPIServer,
+    OpenAPIContact,
+    OpenAPILicense,
+    OpenAPIExternalDocs,
+} from './openapi-config';

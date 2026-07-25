@@ -154,12 +154,13 @@ describe('My Burger API App - Production Ready Example', () => {
         });
 
         describe('GET /docs', () => {
-            it('should return Swagger UI HTML', async () => {
+            it('should return docs UI HTML (Scalar)', async () => {
                 const response = await fetchAPI('/docs');
                 expect(response.status).toBe(200);
                 expect(response.headers.get('Content-Type')).toContain('text/html');
                 const html = await response.text();
-                expect(html).toContain('swagger-ui');
+                expect(html).toContain('api-reference');
+                expect(html).toContain('openapi.json');
             });
         });
     });

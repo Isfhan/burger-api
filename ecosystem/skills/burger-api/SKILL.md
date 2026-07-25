@@ -150,9 +150,12 @@ export default { auth: false };
 
 ## OpenAPI
 
-- Global metadata on `new Burger({ title, version, servers, ... })`
-- Per-route `openapi.ts` with per-method exports
-- `/openapi.json`, `/docs` (dev default)
+- `openapi.config.ts` — auto-discovered convention file (metadata, endpoints, docs UI, docs auth)
+- Scalar is the default docs UI (CDN-based, no npm dependency)
+- Built-in docs protection via `docsAuth: { username, password }`
+- Per-route `openapi.ts` with per-method exports (override auto-generated responses)
+- `mapJsonSchema` — validator-agnostic schema conversion (Zod, Valibot, ArkType)
+- `/openapi.json`, `/docs` (configurable paths, can be disabled)
 
 ## CLI
 

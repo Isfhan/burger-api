@@ -3,7 +3,7 @@ import { Server } from './core/server';
 import { ApiRouter } from './core/api-router';
 import { PageRouter } from './core/page-router';
 import { generateOpenAPIDocument } from './core/openapi';
-import { swaggerHtml } from './core/swagger-ui';
+import { scalarDocs } from './core/docs-providers';
 
 // Import router (Phase 1 — Hybrid Router)
 import { Router } from './router';
@@ -33,6 +33,8 @@ import type {
     RouteDefinition,
     RouteHooks,
     FetchHandler,
+    OpenAPIConfig,
+    DocsProvider,
 } from './types/index';
 import type { HTMLBundle } from 'bun';
 
@@ -99,6 +101,11 @@ export class Burger {
      * The OpenAPI document
      */
     private openApiDoc: any = null;
+
+    /**
+     * The loaded OpenAPI configuration from openapi.config.ts.
+     */
+    private openAPIConfig?: OpenAPIConfig;
 
     /**
      * The routes object
@@ -263,6 +270,8 @@ export class Burger {
             apiRoutes = [...this.options.apiRoutes].sort((a, b) =>
                 compareRoutes(a, b)
             );
+            // Production: accept config from ServerOptions if provided
+            this.openAPIConfig = this.options.openapi;
         } else {
             // Dev path: Route Module pipeline
             // (Directory Scanner → Module Loader → RouteModule → Compiler).
@@ -271,8 +280,13 @@ export class Burger {
                 this.apiDir,
                 this.apiPrefix
             ).scan();
-            const modules = await new ModuleLoader().load(scanned);
+            const loader = new ModuleLoader();
+            const modules = await loader.load(scanned);
             globalOnRequest = scanned.globalOnRequest;
+
+            // Load openapi.config.ts if discovered
+            this.openAPIConfig = await loader.loadOpenAPIConfig(scanned);
+
             // Retained for introspection (deterministic ordering, no dispatch).
             this.routeTree = new RouteTree(modules);
             apiRoutes = modules.map((m) => ({
@@ -289,7 +303,11 @@ export class Burger {
         if (apiRoutes.length === 0) return false;
 
         // Generate OpenAPI document and cache it
-        this.openApiDoc = generateOpenAPIDocument(apiRoutes, this.options);
+        this.openApiDoc = generateOpenAPIDocument(
+            apiRoutes,
+            this.options,
+            this.openAPIConfig
+        );
 
         // Compile routes into the Hybrid Router.
         const router = new Router({
@@ -330,17 +348,44 @@ export class Burger {
         Object.assign(this.routes, router.staticRoutes());
         Object.assign(this.routes, router.nativeRoutes());
 
-        // Add special routes for OpenAPI
-        this.routes['/openapi.json'] = () =>
-            this.openApiDoc
-                ? Response.json(this.openApiDoc)
-                : this.OPENAPI_ERROR;
+        // Register OpenAPI and docs routes based on config
+        const config = this.openAPIConfig;
+        const openapiEnabled = config?.enabled !== false;
 
-        // Add special route for Swagger UI
-        this.routes['/docs'] = () =>
-            new Response(swaggerHtml, {
-                headers: { 'Content-Type': 'text/html' },
-            });
+        if (openapiEnabled) {
+            const specPath = config?.path ?? '/openapi.json';
+            const docsPath = config?.docsPath ?? '/docs';
+
+            this.routes[specPath] = () =>
+                this.openApiDoc
+                    ? Response.json(this.openApiDoc)
+                    : this.OPENAPI_ERROR;
+
+            // Docs UI: use configured provider or default to Scalar
+            const provider: DocsProvider = config?.provider ?? scalarDocs();
+            this.routes[docsPath] = (ctx: any) => {
+                // Basic auth protection
+                if (config?.docsAuth) {
+                    const authHeader =
+                        ctx?.request?.headers?.get('authorization') ?? '';
+                    const expected = 'Basic ' + btoa(`${config.docsAuth.username}:${config.docsAuth.password}`);
+                    if (authHeader !== expected) {
+                        return new Response('Unauthorized', {
+                            status: 401,
+                            headers: {
+                                'WWW-Authenticate': 'Basic realm="Documentation"',
+                            },
+                        });
+                    }
+                }
+
+                const result = provider(this.openApiDoc!);
+                if (result instanceof Response) return result;
+                return new Response(result, {
+                    headers: { 'Content-Type': 'text/html' },
+                });
+            };
+        }
 
         return true;
     }
@@ -403,6 +448,9 @@ export type { BurgerServices } from './context/context';
 export { HTTPError } from './errors/http-error';
 export { ValidationError } from './validation/error';
 
+// Export docs providers (Phase 5)
+export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';
+
 // Export types
 export type {
     ServerOptions,
@@ -416,6 +464,7 @@ export type {
     ContextSet,
     RouteMeta,
     ContextField,
+    OpenAPIConfig,
 } from './types/index';
 
 // Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)
