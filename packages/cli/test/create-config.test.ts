@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { generateBurgerConfig } from '../src/utils/templates';
+import { generateBurgerConfig, generatePackageJson } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
 
 describe('generateBurgerConfig', () => {
@@ -43,5 +43,23 @@ describe('generateBurgerConfig', () => {
         expect(content).toContain("apiPrefix: \"/v1\"");
         expect(content).toContain("pagePrefix: \"/web\"");
         expect(content).toContain('debug: true');
+    });
+});
+
+describe('generatePackageJson', () => {
+    it('generates package.json with vision-aligned CLI scripts', () => {
+        const content = generatePackageJson('my-project');
+        const pkg = JSON.parse(content);
+
+        expect(pkg.scripts.dev).toBe('burger-api dev');
+        expect(pkg.scripts.start).toBe('burger-api start');
+        expect(pkg.scripts.build).toBe('burger-api build src/index.ts');
+    });
+
+    it('includes burger-api dependency', () => {
+        const content = generatePackageJson('my-project');
+        const pkg = JSON.parse(content);
+
+        expect(pkg.dependencies['burger-api']).toBeDefined();
     });
 });

@@ -1,0 +1,27 @@
+{
+  "name": "@burger-api/plugin-env",
+  "version": "0.1.0",
+  "description": "Environment variable validation plugin for BurgerAPI",
+  "main": "env.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=0.15.0"
+  },
+  "devDependencies": {
+    "burger-api": "0.15.0"
+  },
+  "keywords": [
+    "burger-api",
+    "env",
+    "environment",
+    "validation",
+    "config",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/env"
+  }
+}

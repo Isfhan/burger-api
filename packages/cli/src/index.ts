@@ -18,7 +18,11 @@ import { addCommand } from './commands/add';
 import { skillsCommand } from './commands/skills';
 import { listCommand } from './commands/list';
 import { buildCommand, buildExecutableCommand } from './commands/build';
-import { serveCommand } from './commands/serve';
+import { devCommand, serveCommand } from './commands/dev';
+import { startCommand } from './commands/start';
+import { generateCommand } from './commands/generate';
+import { inspectCommand } from './commands/inspect';
+import { doctorCommand } from './commands/doctor';
 import { showBanner } from './utils/logger';
 
 /** Injected at build time when compiling to executable (--define CLI_VERSION). */
@@ -59,12 +63,17 @@ program
 // Add all our commands to the CLI
 // Each command is defined in its own file for better organization
 program.addCommand(createCommand); // Create new projects
-program.addCommand(addCommand); // Add middleware to projects
-program.addCommand(skillsCommand); // Manage agent skills: burger-api skills install
-program.addCommand(listCommand); // List available middleware
+program.addCommand(addCommand); // Add ecosystem packages
+program.addCommand(skillsCommand); // Manage agent skills
+program.addCommand(listCommand); // List available ecosystem packages
 program.addCommand(buildCommand); // Bundle to JS file
 program.addCommand(buildExecutableCommand); // Compile to executable
-program.addCommand(serveCommand); // Run development server
+program.addCommand(devCommand); // Development server with hot reload
+program.addCommand(startCommand); // Production server
+program.addCommand(serveCommand); // Deprecated alias for dev
+program.addCommand(generateCommand); // Scaffold routes, hooks, plugins
+program.addCommand(inspectCommand); // Display routes, config, hooks
+program.addCommand(doctorCommand); // Validate project structure
 
 // Show banner + help when no command is provided
 program.action(() => {

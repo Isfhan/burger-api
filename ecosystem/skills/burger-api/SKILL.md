@@ -148,6 +148,72 @@ export default { auth: false };
 // or { auth: { required: true, roles: ["admin"] } }
 ```
 
+## Plugin Development
+
+### Plugin interface
+
+```typescript
+interface Plugin {
+  name: string;
+  hooks?: RouteHooks;
+}
+```
+
+### Creating a plugin
+
+```typescript
+// ecosystem/plugins/my-plugin/my-plugin.ts
+import type { Plugin } from "burger-api/plugin/types";
+import type { BurgerContext } from "burger-api/context/context";
+
+export function myPlugin(options?: MyPluginOptions): Plugin {
+  return {
+    name: "my-plugin",
+    hooks: {
+      transform: {
+        myField: (ctx: BurgerContext) => {
+          // Transform hook - attaches to context
+          return { value: "data" };
+        },
+      },
+      beforeRoute: (ctx: BurgerContext) => {
+        // Auth checks, validation, etc.
+      },
+    },
+  };
+}
+```
+
+### Registering plugins
+
+```typescript
+// src/plugins.ts
+import { Burger } from "burger-api";
+import { myPlugin } from "./ecosystem/plugins/my-plugin/my-plugin";
+
+const burger = new Burger();
+burger.usePlugin(myPlugin({ /* options */ }));
+```
+
+### Plugin structure
+
+```
+ecosystem/plugins/<name>/
+├── <name>.ts           # Plugin implementation
+├── package.json        # Dependencies + peer deps
+├── README.md           # Documentation + usage examples
+└── test.ts             # (optional) Tests
+```
+
+### Available plugins
+
+- `jwt-auth` — JWT authentication (HS256/HS384/HS512, RS256, ES256)
+- `session` — Session management with configurable stores
+- `api-key` — API key authentication via headers
+- `basic-auth` — HTTP Basic authentication
+- `oidc` — OpenID Connect authentication
+- `env` — Environment variable validation
+
 ## OpenAPI
 
 - `openapi.config.ts` — auto-discovered convention file (metadata, endpoints, docs UI, docs auth)

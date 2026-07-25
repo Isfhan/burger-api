@@ -1,0 +1,26 @@
+{
+  "name": "@burger-api/plugin-jwt-auth",
+  "version": "0.1.0",
+  "description": "JWT authentication plugin for BurgerAPI",
+  "main": "jwt-auth.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=0.15.0"
+  },
+  "devDependencies": {
+    "burger-api": "0.15.0"
+  },
+  "keywords": [
+    "burger-api",
+    "jwt",
+    "authentication",
+    "auth",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/jwt-auth"
+  }
+}

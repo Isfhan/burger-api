@@ -1,0 +1,26 @@
+{
+  "name": "@burger-api/plugin-api-key",
+  "version": "0.1.0",
+  "description": "API key authentication plugin for BurgerAPI",
+  "main": "api-key.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=0.15.0"
+  },
+  "devDependencies": {
+    "burger-api": "0.15.0"
+  },
+  "keywords": [
+    "burger-api",
+    "api-key",
+    "authentication",
+    "auth",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/api-key"
+  }
+}

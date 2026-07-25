@@ -296,6 +296,39 @@ export async function middlewareExists(name: string): Promise<boolean> {
 }
 
 /**
+ * Check if a plugin exists on GitHub under ecosystem/plugins/.
+ */
+export async function pluginExists(name: string): Promise<boolean> {
+    try {
+        const response = await fetchWithTimeout(
+            `${API_URL}/contents/ecosystem/plugins/${name}`,
+            {
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
+            }
+        );
+
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Detect whether a package is a hook or plugin on GitHub.
+ * Returns 'hook' | 'plugin' | null.
+ */
+export async function detectEcosystemType(
+    name: string
+): Promise<'hook' | 'plugin' | null> {
+    if (await middlewareExists(name)) return 'hook';
+    if (await pluginExists(name)) return 'plugin';
+    return null;
+}
+
+/**
  * Get list of available skills from GitHub
  * This scans the ecosystem/skills folder and returns what's available
  *

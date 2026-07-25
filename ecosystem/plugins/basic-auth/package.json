@@ -1,0 +1,26 @@
+{
+  "name": "@burger-api/plugin-basic-auth",
+  "version": "0.1.0",
+  "description": "HTTP Basic authentication plugin for BurgerAPI",
+  "main": "basic-auth.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=0.15.0"
+  },
+  "devDependencies": {
+    "burger-api": "0.15.0"
+  },
+  "keywords": [
+    "burger-api",
+    "basic-auth",
+    "authentication",
+    "auth",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/basic-auth"
+  }
+}

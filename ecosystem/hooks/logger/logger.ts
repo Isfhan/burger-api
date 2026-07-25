@@ -32,6 +32,33 @@ export interface LoggerOptions {
     logBody?: boolean;
 
     /**
+     * Whether to generate and include request IDs in logs.
+     * @default true
+     */
+    requestId?: boolean;
+
+    /**
+     * Header name to check for existing request ID (e.g., from upstream proxy).
+     * If provided, uses existing ID from header; otherwise generates new one.
+     * @default "X-Request-ID"
+     */
+    requestIdHeader?: string;
+
+    /**
+     * Whether to include request ID in log output.
+     * @default true
+     */
+    includeRequestIdInLog?: boolean;
+
+    /**
+     * Output format.
+     * - "text": Human-readable text format
+     * - "json": Structured JSON format
+     * @default "text"
+     */
+    format?: "text" | "json";
+
+    /**
      * Custom log formatter function.
      * If provided, overrides the default logging format.
      *
@@ -66,6 +93,7 @@ export interface LogInfo {
     status: number;
     duration: number;
     timestamp: string;
+    requestId?: string;
     headers?: Record<string, string>;
     query?: string;
     body?: any;
@@ -111,6 +139,17 @@ const colors = {
  *   skip: '/health'
  * });
  *
+ * // With request IDs
+ * const logger = createLogger({
+ *   requestId: true,
+ *   requestIdHeader: 'X-Request-ID',
+ * });
+ *
+ * // JSON format
+ * const logger = createLogger({
+ *   format: 'json',
+ * });
+ *
  * // Custom formatter
  * const logger = createLogger({
  *   formatter: (info) => `[${info.timestamp}] ${info.method} ${info.path} - ${info.status} (${info.duration}ms)`
@@ -128,7 +167,11 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
         logHeaders = false,
         logQuery = false,
         logBody = false,
-        formatter = defaultFormatter,
+        requestId: enableRequestId = true,
+        requestIdHeader = 'X-Request-ID',
+        includeRequestIdInLog = true,
+        format = 'text',
+        formatter = format === 'json' ? jsonFormatter : defaultFormatter,
         logFn = console.log,
         skip,
     } = options;
@@ -160,6 +203,22 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
         const path = urlObj.pathname;
         const query = urlObj.search;
 
+        // Generate or extract request ID
+        let requestId: string | undefined;
+        if (enableRequestId) {
+            // Check for existing request ID in header
+            const existingId = ctx.headers.get(requestIdHeader);
+            if (existingId) {
+                requestId = existingId;
+            } else {
+                // Generate new UUID
+                requestId = crypto.randomUUID();
+            }
+
+            // Attach to context for use in handlers
+            (ctx as { requestId?: string }).requestId = requestId;
+        }
+
         // Transform response to log after handler completes
         return async (response: Response): Promise<Response> => {
             // Calculate duration with high precision
@@ -178,6 +237,7 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
                 status,
                 duration,
                 timestamp,
+                requestId: includeRequestIdInLog ? requestId : undefined,
             };
 
             // Add optional information
@@ -220,17 +280,56 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
 function defaultFormatter(info: LogInfo): string {
     const parts = [
         `[${info.timestamp}]`,
+    ];
+
+    // Add request ID if available
+    if (info.requestId) {
+        parts.push(`[${info.requestId}]`);
+    }
+
+    parts.push(
         info.method,
         info.path,
         `${info.status}`,
-        `${info.duration}ms`,
-    ];
+        `${info.duration}ms`
+    );
 
     if (info.query) {
         parts.push(info.query);
     }
 
     return parts.join(' ');
+}
+
+/**
+ * JSON log formatter.
+ */
+function jsonFormatter(info: LogInfo): string {
+    const logObject: Record<string, unknown> = {
+        timestamp: info.timestamp,
+        method: info.method,
+        path: info.path,
+        status: info.status,
+        duration: info.duration,
+    };
+
+    if (info.requestId) {
+        logObject.requestId = info.requestId;
+    }
+
+    if (info.query) {
+        logObject.query = info.query;
+    }
+
+    if (info.headers) {
+        logObject.headers = info.headers;
+    }
+
+    if (info.body !== undefined) {
+        logObject.body = info.body;
+    }
+
+    return JSON.stringify(logObject);
 }
 
 /**

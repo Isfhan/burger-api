@@ -1,0 +1,27 @@
+{
+  "name": "@burger-api/plugin-oidc",
+  "version": "0.1.0",
+  "description": "OpenID Connect authentication plugin for BurgerAPI",
+  "main": "oidc.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=0.15.0"
+  },
+  "devDependencies": {
+    "burger-api": "0.15.0"
+  },
+  "keywords": [
+    "burger-api",
+    "oidc",
+    "openid-connect",
+    "authentication",
+    "auth",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/oidc"
+  }
+}

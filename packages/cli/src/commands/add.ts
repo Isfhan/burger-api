@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
 import { generateMiddlewareIndex } from '../utils/templates';
-import { middlewareExists, downloadMiddleware } from '../utils/github';
+import { middlewareExists, pluginExists, detectEcosystemType, downloadMiddleware } from '../utils/github';
 import {
     spinner,
     success,
@@ -43,9 +43,10 @@ export const addCommand = new Command('add')
             process.exit(1);
         }
 
-        // Hooks install under ecosystem/hooks/ (plugins under ecosystem/plugins/ when available)
+        // Hooks install under ecosystem/hooks/, plugins under ecosystem/plugins/
         const ecosystemDir = join(process.cwd(), 'ecosystem');
         const hooksDir = join(ecosystemDir, 'hooks');
+        const pluginsDir = join(ecosystemDir, 'plugins');
         if (!existsSync(hooksDir)) {
             await Bun.write(
                 join(hooksDir, 'index.ts'),
@@ -63,12 +64,12 @@ export const addCommand = new Command('add')
 
         for (const name of packageNames) {
             try {
-                // Check if it exists on GitHub
+                // Check if it exists on GitHub as hook or plugin
                 let spin = spinner(`Checking ${name}...`);
 
-                let exists;
+                let ecosystemType: 'hook' | 'plugin' | null;
                 try {
-                    exists = await middlewareExists(name);
+                    ecosystemType = await detectEcosystemType(name);
                 } catch (err) {
                     spin.stop('Could not connect to GitHub', true);
                     logError(
@@ -78,15 +79,18 @@ export const addCommand = new Command('add')
                     continue;
                 }
 
-                if (!exists) {
+                if (!ecosystemType) {
                     spin.stop(`Package "${name}" not found`, true);
                     results.failed.push(name);
                     continue;
                 }
 
-                spin.update(`Downloading ${name}...`);
+                const targetDir =
+                    ecosystemType === 'plugin'
+                        ? join(pluginsDir, name)
+                        : join(hooksDir, name);
 
-                const targetDir = join(hooksDir, name);
+                spin.update(`Downloading ${name} (${ecosystemType})...`);
                 if (existsSync(targetDir)) {
                     spin.stop();
                     // Ask if they want to overwrite
@@ -144,24 +148,56 @@ export const addCommand = new Command('add')
             newline();
 
             header('How to Use');
-            info('Import hooks and register them in src/hooks.ts:');
+            for (const name of results.success) {
+                const isPlugin = existsSync(join(pluginsDir, name));
+                if (isPlugin) {
+                    const className = name.charAt(0).toUpperCase() + name.slice(1);
+                    code(
+                        `import { ${className} } from "./ecosystem/plugins/${name}/${name}";`
+                    );
+                } else {
+                    code(
+                        `import { ${name} } from "./ecosystem/hooks/${name}/${name}";`
+                    );
+                }
+            }
             newline();
-            results.success.forEach((name) => {
-                code(
-                    `import { ${name} } from "./ecosystem/hooks/${name}/${name}";`
-                );
-            });
-            newline();
-            code('// src/hooks.ts');
-            code('export const onRequest = [');
-            results.success.forEach((name) => {
-                code(`    ${name}(),`);
-            });
-            code('];');
-            newline();
+            const hasPlugins = results.success.some((n) =>
+                existsSync(join(pluginsDir, n))
+            );
+            if (hasPlugins) {
+                code('// Register plugins in src/plugins.ts:');
+                code('burger.usePlugin(');
+                results.success
+                    .filter((n) => existsSync(join(pluginsDir, n)))
+                    .forEach((name) => {
+                        const className =
+                            name.charAt(0).toUpperCase() + name.slice(1);
+                        code(`    ${className},`);
+                    });
+                code(');');
+                newline();
+            }
+            const hasHooks = results.success.some((n) =>
+                existsSync(join(hooksDir, n))
+            );
+            if (hasHooks) {
+                code('// Register hooks in src/hooks.ts:');
+                code('export const onRequest = [');
+                results.success
+                    .filter((n) => existsSync(join(hooksDir, n)))
+                    .forEach((name) => {
+                        code(`    ${name}(),`);
+                    });
+                code('];');
+                newline();
+            }
             info('See each package README for options:');
             results.success.forEach((name) => {
-                bullet(`ecosystem/hooks/${name}/README.md`);
+                const isPlugin = existsSync(join(pluginsDir, name));
+                bullet(
+                    `ecosystem/${isPlugin ? 'plugins' : 'hooks'}/${name}/README.md`
+                );
             });
             newline();
         }

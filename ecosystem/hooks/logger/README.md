@@ -8,6 +8,8 @@ Request logging hook factory for burger-api framework. Hooks are code that runs 
 - ✅ Request method, URL, and path logging
 - ✅ Response status code and duration
 - ✅ ISO 8601 timestamps
+- ✅ Request ID generation (UUID)
+- ✅ Structured JSON logging format
 - ✅ Optional headers logging
 - ✅ Optional query parameters logging
 - ✅ Optional request body logging
@@ -48,12 +50,48 @@ new Burger({ apiDir: './api' }).serve(4000);
 [2024-10-22T10:30:47.789Z] GET /api/users/123 200 12ms
 ```
 
+### With Request IDs
+
+```typescript
+// api/hooks.ts
+import { createLogger } from '../ecosystem/hooks/logger/logger';
+export const onRequest = [createLogger({
+    requestId: true,
+    requestIdHeader: 'X-Request-ID',
+})];
+```
+
+**Output:**
+```
+[2024-10-22T10:30:45.123Z] [550e8400-e29b-41d4-a716-446655440000] GET /api/users 200 45ms
+```
+
+The request ID is:
+- Extracted from the `X-Request-ID` header if present
+- Generated as a UUID if not provided
+- Attached to `ctx.requestId` for use in handlers
+
+### JSON Format
+
+```typescript
+// api/hooks.ts
+import { createLogger } from '../ecosystem/hooks/logger/logger';
+export const onRequest = [createLogger({
+    format: 'json',
+})];
+```
+
+**Output:**
+```json
+{"timestamp":"2024-10-22T10:30:45.123Z","method":"GET","path":"/api/users","status":200,"duration":45,"requestId":"550e8400-e29b-41d4-a716-446655440000"}
+```
+
 ### With Additional Options
 
 ```typescript
 // api/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const onRequest = [createLogger({
     colors: true,
     logQuery: true,
     logHeaders: false
@@ -194,6 +232,36 @@ Log request body for POST/PUT/PATCH requests.
 - This uses `request.clone()` to avoid consuming the original body stream.
 - May have performance impact due to body cloning.
 
+### `requestId`
+
+- **Type**: `boolean`
+- **Default**: `true`
+
+Generate and include request IDs in logs. Uses UUID v4 format.
+
+### `requestIdHeader`
+
+- **Type**: `string`
+- **Default**: `"X-Request-ID"`
+
+Header name to check for existing request ID. If provided, uses existing ID from header; otherwise generates new one.
+
+### `includeRequestIdInLog`
+
+- **Type**: `boolean`
+- **Default**: `true`
+
+Include request ID in log output.
+
+### `format`
+
+- **Type**: `"text" | "json"`
+- **Default**: `"text"`
+
+Output format:
+- `"text"`: Human-readable text format
+- `"json"`: Structured JSON format
+
 ### `formatter`
 
 - **Type**: `(info: LogInfo) => string`
@@ -210,6 +278,7 @@ interface LogInfo {
     status: number;      // HTTP status code
     duration: number;    // Request duration in ms
     timestamp: string;   // ISO 8601 timestamp
+    requestId?: string;  // Request ID (if enabled)
     headers?: Record<string, string>;  // Request headers (if enabled)
     query?: string;      // Query string (if enabled)
     body?: any;          // Request body (if enabled)

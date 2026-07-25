@@ -25,9 +25,9 @@ export function generatePackageJson(projectName: string): string {
         version: '0.1.0',
         type: 'module',
         scripts: {
-            dev: 'bun --watch src/index.ts',
-            start: 'bun src/index.ts',
-            build: 'bun build src/index.ts --outdir ./dist',
+            dev: 'burger-api dev',
+            start: 'burger-api start',
+            build: 'burger-api build src/index.ts',
         },
         dependencies: {
             'burger-api': '^0.9.7',
@@ -1198,4 +1198,118 @@ export async function installDependencies(projectDir: string): Promise<void> {
         spin.stop('Failed to install dependencies', true);
         throw err;
     }
+}
+
+// ─────────────────────────────────────────────────────
+// Generate command templates (Phase 7)
+// ─────────────────────────────────────────────────────
+
+export interface GenerateRouteOptions {
+    schema?: boolean;
+    openapi?: boolean;
+    hooks?: boolean;
+    config?: boolean;
+}
+
+/**
+ * Generate route convention files for `burger-api generate route <name>`.
+ * Returns a map of filename → content.
+ */
+export function generateRouteFiles(
+    routeName: string,
+    options: GenerateRouteOptions = {}
+): Record<string, string> {
+    const files: Record<string, string> = {};
+
+    files['route.ts'] = [
+        "import type { BurgerContext } from 'burger-api';",
+        '',
+        'export async function GET(ctx: BurgerContext): Promise<Response> {',
+        '    return Response.json({ ok: true });',
+        '}',
+        '',
+    ].join('\n');
+
+    if (options.schema !== false) {
+        files['schema.ts'] = [
+            "import { z } from 'zod/v4';",
+            '',
+            'export const GET = {',
+            '    query: z.object({}),',
+            '};',
+            '',
+        ].join('\n');
+    }
+
+    if (options.openapi !== false) {
+        files['openapi.ts'] = [
+            `export const GET = {`,
+            `    summary: '${routeName} endpoint',`,
+            `    tags: ['${routeName}'],`,
+            `};`,
+            '',
+        ].join('\n');
+    }
+
+    if (options.hooks !== false) {
+        files['hooks.ts'] = [
+            "import type { BurgerContext } from 'burger-api';",
+            '',
+            'export async function beforeRoute(ctx: BurgerContext) {',
+            '    // Route-level hook',
+            '}',
+            '',
+        ].join('\n');
+    }
+
+    if (options.config !== false) {
+        files['config.ts'] = [
+            'export default {',
+            '    auth: false,',
+            '};',
+            '',
+        ].join('\n');
+    }
+
+    return files;
+}
+
+/**
+ * Generate a hook factory template for `burger-api generate hook <name>`.
+ */
+export function generateHookTemplate(hookName: string): string {
+    return [
+        `/**`,
+        ` * ${hookName} hook factory.`,
+        ` * Import and register in src/hooks.ts.`,
+        ` */`,
+        `export function ${hookName}() {`,
+        `    return async (ctx: import('burger-api').BurgerContext) => {`,
+        `        // hook logic`,
+        `    };`,
+        `}`,
+        '',
+    ].join('\n');
+}
+
+/**
+ * Generate a plugin template for `burger-api generate plugin <name>`.
+ */
+export function generatePluginTemplate(pluginName: string): string {
+    const className = pluginName.charAt(0).toUpperCase() + pluginName.slice(1);
+    return [
+        `/**`,
+        ` * ${className} plugin.`,
+        ` * Import and register in src/plugins.ts via burger.use().`,
+        ` */`,
+        `import type { Plugin } from 'burger-api';`,
+        ``,
+        `export const ${className}: Plugin = {`,
+        `    name: '${pluginName}',`,
+        `    hooks: {`,
+        `        // transform, beforeRoute, afterRoute, etc.`,
+        `    },`,
+        `};`,
+        '',
+    ].join('\n');
 }
