@@ -444,9 +444,13 @@ export { setDir } from './utils/index';
 export { BurgerContext } from './context/context';
 export type { BurgerServices } from './context/context';
 
-// Export error classes (Phase 3)
-export { HTTPError } from './errors/http-error';
+// Export error classes (Phase 3 + Phase 6)
+export { HTTPError, renderHTTPError } from './errors/http-error';
 export { ValidationError } from './validation/error';
+export { NotFoundError } from './errors/not-found';
+export { UnauthorizedError } from './errors/unauthorized';
+export { ForbiddenError } from './errors/forbidden';
+export { MethodNotAllowedError } from './errors/method-not-allowed';
 
 // Export docs providers (Phase 5)
 export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';

@@ -1,5 +1,5 @@
 import { serve } from 'bun';
-import { errorResponse } from '../../utils/error';
+import { renderHTTPError } from '../../errors/http-error';
 import type {
     AdapterStartOptions,
     RuntimeAdapter,
@@ -24,11 +24,10 @@ export class BunAdapter implements RuntimeAdapter {
                 try {
                     return await opts.fetch(request);
                 } catch (error) {
-                    return errorResponse(
-                        error,
-                        request,
-                        opts.debug ?? false
-                    );
+                    // Safety net: errors that escape the pipeline.
+                    // In Phase 6+, all HTTPError subclasses are caught
+                    // within dispatchOnError; this catches edge cases.
+                    return renderHTTPError(error, opts.debug ?? false);
                 }
             },
             error(error: Error) {

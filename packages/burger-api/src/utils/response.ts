@@ -21,14 +21,25 @@ export const OPENAPI_ERROR = Response.json({
 
 /**
  * Builds a 405 response that includes the `Allow` header listing the methods
- * supported by the matched route.
+ * supported by the matched route. Returns RFC 9457 Problem Details format.
  * @param allow - comma-separated allowed methods, e.g. "GET, POST"
  */
 export function methodNotAllowed(allow: string): Response {
-    return new Response('Method Not Allowed', {
-        status: 405,
-        headers: { Allow: allow },
-    });
+    return new Response(
+        JSON.stringify({
+            type: 'about:blank',
+            title: 'Method Not Allowed',
+            status: 405,
+            detail: `Supported methods: ${allow}`,
+        }),
+        {
+            status: 405,
+            headers: {
+                Allow: allow,
+                'Content-Type': 'application/problem+json',
+            },
+        }
+    );
 }
 
 /**

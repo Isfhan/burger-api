@@ -65,6 +65,8 @@ export interface HookPlan {
     transform?: TransformMap;
     /** Compiled route validators; used for response validation post-handler. */
     validators?: CompiledRouteValidators;
+    /** Whether the server is in dev mode (debug or non-production). Controls error rendering detail. */
+    debug?: boolean;
 }
 
 /**

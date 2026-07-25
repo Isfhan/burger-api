@@ -4,6 +4,7 @@ import type { HookPlan, Hook, ErrorHook } from './types';
 import { runHooks } from './hook-runner';
 import { methodNotAllowed } from '../utils/response';
 import { applyTransform } from './transform';
+import { HTTPError, renderHTTPError } from '../errors/http-error';
 import { ValidationError } from '../validation/error';
 import { validateResponse } from '../validation/response';
 
@@ -85,7 +86,7 @@ export async function executeHookPlan(
 
         return response;
     } catch (error) {
-        return dispatchOnError(error, plan.onError, ctx);
+        return dispatchOnError(error, plan.onError, ctx, plan.debug);
     }
 }
 
@@ -96,13 +97,15 @@ export async function executeHookPlan(
  * throws it is silently skipped (no recursion). Returns the first `Response`
  * an `onError` returns.
  *
- * Default fallback: unhandled `ValidationError` renders a 422 RFC 9457
- * response (production-safe, no dev diagnostics).
+ * Default fallback: unhandled `HTTPError` renders an RFC 9457 Problem Details
+ * response. `ValidationError` retains its structured error format for backward
+ * compatibility. Unknown errors are wrapped in `HTTPError(500)`.
  */
 async function dispatchOnError(
     error: unknown,
     onErrorHooks: ErrorHook[],
-    ctx: BurgerContext
+    ctx: BurgerContext,
+    debug?: boolean
 ): Promise<Response> {
     const err = error instanceof Error ? error : new Error(String(error));
     for (const hook of onErrorHooks) {
@@ -116,12 +119,17 @@ async function dispatchOnError(
         }
     }
 
-    // Default fallback: unhandled ValidationError → 422 RFC 9457.
+    // Default fallback: unhandled errors → RFC 9457.
+    // Dev mode: stack + cause included. Production: no internals.
+    const isDev = debug ?? process.env.NODE_ENV !== 'production';
+
+    // ValidationError retains its structured format (errorsBySlot grouping).
     if (error instanceof ValidationError) {
-        return error.toResponse(false);
+        return error.toResponse(isDev);
     }
 
-    throw error;
+    // All other HTTPError subclasses and unknown errors → RFC 9457.
+    return renderHTTPError(error, isDev);
 }
 
 /**

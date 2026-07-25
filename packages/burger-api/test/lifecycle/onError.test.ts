@@ -31,7 +31,7 @@ describe('onError (Phase 4 M2)', () => {
         expect(data).toEqual({ ok: true });
     });
 
-    it('onError that itself throws falls back to errorResponse (500)', async () => {
+    it('onError that itself throws falls back to RFC 9457 500 response', async () => {
         const plan: HookPlan = {
             beforeRoute: [],
             afterRoute: [],
@@ -46,14 +46,17 @@ describe('onError (Phase 4 M2)', () => {
             new Request('http://h/test'),
             { route: { path: '/test', pattern: '/test' } }
         );
-        // No onError handles it → re-throws → expect rejection
-        await expect(
-            executeHookPlan(ctx, plan, {
-                GET: () => {
-                    throw new Error('handler-boom');
-                },
-            }, new Request('http://h/test'))
-        ).rejects.toThrow('handler-boom');
+        const res = await executeHookPlan(ctx, plan, {
+            GET: () => {
+                throw new Error('handler-boom');
+            },
+        }, new Request('http://h/test'));
+        expect(res.status).toBe(500);
+        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        const data = await res.json();
+        expect(data).toHaveProperty('type');
+        expect(data).toHaveProperty('title', 'HTTPError');
+        expect(data).toHaveProperty('status', 500);
     });
 
     it('chains errors in order: route onError runs before global onError', async () => {

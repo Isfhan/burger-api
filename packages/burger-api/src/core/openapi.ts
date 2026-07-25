@@ -303,5 +303,24 @@ export function generateOpenAPIDocument(
         (doc as any).tags = Array.from(tagSet).map((name) => ({ name }));
     }
 
+    // Add components.schemas.ProblemDetail (RFC 9457) when any route
+    // has auto-generated error responses or the doc has paths at all.
+    if (Object.keys(doc.paths).length > 0) {
+        (doc as any).components = {
+            schemas: {
+                ProblemDetail: {
+                    type: 'object',
+                    properties: {
+                        type: { type: 'string', description: 'URI reference identifying the problem type' },
+                        title: { type: 'string', description: 'Short human-readable summary' },
+                        status: { type: 'integer', description: 'HTTP status code' },
+                        detail: { type: 'string', description: 'Human-readable explanation' },
+                    },
+                    required: ['type', 'title', 'status'],
+                },
+            },
+        };
+    }
+
     return doc;
 }
