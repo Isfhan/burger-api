@@ -35,11 +35,11 @@ const RESERVED = new Set([
  * Order: global `transform` entries are applied first, then route-level entries
  * (so route can reference or override global-transformed values).
  */
-export function applyTransform(
+export async function applyTransform(
     ctx: BurgerContext,
     transformMap: TransformMap,
     debug = false
-): void {
+): Promise<void> {
     for (const key of Object.keys(transformMap)) {
         if (RESERVED.has(key)) {
             if (debug) {
@@ -49,7 +49,7 @@ export function applyTransform(
             }
             continue;
         }
-        const value = transformMap[key](ctx);
+        const value = await transformMap[key](ctx);
         (ctx as unknown as Record<string, unknown>)[key] = value;
     }
 }

@@ -127,6 +127,9 @@ export class RouterCompiler {
             // Thread debug flag for error rendering (Phase 6).
             plan.debug = this.debug;
 
+            // Thread global validation config for response validation.
+            plan.validatorConfig = this.config;
+
             // Optional, compile-time-only route field analysis. The result is
             // baked into `meta` but is unused at runtime in Phase 2, so it can
             // never affect request correctness.

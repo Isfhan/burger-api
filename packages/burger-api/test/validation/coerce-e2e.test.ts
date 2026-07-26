@@ -10,7 +10,7 @@ import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
 /** Builds a minimal BurgerContext-like object for the orchestrator. */
-function fakeReq(
+function fakeCtx(
     method: string,
     query: Record<string, string> = {},
     params: Record<string, string> = {}
@@ -38,10 +38,10 @@ describe('Coercion end-to-end (M4)', () => {
         };
         const validators = compileRouteSchema(schema, { coerce: true });
         const middleware = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { n: '42', b: 'true' });
-        const next = await middleware(req);
+        const ctx = fakeCtx('get', { n: '42', b: 'true' });
+        const next = await middleware(ctx);
         expect(next).toBeUndefined();
-        expect((req.validated as any).query).toEqual({ n: 42, b: true });
+        expect((ctx.validated as any).query).toEqual({ n: 42, b: true });
     });
 
     it('throws ValidationError when coercion is OFF (default)', async () => {
@@ -50,9 +50,9 @@ describe('Coercion end-to-end (M4)', () => {
         };
         const validators = compileRouteSchema(schema, { coerce: false });
         const middleware = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { n: '42' });
+        const ctx = fakeCtx('get', { n: '42' });
         // Without coercion, "42" is not a number => ValidationError.
-        await expect(middleware(req)).rejects.toThrow(ValidationError);
+        await expect(middleware(ctx)).rejects.toThrow(ValidationError);
     });
 
     it('does not build a coercion plan when disabled', () => {
@@ -72,8 +72,8 @@ describe('Coercion end-to-end (M4)', () => {
         };
         const validators = compileRouteSchema(schema, { coerce: false });
         const middleware = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { n: '7' });
-        await middleware(req);
-        expect((req.validated as any).query).toEqual({ n: 7 });
+        const ctx = fakeCtx('get', { n: '7' });
+        await middleware(ctx);
+        expect((ctx.validated as any).query).toEqual({ n: 7 });
     });
 });

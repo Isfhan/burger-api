@@ -29,23 +29,19 @@ export function flatten(
     const onError: ErrorHook[] = [];
 
     const frameworkBefore: Hook[] = [];
-    const globalBefore: Hook[] = [];
     const pluginBefore: Hook[] = [];
     const localBefore: Hook[] = [];
 
     const frameworkAfter: Hook[] = [];
-    const globalAfter: Hook[] = [];
     const pluginAfter: Hook[] = [];
     const localAfter: Hook[] = [];
 
     const frameworkResp: Hook[] = [];
-    const globalResp: Hook[] = [];
     const pluginResp: Hook[] = [];
     const localResp: Hook[] = [];
 
     const localError: ErrorHook[] = [];
     const pluginError: ErrorHook[] = [];
-    const globalError: ErrorHook[] = [];
     const frameworkError: ErrorHook[] = [];
 
     for (const node of nodes) {
@@ -57,7 +53,6 @@ export function flatten(
             case 'beforeRoute': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'framework') frameworkBefore.push(fn);
-                else if (node.scope === 'global') globalBefore.push(fn);
                 else if (node.scope === 'plugin') pluginBefore.push(fn);
                 else localBefore.push(fn);
                 break;
@@ -65,7 +60,6 @@ export function flatten(
             case 'afterRoute': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'framework') frameworkAfter.push(fn);
-                else if (node.scope === 'global') globalAfter.push(fn);
                 else if (node.scope === 'plugin') pluginAfter.push(fn);
                 else localAfter.push(fn);
                 break;
@@ -73,7 +67,6 @@ export function flatten(
             case 'mapResponse': {
                 const fn = node.fn as Hook;
                 if (node.scope === 'framework') frameworkResp.push(fn);
-                else if (node.scope === 'global') globalResp.push(fn);
                 else if (node.scope === 'plugin') pluginResp.push(fn);
                 else localResp.push(fn);
                 break;
@@ -82,20 +75,19 @@ export function flatten(
                 const fn = node.fn as ErrorHook;
                 if (node.scope === 'local') localError.push(fn);
                 else if (node.scope === 'plugin') pluginError.push(fn);
-                else if (node.scope === 'global') globalError.push(fn);
                 else frameworkError.push(fn);
                 break;
             }
         }
     }
 
-    // Request hooks: Framework → Plugin → Global → Route (forward)
-    beforeRoute.push(...frameworkBefore, ...pluginBefore, ...globalBefore, ...localBefore);
-    // Response hooks: Route → Global → Plugin → Framework (reversed)
-    afterRoute.push(...localAfter, ...globalAfter, ...pluginAfter, ...frameworkAfter);
-    mapResponse.push(...localResp, ...globalResp, ...pluginResp, ...frameworkResp);
-    // Error hooks: Route → Global → Plugin → Framework (reversed, nearest-first)
-    onError.push(...localError, ...globalError, ...pluginError, ...frameworkError);
+    // Request hooks: Framework → Plugin → Route (forward)
+    beforeRoute.push(...frameworkBefore, ...pluginBefore, ...localBefore);
+    // Response hooks: Route → Plugin → Framework (reversed)
+    afterRoute.push(...localAfter, ...pluginAfter, ...frameworkAfter);
+    mapResponse.push(...localResp, ...pluginResp, ...frameworkResp);
+    // Error hooks: Route → Plugin → Framework (reversed, nearest-first)
+    onError.push(...localError, ...pluginError, ...frameworkError);
 
     const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
     if (validation) plan.validation = validation;

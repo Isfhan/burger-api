@@ -278,7 +278,8 @@ export class WebSocketAdapter {
     }
 
     // Check if auth is explicitly disabled for this route
-    const authDisabled = routeConfig?.auth !== undefined && routeConfig.auth.required === false;
+    const authDisabled = routeConfig?.auth === false ||
+      (routeConfig?.auth !== undefined && routeConfig.auth.required === false);
 
     // Create a temporary BurgerContext for the upgrade request
     const ctx = BurgerContext.create(
@@ -293,7 +294,7 @@ export class WebSocketAdapter {
       // Always run transform hooks (parse JWT, load user, etc.)
       // These set ctx.user which may be needed even when auth is disabled
       if (this.pluginTransform) {
-        applyTransform(ctx, this.pluginTransform);
+        await applyTransform(ctx, this.pluginTransform);
       }
 
       // Skip beforeRoute hooks if auth is explicitly disabled

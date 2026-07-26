@@ -69,7 +69,7 @@ function splitCookiePairs(header: string): Array<[string, string]> {
 }
 
 /** Parses a `Cookie` header value into a flat record (phase3 §5 cookie slot). */
-function parseCookies(header: string): Record<string, string> {
+export function parseCookies(header: string | null | undefined): Record<string, string> {
     const out: Record<string, string> = {};
     if (!header) return out;
     for (const [key, rawValue] of splitCookiePairs(header)) {

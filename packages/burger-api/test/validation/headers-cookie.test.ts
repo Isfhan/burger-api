@@ -9,7 +9,7 @@ import { createValidatorMiddleware } from '../../src/validation/validator';
 import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
-function fakeReq(
+function fakeCtx(
     method: string,
     opts: {
         query?: Record<string, string>;
@@ -40,9 +40,9 @@ describe('headers/cookie slots + response (M5)', () => {
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { headers: { 'x-api-key': 'abc' } });
-        await mw(req);
-        expect((req.validated as any).headers).toEqual({ 'x-api-key': 'abc' });
+        const ctx = fakeCtx('get', { headers: { 'x-api-key': 'abc' } });
+        await mw(ctx);
+        expect((ctx.validated as any).headers).toEqual({ 'x-api-key': 'abc' });
     });
 
     it('throws ValidationError for missing header', async () => {
@@ -51,9 +51,9 @@ describe('headers/cookie slots + response (M5)', () => {
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const req = fakeReq('get', {});
+        const ctx = fakeCtx('get', {});
         try {
-            await mw(req);
+            await mw(ctx);
             expect(true).toBe(false); // should not reach
         } catch (e) {
             expect(e).toBeInstanceOf(ValidationError);
@@ -67,9 +67,9 @@ describe('headers/cookie slots + response (M5)', () => {
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { cookie: 'sid=xyz' });
-        await mw(req);
-        expect((req.validated as any).cookies).toEqual({ sid: 'xyz' });
+        const ctx = fakeCtx('get', { cookie: 'sid=xyz' });
+        await mw(ctx);
+        expect((ctx.validated as any).cookies).toEqual({ sid: 'xyz' });
     });
 
     it('parses RFC 6265 quoted cookie values containing ; and =', async () => {
@@ -78,9 +78,9 @@ describe('headers/cookie slots + response (M5)', () => {
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { cookie: 'session="a;b=c"; csrftoken=token' });
-        await mw(req);
-        expect((req.validated as any).cookies).toEqual({
+        const ctx = fakeCtx('get', { cookie: 'session="a;b=c"; csrftoken=token' });
+        await mw(ctx);
+        expect((ctx.validated as any).cookies).toEqual({
             session: 'a;b=c',
             csrftoken: 'token',
         });
@@ -90,10 +90,10 @@ describe('headers/cookie slots + response (M5)', () => {
         const schema = { get: { query: z.object({ q: z.string() }) } };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const req = fakeReq('get', { query: { q: 'hi' } });
-        await mw(req);
-        expect((req.validated as any).query).toEqual({ q: 'hi' });
-        expect((req.validated as any).headers).toBeUndefined();
+        const ctx = fakeCtx('get', { query: { q: 'hi' } });
+        await mw(ctx);
+        expect((ctx.validated as any).query).toEqual({ q: 'hi' });
+        expect((ctx.validated as any).headers).toBeUndefined();
     });
 
     it('multiple failing slots report issues in ValidationError', async () => {
@@ -106,12 +106,12 @@ describe('headers/cookie slots + response (M5)', () => {
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
         // Both params and query fail (strings instead of numbers).
-        const req = fakeReq('get', {
+        const ctx = fakeCtx('get', {
             params: { id: 'abc' },
             query: { n: 'xyz' },
         });
         try {
-            await mw(req);
+            await mw(ctx);
             expect(true).toBe(false); // should not reach
         } catch (e) {
             expect(e).toBeInstanceOf(ValidationError);

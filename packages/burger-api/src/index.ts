@@ -14,7 +14,7 @@ import { ModuleLoader } from './compiler/module-loader';
 import { RouteTree } from './compiler/route-tree';
 
 // Import utils
-import { collectRoutes, compareRoutes } from './utils/index';
+import { collectRoutes, compareRoutes, setDir } from './utils/index';
 import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 
 // Import validation (Phase 3)
@@ -606,12 +606,13 @@ export class Burger {
     }
 }
 
-// Export utils
-export { setDir } from './utils/index';
-
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
 export type { BurgerServices } from './context/context';
+
+// Export utils used by examples and CLI build pipeline
+export { setDir } from './utils/index';
+export { cleanPrefix, normalizePath } from './utils/index';
 
 // Export error classes (Phase 3 + Phase 6)
 export { HTTPError, renderHTTPError } from './errors/http-error';
@@ -624,21 +625,24 @@ export { MethodNotAllowedError } from './errors/method-not-allowed';
 // Export docs providers (Phase 5)
 export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';
 
-// Export types
+// Export public types
 export type {
     ServerOptions,
     RequestHandler,
     BurgerNext,
     openapi,
-    RouteDefinition,
-    PageDefinition,
     RouteHooks,
     TransformMap,
     ContextSet,
     RouteMeta,
-    ContextField,
     OpenAPIConfig,
 } from './types/index';
+
+// Export lifecycle types (Phase 4)
+export type { Hook, ErrorHook } from './lifecycle/types';
+
+// Export validation types
+export type { ValidationIssue } from './validation/types';
 
 // Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)
 export type { Plugin, MacroFn } from './plugin/types';
@@ -663,14 +667,6 @@ export {
     WebSocketCloseCode,
     BurgerWSContext,
 } from './ws/types';
-
-// Export WebSocket modules (Phase 9)
-export { WebSocketScanner } from './ws/scanner';
-export type { ScannedWebSocketRoute, WebSocketScanResult } from './ws/scanner';
-
-export { WebSocketCompiler } from './ws/compiler';
-
-export { WebSocketRouter } from './ws/router';
 
 export { WebSocketAdapter } from './ws/adapter';
 export type { WebSocketAdapterOptions } from './ws/adapter';

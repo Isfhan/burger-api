@@ -39,7 +39,7 @@ export async function executeHookPlan(
     try {
         // 1. Transform — inject derived values onto the context.
         if (plan.transform) {
-            applyTransform(ctx, plan.transform);
+            await applyTransform(ctx, plan.transform);
         }
 
         // 2. Validation — framework-owned stage; throws ValidationError on failure.
@@ -69,8 +69,8 @@ export async function executeHookPlan(
                         method,
                         response.status,
                         body,
-                        {},
-                        false
+                        plan.validatorConfig ?? {},
+                        plan.debug ?? false
                     );
                     if (!outcome.ok && outcome.errorResponse) {
                         return outcome.errorResponse;
@@ -86,7 +86,7 @@ export async function executeHookPlan(
 
         return response;
     } catch (error) {
-        return dispatchOnError(error, plan.onError, ctx, plan.debug);
+        return dispatchOnError(error, plan.onError, ctx, plan.debug, plan.validatorConfig);
     }
 }
 
@@ -105,7 +105,8 @@ async function dispatchOnError(
     error: unknown,
     onErrorHooks: ErrorHook[],
     ctx: BurgerContext,
-    debug?: boolean
+    debug?: boolean,
+    validatorConfig?: import('../validation/types').ValidatorConfig
 ): Promise<Response> {
     const err = error instanceof Error ? error : new Error(String(error));
     for (const hook of onErrorHooks) {
@@ -125,7 +126,7 @@ async function dispatchOnError(
 
     // ValidationError retains its structured format (errorsBySlot grouping).
     if (error instanceof ValidationError) {
-        return error.toResponse(isDev);
+        return error.toResponse(isDev, validatorConfig);
     }
 
     // All other HTTPError subclasses and unknown errors → RFC 9457.

@@ -69,31 +69,24 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
  */
 export async function getMiddlewareList(): Promise<string[]> {
     try {
-        // Use Bun's native fetch - no node-fetch package needed!
-        const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/hooks`,
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
+        // Fetch both hooks and plugins from ecosystem
+        const [hooksRes, pluginsRes] = await Promise.all([
+            fetchWithTimeout(`${API_URL}/contents/ecosystem/hooks`, {
+                headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'burger-api-cli' },
+            }),
+            fetchWithTimeout(`${API_URL}/contents/ecosystem/plugins`, {
+                headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'burger-api-cli' },
+            }),
+        ]);
 
-        // Check if the request was successful
-        if (!response.ok) {
-            throw new Error(`GitHub returned status ${response.status}`);
-        }
+        const hooks = hooksRes.ok
+            ? ((await hooksRes.json()) as GitHubFile[]).filter((f) => f.type === 'dir').map((f) => f.name)
+            : [];
+        const plugins = pluginsRes.ok
+            ? ((await pluginsRes.json()) as GitHubFile[]).filter((f) => f.type === 'dir').map((f) => f.name)
+            : [];
 
-        // Parse the JSON response
-        const files = (await response.json()) as GitHubFile[];
-
-        // Filter to only show directories (each middleware is in its own folder)
-        // Sort alphabetically to make it easier to find things
-        return files
-            .filter((f) => f.type === 'dir')
-            .map((f) => f.name)
-            .sort();
+        return [...hooks, ...plugins].sort();
     } catch (err) {
         throw wrapFetchError(
             err,

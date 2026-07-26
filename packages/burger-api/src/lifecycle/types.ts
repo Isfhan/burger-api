@@ -1,5 +1,5 @@
 import type { BurgerContext } from '../context/context';
-import type { CompiledRouteValidators } from '../validation/types';
+import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
 
 /**
  * The forward lifecycle phases that run inside the single request pipeline.
@@ -67,6 +67,8 @@ export interface HookPlan {
     validators?: CompiledRouteValidators;
     /** Whether the server is in dev mode (debug or non-production). Controls error rendering detail. */
     debug?: boolean;
+    /** Global validation config (coerce, responseValidation, errorFormat, etc.). */
+    validatorConfig?: ValidatorConfig;
 }
 
 /**
