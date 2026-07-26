@@ -19,7 +19,9 @@ import {
     generateRouteFiles,
     generateHookTemplate,
     generatePluginTemplate,
+    generateWsFiles,
     type GenerateRouteOptions,
+    type GenerateWsOptions,
 } from '../utils/templates';
 import {
     success,
@@ -160,6 +162,64 @@ const pluginCommand = new Command('plugin')
     });
 
 // ─────────────────────────────────────────────────────
+// `generate ws <path>`
+// ─────────────────────────────────────────────────────
+
+const wsCommand = new Command('ws')
+    .description('Scaffold a WebSocket handler directory with convention files')
+    .argument('<path>', 'WebSocket path (e.g. chat, notifications/[room])')
+    .option('--no-hooks', 'Skip hooks.ts')
+    .option('--no-config', 'Skip config.ts')
+    .action(async (routePath: string, options: GenerateWsOptions) => {
+        if (!existsSync('package.json')) {
+            logError('Not in a BurgerAPI project directory.');
+            info('Run this from your project root.');
+            process.exit(1);
+        }
+
+        const config = await resolveBuildConfig(process.cwd());
+        const wsDir = join(process.cwd(), 'src', 'websocket', routePath);
+
+        if (existsSync(wsDir)) {
+            logError(`WebSocket directory already exists: ${wsDir}`);
+            info('Remove it first or choose a different name.');
+            process.exit(1);
+        }
+
+        const files = generateWsFiles(routePath, {
+            hooks: options.hooks,
+            config: options.config,
+        });
+
+        await mkdir(wsDir, { recursive: true });
+
+        for (const [filename, content] of Object.entries(files)) {
+            await writeFile(join(wsDir, filename), content);
+        }
+
+        newline();
+        success(`WebSocket route "${routePath}" created at ${wsDir}`);
+        newline();
+        header('Files created');
+        for (const filename of Object.keys(files)) {
+            bullet(filename);
+        }
+        newline();
+        header('How to use');
+        code(`// In your server entry point (e.g. src/index.ts):`);
+        code(`const burger = new Burger({`);
+        code(`    wsDir: "./src/websocket",`);
+        code(`    // ... other options`);
+        code(`});`);
+        newline();
+        info('Edit ws.ts to add your open/message/close handlers.');
+        if (files['hooks.ts']) {
+            info('Define route-level hooks in hooks.ts.');
+        }
+        newline();
+    });
+
+// ─────────────────────────────────────────────────────
 // `generate` (parent command)
 // ─────────────────────────────────────────────────────
 
@@ -168,4 +228,5 @@ export const generateCommand = new Command('generate')
     .alias('g')
     .addCommand(routeCommand)
     .addCommand(hookCommand)
-    .addCommand(pluginCommand);
+    .addCommand(pluginCommand)
+    .addCommand(wsCommand);

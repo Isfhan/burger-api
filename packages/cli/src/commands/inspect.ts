@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { resolveBuildConfig } from '../utils/config';
-import { scanApiRoutes, scanPageRoutes } from '../utils/scanner';
+import { scanApiRoutes, scanPageRoutes, scanWebSocketRoutes } from '../utils/scanner';
 import { detectExportedHookNames } from '../utils/route-methods';
 import {
     success,
@@ -76,11 +76,15 @@ export const inspectCommand = new Command('inspect')
         bullet(`pageDir:    ${config.pageDir}`);
         bullet(`apiPrefix:  ${config.apiPrefix}`);
         bullet(`pagePrefix: ${config.pagePrefix}`);
+        bullet(`wsDir:      ${config.wsDir}`);
         bullet(`debug:      ${config.debug}`);
 
         // Scan routes
         const apiEntries = await scanApiRoutes(cwd, config.apiDir, config.apiPrefix);
         const pageEntries = await scanPageRoutes(cwd, config.pageDir, config.pagePrefix);
+        const wsEntries = config.wsDir
+            ? await scanWebSocketRoutes(cwd, config.wsDir)
+            : [];
 
         // API Routes
         newline();
@@ -105,6 +109,22 @@ export const inspectCommand = new Command('inspect')
             for (const entry of pageEntries) {
                 const relativePath = entry.importPath.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
                 bullet(`${highlight('GET'.padEnd(30))} ${entry.routePath}  ${dimText(relativePath)}`);
+            }
+        }
+
+        // WebSocket Routes
+        newline();
+        header(`WebSocket Routes (${wsEntries.length})`);
+        if (wsEntries.length === 0) {
+            info('  No WebSocket routes found.');
+        } else {
+            for (const entry of wsEntries) {
+                const relativePath = entry.importPath.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
+                const features: string[] = [];
+                if (entry.hooksPath) features.push('hooks');
+                if (entry.configPath) features.push('config');
+                const featureStr = features.length > 0 ? ` [${features.join(', ')}]` : '';
+                bullet(`${highlight('WS'.padEnd(30))} ${entry.routePath}  ${dimText(relativePath + featureStr)}`);
             }
         }
 

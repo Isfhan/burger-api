@@ -65,6 +65,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'ws',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:ws'],
+        kind: 'tests',
+    },
+    {
         label: 'typecheck',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'typecheck'],
         kind: 'typecheck',

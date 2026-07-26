@@ -79,5 +79,6 @@ export interface BuildConfig {
     pageDir: string;
     apiPrefix: string;
     pagePrefix: string;
+    wsDir?: string;
     debug?: boolean;
 }

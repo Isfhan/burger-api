@@ -1313,3 +1313,73 @@ export function generatePluginTemplate(pluginName: string): string {
         '',
     ].join('\n');
 }
+
+// ─────────────────────────────────────────────────────
+// Generate WebSocket templates (Phase 9)
+// ─────────────────────────────────────────────────────
+
+export interface GenerateWsOptions {
+    hooks?: boolean;
+    config?: boolean;
+}
+
+/**
+ * Generate WebSocket convention files for `burger-api generate ws <path>`.
+ * Returns a map of filename → content.
+ */
+export function generateWsFiles(
+    routePath: string,
+    options: GenerateWsOptions = {}
+): Record<string, string> {
+    const files: Record<string, string> = {};
+
+    files['ws.ts'] = [
+        "import type { BurgerWS } from 'burger-api';",
+        '',
+        'export function open(ws: BurgerWS) {',
+        '    // Handle new connection',
+        '    ws.send(JSON.stringify({ type: "connected" }));',
+        '}',
+        '',
+        'export function message(ws: BurgerWS, message: string | Buffer) {',
+        '    // Handle incoming message',
+        '    // ws.send(message); // echo back',
+        '}',
+        '',
+        'export function close(ws: BurgerWS, code: number, reason: string) {',
+        '    // Handle connection close',
+        '}',
+        '',
+    ].join('\n');
+
+    if (options.hooks !== false) {
+        files['hooks.ts'] = [
+            "import type { BurgerWS } from 'burger-api';",
+            '',
+            'export function onOpen(ws: BurgerWS) {',
+            '    // Runs before open handler',
+            '}',
+            '',
+            'export function onMessage(ws: BurgerWS, message: string | Buffer) {',
+            '    // Runs before message handler',
+            '}',
+            '',
+            'export function onClose(ws: BurgerWS, code: number, reason: string) {',
+            '    // Runs before close handler',
+            '}',
+            '',
+        ].join('\n');
+    }
+
+    if (options.config !== false) {
+        files['config.ts'] = [
+            'export default {',
+            '    maxPayloadLength: 1024 * 1024, // 1MB',
+            '    idleTimeout: 30,',
+            '};',
+            '',
+        ].join('\n');
+    }
+
+    return files;
+}

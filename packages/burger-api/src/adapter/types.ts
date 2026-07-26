@@ -28,6 +28,8 @@ export interface AdapterStartOptions {
     debug?: boolean;
     /** Optional callback invoked once the server is listening. */
     onListen?: () => void;
+    /** Optional WebSocket handlers (Bun-specific). */
+    websocket?: any;
 }
 
 /**

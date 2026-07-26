@@ -9,6 +9,7 @@ import {
     generateRouteFiles,
     generateHookTemplate,
     generatePluginTemplate,
+    generateWsFiles,
 } from '../src/utils/templates';
 
 const tmpDir = join(import.meta.dir, '__tmp_generate');
@@ -152,5 +153,60 @@ describe('generate route files to disk', () => {
 
         const routeContent = await readFile(join(targetDir, 'route.ts'), 'utf-8');
         expect(routeContent).toContain('export async function GET');
+    });
+});
+
+describe('generateWsFiles', () => {
+    it('generates all convention files by default', () => {
+        const files = generateWsFiles('chat');
+        expect(files['ws.ts']).toBeDefined();
+        expect(files['hooks.ts']).toBeDefined();
+        expect(files['config.ts']).toBeDefined();
+    });
+
+    it('ws.ts contains open, message, close handlers', () => {
+        const files = generateWsFiles('chat');
+        expect(files['ws.ts']).toContain('export function open');
+        expect(files['ws.ts']).toContain('export function message');
+        expect(files['ws.ts']).toContain('export function close');
+        expect(files['ws.ts']).toContain('BurgerWS');
+    });
+
+    it('hooks.ts contains onOpen, onMessage, onClose', () => {
+        const files = generateWsFiles('chat');
+        expect(files['hooks.ts']).toContain('export function onOpen');
+        expect(files['hooks.ts']).toContain('export function onMessage');
+        expect(files['hooks.ts']).toContain('export function onClose');
+    });
+
+    it('config.ts contains WebSocket config options', () => {
+        const files = generateWsFiles('chat');
+        expect(files['config.ts']).toContain('maxPayloadLength');
+        expect(files['config.ts']).toContain('idleTimeout');
+    });
+
+    it('respects --no-hooks flag', () => {
+        const files = generateWsFiles('chat', { hooks: false });
+        expect(files['hooks.ts']).toBeUndefined();
+        expect(files['ws.ts']).toBeDefined();
+        expect(files['config.ts']).toBeDefined();
+    });
+
+    it('respects --no-config flag', () => {
+        const files = generateWsFiles('chat', { config: false });
+        expect(files['config.ts']).toBeUndefined();
+        expect(files['ws.ts']).toBeDefined();
+        expect(files['hooks.ts']).toBeDefined();
+    });
+
+    it('respects multiple --no-* flags', () => {
+        const files = generateWsFiles('chat', { hooks: false, config: false });
+        expect(Object.keys(files)).toEqual(['ws.ts']);
+    });
+
+    it('handles nested paths like notifications/[room]', () => {
+        const files = generateWsFiles('notifications/[room]');
+        expect(files['ws.ts']).toBeDefined();
+        expect(files['ws.ts']).toContain('export function open');
     });
 });

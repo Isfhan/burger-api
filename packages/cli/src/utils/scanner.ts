@@ -202,3 +202,112 @@ async function scanPageDir(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────
+// WebSocket route scanner (Phase 9)
+// ─────────────────────────────────────────────────────
+
+export interface WebSocketRouteScanEntry {
+    /** Absolute import path used by generated build entry */
+    importPath: string;
+    /** Route path with prefix (e.g. /ws/chat) */
+    routePath: string;
+    /** Absolute import path of a sibling `hooks.ts`, if present */
+    hooksPath?: string;
+    /** Absolute import path of a sibling `config.ts`, if present */
+    configPath?: string;
+}
+
+/**
+ * Scan wsDir for ws.ts files and return entries for inspect.
+ */
+export async function scanWebSocketRoutes(
+    cwd: string,
+    wsDir: string
+): Promise<WebSocketRouteScanEntry[]> {
+    const absoluteWsDir = path.resolve(cwd, wsDir);
+    if (!existsSync(absoluteWsDir)) {
+        return [];
+    }
+
+    const entries: WebSocketRouteScanEntry[] = [];
+    await scanWsDir(absoluteWsDir, '', entries);
+    return entries;
+}
+
+async function scanWsDir(
+    dir: string,
+    basePath: string,
+    out: WebSocketRouteScanEntry[]
+): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const entryPath = path.join(dir, entry.name);
+        const relativePath = path.join(basePath, entry.name);
+
+        if (entry.isDirectory()) {
+            await scanWsDir(entryPath, relativePath, out);
+            continue;
+        }
+
+        if (entry.isFile() && entry.name === 'ws.ts') {
+            const importPath = entryPath.split(path.sep).join('/');
+
+            // Build route path from directory structure
+            const routePath = buildWsRoutePath(basePath);
+
+            const scanEntry: WebSocketRouteScanEntry = {
+                importPath,
+                routePath,
+            };
+
+            // Check for sibling hooks.ts
+            const hooksFile = path.join(dir, 'hooks.ts');
+            if (existsSync(hooksFile)) {
+                scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
+            }
+
+            // Check for sibling config.ts
+            const configFile = path.join(dir, 'config.ts');
+            if (existsSync(configFile)) {
+                scanEntry.configPath = configFile.split(path.sep).join('/');
+            }
+
+            out.push(scanEntry);
+        }
+    }
+}
+
+/**
+ * Build WebSocket route path from directory structure.
+ * Handles dynamic [param] and group (name) directories.
+ */
+function buildWsRoutePath(relativePath: string): string {
+    if (!relativePath) return '/';
+
+    const parts = relativePath.split(path.sep);
+    const routeParts: string[] = [];
+
+    for (const part of parts) {
+        // Skip group directories (URL only)
+        if (/^\(.+\)$/.test(part)) continue;
+
+        // Convert wildcard [...]
+        if (/^\[\.\.\.([^\]]*)\]$/.test(part)) {
+            routeParts.push('*');
+            continue;
+        }
+
+        // Convert dynamic [param]
+        const dynamicMatch = part.match(/^\[([^\]]+)\]$/);
+        if (dynamicMatch) {
+            routeParts.push(`:${dynamicMatch[1]}`);
+            continue;
+        }
+
+        routeParts.push(part);
+    }
+
+    return '/' + routeParts.join('/');
+}

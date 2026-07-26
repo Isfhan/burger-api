@@ -17,12 +17,12 @@ import type {
  */
 export class BunAdapter implements RuntimeAdapter {
     start(opts: AdapterStartOptions): ServerHandle {
-        const serverOptions = {
+        const serverOptions: any = {
             hostname: opts.hostname,
             routes: opts.staticRoutes,
-            fetch: async (request: Request) => {
+            fetch: async (request: Request, server: any) => {
                 try {
-                    return await opts.fetch(request);
+                    return await opts.fetch(request, server);
                 } catch (error) {
                     // Safety net: errors that escape the pipeline.
                     // In Phase 6+, all HTTPError subclasses are caught
@@ -42,6 +42,12 @@ export class BunAdapter implements RuntimeAdapter {
             },
             port: opts.port,
         };
+
+        // Add WebSocket handlers if provided (Phase 9)
+        if (opts.websocket) {
+            serverOptions.websocket = opts.websocket;
+        }
+
         const server = serve(serverOptions as Parameters<typeof serve>[0]);
 
         if (opts.onListen) {

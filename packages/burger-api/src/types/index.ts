@@ -59,6 +59,12 @@ export interface ServerOptions extends Omit<
     pagePrefix?: string;
 
     /**
+     * The directory path to load WebSocket routes from.
+     * If not specified, no WebSocket routes are loaded.
+     */
+    wsDir?: string;
+
+    /**
      * The version of the API. This is an optional property that can be used
      * to specify the version of the API.
      */

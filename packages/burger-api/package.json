@@ -29,6 +29,7 @@
     "test:core": "bun test --timeout 30000 test/core/**/*.test.ts",
     "test:errors": "bun test --timeout 30000 test/errors/**/*.test.ts",
     "test:smoke": "bun test --timeout 30000 test/plugin-macro-smoke.test.ts",
+    "test:ws": "bun test --timeout 30000 test/ws/**/*.test.ts",
     "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
   },
   "keywords": [

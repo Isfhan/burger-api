@@ -16,6 +16,7 @@ const CONVENTION_DEFAULTS: BuildConfig = {
     pageDir: './src/pages',
     apiPrefix: '/api',
     pagePrefix: '/',
+    wsDir: './src/websocket',
     debug: false,
 };
 
@@ -80,6 +81,10 @@ function mergeBuildConfig(
             typeof user.pagePrefix === 'string'
                 ? user.pagePrefix
                 : defaults.pagePrefix,
+        wsDir:
+            typeof user.wsDir === 'string'
+                ? user.wsDir
+                : defaults.wsDir,
         debug: typeof user.debug === 'boolean' ? user.debug : defaults.debug,
     };
 }

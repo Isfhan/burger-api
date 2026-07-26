@@ -26,6 +26,12 @@ import { MacroRegistry } from './plugin/macro';
 import type { Plugin, MacroFn } from './plugin/types';
 import type { Scope } from './chain/node';
 
+// Import WebSocket modules (Phase 9)
+import { WebSocketScanner } from './ws/scanner';
+import { WebSocketCompiler } from './ws/compiler';
+import { WebSocketRouter } from './ws/router';
+import { WebSocketAdapter } from './ws/adapter';
+
 // Import types
 import type {
     ServerOptions,
@@ -36,6 +42,7 @@ import type {
     OpenAPIConfig,
     DocsProvider,
 } from './types/index';
+import type { WebSocketConfig } from './ws/types';
 import type { HTMLBundle } from 'bun';
 
 export class Burger {
@@ -115,6 +122,31 @@ export class Burger {
     } = {};
 
     /**
+     * WebSocket directory (dev path)
+     */
+    private wsDir?: string;
+
+    /**
+     * WebSocket router (Phase 9)
+     */
+    private wsRouter?: WebSocketRouter;
+
+    /**
+     * WebSocket adapter (Phase 9)
+     */
+    private wsAdapter?: WebSocketAdapter;
+
+    /**
+     * WebSocket config (Phase 9)
+     */
+    private wsConfigOptions?: WebSocketConfig;
+
+    /**
+     * Programmatic WebSocket routes (Phase 9)
+     */
+    private programmaticWsRoutes: Map<string, any> = new Map();
+
+    /**
      * The not found response
      */
     private readonly NOT_FOUND = NOT_FOUND;
@@ -131,13 +163,14 @@ export class Burger {
      * - port: The port number to listen on.
      * - apiDir: The directory path to load API routes from.
      * - pageDir: The directory path to load page routes from.
+     * - wsDir: The directory path to load WebSocket routes from.
      */
     constructor(private options: ServerOptions) {
         // Create server instance
         this.server = new Server(options);
 
         // Fast initialization for routers with nullish coalescing
-        const { apiDir, pageDir, apiPrefix, pagePrefix } = options;
+        const { apiDir, pageDir, apiPrefix, pagePrefix, wsDir } = options;
 
         // Initialize API router only when using runtime scanning (no prebuilt apiRoutes)
         this.apiRouter =
@@ -152,6 +185,9 @@ export class Burger {
             pageDir && !Array.isArray(options.pageRoutes)
                 ? new PageRouter(pageDir, pagePrefix || '')
                 : undefined;
+
+        // Initialize WebSocket directory (Phase 9)
+        this.wsDir = wsDir;
 
         // Phase 3: seed the schema registry from ServerOptions.models so model
         // refs in route schemas resolve at compile time (phase3 §12.12, D10).
@@ -202,6 +238,27 @@ export class Burger {
      */
     provide(name: string, service: unknown): this {
         this.providers.set(name, service);
+        return this;
+    }
+
+    /**
+     * Register a WebSocket route programmatically (Phase 9).
+     * @param path  Route path (e.g., "/chat", "/notifications/:room")
+     * @param handlers  WebSocket handler functions
+     * @returns `this` for chaining.
+     */
+    websocket(path: string, handlers: import('./ws/types').WebSocketHandlers): this {
+        this.programmaticWsRoutes.set(path, { path, handlers });
+        return this;
+    }
+
+    /**
+     * Set global WebSocket configuration (Phase 9).
+     * @param config  WebSocket configuration options
+     * @returns `this` for chaining.
+     */
+    wsConfig(config: WebSocketConfig): this {
+        this.wsConfigOptions = config;
         return this;
     }
 
@@ -391,6 +448,90 @@ export class Burger {
     }
 
     /**
+     * Process WebSocket routes and add them to the WebSocket router (Phase 9).
+     * @returns A promise that resolves to a boolean indicating if WebSocket routes were configured
+     */
+    private async processWebSocketRoutes(): Promise<boolean> {
+        // Create WebSocket router
+        this.wsRouter = new WebSocketRouter();
+
+        // Extract auth hooks from resolved plugins for WebSocket upgrade
+        const resolvedPlugins = await this.pluginRegistry.resolveAll();
+        let pluginTransform: import('./lifecycle/types').TransformMap | undefined;
+        const pluginBeforeRoute: import('./lifecycle/types').Hook[] = [];
+
+        for (const plugin of resolvedPlugins) {
+            // Collect transform hooks
+            if (plugin.hooks.transform) {
+                if (!pluginTransform) pluginTransform = {};
+                Object.assign(pluginTransform, plugin.hooks.transform);
+            }
+            // Collect beforeRoute hooks
+            if (plugin.hooks.beforeRoute) {
+                const hooks = Array.isArray(plugin.hooks.beforeRoute)
+                    ? plugin.hooks.beforeRoute
+                    : [plugin.hooks.beforeRoute];
+                pluginBeforeRoute.push(...hooks);
+            }
+        }
+
+        this.wsAdapter = new WebSocketAdapter({
+            router: this.wsRouter,
+            config: this.wsConfigOptions,
+            debug: this.options.debug,
+            providers: this.providers,
+            pluginTransform,
+            pluginBeforeRoute: pluginBeforeRoute.length > 0 ? pluginBeforeRoute : undefined,
+        });
+
+        // Add programmatic routes
+        for (const [path, route] of this.programmaticWsRoutes) {
+            this.wsRouter.addRoute({
+                path,
+                handlers: route.handlers,
+                config: this.wsConfigOptions ?? {},
+            });
+        }
+
+        // Scan file-based routes if wsDir is provided
+        if (this.wsDir) {
+            const scanner = new WebSocketScanner(this.wsDir);
+            const scanResult = await scanner.scan();
+
+            if (scanResult.routes.length > 0) {
+                const compiler = new WebSocketCompiler();
+
+                // Set global hooks if found
+                if (scanResult.globalHooks) {
+                    try {
+                        const hooksModule = await import(scanResult.globalHooks);
+                        compiler.setGlobalHooks({
+                            onOpen: hooksModule.onOpen,
+                            onMessage: hooksModule.onMessage,
+                            onClose: hooksModule.onClose,
+                        });
+                    } catch (error) {
+                        console.error('[WebSocket] Failed to load global hooks:', error);
+                    }
+                }
+
+                // Set global config
+                if (this.wsConfigOptions) {
+                    compiler.setGlobalConfig(this.wsConfigOptions);
+                }
+
+                // Compile all routes
+                const compiledRoutes = await compiler.compileAll(scanResult.routes);
+
+                // Add to router
+                this.wsRouter.addRoutes(compiledRoutes);
+            }
+        }
+
+        return this.wsRouter.getRouteCount() > 0;
+    }
+
+    /**
      * Starts the server and begins listening for incoming requests.
      * @param port - The port number to listen on. Defaults to `4000`.
      * @param cb - An optional cb function to be executed when the server is listening.
@@ -398,13 +539,14 @@ export class Burger {
      */
     public async serve(port: number = 4000, cb?: () => void): Promise<void> {
         // Process routes in parallel if possible
-        const [pagesConfigured, apiConfigured] = await Promise.all([
+        const [pagesConfigured, apiConfigured, wsConfigured] = await Promise.all([
             this.processPageRoutes(),
             this.processApiRoutes(),
+            this.processWebSocketRoutes(),
         ]);
 
         // Flag to track if any routes were loaded
-        const routesConfigured = pagesConfigured || apiConfigured;
+        const routesConfigured = pagesConfigured || apiConfigured || wsConfigured;
 
         // If routes were configured, start the server
         if (routesConfigured) {
@@ -413,9 +555,29 @@ export class Burger {
                 ? (request) => this.dynamicRouter!.fetch(request)
                 : () => this.NOT_FOUND;
 
+            // Get WebSocket handlers and fetch handler if adapter is configured
+            const wsOptions = this.wsAdapter?.createWebSocketOption();
+            const wsFetchHandler = this.wsAdapter?.createFetchHandler();
+
+            // Create a combined fetch handler:
+            // 1. Try WebSocket upgrade first (if wsAdapter exists)
+            // 2. Fall through to HTTP handler
+            const combinedFetch: FetchHandler = wsFetchHandler
+                ? async (request, server) => {
+                    // Try WebSocket upgrade (calls server.upgrade internally)
+                    const wsResponse = await wsFetchHandler(request, server as any);
+                    if (wsResponse !== undefined) {
+                        return wsResponse as Response;
+                    }
+                    // Not a WebSocket upgrade or upgrade failed — fall through to HTTP
+                    return fetchHandler(request);
+                }
+                : fetchHandler;
+
             this.server.start({
                 staticRoutes: this.routes,
-                fetch: fetchHandler,
+                fetch: combinedFetch,
+                websocket: wsOptions,
                 port,
                 onListen: cb,
             });
@@ -474,3 +636,34 @@ export type {
 // Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)
 export type { Plugin, MacroFn } from './plugin/types';
 export type { Scope } from './chain/node';
+
+// Export WebSocket types (Phase 9)
+export type {
+    BurgerWS,
+    WebSocketData,
+    WebSocketConfig,
+    WebSocketRouteDefinition,
+    WebSocketHandlers,
+    WebSocketHooks,
+    CompiledWebSocketRoute,
+    WebSocketModule,
+    WebSocketHooksModule,
+    WebSocketConfigModule,
+} from './ws/types';
+
+export {
+    WebSocketReadyState,
+    WebSocketCloseCode,
+    BurgerWSContext,
+} from './ws/types';
+
+// Export WebSocket modules (Phase 9)
+export { WebSocketScanner } from './ws/scanner';
+export type { ScannedWebSocketRoute, WebSocketScanResult } from './ws/scanner';
+
+export { WebSocketCompiler } from './ws/compiler';
+
+export { WebSocketRouter } from './ws/router';
+
+export { WebSocketAdapter } from './ws/adapter';
+export type { WebSocketAdapterOptions } from './ws/adapter';
