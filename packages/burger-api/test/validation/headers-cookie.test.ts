@@ -63,24 +63,24 @@ describe('headers/cookie slots + response (M5)', () => {
 
     it('validates cookie values', async () => {
         const schema = {
-            get: { cookie: z.object({ sid: z.string() }) },
+            get: { cookies: z.object({ sid: z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
         const req = fakeReq('get', { cookie: 'sid=xyz' });
         await mw(req);
-        expect((req.validated as any).cookie).toEqual({ sid: 'xyz' });
+        expect((req.validated as any).cookies).toEqual({ sid: 'xyz' });
     });
 
     it('parses RFC 6265 quoted cookie values containing ; and =', async () => {
         const schema = {
-            get: { cookie: z.object({ session: z.string(), csrftoken: z.string() }) },
+            get: { cookies: z.object({ session: z.string(), csrftoken: z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
         const req = fakeReq('get', { cookie: 'session="a;b=c"; csrftoken=token' });
         await mw(req);
-        expect((req.validated as any).cookie).toEqual({
+        expect((req.validated as any).cookies).toEqual({
             session: 'a;b=c',
             csrftoken: 'token',
         });

@@ -86,7 +86,7 @@ export class Burger {
     private routeTree?: import('./compiler/route-tree').RouteTree;
 
     /**
-     * Plugin registry (Phase 4 M5). Populated via `.use()` before `serve()`;
+     * Plugin registry (Phase 4 M5). Populated via `.usePlugin()` before `serve()`;
      * resolved into `HookChain` nodes during `processApiRoutes()`.
      */
     private pluginRegistry = new PluginRegistry();
@@ -202,7 +202,7 @@ export class Burger {
     /**
      * Registers a plugin. Plugin hooks are compiled into the HookChain for
      * every route (scoped according to the plugin's scope). The same plugin
-     * (name + seed) is deduplicated — calling `.use()` twice with the same
+     * (name + seed) is deduplicated — calling `.usePlugin()` twice with the same
      * identity is a no-op.
      *
      * @param plugin  The plugin object or a factory function returning one.
@@ -210,9 +210,16 @@ export class Burger {
      * @param seed    Optional disambiguation string (e.g. two JWT plugins).
      * @returns `this` for chaining.
      */
-    use(plugin: Plugin, scope?: Scope, seed?: string): this {
+    usePlugin(plugin: Plugin, scope?: Scope, seed?: string): this {
         this.pluginRegistry.register(plugin, scope ?? 'plugin', seed);
         return this;
+    }
+
+    /**
+     * @deprecated Use `usePlugin()` instead.
+     */
+    use(plugin: Plugin, scope?: Scope, seed?: string): this {
+        return this.usePlugin(plugin, scope, seed);
     }
 
     /**
@@ -315,7 +322,7 @@ export class Burger {
      * the URL), avoiding the `fetch` fallback hop. Unmatched, loose-trailing-
      * slash, and empty-param requests fall through to `Router.fetch` (the trie
      * fallback). Both paths execute the same compiled handler, so method
-     * dispatch, 405+Allow, auto-HEAD, and middleware behavior are identical.
+     * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior are identical.
      *
      * @returns A promise that resolves to a boolean
      */
@@ -381,10 +388,8 @@ export class Burger {
 
         // Extract onRequest hooks from plugins — these run before routing
         // (pre-routing, app-level). They are NOT per-route HookPlan entries.
-        // Global onRequest from src/hooks.ts is merged in (runs first).
-        const onRequestHooks: import('./lifecycle/types').Hook[] = [
-            ...(globalOnRequest ?? []),
-        ];
+        // Order: Framework (internal) → Plugin → Global (src/hooks.ts) → Route
+        const onRequestHooks: import('./lifecycle/types').Hook[] = [];
         for (const plugin of allHooks) {
             const h = plugin.hooks.onRequest;
             if (h) {
@@ -392,6 +397,8 @@ export class Burger {
                 else onRequestHooks.push(h);
             }
         }
+        // Global onRequest from src/hooks.ts runs after plugins
+        onRequestHooks.push(...(globalOnRequest ?? []));
 
         router.compile(apiRoutes, allHooks, this.providers, onRequestHooks);
         this.dynamicRouter = router;

@@ -166,7 +166,7 @@ describe('WebSocket Auth Integration (Phase 10)', () => {
             const response = await fetchHandler(request, mockServer as any);
 
             expect(response).toBeInstanceOf(Response);
-            expect((response as Response).status).toBe(401);
+            expect((response as Response).status).toBe(403);
         });
 
         it('should return 401 when auth required but no user provided', async () => {

@@ -23,6 +23,25 @@ import { parseCookies } from './cookie-parser';
 export interface BurgerServices {}
 
 /**
+ * Module augmentation target for adding custom properties to BurgerContext.
+ * Use this to type request-scoped values set in `transform` hooks:
+ *
+ * ```ts
+ * declare module "burger-api" {
+ *   interface BurgerContext {
+ *     user: User;
+ *     session: Session;
+ *     tenant: Tenant;
+ *   }
+ * }
+ * ```
+ *
+ * The actual `BurgerContext` class is defined below. This interface exists
+ * solely for declaration merging via module augmentation.
+ */
+export interface BurgerContext {}
+
+/**
  * `BurgerContext` — the public request context type.
  *
  * Exactly **one** instance is allocated per request, via the static
@@ -274,7 +293,7 @@ for (const name of Object.getOwnPropertyNames(Request.prototype)) {
  * leak state across requests. The delegation **methods** (incl. `json`, `text`,
  * `arrayBuffer`, `blob`, `formData`, `clone`) are intentionally left
  * writable/configurable so the framework can reassign `req.json` per instance
- * (validator.ts) and user middleware can attach custom properties (§6.1.4).
+ * (validator.ts) and user hooks can attach custom properties (§6.1.4).
  * Freezing only getters preserves both the §13 safety goal and the documented
  * mutability contract without breaking existing validation behavior.
  */

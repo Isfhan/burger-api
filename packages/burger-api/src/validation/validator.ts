@@ -1,20 +1,18 @@
 /**
- * The validator coordinator middleware — the evolution of
+ * The validator coordinator — the evolution of
  * `createValidationMiddleware` (phase3 §12.11, §13.6).
  *
  * It consumes the prepared `CompiledRouteValidators` produced by the schema
  * preparation component. When a request comes in it runs `cv.validate(value)`
  * once per slot — no walk over the raw schema, no adapter (connector)
  * selection, no preparing at request time (phase3 §15.3). It does NOT redesign
- * the middleware runner.
+ * the hook pipeline.
  *
- * Behavior mirrors the legacy middleware so existing applications behave
+ * Behavior mirrors the legacy lifecycle so existing applications behave
  * identically:
  * - skips work when `req.validated` is already set,
  * - validates params/query/body with the same checks,
- * - patches `req.json` to return the validated body,
- * - returns 400 with `{ errors }` on failure (raw issues for M2; M6 adds
- *   structured rendering).
+ * - returns 422 with RFC 9457 problem details on failure.
  */
 
 import type { BurgerContext } from '../context/context';
@@ -171,19 +169,19 @@ export function createValidatorMiddleware(
             }
         }
 
-        // Cookie
-        if (methodValidators.cookie) {
+        // Cookies
+        if (methodValidators.cookies) {
             const cookieHeader = ctx.headers.get('cookie') ?? '';
             const cookieRecord = parseCookies(cookieHeader);
-            const input = coercion?.cookie
-                ? applyCoercion(coercion.cookie, cookieRecord)
+            const input = coercion?.cookies
+                ? applyCoercion(coercion.cookies, cookieRecord)
                 : cookieRecord;
-            const result = methodValidators.cookie.validate(input);
+            const result = methodValidators.cookies.validate(input);
             if (result.success) {
-                (validated as any).cookie = result.data;
+                (validated as any).cookies = result.data;
             } else {
                 if (!errorsBySlot) errorsBySlot = {};
-                errorsBySlot.cookie = result.issues;
+                errorsBySlot.cookies = result.issues;
             }
         }
 
@@ -199,7 +197,6 @@ export function createValidatorMiddleware(
                     const result = methodValidators.body.validate(bodyData);
                     if (result.success) {
                         (validated as any).body = result.data;
-                        ctx.json = async () => result.data;
                     } else {
                         if (!errorsBySlot) errorsBySlot = {};
                         errorsBySlot.body = result.issues;

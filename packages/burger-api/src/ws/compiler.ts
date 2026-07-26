@@ -69,8 +69,8 @@ export class WebSocketCompiler {
     // Import config if present
     let routeConfig: WebSocketConfig = {};
     if (scanned.configFile) {
-      const configModule = await import(scanned.configFile) as WebSocketConfigModule;
-      routeConfig = { ...configModule };
+      const configModule = await import(scanned.configFile) as Record<string, unknown>;
+      routeConfig = (configModule.default as WebSocketConfig) ?? { ...configModule } as WebSocketConfig;
     }
 
     // Merge global and route-specific config

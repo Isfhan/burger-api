@@ -51,7 +51,7 @@ export type ValidationSlot =
     | 'params'
     | 'query'
     | 'headers'
-    | 'cookie'
+    | 'cookies'
     | 'body';
 
 /** The kinds of validator providers known to the adapter (connector) layer. */
@@ -99,7 +99,7 @@ export type CoercionOp = 'number' | 'boolean' | 'date' | 'none';
  * runtime with no extra checks on each request (phase3 §14.5, §7).
  */
 export interface CoercionPlan {
-    slot: 'query' | 'params' | 'headers' | 'cookie';
+    slot: 'query' | 'params' | 'headers' | 'cookies';
     fields: Record<string, CoercionOp>;
 }
 
@@ -143,13 +143,13 @@ export interface CompiledRouteValidators {
             params?: CompiledValidator;
             query?: CompiledValidator;
             headers?: CompiledValidator;
-            cookie?: CompiledValidator;
+            cookies?: CompiledValidator;
             body?: CompiledValidator;
             coercion?: {
                 query?: CoercionPlan;
                 params?: CoercionPlan;
                 headers?: CoercionPlan;
-                cookie?: CoercionPlan;
+                cookies?: CoercionPlan;
             };
         }
     >;

@@ -84,7 +84,7 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
  */
 export function buildPlan(
     slotSchema: SchemaInput,
-    slot: 'query' | 'params' | 'headers' | 'cookie'
+    slot: 'query' | 'params' | 'headers' | 'cookies'
 ): CoercionPlan | undefined {
     if (!(slotSchema instanceof z.ZodType)) return undefined;
     const shape = (slotSchema as z.ZodObject<any, any>).shape;

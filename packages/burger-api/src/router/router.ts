@@ -27,7 +27,7 @@ import { BurgerContext } from '../context/context';
  *   the internal trie so behavior is fully preserved.
  *
  * Both paths execute exactly the same compiled handler, so method dispatch,
- * 405+Allow, auto-HEAD, and middleware behavior are identical. The native table
+ * 405+Allow, auto-HEAD, and lifecycle behavior are identical. The native table
  * is consumed only by the Bun adapter; non-Bun (WinterCG) adapters dispatch
  * every route through `fetch` + trie (see ROADMAP-phase1.md §4.1).
  */

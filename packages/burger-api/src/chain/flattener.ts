@@ -4,8 +4,8 @@ import type { ChainNode } from './node';
 
 const SCOPE_RANK: Record<string, number> = {
     framework: 0,
-    global: 1,
-    plugin: 2,
+    plugin: 1,
+    global: 2,
     local: 3,
 };
 
@@ -89,8 +89,8 @@ export function flatten(
         }
     }
 
-    // Request hooks: Framework → Global → Plugin → Route (forward)
-    beforeRoute.push(...frameworkBefore, ...globalBefore, ...pluginBefore, ...localBefore);
+    // Request hooks: Framework → Plugin → Global → Route (forward)
+    beforeRoute.push(...frameworkBefore, ...pluginBefore, ...globalBefore, ...localBefore);
     // Response hooks: Route → Global → Plugin → Framework (reversed)
     afterRoute.push(...localAfter, ...globalAfter, ...pluginAfter, ...frameworkAfter);
     mapResponse.push(...localResp, ...globalResp, ...pluginResp, ...frameworkResp);

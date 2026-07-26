@@ -92,7 +92,7 @@ export interface ServerOptions extends Omit<
     /**
      * Reusable named schemas ("models") referenced by string from any route's
      * `schema` (Phase 3). Resolved at compile time; fail-fast on missing refs.
-     * Seeded from `burger.config.ts` models by the CLI (phase3 §12.12, D10).
+     * Seeded from `burger.build.ts` models by the CLI (phase3 §12.12, D10).
      */
     models?: Record<string, SchemaInput>;
 
@@ -158,7 +158,7 @@ export interface RouteDefinition {
      * onto the single pipeline: `beforeRoute` (global → route) runs before
      * the handler; `afterRoute` / `mapResponse` are response phases.
      * `route.ts` contains handlers only — there is no
-     * per-route `middleware` export.
+     * per-route `hooks` export.
      */
     hooks?: RouteHooks;
 
@@ -206,7 +206,7 @@ export type RouteSchema = {
         params?: SchemaInput | string;
         query?: SchemaInput | string;
         headers?: SchemaInput | string;
-        cookie?: SchemaInput | string;
+        cookies?: SchemaInput | string;
         body?: SchemaInput | string;
         /** Per-route opt-in override for coercion (phase3 §7, §11). */
         coerce?: boolean;

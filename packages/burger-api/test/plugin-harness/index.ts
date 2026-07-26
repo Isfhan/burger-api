@@ -36,7 +36,7 @@ const burger = new Burger({
     debug: false,
 });
 
-burger.use(testPlugin);
+burger.usePlugin(testPlugin);
 burger.macro('test-macro', () => testMacro);
 
 burger.serve(port);

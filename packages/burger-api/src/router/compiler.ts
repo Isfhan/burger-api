@@ -28,7 +28,7 @@ import type { CompiledRouteValidators, ValidatorConfig } from '../validation/typ
  *
  * Responsibilities:
  * - Build the optimized `CompiledHandler` per route (method dispatch + 405/Allow
- *   + auto-HEAD + middleware pipeline delegation).
+ *   + auto-HEAD + hook pipeline delegation).
  * - Classify each route as static (→ `StaticMap`) or dynamic/wildcard (→ `Trie`).
  * - Populate the `AllowCache`.
  * - Optionally run the `RouteAccessAnalyzer` once per route (compile-time only;
@@ -239,7 +239,7 @@ function toHookArray<T>(h: T | T[] | undefined): T[] {
 
 /**
  * Builds a compiled handler that performs method dispatch, 405+Allow,
- * auto-HEAD, creates the single `BurgerContext`, delegates to the middleware
+ * auto-HEAD, creates the single `BurgerContext`, delegates to the hook
  * pipeline, and merges `ctx.set` into the response via `applySet`.
  */
 function buildCompiledHandler(
@@ -338,7 +338,7 @@ function isStaticPath(path: string): boolean {
 
 /**
  * Optionally registers a provably-constant `OPTIONS` (204) response via
- * `Bun.nativeStaticResponse`. Only safe when the route has no middleware,
+ * `Bun.nativeStaticResponse`. Only safe when the route has no hooks,
  * no schema, and uses the framework's auto-generated OPTIONS handler — so the
  * response is identical for every request. The pipeline works correctly without
  * this; it is a pure performance optimization.

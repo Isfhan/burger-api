@@ -37,7 +37,7 @@ export class SchemaRegistry {
         if (!schema) {
             throw new Error(
                 `[burger-api] Unknown model reference: "${name}". ` +
-                    `Register it in ServerOptions.models (burger.config.ts).`
+                    `Register it in ServerOptions.models (burger.build.ts).`
             );
         }
         return schema;

@@ -25,11 +25,11 @@ export const CONVENTION_FILES = [
 export type ConventionFile = (typeof CONVENTION_FILES)[number];
 
 /**
- * The one forbidden file. The v2 architecture removes the separate middleware
- * concept entirely — lifecycle is expressed only through hooks. Discovery of a
- * `middleware.ts` is a compile-time error (fail fast, per `ROADMAP.md` §6.3).
+ * Forbidden files. The v2 architecture removes the separate middleware
+ * concept entirely — lifecycle is expressed only through hooks. Discovery of
+ * these files is a compile-time error (fail fast, per `ROADMAP.md` §6.3).
  */
-export const FORBIDDEN_FILE = 'middleware';
+export const FORBIDDEN_FILES = ['middleware', 'use', 'webhook'] as const;
 
 /**
  * Returns true if `name` (a file stem, no extension) is a recognized
@@ -41,13 +41,13 @@ export function isConventionFile(stem: string): stem is ConventionFile {
 
 /**
  * Validates a discovered file stem against the convention.
- * @throws if the file is forbidden (`middleware.ts`).
+ * @throws if the file is forbidden.
  */
 export function assertConventionFile(stem: string): void {
-    if (stem === FORBIDDEN_FILE) {
+    if ((FORBIDDEN_FILES as readonly string[]).includes(stem)) {
         throw new Error(
-            `Forbidden file "middleware.ts" discovered at "${stem}.ts". ` +
-                `BurgerAPI has no middleware concept — express infrastructure ` +
+            `Forbidden file "${stem}.ts" discovered. ` +
+                `BurgerAPI has no middleware/webhook concept — express infrastructure ` +
                 `as hooks in "hooks.ts" (see ROADMAP.md §3.4).`
         );
     }

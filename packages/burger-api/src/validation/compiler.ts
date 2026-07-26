@@ -41,7 +41,7 @@ const REQUEST_SLOTS: ValidationSlot[] = [
     'params',
     'query',
     'headers',
-    'cookie',
+    'cookies',
     'body',
 ];
 
@@ -116,7 +116,7 @@ export function compileRouteSchema(
             const coercion: NonNullable<
                 CompiledRouteValidators['methods'][string]['coercion']
             > = {};
-            for (const slot of ['query', 'params', 'headers', 'cookie'] as const) {
+            for (const slot of ['query', 'params', 'headers', 'cookies'] as const) {
                 const raw = (m as Record<string, SchemaInput | string | undefined>)[
                     slot
                 ];

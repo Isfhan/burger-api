@@ -92,6 +92,7 @@ export async function detectExportedMethods(
 
 /** Lifecycle hook export names recognized in `hooks.ts`. */
 export const HOOK_NAMES = [
+    'onRequest',
     'beforeRoute',
     'afterRoute',
     'mapResponse',
@@ -101,11 +102,11 @@ export const HOOK_NAMES = [
 
 /** Matches `export const beforeRoute = ...` (and the other hook names). */
 const EXPORT_HOOK_CONST_RE =
-    /export\s+const\s+(beforeRoute|afterRoute|mapResponse|onError|transform)\s*=/g;
+    /export\s+const\s+(onRequest|beforeRoute|afterRoute|mapResponse|onError|transform)\s*=/g;
 
 /** Matches `export function beforeRoute( ...` (and the other hook names). */
 const EXPORT_HOOK_FUNCTION_RE =
-    /export\s+(?:async\s+)?function\s+(beforeRoute|afterRoute|mapResponse|onError|transform)\s*\(/g;
+    /export\s+(?:async\s+)?function\s+(onRequest|beforeRoute|afterRoute|mapResponse|onError|transform)\s*\(/g;
 
 /**
  * Detect which lifecycle hook names a `hooks.ts` module exports. Mirrors

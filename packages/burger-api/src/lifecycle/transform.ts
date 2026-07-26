@@ -31,7 +31,7 @@ const RESERVED = new Set([
  * (built-in properties like `params`, `query`, `body`, etc.) are silently
  * dropped with a `console.warn` in debug mode.
  *
- * This runs once per request, after `beforeRoute` and before the handler.
+ * This runs once per request, before validation and before `beforeRoute`.
  * Order: global `transform` entries are applied first, then route-level entries
  * (so route can reference or override global-transformed values).
  */

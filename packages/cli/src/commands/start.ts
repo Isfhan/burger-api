@@ -29,14 +29,14 @@ interface StartCommandOptions {
 
 /**
  * Resolve the production entry file.
- * Priority: --file flag → .build/bundle/index.js → src/index.ts
+ * Priority: --file flag → .build/bundle/app.js → src/index.ts
  */
 function resolveEntryFile(fileFlag: string): string {
     if (fileFlag !== 'src/index.ts') {
         return fileFlag;
     }
 
-    const buildOutput = join('.build', 'bundle', 'index.js');
+    const buildOutput = join('.build', 'bundle', 'app.js');
     if (existsSync(buildOutput)) {
         return buildOutput;
     }
@@ -58,7 +58,7 @@ export const startCommand = new Command('start')
         if (!existsSync(file)) {
             logError(`Entry file not found: ${file}`);
             info(
-                file === '.build/bundle/index.js'
+                file === '.build/bundle/app.js'
                     ? 'Run "burger-api build" first to create the production bundle.'
                     : 'Make sure you are in the project directory.'
             );

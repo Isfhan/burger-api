@@ -330,20 +330,25 @@ export class WebSocketAdapter {
 
       return { user };
     } catch (error) {
-      // Auth hook threw an error — return 401
+      // Auth hook threw an error — determine correct status
       if (this.debug) {
         console.error('[WebSocket] Auth hook error:', error);
       }
+      const status = (error as any)?.status ?? 401;
+      const title = status === 403 ? 'Forbidden' : 'Unauthorized';
+      const type = status === 403
+        ? 'https://burger-api.com/errors/forbidden'
+        : 'https://burger-api.com/errors/unauthorized';
       return {
         response: new Response(
           JSON.stringify({
-            type: 'https://burger-api.com/errors/unauthorized',
-            title: 'Unauthorized',
-            status: 401,
+            type,
+            title,
+            status,
             detail: error instanceof Error ? error.message : 'Authentication failed',
           }),
           {
-            status: 401,
+            status,
             headers: { 'Content-Type': 'application/problem+json' },
           }
         ),

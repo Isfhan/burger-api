@@ -22,7 +22,7 @@ const burger = new Burger({
     apiDir: setDir(__dirname, 'api'),
 });
 
-burger.use(auditLogger);
+burger.usePlugin(auditLogger);
 
 const port = Number(process.env.PORT) || 4000;
 burger.serve(port);

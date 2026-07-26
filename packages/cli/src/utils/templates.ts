@@ -1300,7 +1300,7 @@ export function generatePluginTemplate(pluginName: string): string {
     return [
         `/**`,
         ` * ${className} plugin.`,
-        ` * Import and register in src/plugins.ts via burger.use().`,
+         ` * Import and register in src/plugins.ts via burger.usePlugin().`,
         ` */`,
         `import type { Plugin } from 'burger-api';`,
         ``,

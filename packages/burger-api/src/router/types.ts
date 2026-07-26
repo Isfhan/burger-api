@@ -8,7 +8,7 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
  * A compiled route handler.
  * Both static (Bun-dispatched) and dynamic/wildcard (trie-dispatched) routes
  * execute exactly this same handler shape, guaranteeing identical method
- * dispatch, 405+Allow, auto-HEAD, and middleware behavior regardless of which
+ * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior regardless of which
  * lookup mechanism reached it.
  *
  * Phase 2: the handler receives the raw `Request` plus an optional `ctxInit`
