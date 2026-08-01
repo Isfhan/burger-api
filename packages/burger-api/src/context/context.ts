@@ -109,7 +109,7 @@ export class BurgerContext {
      * }
      * ```
      */
-    services: Record<string, unknown> = Object.create(null);
+    services: BurgerServices = Object.create(null) as BurgerServices;
 
     /**
      * Route-specific configuration from `config.ts`. Read-only at runtime.
@@ -140,7 +140,7 @@ export class BurgerContext {
         ctx._cookies = undefined;
         ctx.validated = undefined;
         ctx.set = Object.create(null);
-        ctx.services = providers ? Object.fromEntries(providers) : Object.create(null);
+        ctx.services = (providers ? Object.fromEntries(providers) : Object.create(null)) as BurgerServices;
         ctx._config = config;
         return ctx;
     }

@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun test --timeout 30000 ./test",
+    "typecheck": "tsc --noEmit",
     "test:build": "bun test test/scanner.test.ts test/virtual-entry.test.ts test/entry-options.test.ts test/build-preserve-options.test.ts",
     "build:win": "bun run scripts/build-executable.ts win",
     "build:linux": "bun run scripts/build-executable.ts linux",

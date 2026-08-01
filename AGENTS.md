@@ -211,6 +211,34 @@ import { Burger } from "burger-api";
 import type { BurgerContext } from "burger-api";
 ```
 
+### Examples — convention file separation
+
+When creating or migrating examples, **each route directory must use separate convention files** — never co-locate schema/openapi/hooks exports inside `route.ts`. The framework scanner discovers these by filename.
+
+```
+src/api/products/
+  route.ts      # handler ONLY: export async function GET(ctx) { ... }
+  schema.ts     # export const GET = { body, query, params }
+  openapi.ts    # export const GET = { summary, tags, operationId }
+  hooks.ts      # export const beforeRoute = [...]
+  config.ts     # export default { auth: false }
+```
+
+If a route has no schema/openapi/hooks, simply omit those files — do not put empty stubs in `route.ts`. The framework merges them automatically at load time.
+
+**App-level convention files** (sibling of `index.ts`) must also be separate:
+
+```
+src/
+  index.ts        # Burger instance + serve() ONLY
+  hooks.ts        # global lifecycle hooks
+  plugins.ts      # plugin definitions + burger.usePlugin()
+  providers.ts    # service definitions + burger.provide()
+  openapi.config.ts  # OpenAPI metadata + docs config
+```
+
+Never inline `burger.usePlugin()` definitions or `burger.provide()` calls in `index.ts` — move them to `plugins.ts` and `providers.ts`.
+
 ## Performance
 
 AOT routes, static dispatch, efficient hook plans, small footprint. Benchmarks only in `burger-api-benchmarks`.

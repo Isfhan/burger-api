@@ -246,7 +246,7 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
             }
 
             if (logHeaders) {
-                logInfo.headers = Object.fromEntries(ctx.headers.entries());
+                logInfo.headers = Object.fromEntries(ctx.headers as any);
             }
 
             if (logBody && ['POST', 'PUT', 'PATCH'].includes(method)) {

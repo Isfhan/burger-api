@@ -1,6 +1,9 @@
 import { resolveBuildConfig } from '../config';
 import { scanApiRoutes, scanPageRoutes } from '../scanner';
-import { generateVirtualEntrySource } from '../virtual-entry';
+import {
+    generateVirtualEntrySource,
+    type AppConventionPaths,
+} from '../virtual-entry';
 import { createBunBuildOptions, runBunBuildOrThrow } from './bun';
 import {
     cleanupVirtualEntry,
@@ -11,6 +14,24 @@ import {
     cleanupEntryOptionsModule,
     prepareEntryOptionsModule,
 } from '../entry-options';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
+function scanAppConventions(cwd: string): AppConventionPaths | undefined {
+    const srcDir = resolve(cwd, 'src');
+    const paths: AppConventionPaths = {};
+    const hooksFile = resolve(srcDir, 'hooks.ts');
+    if (existsSync(hooksFile)) paths.hooksPath = hooksFile.split('\\').join('/');
+    const pluginsFile = resolve(srcDir, 'plugins.ts');
+    if (existsSync(pluginsFile)) paths.pluginsPath = pluginsFile.split('\\').join('/');
+    const providersFile = resolve(srcDir, 'providers.ts');
+    if (existsSync(providersFile)) paths.providersPath = providersFile.split('\\').join('/');
+    const openapiConfigFile = resolve(srcDir, 'openapi.config.ts');
+    if (existsSync(openapiConfigFile)) paths.openapiConfigPath = openapiConfigFile.split('\\').join('/');
+    return paths.hooksPath || paths.pluginsPath || paths.providersPath || paths.openapiConfigPath
+        ? paths
+        : undefined;
+}
 
 export interface VirtualBuildResult {
     success: boolean;
@@ -46,11 +67,14 @@ export async function runVirtualEntryBuild(options: {
         );
     }
 
+    const appConventions = scanAppConventions(options.cwd);
+
     const source = generateVirtualEntrySource(
         config,
         apiEntries,
         pageEntries,
-        entryOptions.importPath
+        entryOptions.importPath,
+        appConventions
     );
     const hasPages = pageEntries.length > 0;
     const { outDir, virtualPath, virtualSourcePath } = prepareVirtualEntry({

@@ -237,6 +237,102 @@ describe('generateOpenAPIDocument — config', () => {
     });
 });
 
+// ─── Regression: uppercase named exports in openapi.ts ───
+
+describe('ModuleLoader — normalizeOpenapi', () => {
+    it('loads uppercase named exports from openapi.ts as lowercase method metadata', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-norm-'));
+        try {
+            mkdirSync(path.join(root, 'api', 'posts'), { recursive: true });
+            // route.ts — minimal handler
+            writeFileSync(
+                path.join(root, 'api', 'posts', 'route.ts'),
+                'export async function GET() { return Response.json({}); }'
+            );
+            // openapi.ts — uppercase named exports
+            writeFileSync(
+                path.join(root, 'api', 'posts', 'openapi.ts'),
+                `export const GET = {
+                    summary: 'List posts',
+                    description: 'Returns all posts',
+                    tags: ['Posts'],
+                };`
+            );
+            const scanner = new DirectoryScanner(
+                path.join(root, 'api'),
+                'api'
+            );
+            const result = await scanner.scan();
+            const loader = new ModuleLoader();
+            const modules = await loader.load(result);
+            const apiRoutes: RouteDefinition[] = modules.map((m) => ({
+                path: m.path,
+                handlers: m.handlers as any,
+                schema: m.schema,
+                openapi: m.openapi as any,
+                hooks: m.hooks as any,
+                config: m.config as any,
+                isWildcard: m.isWildcard,
+            }));
+            const doc = generateOpenAPIDocument(apiRoutes, {
+                debug: false,
+                title: 'Test',
+            });
+            const getOp = (doc.paths['/api/posts'] as any)?.get;
+            expect(getOp).toBeDefined();
+            expect(getOp.summary).toBe('List posts');
+            expect(getOp.description).toBe('Returns all posts');
+            expect(getOp.tags).toEqual(['Posts']);
+            // Tag should appear in top-level tags array
+            const tagNames = ((doc as any).tags ?? []).map(
+                (t: any) => t.name
+            );
+            expect(tagNames).toContain('Posts');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('lowercase module export passes through unchanged', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-lower-'));
+        try {
+            mkdirSync(path.join(root, 'api', 'items'), { recursive: true });
+            writeFileSync(
+                path.join(root, 'api', 'items', 'route.ts'),
+                'export async function GET() { return Response.json({}); }'
+            );
+            // default export with lowercase keys
+            writeFileSync(
+                path.join(root, 'api', 'items', 'openapi.ts'),
+                `export default {
+                    get: { summary: 'Get items', tags: ['Items'] },
+                };`
+            );
+            const scanner = new DirectoryScanner(
+                path.join(root, 'api'),
+                'api'
+            );
+            const result = await scanner.scan();
+            const loader = new ModuleLoader();
+            const modules = await loader.load(result);
+            const apiRoutes: RouteDefinition[] = modules.map((m) => ({
+                path: m.path,
+                handlers: m.handlers as any,
+                openapi: m.openapi as any,
+                isWildcard: m.isWildcard,
+            }));
+            const doc = generateOpenAPIDocument(apiRoutes, {
+                debug: false,
+            });
+            const getOp = (doc.paths['/api/items'] as any)?.get;
+            expect(getOp).toBeDefined();
+            expect(getOp.summary).toBe('Get items');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
+
 // ─── Docs providers ───
 
 describe('Docs providers', () => {

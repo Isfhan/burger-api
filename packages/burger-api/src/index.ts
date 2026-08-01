@@ -336,6 +336,35 @@ export class Burger {
             );
             // Production: accept config from ServerOptions if provided
             this.openAPIConfig = this.options.openapi;
+
+            // Production: resolve global hooks from options
+            const globalHooks = this.options.globalHooks;
+            if (globalHooks) {
+                const onRequest = globalHooks.onRequest;
+                if (onRequest) {
+                    globalOnRequest = Array.isArray(onRequest)
+                        ? (onRequest as import('./lifecycle/types').Hook[])
+                        : [onRequest as import('./lifecycle/types').Hook];
+                }
+            }
+
+            // Production: execute plugins module if provided
+            const pluginsMod = this.options.pluginsModule;
+            if (pluginsMod) {
+                const defaultFn = (pluginsMod as any).default;
+                if (typeof defaultFn === 'function') {
+                    (defaultFn as (burger: Burger) => void)(this);
+                }
+            }
+
+            // Production: execute providers module if provided
+            const providersMod = this.options.providersModule;
+            if (providersMod) {
+                const defaultFn = (providersMod as any).default;
+                if (typeof defaultFn === 'function') {
+                    (defaultFn as (burger: Burger) => void)(this);
+                }
+            }
         } else {
             // Dev path: Route Module pipeline
             // (Directory Scanner → Module Loader → RouteModule → Compiler).
@@ -351,6 +380,18 @@ export class Burger {
             // Load openapi.config.ts if discovered
             this.openAPIConfig = await loader.loadOpenAPIConfig(scanned);
 
+            // Load and execute plugins.ts (auto-discovered at app root)
+            const pluginsFn = await loader.loadPlugins(scanned);
+            if (typeof pluginsFn === 'function') {
+                (pluginsFn as (burger: Burger) => void)(this);
+            }
+
+            // Load and execute providers.ts (auto-discovered at app root)
+            const providersFn = await loader.loadProviders(scanned);
+            if (typeof providersFn === 'function') {
+                (providersFn as (burger: Burger) => void)(this);
+            }
+
             // Retained for introspection (deterministic ordering, no dispatch).
             this.routeTree = new RouteTree(modules);
             apiRoutes = modules.map((m) => ({
@@ -359,6 +400,7 @@ export class Burger {
                 schema: m.schema,
                 openapi: m.openapi,
                 hooks: m.hooks as RouteHooks | undefined,
+                config: m.config,
                 isWildcard: m.isWildcard,
             }));
         }
@@ -430,8 +472,7 @@ export class Burger {
             this.routes[docsPath] = (ctx: any) => {
                 // Basic auth protection
                 if (config?.docsAuth) {
-                    const authHeader =
-                        ctx?.request?.headers?.get('authorization') ?? '';
+                    const authHeader = ctx?.headers?.get?.('authorization') ?? '';
                     const expected = 'Basic ' + btoa(`${config.docsAuth.username}:${config.docsAuth.password}`);
                     if (authHeader !== expected) {
                         return new Response('Unauthorized', {
@@ -545,10 +586,11 @@ export class Burger {
      * @returns A Promise that resolves when the server has started listening.
      */
     public async serve(port: number = 4000, cb?: () => void): Promise<void> {
-        // Process routes in parallel if possible
-        const [pagesConfigured, apiConfigured, wsConfigured] = await Promise.all([
+        // Process API routes first so convention files (plugins.ts, providers.ts)
+        // are loaded before WebSocket reads the registries (avoids race).
+        const apiConfigured = await this.processApiRoutes();
+        const [pagesConfigured, wsConfigured] = await Promise.all([
             this.processPageRoutes(),
-            this.processApiRoutes(),
             this.processWebSocketRoutes(),
         ]);
 

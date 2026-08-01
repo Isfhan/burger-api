@@ -33,8 +33,12 @@ export class HTTPError extends Error {
  */
 export function renderHTTPError(error: unknown, isDev: boolean): Response {
     const httpError =
-        error instanceof HTTPError
-            ? error
+        error instanceof HTTPError ||
+        (error !== null &&
+            typeof error === 'object' &&
+            'status' in (error as object) &&
+            typeof (error as Record<string, unknown>).status === 'number')
+            ? (error as HTTPError)
             : new HTTPError(
                   500,
                   'Internal Server Error',

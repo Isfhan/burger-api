@@ -2,6 +2,8 @@
  * WebSocket types for BurgerAPI
  */
 
+import type { BurgerServices } from '../context/context';
+
 /**
  * Per-connection data structure
  * Extends this via module augmentation:
@@ -187,7 +189,7 @@ export interface BurgerWS {
    * const logger = ws.services.logger;
    * ```
    */
-  services: Record<string, unknown>;
+  services: BurgerServices;
 
   /**
    * Authenticated user from auth plugins (same as `ctx.user` in HTTP handlers).

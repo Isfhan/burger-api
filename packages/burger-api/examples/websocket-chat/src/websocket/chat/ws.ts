@@ -9,8 +9,8 @@ export function open(ws: BurgerWS) {
     users.set(userId, ws);
 
     // Phase 10: Access injected services
-    const logger = ws.services.logger as { info: (msg: string) => void };
-    const db = ws.services.db as { getRecentMessages: (limit: number) => Promise<any[]> };
+    const logger = (ws.services as any).logger as { info: (msg: string) => void };
+    const db = (ws.services as any).db as { getRecentMessages: (limit: number) => Promise<any[]> };
 
     logger.info(`User connected: ${userId}. Total users: ${users.size}`);
 
@@ -30,8 +30,8 @@ export function open(ws: BurgerWS) {
 }
 
 export function message(ws: BurgerWS, message: string | Buffer) {
-    const logger = ws.services.logger as { info: (msg: string) => void };
-    const db = ws.services.db as { saveMessage: (data: any) => Promise<any> };
+    const logger = (ws.services as any).logger as { info: (msg: string) => void };
+    const db = (ws.services as any).db as { saveMessage: (data: any) => Promise<any> };
 
     try {
         const data = JSON.parse(message.toString());
@@ -62,7 +62,7 @@ export function message(ws: BurgerWS, message: string | Buffer) {
 
 export function close(ws: BurgerWS, code: number, reason: string) {
     const userId = ws.data.userId as string;
-    const logger = ws.services.logger as { info: (msg: string) => void };
+    const logger = (ws.services as any).logger as { info: (msg: string) => void };
 
     users.delete(userId);
 

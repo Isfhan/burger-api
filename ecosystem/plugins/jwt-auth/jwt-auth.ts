@@ -19,10 +19,8 @@
  * ```
  */
 
-import type { Plugin } from "burger-api/plugin/types";
-import type { BurgerContext } from "burger-api/context/context";
-import { UnauthorizedError } from "burger-api/errors/unauthorized";
-import { ForbiddenError } from "burger-api/errors/forbidden";
+import type { Plugin, BurgerContext } from "burger-api";
+import { UnauthorizedError, ForbiddenError } from "burger-api";
 
 /**
  * JWT plugin configuration options

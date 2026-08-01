@@ -97,4 +97,8 @@ export interface ScanResult {
     globalOnRequest?: Hook[];
     /** Absolute path to `openapi.config.ts` (sibling of entry point), or undefined. */
     openAPIConfigPath?: string;
+    /** Absolute path to `plugins.ts` (sibling of index.ts), or undefined. */
+    pluginsPath?: string;
+    /** Absolute path to `providers.ts` (sibling of index.ts), or undefined. */
+    providersPath?: string;
 }

@@ -18,9 +18,8 @@
  * ```
  */
 
-import type { Plugin } from "burger-api/plugin/types";
-import type { BurgerContext } from "burger-api/context/context";
-import { UnauthorizedError } from "burger-api/errors/unauthorized";
+import type { Plugin, BurgerContext } from "burger-api";
+import { UnauthorizedError } from "burger-api";
 
 /**
  * OIDC plugin configuration options

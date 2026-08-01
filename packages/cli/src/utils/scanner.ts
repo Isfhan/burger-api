@@ -26,6 +26,12 @@ export interface ApiRouteScanEntry {
     methods?: string[];
     /** Absolute import path of a sibling `hooks.ts`, if the route declares lifecycle hooks (Phase 4). */
     hooksPath?: string;
+    /** Absolute import path of a sibling `schema.ts`, if present (Phase 4). */
+    schemaPath?: string;
+    /** Absolute import path of a sibling `openapi.ts`, if present (Phase 4). */
+    openapiPath?: string;
+    /** Absolute import path of a sibling `config.ts`, if present (Phase 4). */
+    configPath?: string;
 }
 
 export interface PageRouteScanEntry {
@@ -135,6 +141,19 @@ async function scanApiDir(
                         .split(path.sep)
                         .join('/');
                 }
+            }
+            // Capture sibling convention files for build entry merging (Phase 4)
+            const schemaFile = path.join(dir, 'schema.ts');
+            if (existsSync(schemaFile)) {
+                scanEntry.schemaPath = schemaFile.split(path.sep).join('/');
+            }
+            const openapiFile = path.join(dir, 'openapi.ts');
+            if (existsSync(openapiFile)) {
+                scanEntry.openapiPath = openapiFile.split(path.sep).join('/');
+            }
+            const configFile = path.join(dir, 'config.ts');
+            if (existsSync(configFile)) {
+                scanEntry.configPath = configFile.split(path.sep).join('/');
             }
             out.push(scanEntry);
         }

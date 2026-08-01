@@ -9,6 +9,18 @@
 import type { BuildConfig } from '../types/index';
 import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
 
+/** Paths to app-level convention files for production builds (Phase 4). */
+export interface AppConventionPaths {
+    /** Path to `src/hooks.ts` — exports all 6 hook points */
+    hooksPath?: string;
+    /** Path to `src/plugins.ts` — default export: (burger: Burger) => void */
+    pluginsPath?: string;
+    /** Path to `src/providers.ts` — default export: (burger: Burger) => void */
+    providersPath?: string;
+    /** Path to `src/openapi.config.ts` — default export: OpenAPIConfig */
+    openapiConfigPath?: string;
+}
+
 /** Default methods to emit when entry has no methods; excludes OPTIONS so we add 204 only when hasPreflight. */
 const DEFAULT_EMIT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
 
@@ -40,7 +52,8 @@ export function generateVirtualEntrySource(
     config: BuildConfig,
     apiEntries: ApiRouteScanEntry[],
     pageEntries: PageRouteScanEntry[],
-    optionsImportPath?: string
+    optionsImportPath?: string,
+    appConventions?: AppConventionPaths
 ): string {
     const lines: string[] = [];
 
@@ -70,6 +83,47 @@ export function generateVirtualEntrySource(
         }
     });
 
+    // Import per-route convention files (schema, openapi, config) for
+    // build-time merging (Phase 4). These are separate from route.ts.
+    const hasOpenapiEntry = apiEntries.some(e => e.openapiPath);
+    apiEntries.forEach((e, i) => {
+        if (e.schemaPath) {
+            lines.push(`import * as _s${i} from '${e.schemaPath}';`);
+        }
+        if (e.openapiPath) {
+            lines.push(`import * as _o${i} from '${e.openapiPath}';`);
+        }
+        if (e.configPath) {
+            lines.push(`import * as _c${i} from '${e.configPath}';`);
+        }
+    });
+    if (hasOpenapiEntry) {
+        lines.push('');
+        lines.push('function __normOpenapi(mod) {');
+        lines.push('  const out = {};');
+        lines.push('  for (const k of Object.keys(mod)) {');
+        lines.push('    out[/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(k) ? k.toLowerCase() : k] = mod[k];');
+        lines.push('  }');
+        lines.push('  return out;');
+        lines.push('}');
+    }
+
+    // Import app-level convention files for production builds (Phase 4)
+    if (appConventions) {
+        if (appConventions.hooksPath) {
+            lines.push(`import * as __globalHooks from '${appConventions.hooksPath}';`);
+        }
+        if (appConventions.pluginsPath) {
+            lines.push(`import * as __pluginsModule from '${appConventions.pluginsPath}';`);
+        }
+        if (appConventions.providersPath) {
+            lines.push(`import * as __providersModule from '${appConventions.providersPath}';`);
+        }
+        if (appConventions.openapiConfigPath) {
+            lines.push(`import __openapiConfig from '${appConventions.openapiConfigPath}';`);
+        }
+    }
+
     lines.push('');
     lines.push('const apiRoutes = [');
 
@@ -89,8 +143,9 @@ export function generateVirtualEntrySource(
             );
         }
         lines.push('    },');
-        lines.push(`    schema: _r${i}.schema,`);
-        lines.push(`    openapi: _r${i}.openapi,`);
+        lines.push(`    schema: ${e.schemaPath ? `_s${i}` : `_r${i}.schema`},`);
+        lines.push(`    openapi: ${e.openapiPath ? `__normOpenapi(_o${i})` : `_r${i}.openapi`},`);
+        lines.push(`    config: ${e.configPath ? `_c${i}` : `_r${i}.config`},`);
         lines.push(`    hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
         lines.push(`    isWildcard: ${e.isWildcard},`);
         lines.push('  },');
@@ -118,6 +173,18 @@ export function generateVirtualEntrySource(
         lines.push('  ...__burgerOptions,');
     } else {
         lines.push(`  debug: ${config.debug === true},`);
+    }
+    if (appConventions?.hooksPath) {
+        lines.push('  globalHooks: __globalHooks,');
+    }
+    if (appConventions?.pluginsPath) {
+        lines.push('  pluginsModule: __pluginsModule,');
+    }
+    if (appConventions?.providersPath) {
+        lines.push('  providersModule: __providersModule,');
+    }
+    if (appConventions?.openapiConfigPath) {
+        lines.push('  openapi: __openapiConfig,');
     }
     lines.push('  apiRoutes,');
     lines.push('  pageRoutes,');

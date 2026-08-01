@@ -42,6 +42,31 @@ function normalizeSchema(raw: Record<string, unknown>): RouteSchema {
 }
 
 /**
+ * Normalizes uppercase method exports from an openapi.ts convention file
+ * into the lowercase method-keyed format expected by generateOpenAPIDocument.
+ *
+ * @example
+ * ```ts
+ * // openapi.ts — named exports per HTTP method
+ * export const GET = { summary: 'List', tags: ['posts'] };
+ * export const POST = { summary: 'Create', tags: ['posts'] };
+ *
+ * // → normalized: { get: {...}, post: {...} }
+ * ```
+ */
+function normalizeOpenapi(raw: Record<string, unknown>): openapi {
+    const merged: Record<string, unknown> = {};
+    for (const key of Object.keys(raw)) {
+        if (HTTP_METHOD_SET.has(key)) {
+            merged[key.toLowerCase()] = raw[key];
+        } else {
+            merged[key] = raw[key];
+        }
+    }
+    return merged as openapi;
+}
+
+/**
  * The second stage of the compiler pipeline (`ROADMAP.md` §2.1 step 2).
  *
  * Consumes the pure inventory produced by {@link DirectoryScanner} and, for
@@ -67,7 +92,7 @@ export class ModuleLoader {
         const seenPaths = new Set<string>();
 
         // Load global hooks once (shared across all routes).
-        const globalHooks = scanned.globalHooks
+        let globalHooks = scanned.globalHooks
             ? await this.loadOptional<Record<string, unknown>>(scanned.globalHooks)
             : undefined;
 
@@ -76,8 +101,12 @@ export class ModuleLoader {
         const globalOnRequest = this.extractOnRequest(globalHooks);
         if (globalOnRequest.length > 0) {
             scanned.globalOnRequest = globalOnRequest;
-            // Strip onRequest from merged global hooks so it's not duplicated per-route
-            delete globalHooks?.onRequest;
+            // Strip onRequest from merged global hooks so it's not duplicated per-route.
+            // ESM module namespaces are frozen — clone without onRequest instead of delete.
+            if (globalHooks) {
+                const { onRequest: _, ...rest } = globalHooks;
+                globalHooks = Object.keys(rest).length > 0 ? (rest as Record<string, unknown>) : undefined;
+            }
         }
 
         for (const route of scanned.routes) {
@@ -105,7 +134,8 @@ export class ModuleLoader {
         // 2. Load convention files from this route's own directory only.
         const rawSchema = await this.loadOptional<Record<string, unknown>>(route.localFiles.schema);
         const schema = rawSchema ? normalizeSchema(rawSchema) : undefined;
-        const openapi = await this.loadOptional<openapi>(route.localFiles.openapi);
+        const rawOpenapi = await this.loadOptional<Record<string, unknown>>(route.localFiles.openapi);
+        const openapi = rawOpenapi ? normalizeOpenapi(rawOpenapi) : undefined;
         const hooks = await this.loadOptional<Record<string, unknown>>(route.localFiles.hooks);
         const config = await this.loadOptional<Record<string, unknown>>(route.localFiles.config);
 
@@ -192,6 +222,26 @@ export class ModuleLoader {
         scanned: ScanResult
     ): Promise<OpenAPIConfig | undefined> {
         return this.loadOptional<OpenAPIConfig>(scanned.openAPIConfigPath);
+    }
+
+    /**
+     * Loads the `plugins.ts` convention file from the scanned result.
+     * Returns the module, or undefined if no plugins file was discovered.
+     */
+    async loadPlugins(
+        scanned: ScanResult
+    ): Promise<Record<string, unknown> | undefined> {
+        return this.loadOptional<Record<string, unknown>>(scanned.pluginsPath);
+    }
+
+    /**
+     * Loads the `providers.ts` convention file from the scanned result.
+     * Returns the module, or undefined if no providers file was discovered.
+     */
+    async loadProviders(
+        scanned: ScanResult
+    ): Promise<Record<string, unknown> | undefined> {
+        return this.loadOptional<Record<string, unknown>>(scanned.providersPath);
     }
 
     /**

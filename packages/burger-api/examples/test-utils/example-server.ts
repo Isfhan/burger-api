@@ -70,7 +70,7 @@ export async function startExampleServer(options: {
     const baseUrl = `http://localhost:${port}`;
     const acceptedStatuses = options.acceptedStatuses ?? [200];
 
-    const proc = spawn('bun', ['run', 'index.ts'], {
+    const proc = spawn('bun', ['run', 'src/index.ts'], {
         cwd: options.exampleDir,
         env: { ...process.env, ...options.env, PORT: String(port) },
         stdio: 'pipe',

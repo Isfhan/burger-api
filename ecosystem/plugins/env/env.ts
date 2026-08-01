@@ -21,7 +21,7 @@
  * ```
  */
 
-import type { Plugin } from "burger-api/plugin/types";
+import type { Plugin } from "burger-api";
 
 /**
  * Environment variable type

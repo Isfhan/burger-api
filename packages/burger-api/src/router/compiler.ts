@@ -45,7 +45,12 @@ export class RouterCompiler {
         this.config = config;
     }
 
-    compile(defs: RouteDefinition[], plugins?: ResolvedPlugin[], providers?: Map<string, unknown>): CompiledRouter {
+    compile(
+        defs: RouteDefinition[],
+        plugins?: ResolvedPlugin[],
+        providers?: Map<string, unknown>,
+        onRequestHooksCount: number = 0
+    ): CompiledRouter {
         const staticMap = new StaticMap();
         const trie = new Trie();
         const allowCache = new AllowCache();
@@ -173,7 +178,7 @@ export class RouterCompiler {
                 // Optional: cache provably-constant OPTIONS responses natively.
                 // (Loose trailing-slash equivalence is resolved at lookup time in
                 //  Router.fetch, so it never shadows a `:param` empty-value match.)
-                registerNativeOptions(path, def, hasSchema);
+                registerNativeOptions(path, def, hasSchema, onRequestHooksCount);
             } else {
                 if (registeredPaths.has(path)) {
                     throw new Error(
@@ -349,8 +354,14 @@ function isStaticPath(path: string): boolean {
 function registerNativeOptions(
     path: string,
     def: RouteDefinition,
-    hasSchema: boolean
+    hasSchema: boolean,
+    onRequestHooksCount: number = 0
 ): void {
+    // Skip native OPTIONS when onRequest hooks exist — they may need to
+    // intercept OPTIONS preflight (e.g. CORS hook).
+    if (onRequestHooksCount > 0) {
+        return;
+    }
     // Optional optimization: `Bun.nativeStaticResponse` may not exist in all
     // Bun versions. Detect it at runtime; the pipeline works without it.
     type NativeStaticResponse = (

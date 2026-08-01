@@ -1,0 +1,7 @@
+{
+    "name": "example-openapi",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

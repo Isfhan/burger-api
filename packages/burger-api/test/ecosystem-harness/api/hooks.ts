@@ -1,4 +1,4 @@
-import type { Hook } from '../../../src/lifecycle/types';
+import type { Hook } from 'burger-api';
 import { cors } from '../../../../../ecosystem/hooks/cors/cors';
 import { logger } from '../../../../../ecosystem/hooks/logger/logger';
 import { rateLimit } from '../../../../../ecosystem/hooks/rate-limiter/rate-limiter';
@@ -12,7 +12,7 @@ import { bodySizeLimiter } from '../../../../../ecosystem/hooks/body-size-limite
 
 const name = process.env.TEST_MW ?? 'cors';
 
-const middlewareByName: Record<string, Hook> = {
+const hooksByName: Record<string, Hook> = {
     cors: cors({ origin: '*' }),
     logger: logger(),
     'rate-limiter': rateLimit({ windowMs: 60_000, maxRequests: 3 }),
@@ -25,11 +25,11 @@ const middlewareByName: Record<string, Hook> = {
     'body-size-limiter': bodySizeLimiter({ maxSize: 200, mode: 'stream' }),
 };
 
-const mw = middlewareByName[name];
-if (!mw) {
+const hook = hooksByName[name];
+if (!hook) {
     console.error(`Unknown TEST_MW: ${name}`);
     process.exit(1);
 }
 
-// Self-contained: dynamic middleware selection per route (test fixture pattern).
-export const beforeRoute = [mw];
+// Self-contained: dynamic hook selection per route (test fixture pattern).
+export const beforeRoute = [hook];

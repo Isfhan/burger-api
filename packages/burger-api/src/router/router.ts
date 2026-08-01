@@ -1,3 +1,4 @@
+import { renderHTTPError } from '../errors/http-error';
 import type { FetchHandler } from '../types/index';
 import type { ContextInit } from '../context/types';
 import { NOT_FOUND, methodNotAllowed } from '../utils/response';
@@ -12,6 +13,11 @@ import type { ValidatorConfig } from '../validation/types';
 import type { ResolvedPlugin } from '../plugin/types';
 import type { Hook } from '../lifecycle/types';
 import { BurgerContext } from '../context/context';
+
+interface OnRequestOutcome {
+    shortCircuit: Response | undefined;
+    mappers: ((res: Response) => Response | Promise<Response>)[];
+}
 
 /**
  * Public router that owns the compiled dispatch state and orchestrates
@@ -63,7 +69,7 @@ export class Router {
         providers?: Map<string, unknown>,
         onRequestHooks?: Hook[]
     ): void {
-        const result = this.compiler.compile(defs, plugins, providers);
+        const result = this.compiler.compile(defs, plugins, providers, this.onRequestHooks.length);
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;
@@ -99,43 +105,43 @@ export class Router {
         const out: Record<string, CompiledHandler> = {};
         const hasOnRequest = this.onRequestHooks.length > 0;
         for (const [path, handler] of this.staticMap.entries()) {
-            out[path] = async (request: Request) => {
-                if (hasOnRequest) {
-                    const res = await this.runOnRequest(request);
-                    if (res) return res;
-                }
-                return handler(request, { route: { path, pattern: path } });
-            };
+            out[path] = this.wrapHandler(handler, hasOnRequest, { path, pattern: path });
         }
         this.cachedStaticRoutes = out;
         return out;
     }
 
-    /**
-     * Returns the native dispatch table for `:param` / `*` routes, keyed by
-     * their Bun-native pattern (e.g. `/users/:id`). Each handler self-extracts
-     * `params` / `wildcardParams` from the `Request` URL, so it can be registered
-     * directly on `Bun.serve`'s `routes` map — dynamic routes then dispatch
-     * without the `fetch` fallback hop. The `fetch` fallback (trie) still covers
-     * unmatched / loose-trailing-slash / empty-param cases.
-     *
-     * This map is consumed only by the Bun adapter. Non-Bun (WinterCG) adapters
-     * dispatch every route through `Router.fetch` + trie and ignore this table,
-     * so the framework body stays runtime-agnostic.
-     */
     nativeRoutes(): Record<string, CompiledHandler> {
         const out: Record<string, CompiledHandler> = {};
         const hasOnRequest = this.onRequestHooks.length > 0;
         for (const [pattern, handler] of this.nativeRoutesMap.entries()) {
-            out[pattern] = async (request: Request) => {
-                if (hasOnRequest) {
-                    const res = await this.runOnRequest(request);
-                    if (res) return res;
-                }
-                return handler(request);
-            };
+            out[pattern] = this.wrapHandler(handler, hasOnRequest, undefined);
         }
         return out;
+    }
+
+    private wrapHandler(
+        handler: CompiledHandler,
+        hasOnRequest: boolean,
+        route: { path: string; pattern: string } | undefined
+    ): CompiledHandler {
+        return async (request: Request, ctxInit?: any) => {
+            let outcome: OnRequestOutcome = { shortCircuit: undefined, mappers: [] };
+            if (hasOnRequest) {
+                outcome = await this.runOnRequest(request);
+                if (outcome.shortCircuit) return outcome.shortCircuit;
+            }
+            try {
+                const result = route
+                    ? await handler(request, { ...ctxInit, route })
+                    : await handler(request);
+                return outcome.mappers.length > 0
+                    ? this.applyMappers(result, outcome.mappers)
+                    : result;
+            } catch (error) {
+                return renderHTTPError(error, false);
+            }
+        };
     }
 
     /**
@@ -149,14 +155,37 @@ export class Router {
      * Executes pre-routing `onRequest` hooks on a minimal BurgerContext.
      * Returns a Response if any hook short-circuits, or undefined to continue.
      */
-    private async runOnRequest(request: Request): Promise<Response | undefined> {
-        if (this.onRequestHooks.length === 0) return undefined;
+    private async runOnRequest(request: Request): Promise<OnRequestOutcome> {
+        const outcome: OnRequestOutcome = { shortCircuit: undefined, mappers: [] };
+        if (this.onRequestHooks.length === 0) return outcome;
         const ctx = BurgerContext.create(request);
         for (const hook of this.onRequestHooks) {
-            const result = await hook(ctx);
-            if (result instanceof Response) return result;
+            try {
+                const result = await (hook as (ctx: BurgerContext) => unknown)(ctx);
+                if (result instanceof Response) {
+                    outcome.shortCircuit = result;
+                    return outcome;
+                }
+                if (typeof result === 'function') {
+                    outcome.mappers.push(result as (res: Response) => Response | Promise<Response>);
+                }
+            } catch (error) {
+                outcome.shortCircuit = renderHTTPError(error, false);
+                return outcome;
+            }
         }
-        return undefined;
+        return outcome;
+    }
+
+    private async applyMappers(
+        response: Response,
+        mappers: ((res: Response) => Response | Promise<Response>)[]
+    ): Promise<Response> {
+        let res = response;
+        for (const mapper of mappers) {
+            res = await mapper(res);
+        }
+        return res;
     }
 
     /**
@@ -167,8 +196,12 @@ export class Router {
     fetch: FetchHandler = async (request: Request): Promise<Response> => {
         // Pre-routing: create minimal context and run onRequest hooks.
         // Any hook returning a Response short-circuits the entire pipeline.
-        const onRequestResponse = await this.runOnRequest(request);
-        if (onRequestResponse) return onRequestResponse;
+        // Mapper functions are collected and applied to the eventual response.
+        const outcome = await this.runOnRequest(request);
+        if (outcome.shortCircuit) return outcome.shortCircuit;
+        const apply = outcome.mappers.length > 0
+            ? (res: Response) => this.applyMappers(res, outcome.mappers)
+            : (res: Response) => res;
 
         const raw = extractPathnameFromUrl(request.url);
         // Collapse repeated slashes but PRESERVE a single trailing slash so that
@@ -182,7 +215,7 @@ export class Router {
             // Every matched route gets a `ctxInit` with `route`; static routes
             // have no params/wildcardParams.
             const ctxInit: ContextInit = { route: { path, pattern: path } };
-            return staticExact(request, ctxInit);
+            return apply(await staticExact(request, ctxInit));
         }
 
         // 2. Dynamic / wildcard routes via the internal trie. The trie is
@@ -207,7 +240,7 @@ export class Router {
                 params: match.params,
                 wildcardParams: match.wildcardParams,
             };
-            return match.handler(request, ctxInit);
+            return apply(await match.handler(request, ctxInit));
         }
 
         // 3. Loose trailing-slash fallback for static routes: `/foo/` ≡ `/foo`.
@@ -220,10 +253,10 @@ export class Router {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
                 };
-                return loose(request, ctxInit);
+                return apply(await loose(request, ctxInit));
             }
         }
 
-        return NOT_FOUND;
+        return apply(NOT_FOUND);
     };
 }

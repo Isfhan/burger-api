@@ -109,6 +109,27 @@ export interface ServerOptions extends Omit<
      * auto-discovered and this field is ignored.
      */
     openapi?: OpenAPIConfig;
+
+    /**
+     * Pre-resolved global hooks module (e.g. from `src/hooks.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/hooks.ts` is auto-discovered and this field is ignored.
+     */
+    globalHooks?: Record<string, unknown>;
+
+    /**
+     * Pre-resolved plugins module (e.g. from `src/plugins.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/plugins.ts` is auto-discovered and this field is ignored.
+     */
+    pluginsModule?: Record<string, unknown>;
+
+    /**
+     * Pre-resolved providers module (e.g. from `src/providers.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/providers.ts` is auto-discovered and this field is ignored.
+     */
+    providersModule?: Record<string, unknown>;
 }
 
 /**
