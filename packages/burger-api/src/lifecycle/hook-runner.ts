@@ -12,7 +12,7 @@ async function runSingleHook(
     hook: Hook,
     handler: RequestHandler
 ): Promise<Response> {
-    const result = await hook(ctx) as BurgerNext;
+    const result = (await hook(ctx)) as BurgerNext;
 
     // Short-circuit with Response
     if (result instanceof Response) {
@@ -49,13 +49,13 @@ async function runHookChain(
     // Fast path: two hooks (common: CORS + logger, or auth + logger)
     if (len === 2) {
         // First hook
-        const result1 = await hooks[0](ctx) as BurgerNext;
+        const result1 = (await hooks[0](ctx)) as BurgerNext;
         if (result1 instanceof Response) {
             return result1;
         }
 
         // Second hook
-        const result2 = await hooks[1](ctx) as BurgerNext;
+        const result2 = (await hooks[1](ctx)) as BurgerNext;
         if (result2 instanceof Response) {
             // Apply first hook's after function if exists
             if (typeof result1 === 'function') {
@@ -85,7 +85,7 @@ async function runHookChain(
 
     // Run each hook
     for (let i = 0; i < len; i++) {
-        const result = await hooks[i](ctx) as BurgerNext;
+        const result = (await hooks[i](ctx)) as BurgerNext;
 
         // Short-circuit with Response (check first - most common early exit)
         if (result instanceof Response) {
@@ -139,7 +139,6 @@ export function runHooks(
     handler: RequestHandler
 ): Promise<Response> {
     if (hooks.length === 0) return Promise.resolve(handler(ctx));
-    if (hooks.length === 1)
-        return runSingleHook(ctx, hooks[0], handler);
+    if (hooks.length === 1) return runSingleHook(ctx, hooks[0], handler);
     return runHookChain(ctx, hooks, handler);
 }

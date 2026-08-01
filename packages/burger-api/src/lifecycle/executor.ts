@@ -12,8 +12,8 @@ import { validateResponse } from '../validation/response';
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
  *
  * Fixed forward order:
- *   transform → validation → beforeRoute
- *     → handler → afterRoute → mapResponse
+ * transform → validation → beforeRoute
+ * → handler → afterRoute → mapResponse
  *
  * On throw the {@link HookPlan#onError} chain is dispatched nearest-first
  * (route → global). If no `onError` handles the error it re-throws so the
@@ -86,7 +86,13 @@ export async function executeHookPlan(
 
         return response;
     } catch (error) {
-        return dispatchOnError(error, plan.onError, ctx, plan.debug, plan.validatorConfig);
+        return dispatchOnError(
+            error,
+            plan.onError,
+            ctx,
+            plan.debug,
+            plan.validatorConfig
+        );
     }
 }
 

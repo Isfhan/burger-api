@@ -39,8 +39,7 @@ describe('Static route req.route (Bun-native dispatch)', () => {
             {
                 path: '/health',
                 handlers: {
-                    GET: (req: any) =>
-                        Response.json({ path: req.route?.path }),
+                    GET: (req: any) => Response.json({ path: req.route?.path }),
                 },
             } as any,
         ];

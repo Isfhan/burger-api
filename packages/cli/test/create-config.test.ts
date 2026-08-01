@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { generateBurgerConfig, generatePackageJson } from '../src/utils/templates';
+import {
+    generateBurgerConfig,
+    generatePackageJson,
+} from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
 
 describe('generateBurgerConfig', () => {
@@ -17,10 +20,10 @@ describe('generateBurgerConfig', () => {
 
         const content = generateBurgerConfig(options);
 
-        expect(content).toContain("apiDir: \"./src/api\"");
-        expect(content).toContain("pageDir: \"./src/pages\"");
-        expect(content).toContain("apiPrefix: \"/api\"");
-        expect(content).toContain("pagePrefix: \"/\"");
+        expect(content).toContain('apiDir: "./src/api"');
+        expect(content).toContain('pageDir: "./src/pages"');
+        expect(content).toContain('apiPrefix: "/api"');
+        expect(content).toContain('pagePrefix: "/"');
         expect(content).toContain('debug: false');
     });
 
@@ -38,10 +41,10 @@ describe('generateBurgerConfig', () => {
 
         const content = generateBurgerConfig(options);
 
-        expect(content).toContain("apiDir: \"./src/backend\"");
-        expect(content).toContain("pageDir: \"./src/site\"");
-        expect(content).toContain("apiPrefix: \"/v1\"");
-        expect(content).toContain("pagePrefix: \"/web\"");
+        expect(content).toContain('apiDir: "./src/backend"');
+        expect(content).toContain('pageDir: "./src/site"');
+        expect(content).toContain('apiPrefix: "/v1"');
+        expect(content).toContain('pagePrefix: "/web"');
         expect(content).toContain('debug: true');
     });
 });

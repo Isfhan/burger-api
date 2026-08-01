@@ -1,15 +1,14 @@
 /**
- * The schema registry — the named-schema (`models`) registry (phase3 §12.8,
- * §9). Holds reusable named schemas resolved by string ref at compile time.
+ * The schema registry — the named-schema (`models`) registry (* §9). Holds reusable named schemas resolved by string ref at compile time.
  *
  * Responsibilities:
  * - Register a named schema (seeded from `ServerOptions.models`).
  * - Resolve a name to its schema.
  * - Report whether a name exists.
  *
- * Resolution happens at compile time only (phase3 §9.4). This registry is
+ * Resolution happens at compile time only (). This registry is
  * never consulted per request and never leaks models into the request
- * surface (phase3 §9.10). It is cleared together with the validator cache on
+ * surface (). It is cleared together with the validator cache on
  * dev hot reload.
  */
 
@@ -30,7 +29,7 @@ export class SchemaRegistry {
 
     /**
      * Resolves a model name to its schema. Throws if the name is unknown —
-     * fail fast at compile time (phase3 §9.11).
+     * fail fast at compile time ().
      */
     resolve(name: string): SchemaInput {
         const schema = this.models.get(name);

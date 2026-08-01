@@ -25,17 +25,17 @@ interface OnRequestOutcome {
  *
  * - Static routes are served by Bun's native `routes` map (via `staticRoutes()`).
  * - Dynamic (`:param`) and wildcard (`*`) routes are ALSO served by Bun's native
- *   `routes` map (via `nativeRoutes()`): Bun matches the pattern directly, and
- *   the compiled handler self-extracts `params` / `wildcardParams` from the
- *   URL. This removes the `fetch` fallback hop for the common dynamic case.
+ * `routes` map (via `nativeRoutes()`): Bun matches the pattern directly, and
+ * the compiled handler self-extracts `params` / `wildcardParams` from the
+ * URL. This removes the `fetch` fallback hop for the common dynamic case.
  * - The `fetch` fallback (the `Bun.serve` fallback) still runs for unmatched,
- *   loose-trailing-slash, and empty-param-trailing-slash requests, consulting
- *   the internal trie so behavior is fully preserved.
+ * loose-trailing-slash, and empty-param-trailing-slash requests, consulting
+ * the internal trie so behavior is fully preserved.
  *
  * Both paths execute exactly the same compiled handler, so method dispatch,
  * 405+Allow, auto-HEAD, and lifecycle behavior are identical. The native table
  * is consumed only by the Bun adapter; non-Bun (WinterCG) adapters dispatch
- * every route through `fetch` + trie (see ROADMAP-phase1.md §4.1).
+ * every route through `fetch` + trie (see ).
  */
 export class Router {
     private staticMap = new StaticMap();
@@ -69,7 +69,12 @@ export class Router {
         providers?: Map<string, unknown>,
         onRequestHooks?: Hook[]
     ): void {
-        const result = this.compiler.compile(defs, plugins, providers, this.onRequestHooks.length);
+        const result = this.compiler.compile(
+            defs,
+            plugins,
+            providers,
+            this.onRequestHooks.length
+        );
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;
@@ -95,7 +100,7 @@ export class Router {
      * Bun's native routing invokes each handler with ONLY `(request)`, so the
      * matched-route metadata cannot be passed as a second argument the way the
      * trie-dispatched (dynamic/wildcard) routes are in `fetch`. To guarantee
-     * `req.route` is available for **every** matched route (ROADMAP-phase2 §5.7),
+     * `req.route` is available for **every** matched route.
      * each static handler is wrapped to inject `ctxInit` with its `route`
      * identity (`path` === `pattern` for static routes). This preserves Bun's
      * native dispatch fast path — no router redesign, no perf regression.
@@ -105,7 +110,10 @@ export class Router {
         const out: Record<string, CompiledHandler> = {};
         const hasOnRequest = this.onRequestHooks.length > 0;
         for (const [path, handler] of this.staticMap.entries()) {
-            out[path] = this.wrapHandler(handler, hasOnRequest, { path, pattern: path });
+            out[path] = this.wrapHandler(handler, hasOnRequest, {
+                path,
+                pattern: path,
+            });
         }
         this.cachedStaticRoutes = out;
         return out;
@@ -126,7 +134,10 @@ export class Router {
         route: { path: string; pattern: string } | undefined
     ): CompiledHandler {
         return async (request: Request, ctxInit?: any) => {
-            let outcome: OnRequestOutcome = { shortCircuit: undefined, mappers: [] };
+            let outcome: OnRequestOutcome = {
+                shortCircuit: undefined,
+                mappers: [],
+            };
             if (hasOnRequest) {
                 outcome = await this.runOnRequest(request);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
@@ -156,18 +167,27 @@ export class Router {
      * Returns a Response if any hook short-circuits, or undefined to continue.
      */
     private async runOnRequest(request: Request): Promise<OnRequestOutcome> {
-        const outcome: OnRequestOutcome = { shortCircuit: undefined, mappers: [] };
+        const outcome: OnRequestOutcome = {
+            shortCircuit: undefined,
+            mappers: [],
+        };
         if (this.onRequestHooks.length === 0) return outcome;
         const ctx = BurgerContext.create(request);
         for (const hook of this.onRequestHooks) {
             try {
-                const result = await (hook as (ctx: BurgerContext) => unknown)(ctx);
+                const result = await (hook as (ctx: BurgerContext) => unknown)(
+                    ctx
+                );
                 if (result instanceof Response) {
                     outcome.shortCircuit = result;
                     return outcome;
                 }
                 if (typeof result === 'function') {
-                    outcome.mappers.push(result as (res: Response) => Response | Promise<Response>);
+                    outcome.mappers.push(
+                        result as (
+                            res: Response
+                        ) => Response | Promise<Response>
+                    );
                 }
             } catch (error) {
                 outcome.shortCircuit = renderHTTPError(error, false);
@@ -199,9 +219,10 @@ export class Router {
         // Mapper functions are collected and applied to the eventual response.
         const outcome = await this.runOnRequest(request);
         if (outcome.shortCircuit) return outcome.shortCircuit;
-        const apply = outcome.mappers.length > 0
-            ? (res: Response) => this.applyMappers(res, outcome.mappers)
-            : (res: Response) => res;
+        const apply =
+            outcome.mappers.length > 0
+                ? (res: Response) => this.applyMappers(res, outcome.mappers)
+                : (res: Response) => res;
 
         const raw = extractPathnameFromUrl(request.url);
         // Collapse repeated slashes but PRESERVE a single trailing slash so that
@@ -209,7 +230,7 @@ export class Router {
         const path = raw.replace(/\/+/g, '/');
 
         // 1. Exact static route (slash-preserving — Bun already serves the exact
-        //    form natively; this catches the trailing-slash variants it missed).
+        // form natively; this catches the trailing-slash variants it missed).
         const staticExact = this.staticMap.get(path);
         if (staticExact) {
             // Every matched route gets a `ctxInit` with `route`; static routes
@@ -219,8 +240,8 @@ export class Router {
         }
 
         // 2. Dynamic / wildcard routes via the internal trie. The trie is
-        //    consulted before the loose-slash static fallback so that a trailing
-        //    slash resolving to an empty `:param` value wins (matching Bun).
+        // consulted before the loose-slash static fallback so that a trailing
+        // slash resolving to an empty `:param` value wins (matching Bun).
         const match = this.trie.match(path);
         if (match) {
             // Auto-HEAD: a GET route implies HEAD is allowed.
@@ -228,8 +249,7 @@ export class Router {
             const headAllowed = method === 'HEAD' && match.methods.has('GET');
             if (!match.methods.has(method) && !headAllowed) {
                 const allow =
-                    this.allowCache.get(path) ??
-                    [...match.methods].join(', ');
+                    this.allowCache.get(path) ?? [...match.methods].join(', ');
                 return methodNotAllowed(allow);
             }
 

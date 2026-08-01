@@ -1,8 +1,8 @@
 /**
- * The Zod adapter — the default schema provider for BurgerAPI (phase3 §12.3).
+ * The Zod adapter — the default schema provider for BurgerAPI ().
  *
  * Responsibilities:
- * - Compute a stable identity for a Zod schema (phase3 D2).
+ * - Compute a stable identity for a Zod schema.
  * - Compile a Zod schema into a reusable `CompiledValidator`.
  * - Normalize Zod `issues` into the common `ValidationIssue[]` shape.
  *
@@ -11,7 +11,13 @@
  */
 
 import { z } from 'zod';
-import type { SchemaInput, ValidationSlot, CompiledValidator, ValidationResult, ValidationIssue } from '../types';
+import type {
+    SchemaInput,
+    ValidationSlot,
+    CompiledValidator,
+    ValidationResult,
+    ValidationIssue,
+} from '../types';
 import { __setZodAdapter, type ValidatorAdapter } from '../adapter';
 
 /** Maps a Zod issue path to the normalized `(string | number)[]`. */
@@ -32,7 +38,7 @@ export const ZodAdapter: ValidatorAdapter = {
     identity(schema: SchemaInput): string {
         // Zod v4's `toString()` is not stable for object schemas, so use a
         // deterministic JSON Schema fingerprint as the structural identity
-        // (phase3 D2). Prefix to namespace under the Zod provider.
+        // Prefix to namespace under the Zod provider.
         const zodSchema = schema as z.ZodTypeAny;
         let fingerprint: string;
         try {
@@ -65,7 +71,7 @@ export const ZodAdapter: ValidatorAdapter = {
             validate,
             // Coercion intent is adapter-provided; Zod itself is strict, so
             // the base adapter reports non-coercible. The coercer inspects
-            // the shape directly (phase3 D5).
+            // the shape directly.
             coercible: false,
         };
     },

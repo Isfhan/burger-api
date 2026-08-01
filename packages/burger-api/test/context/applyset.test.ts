@@ -62,9 +62,11 @@ describe('applySet on auto-HEAD (uniform mutation)', () => {
     });
 });
 
-describe('auto-HEAD response validation (M5)', () => {
+describe('auto-HEAD response validation', () => {
     it('validates the GET-derived response for HEAD when a response schema exists', async () => {
-        const config = { validation: { responseValidation: 'enforce' as const } };
+        const config = {
+            validation: { responseValidation: 'enforce' as const },
+        };
         const defs: RouteDefinition[] = [
             {
                 path: '/items/:id',
@@ -76,8 +78,7 @@ describe('auto-HEAD response validation (M5)', () => {
                     },
                 } as any,
                 handlers: {
-                    GET: (req: any) =>
-                        Response.json({ id: req.params.id }),
+                    GET: (req: any) => Response.json({ id: req.params.id }),
                 },
             } as any,
         ];

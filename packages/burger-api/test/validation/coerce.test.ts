@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { buildPlan, apply } from '../../src/validation/coerce';
 
-describe('Coercer (M4)', () => {
+describe('Coercer', () => {
     const schema = z.object({
         n: z.number(),
         b: z.boolean(),

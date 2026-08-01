@@ -21,14 +21,21 @@ function scanAppConventions(cwd: string): AppConventionPaths | undefined {
     const srcDir = resolve(cwd, 'src');
     const paths: AppConventionPaths = {};
     const hooksFile = resolve(srcDir, 'hooks.ts');
-    if (existsSync(hooksFile)) paths.hooksPath = hooksFile.split('\\').join('/');
+    if (existsSync(hooksFile))
+        paths.hooksPath = hooksFile.split('\\').join('/');
     const pluginsFile = resolve(srcDir, 'plugins.ts');
-    if (existsSync(pluginsFile)) paths.pluginsPath = pluginsFile.split('\\').join('/');
+    if (existsSync(pluginsFile))
+        paths.pluginsPath = pluginsFile.split('\\').join('/');
     const providersFile = resolve(srcDir, 'providers.ts');
-    if (existsSync(providersFile)) paths.providersPath = providersFile.split('\\').join('/');
+    if (existsSync(providersFile))
+        paths.providersPath = providersFile.split('\\').join('/');
     const openapiConfigFile = resolve(srcDir, 'openapi.config.ts');
-    if (existsSync(openapiConfigFile)) paths.openapiConfigPath = openapiConfigFile.split('\\').join('/');
-    return paths.hooksPath || paths.pluginsPath || paths.providersPath || paths.openapiConfigPath
+    if (existsSync(openapiConfigFile))
+        paths.openapiConfigPath = openapiConfigFile.split('\\').join('/');
+    return paths.hooksPath ||
+        paths.pluginsPath ||
+        paths.providersPath ||
+        paths.openapiConfigPath
         ? paths
         : undefined;
 }

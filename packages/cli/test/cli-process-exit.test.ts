@@ -93,7 +93,11 @@ describe('CLI process exit', () => {
     });
 
     test('burger-api skills install exits 0 under time bound', async () => {
-        const { exitCode, elapsedMs } = await runCli(['skills', 'install', '--help']);
+        const { exitCode, elapsedMs } = await runCli([
+            'skills',
+            'install',
+            '--help',
+        ]);
 
         expect(exitCode).toBe(0);
         expect(elapsedMs).toBeLessThan(10_000);

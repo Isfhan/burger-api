@@ -5,7 +5,7 @@ import { HookChain } from '../../src/chain/chain';
 import { flatten } from '../../src/chain/flattener';
 import type { MacroFn } from '../../src/plugin/types';
 
-describe('MacroRegistry (Phase 4 M6)', () => {
+describe('MacroRegistry', () => {
     it('registers and checks a macro', () => {
         const reg = new MacroRegistry();
         reg.register('auth', () => ({ beforeRoute: [() => undefined] }));
@@ -49,28 +49,54 @@ describe('MacroRegistry (Phase 4 M6)', () => {
     });
 });
 
-describe('Macro hook composition (Phase 4 M6)', () => {
+describe('Macro hook composition', () => {
     it('expanded macro hooks are composed into the chain alongside plugins', () => {
         const chain = new HookChain();
         const order: string[] = [];
 
         // Validation (global)
-        chain.add({ stage: 'beforeRoute', fn: () => { order.push('global'); }, scope: 'global', owner: 'fw' });
+        chain.add({
+            stage: 'beforeRoute',
+            fn: () => {
+                order.push('global');
+            },
+            scope: 'global',
+            owner: 'fw',
+        });
 
         // Macro expanded hooks (treated as plugin scope)
         const macroPlugins = [
-            { name: 'auth-macro', hooks: { beforeRoute: [() => { order.push('macro'); }] }, scope: 'plugin' as const },
+            {
+                name: 'auth-macro',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('macro');
+                        },
+                    ],
+                },
+                scope: 'plugin' as const,
+            },
         ];
         composePluginHooks(chain, macroPlugins, '/r');
 
         // Route (local)
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
-        expect(order).toEqual(['global', 'macro', 'local']);
+        expect(order).toEqual(['macro', 'global', 'local']);
     });
 
     it('macro and plugin hooks interleave at the same scope', () => {
@@ -78,12 +104,51 @@ describe('Macro hook composition (Phase 4 M6)', () => {
         const order: string[] = [];
 
         const allPlugins = [
-            { name: 'plugin-a', hooks: { beforeRoute: [() => { order.push('plugin-a'); }] }, scope: 'plugin' as const },
-            { name: 'macro-a', hooks: { beforeRoute: [() => { order.push('macro-a'); }] }, scope: 'plugin' as const },
-            { name: 'plugin-b', hooks: { beforeRoute: [() => { order.push('plugin-b'); }] }, scope: 'plugin' as const },
+            {
+                name: 'plugin-a',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('plugin-a');
+                        },
+                    ],
+                },
+                scope: 'plugin' as const,
+            },
+            {
+                name: 'macro-a',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('macro-a');
+                        },
+                    ],
+                },
+                scope: 'plugin' as const,
+            },
+            {
+                name: 'plugin-b',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('plugin-b');
+                        },
+                    ],
+                },
+                scope: 'plugin' as const,
+            },
         ];
         composePluginHooks(chain, allPlugins, '/r');
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {

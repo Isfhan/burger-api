@@ -35,7 +35,7 @@ irm https://burger-api.com/install.ps1 | iex
 ### Option 3: Manual Download (Alternative Installation Method)
 
 1. Download the executable for your platform from
-   [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
+ [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
 2. Add to PATH
 3. Make executable (Linux/macOS): `chmod +x burger-api`
 
@@ -53,39 +53,39 @@ Create a new Burger API project with interactive prompts.
 
 **Questions You Will Be Asked:**
 
--   Do you need API routes? (yes/no)
--   API directory name (default: api)
--   API route prefix (default: /api)
--   Enable debug mode? (yes/no)
--   Do you need Page routes? (yes/no)
--   Page directory name (default: pages)
--   Page route prefix (default: /)
--   Add AI agent skills? (recommended for agentic IDEs, default: yes)
+- Do you need API routes? (yes/no)
+- API directory name (default: api)
+- API route prefix (default: /api)
+- Enable debug mode? (yes/no)
+- Do you need Page routes? (yes/no)
+- Page directory name (default: pages)
+- Page route prefix (default: /)
+- Add AI agent skills? (recommended for agentic IDEs, default: yes)
 
 After answering, your project will be created with all files and dependencies
 installed!
 
 **What you get:**
 
--   ✅ Full project structure
--   ✅ TypeScript configured
--   ✅ Dependencies installed
--   ✅ `burger.build.ts` generated from your answers (build-time only)
--   ✅ Example routes
--   ✅ Ready to run!
--   ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
--   ✅ When page routes are enabled, the sample `index.html` matches your choices
-    (API prefix for “Try API”, and edit hints for your API/page directories)
+- ✅ Full project structure
+- ✅ TypeScript configured
+- ✅ Dependencies installed
+- ✅ `burger.build.ts` generated from your answers (build-time only)
+- ✅ Example routes
+- ✅ Ready to run!
+- ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
+- ✅ When page routes are enabled, the sample `index.html` matches your choices
+ (API prefix for “Try API”, and edit hints for your API/page directories)
 
 Generated config example:
 
 ```ts
 export default {
-    apiDir: './src/api',
-    pageDir: './src/pages',
-    apiPrefix: '/api',
-    pagePrefix: '/',
-    debug: false,
+ apiDir: './src/api',
+ pageDir: './src/pages',
+ apiPrefix: '/api',
+ pagePrefix: '/',
+ debug: false,
 };
 ```
 
@@ -120,14 +120,14 @@ burger-api ls
 Available Middleware
 ────────────────────────────────
 
-Name            Description
+Name Description
 ─────────────────────────────────────────────────
-cors            Cross-Origin Resource Sharing
-logger          Request/response logging
-rate-limiter    Request rate limiting
-jwt-auth        JWT authentication
-api-key-auth    API key authentication
-compression     Response compression
+cors Cross-Origin Resource Sharing
+logger Request/response logging
+rate-limiter Request rate limiting
+jwt-auth JWT authentication
+api-key-auth API key authentication
+compression Response compression
 ...
 ```
 
@@ -166,8 +166,8 @@ import { cors } from './middleware/cors/cors';
 import { logger } from './middleware/logger/logger';
 
 const app = new Burger({
-    apiDir: './api',
-    globalMiddleware: [logger(), cors()],
+ apiDir: './api',
+ globalMiddleware: [logger(), cors()],
 });
 ```
 
@@ -203,13 +203,13 @@ burger-api skills available
 
 ```
 .agents/skills/burger-api/
-├── SKILL.md              # Main skill definition
-└── references/           # Reference documentation
-    ├── routing.md
-    ├── validation.md
-    ├── middleware.md
-    ├── cli.md
-    └── openapi.md
+├── SKILL.md # Main skill definition
+└── references/ # Reference documentation
+ ├── routing.md
+ ├── validation.md
+ ├── middleware.md
+ ├── cli.md
+ └── openapi.md
 ```
 
 **Compatible agents:** Skills in `.agents/skills/` are automatically detected by
@@ -242,10 +242,10 @@ burger-api build index.ts --sourcemap linked
 
 **Options:**
 
--   `--outfile <path>` - Output file path (default: `.build/bundle/app.js`)
--   `--minify` - Minify the output for smaller file size
--   `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
--   `--target <target>` - Target environment (e.g., bun, node)
+- `--outfile <path>` - Output file path (default: `.build/bundle/app.js`)
+- `--minify` - Minify the output for smaller file size
+- `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
+- `--target <target>` - Target environment (e.g., bun, node)
 
 Build config is loaded from `burger.config.ts` or `burger.config.js` when
 present. If no config exists, the CLI uses defaults:
@@ -255,8 +255,8 @@ present. If no config exists, the CLI uses defaults:
 
 ```
 ✓ Build completed successfully!
-  Output: .build/bundle/app.js
-  Size: 42.5 KB
+ Output: .build/bundle/app.js
+ Size: 42.5 KB
 ```
 
 - API-only apps: `app.js` is usually enough to deploy.
@@ -289,28 +289,28 @@ burger-api build:exec index.ts --outfile my-server.exe
 
 **Options:**
 
--   `--outfile <path>` - Output file path
--   `--target <target>` - Target platform
--   `--minify` - Minify the output (enabled by default)
--   `--no-bytecode` - Disable bytecode compilation
+- `--outfile <path>` - Output file path
+- `--target <target>` - Target platform
+- `--minify` - Minify the output (enabled by default)
+- `--no-bytecode` - Disable bytecode compilation
 
 **Targets:**
 
--   `bun-windows-x64` - Windows (64-bit)
--   `bun-linux-x64` - Linux (64-bit)
--   `bun-linux-arm64` - Linux (ARM 64-bit)
--   `bun-darwin-x64` - macOS (Intel)
--   `bun-darwin-arm64` - macOS (Apple Silicon)
+- `bun-windows-x64` - Windows (64-bit)
+- `bun-linux-x64` - Linux (64-bit)
+- `bun-linux-arm64` - Linux (ARM 64-bit)
+- `bun-darwin-x64` - macOS (Intel)
+- `bun-darwin-arm64` - macOS (Apple Silicon)
 
 **Output:**
 
 ```
 ✓ Compilation completed successfully!
-  Executable: .build/executable/<project>.exe
-  Size: 45.2 MB
+ Executable: .build/executable/<project>.exe
+ Size: 45.2 MB
 
-  Your standalone executable is ready to run!
-  Run it: .build/executable/<project>.exe
+ Your standalone executable is ready to run!
+ Run it: .build/executable/<project>.exe
 ```
 
 **Use case:** Perfect for deploying your API to production servers without
@@ -340,8 +340,8 @@ burger-api serve --port 8080 --file app.ts
 
 **Options:**
 
--   `-p, --port <port>` - Port to run on (default: 4000)
--   `-f, --file <file>` - Entry file (default: index.ts)
+- `-p, --port <port>` - Port to run on (default: 4000)
+- `-f, --file <file>` - Entry file (default: index.ts)
 
 **What you'll see:**
 
@@ -350,7 +350,7 @@ burger-api serve --port 8080 --file app.ts
 
 ✓ Server running on http://localhost:4000
 ℹ Press Ctrl+C to stop
-  File changes will automatically restart the server
+ File changes will automatically restart the server
 ```
 
 **Pro tip:** Edit your code and save - the server restarts automatically! No
@@ -364,22 +364,22 @@ When you create a project, this is what you get:
 
 ```
 my-awesome-api/
-├── api/                    # Your API routes
-│   └── route.ts           # Example route
-├── pages/                 # Your HTML pages (optional)
-│   └── index.html         # Example page
-├── middleware/            # Middleware folder
-│   └── index.ts          # Export middleware here
-├── .agents/               # AI agent skills (optional)
-│   └── skills/
-│       └── burger-api/    # BurgerAPI skill for agentic IDEs
-│           ├── SKILL.md
-│           └── references/
-├── index.ts              # Main server file
-├── package.json          # Dependencies
-├── tsconfig.json         # TypeScript config
-├── .gitignore           # Git ignore rules
-└── .prettierrc          # Code formatting
+├── api/ # Your API routes
+│ └── route.ts # Example route
+├── pages/ # Your HTML pages (optional)
+│ └── index.html # Example page
+├── middleware/ # Middleware folder
+│ └── index.ts # Export middleware here
+├── .agents/ # AI agent skills (optional)
+│ └── skills/
+│ └── burger-api/ # BurgerAPI skill for agentic IDEs
+│ ├── SKILL.md
+│ └── references/
+├── index.ts # Main server file
+├── package.json # Dependencies
+├── tsconfig.json # TypeScript config
+├── .gitignore # Git ignore rules
+└── .prettierrc # Code formatting
 ```
 
 ### Adding Routes
@@ -391,17 +391,17 @@ Create a new file in the `api/` folder:
 import type { BurgerContext } from 'burger-api';
 
 export async function GET(ctx: BurgerContext) {
-    return Response.json({
-        users: ['Alice', 'Bob', 'Charlie'],
-    });
+ return Response.json({
+ users: ['Alice', 'Bob', 'Charlie'],
+ });
 }
 
 export async function POST(ctx: BurgerContext) {
-    const body = await ctx.request.json();
-    return Response.json({
-        message: 'User created',
-        data: body,
-    });
+ const body = await ctx.request.json();
+ return Response.json({
+ message: 'User created',
+ data: body,
+ });
 }
 ```
 
@@ -414,10 +414,10 @@ Create a new file in the `pages/` folder:
 ```html
 <!-- pages/about.html -->
 <html>
-    <body>
-        <h1>About Page</h1>
-        <p>This is the about page.</p>
-    </body>
+ <body>
+ <h1>About Page</h1>
+ <p>This is the about page.</p>
+ </body>
 </html>
 ```
 
@@ -492,15 +492,15 @@ bun run build:linux
 Get help for any command:
 
 ```bash
-burger-api --help                  # General help
-burger-api create --help           # Command-specific help
+burger-api --help # General help
+burger-api create --help # Command-specific help
 ```
 
 **Resources:**
 
--   Main website: https://burger-api.com
--   GitHub: https://github.com/isfhan/burger-api
--   Issues: https://github.com/isfhan/burger-api/issues
+- Main website: https://burger-api.com
+- GitHub: https://github.com/isfhan/burger-api
+- Issues: https://github.com/isfhan/burger-api/issues
 
 ---
 
@@ -543,12 +543,12 @@ bun run src/index.ts --help
 ```
 packages/cli/
 ├── src/
-│   ├── index.ts           # Main entry point
-│   ├── commands/          # All CLI commands
-│   ├── utils/             # Shared utilities
-│   └── types/             # TypeScript types
-├── package.json           # Dependencies and scripts
-└── README.md             # This file
+│ ├── index.ts # Main entry point
+│ ├── commands/ # All CLI commands
+│ ├── utils/ # Shared utilities
+│ └── types/ # TypeScript types
+├── package.json # Dependencies and scripts
+└── README.md # This file
 ```
 
 ### Build Executables
@@ -556,11 +556,11 @@ packages/cli/
 Build standalone executables for all platforms:
 
 ```bash
-bun run build:win          # Windows (x64)
-bun run build:linux        # Linux (x64)
-bun run build:mac          # macOS (ARM64/Apple Silicon)
-bun run build:mac-intel    # macOS (Intel x64)
-bun run build:all          # All platforms
+bun run build:win # Windows (x64)
+bun run build:linux # Linux (x64)
+bun run build:mac # macOS (ARM64/Apple Silicon)
+bun run build:mac-intel # macOS (Intel x64)
+bun run build:all # All platforms
 ```
 
 **Cross-Compilation from Windows:**
@@ -638,47 +638,47 @@ BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
 
 **Guidelines:**
 
--   Use simple, beginner-friendly language
--   Add comments explaining your code
--   Test all commands before submitting
--   Update README if adding new features
--   Keep route rules in one place:
-    - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
-    - scanner traversal: `packages/cli/src/utils/scanner.ts`
--   Run build tests when changing routing/build (keeps dev and production behavior the same):
-    - `bun run test:build`
--   CLI: commands that should return to the shell when finished must not leave
-    stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
-    in `src/utils/github.ts` for outbound requests. `serve` is meant to stay
-    running until you stop it.
+- Use simple, beginner-friendly language
+- Add comments explaining your code
+- Test all commands before submitting
+- Update README if adding new features
+- Keep route rules in one place:
+ - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
+ - scanner traversal: `packages/cli/src/utils/scanner.ts`
+- Run build tests when changing routing/build (keeps dev and production behavior the same):
+ - `bun run test:build`
+- CLI: commands that should return to the shell when finished must not leave
+ stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
+ in `src/utils/github.ts` for outbound requests. `serve` is meant to stay
+ running until you stop it.
 
 ### Design Principles
 
--   **Minimal dependencies** - Only use `commander` and `@clack/prompts`
--   **Beautiful output** - Use colors and symbols for clarity
--   **Simple language** - No jargon, clear explanations
--   **Well commented** - Explain why, not just what
+- **Minimal dependencies** - Only use `commander` and `@clack/prompts`
+- **Beautiful output** - Use colors and symbols for clarity
+- **Simple language** - No jargon, clear explanations
+- **Well commented** - Explain why, not just what
 
 ## Technical Details
 
 **Built with:**
 
--   TypeScript for type safety
--   Bun.js for speed and native APIs
--   Commander for CLI framework
--   @clack/prompts for beautiful prompts
+- TypeScript for type safety
+- Bun.js for speed and native APIs
+- Commander for CLI framework
+- @clack/prompts for beautiful prompts
 
 **Zero external dependencies for:**
 
--   File operations (uses `Bun.write()`)
--   Downloads (uses native `fetch()`)
--   Process spawning (uses `Bun.spawn()`)
+- File operations (uses `Bun.write()`)
+- Downloads (uses native `fetch()`)
+- Process spawning (uses `Bun.spawn()`)
 
 **Supported platforms:**
 
--   Windows (x64)
--   Linux (x64, ARM64)
--   macOS (Intel, Apple Silicon)
+- Windows (x64)
+- Linux (x64, ARM64)
+- macOS (Intel, Apple Silicon)
 
 ---
 

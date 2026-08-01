@@ -23,8 +23,7 @@ describe('RuntimeAdapter — BunAdapter contract', () => {
         const staticRoutes: Record<string, any> = {
             '/ping': () => new Response('pong'),
         };
-        const fetchFallback = () =>
-            new Response('fallback', { status: 404 });
+        const fetchFallback = () => new Response('fallback', { status: 404 });
 
         const handle = adapter.start({
             staticRoutes,

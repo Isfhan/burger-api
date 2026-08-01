@@ -72,18 +72,28 @@ export async function getMiddlewareList(): Promise<string[]> {
         // Fetch both hooks and plugins from ecosystem
         const [hooksRes, pluginsRes] = await Promise.all([
             fetchWithTimeout(`${API_URL}/contents/ecosystem/hooks`, {
-                headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'burger-api-cli' },
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
             }),
             fetchWithTimeout(`${API_URL}/contents/ecosystem/plugins`, {
-                headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'burger-api-cli' },
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
             }),
         ]);
 
         const hooks = hooksRes.ok
-            ? ((await hooksRes.json()) as GitHubFile[]).filter((f) => f.type === 'dir').map((f) => f.name)
+            ? ((await hooksRes.json()) as GitHubFile[])
+                  .filter((f) => f.type === 'dir')
+                  .map((f) => f.name)
             : [];
         const plugins = pluginsRes.ok
-            ? ((await pluginsRes.json()) as GitHubFile[]).filter((f) => f.type === 'dir').map((f) => f.name)
+            ? ((await pluginsRes.json()) as GitHubFile[])
+                  .filter((f) => f.type === 'dir')
+                  .map((f) => f.name)
             : [];
 
         return [...hooks, ...plugins].sort();
@@ -267,7 +277,7 @@ export async function downloadMiddleware(
  * @returns Promise with true if it exists, false otherwise
  * @example
  * if (await middlewareExists('cors')) {
- *   await downloadMiddleware('cors', './middleware');
+ * await downloadMiddleware('cors', './middleware');
  * }
  */
 export async function middlewareExists(name: string): Promise<boolean> {
@@ -365,15 +375,12 @@ export async function flattenSkillFiles(
     basePath: string,
     prefix: string = ''
 ): Promise<string[]> {
-    const response = await fetchWithTimeout(
-        `${API_URL}/contents/${basePath}`,
-        {
-            headers: {
-                Accept: 'application/vnd.github.v3+json',
-                'User-Agent': 'burger-api-cli',
-            },
-        }
-    );
+    const response = await fetchWithTimeout(`${API_URL}/contents/${basePath}`, {
+        headers: {
+            Accept: 'application/vnd.github.v3+json',
+            'User-Agent': 'burger-api-cli',
+        },
+    });
 
     if (!response.ok) return [];
 
@@ -400,14 +407,23 @@ export async function flattenSkillFiles(
  * Parse a description line from SKILL.md YAML frontmatter.
  * Extracted as a separate function for testability.
  */
-export function parseSkillDescription(raw: string): { description: string; version?: string } {
+export function parseSkillDescription(raw: string): {
+    description: string;
+    version?: string;
+} {
     const descLine = raw.split('\n').find((l) => l.startsWith('description:'));
     const verLine = raw.split('\n').find((l) => l.startsWith('version:'));
     const description = descLine
-        ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+        ? descLine
+              .slice('description:'.length)
+              .trim()
+              .replace(/^['"]|['"]$/g, '')
         : '(no description)';
     const version = verLine
-        ? verLine.slice('version:'.length).trim().replace(/^['"]|['"]$/g, '')
+        ? verLine
+              .slice('version:'.length)
+              .trim()
+              .replace(/^['"]|['"]$/g, '')
         : undefined;
     return { description, version };
 }
@@ -468,7 +484,9 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
 
         if (skillMd?.download_url) {
             try {
-                const raw = await (await fetchWithTimeout(skillMd.download_url)).text();
+                const raw = await (
+                    await fetchWithTimeout(skillMd.download_url)
+                ).text();
                 const parsed = parseSkillDescription(raw);
                 if (parsed.description !== '(no description)') {
                     description = parsed.description;
@@ -487,10 +505,7 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
             files: flatFiles,
         };
     } catch (err) {
-        throw wrapFetchError(
-            err,
-            `Could not get info for skill "${name}"`
-        );
+        throw wrapFetchError(err, `Could not get info for skill "${name}"`);
     }
 }
 
@@ -524,7 +539,11 @@ export async function downloadSkill(
         }
 
         // Remove .gitkeep
-        try { unlinkSync(`${targetDir}/.gitkeep`); } catch { /* ignore */ }
+        try {
+            unlinkSync(`${targetDir}/.gitkeep`);
+        } catch {
+            /* ignore */
+        }
 
         return filesDownloaded;
     } catch (err) {

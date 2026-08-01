@@ -28,8 +28,8 @@ export class HTTPError extends Error {
  * - In production, only `type`, `title`, `status`, `detail` are emitted.
  * - Unknown (non-HTTPError) errors are wrapped in `HTTPError(500)`.
  *
- * @param error  The error to render.
- * @param isDev  Whether to include dev diagnostics (stack, cause).
+ * @param error The error to render.
+ * @param isDev Whether to include dev diagnostics (stack, cause).
  */
 export function renderHTTPError(error: unknown, isDev: boolean): Response {
     const httpError =

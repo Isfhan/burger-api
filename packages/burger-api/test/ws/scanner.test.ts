@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-describe('WebSocketScanner (Phase 9)', () => {
+describe('WebSocketScanner', () => {
     let tempDir: string;
 
     beforeEach(() => {
@@ -16,7 +16,9 @@ describe('WebSocketScanner (Phase 9)', () => {
     });
 
     it('should throw error if wsDir is empty', () => {
-        expect(() => new WebSocketScanner('')).toThrow('WebSocket directory path is required');
+        expect(() => new WebSocketScanner('')).toThrow(
+            'WebSocket directory path is required'
+        );
     });
 
     it('should return empty routes for empty directory', async () => {
@@ -52,7 +54,10 @@ describe('WebSocketScanner (Phase 9)', () => {
 
     it('should find hooks.ts alongside ws.ts', async () => {
         writeFileSync(join(tempDir, 'ws.ts'), 'export default {};');
-        writeFileSync(join(tempDir, 'hooks.ts'), 'export const onOpen = () => {};');
+        writeFileSync(
+            join(tempDir, 'hooks.ts'),
+            'export const onOpen = () => {};'
+        );
 
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
@@ -62,7 +67,10 @@ describe('WebSocketScanner (Phase 9)', () => {
 
     it('should find config.ts alongside ws.ts', async () => {
         writeFileSync(join(tempDir, 'ws.ts'), 'export default {};');
-        writeFileSync(join(tempDir, 'config.ts'), 'export default { maxPayloadLength: 1024 };');
+        writeFileSync(
+            join(tempDir, 'config.ts'),
+            'export default { maxPayloadLength: 1024 };'
+        );
 
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
@@ -73,10 +81,16 @@ describe('WebSocketScanner (Phase 9)', () => {
     it('should detect global hooks in parent directory', async () => {
         // Create websocket dir
         mkdirSync(join(tempDir, 'websocket'), { recursive: true });
-        writeFileSync(join(tempDir, 'websocket', 'ws.ts'), 'export default {};');
+        writeFileSync(
+            join(tempDir, 'websocket', 'ws.ts'),
+            'export default {};'
+        );
 
         // Create hooks.ts in parent directory
-        writeFileSync(join(tempDir, 'hooks.ts'), 'export const onOpen = () => {};');
+        writeFileSync(
+            join(tempDir, 'hooks.ts'),
+            'export const onOpen = () => {};'
+        );
 
         const scanner = new WebSocketScanner(join(tempDir, 'websocket'));
         const result = await scanner.scan();
@@ -126,14 +140,20 @@ describe('WebSocketScanner (Phase 9)', () => {
         mkdirSync(join(tempDir, 'notifications'), { recursive: true });
 
         writeFileSync(join(tempDir, 'chat', 'ws.ts'), 'export default {};');
-        writeFileSync(join(tempDir, 'chat', '[roomId]', 'ws.ts'), 'export default {};');
-        writeFileSync(join(tempDir, 'notifications', 'ws.ts'), 'export default {};');
+        writeFileSync(
+            join(tempDir, 'chat', '[roomId]', 'ws.ts'),
+            'export default {};'
+        );
+        writeFileSync(
+            join(tempDir, 'notifications', 'ws.ts'),
+            'export default {};'
+        );
 
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
         expect(result.routes).toHaveLength(3);
-        expect(result.routes.map(r => r.path).sort()).toEqual([
+        expect(result.routes.map((r) => r.path).sort()).toEqual([
             '/chat',
             '/chat/:roomId',
             '/notifications',

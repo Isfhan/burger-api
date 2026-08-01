@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import {
-    mkdtempSync,
-    mkdirSync,
-    writeFileSync,
-    rmSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { DirectoryScanner } from '../../src/compiler/scanner';
@@ -31,10 +26,7 @@ function makeTree(): string {
 export const POST = () => new Response('created', { status: 201 });`
     );
     write('users/schema.ts', `export const POST = { body: {} };`);
-    write(
-        'users/hooks.ts',
-        `export const beforeRoute = ['auth'];`
-    );
+    write('users/hooks.ts', `export const beforeRoute = ['auth'];`);
     write('users/config.ts', `export default { auth: true };`);
     // Self-contained route: dashboard with no extra files
     write(
@@ -108,7 +100,10 @@ describe('ModuleLoader — fail fast', () => {
             const write = (rel: string) => {
                 const full = path.join(root, rel);
                 mkdirSync(path.dirname(full), { recursive: true });
-                writeFileSync(full, `export const GET = () => new Response('x');`);
+                writeFileSync(
+                    full,
+                    `export const GET = () => new Response('x');`
+                );
             };
             // Two route directories that resolve to the SAME path because one
             // is wrapped in a route group (which does not affect the URL).
@@ -131,7 +126,10 @@ describe('RouteTree', () => {
             const write = (rel: string) => {
                 const full = path.join(root, rel);
                 mkdirSync(path.dirname(full), { recursive: true });
-                writeFileSync(full, `export const GET = () => new Response('x');`);
+                writeFileSync(
+                    full,
+                    `export const GET = () => new Response('x');`
+                );
             };
             write('b/route.ts');
             write('a/route.ts');

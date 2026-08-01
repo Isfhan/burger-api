@@ -1,6 +1,6 @@
 /**
  * The response validator — validates a handler's return against declared
- * per-status schemas (phase3 §12.9, §8).
+ * per-status schemas (§8).
  *
  * Responsibilities:
  * - Select the response schema by status (exact code, then class `2xx`).
@@ -8,7 +8,7 @@
  * - Apply `dev` (observe, log, pass through) vs `enforce` (safe 500/422).
  *
  * This runs as a step AFTER your handler, inside the same request flow (not a
- * separate flow, phase3 §3.14). It is invisible to apps that declare no
+ * separate flow, ). It is invisible to apps that declare no
  * `response` schema.
  */
 

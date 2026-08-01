@@ -1,19 +1,24 @@
 /**
  * The validation error system — structured `ValidationError` + mode-gated
- * renderers (phase3 §12.10, §10).
+ * renderers (§10).
  *
  * Responsibilities:
  * - `ValidationError` extends `HTTPError` (status 422).
  * - Carries structured `ValidationIssue[]` per slot.
  * - Renders RFC 9457 Problem Details by default.
  * - Mode-gate: dev shows full issues; production strips internals.
- * - Honor a custom `errorRenderer` override (phase3 §10.4).
+ * - Honor a custom `errorRenderer` override ().
  *
- * Production bodies never leak stacks/source/schema internals (phase3 §18 R7).
+ * Production bodies never leak stacks/source/schema internals (R7).
  */
 
 import { HTTPError } from '../errors/http-error';
-import type { ValidationIssue, ValidationResult, ValidatorConfig, ValidationSlot } from './types';
+import type {
+    ValidationIssue,
+    ValidationResult,
+    ValidatorConfig,
+    ValidationSlot,
+} from './types';
 
 /**
  * A structured validation error thrown when request validation fails.
@@ -38,11 +43,14 @@ export class ValidationError extends HTTPError {
     constructor(
         slot: ValidationSlot | 'response',
         issues: ValidationIssue[],
-        options?: ErrorOptions & { errorsBySlot?: Record<string, ValidationIssue[]> }
+        options?: ErrorOptions & {
+            errorsBySlot?: Record<string, ValidationIssue[]>;
+        }
     ) {
-        const summary = issues.length === 1
-            ? issues[0].message
-            : `${issues.length} validation errors`;
+        const summary =
+            issues.length === 1
+                ? issues[0].message
+                : `${issues.length} validation errors`;
         super(422, `${slot}: ${summary}`, options);
         this.slot = slot;
         this.issues = issues;
@@ -67,10 +75,7 @@ export class ValidationError extends HTTPError {
      * - In production, strips internal path information.
      * - Honors a custom `errorRenderer` if provided.
      */
-    toResponse(
-        isDev: boolean,
-        config: ValidatorConfig = {}
-    ): Response {
+    toResponse(isDev: boolean, config: ValidatorConfig = {}): Response {
         if (config.errorRenderer) {
             return config.errorRenderer(
                 { success: false, issues: this.issues },
@@ -126,8 +131,8 @@ export interface RenderContext {
     /** The slot that produced the error (request) or 'response' (enforce). */
     slot?: string;
     /** Per-slot issues for request validation (all failing slots). When
-     *  present, the plain renderer emits one key per slot instead of
-     *  collapsing every issue under a single slot name. */
+     * present, the plain renderer emits one key per slot instead of
+     * collapsing every issue under a single slot name. */
     errorsBySlot?: Record<string, ValidationIssue[]>;
     /** The validator config (mode + custom renderer). */
     config: ValidatorConfig;
@@ -140,7 +145,7 @@ export interface RenderContext {
  * - `problem+json` format emits the RFC 9457 *shape* (path/message only).
  * - `plain` (default) emits `{ errors: { slot: issues } }`.
  * - In production, only `path`/`message` (and `code`) are emitted — no
- *   stacks, source paths, or schema internals (phase3 §18 R7).
+ * stacks, source paths, or schema internals (R7).
  */
 export function renderValidationError(
     result: ValidationResult,

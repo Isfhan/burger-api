@@ -48,7 +48,7 @@ function splitPath(pathname: string): string[] {
 export function extractCtxInit(
     request: Request,
     pattern: string,
-    isWildcard: boolean,
+    isWildcard: boolean
 ): ContextInit {
     const pathname = extractPathnameFromUrl(request.url);
     const patternSegs = pattern.split('/').slice(1);
@@ -64,7 +64,9 @@ export function extractCtxInit(
             break;
         }
         if (ps.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
-            const name = ps.slice(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length);
+            const name = ps.slice(
+                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length
+            );
             params[name] = pathSegs[i] ?? '';
         }
     }

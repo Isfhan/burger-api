@@ -21,7 +21,7 @@ function stub(ok: boolean): StandardSchemaV1 {
     };
 }
 
-describe('compileRouteSchema with models + Standard Schema (M3)', () => {
+describe('compileRouteSchema with models + Standard Schema', () => {
     beforeEach(() => clearValidatorCache());
 
     it('resolves a model ref string into a compiled validator', () => {
@@ -89,7 +89,7 @@ describe('compileRouteSchema with models + Standard Schema (M3)', () => {
 
     it('throws on an unknown (non-Zod, non-Standard) schema', () => {
         expect(() =>
-            compileRouteSchema({ get: { query: (123 as any) } })
+            compileRouteSchema({ get: { query: 123 as any } })
         ).toThrow(/Unsupported schema/);
     });
 });

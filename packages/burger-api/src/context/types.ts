@@ -34,8 +34,8 @@ export interface ContextInit {
 }
 
 /**
- * The Phase 2 response-mutation surface exposed through `req.set`.
- * `cookies` is intentionally absent (reserved for Phase 7).
+ * The response-mutation surface exposed through `req.set`.
+ * `cookies` is intentionally absent (reserved for a future release).
  */
 export interface ContextSet {
     status?: number;
@@ -45,7 +45,7 @@ export interface ContextSet {
 /**
  * The immutable information produced by `RouteAccessAnalyzer` describing which
  * request fields and lifecycle hooks a route uses. It is an optimization hint
- * only — the framework never reads it at runtime in Phase 2.
+ * only — the framework never reads it at runtime .
  */
 export interface RouteAccessInfo {
     /** The set of fields the analyzer determined the route reads. */
@@ -56,7 +56,7 @@ export interface RouteAccessInfo {
      * default.
      */
     unknown: boolean;
-    /** The set of lifecycle hook stages the route uses (Phase 4 M7). */
+    /** The set of lifecycle hook stages the route uses. */
     hooks: ReadonlySet<string>;
     /** Reports whether `field` is considered accessed by this route. */
     has(field: ContextField): boolean;

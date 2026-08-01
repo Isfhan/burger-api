@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { RouteDefinition } from '../../src/types/index';
 
 /**
- * Concurrency / isolation (ROADMAP-phase2 §15.4). Fires 100 concurrent
+ * Concurrency / isolation. Fires 100 concurrent
  * requests that read `req.params`, `req.query`, `req.set`, and `req.validated`,
  * and asserts each request sees ONLY its own data — no cross-request leakage,
  * because every request gets its own `BurgerContext` instance.
@@ -16,7 +16,9 @@ describe('BurgerContext isolation (100 concurrent requests)', () => {
                 path: '/iso/:id',
                 handlers: {
                     GET: (req: any) => {
-                        req.set.headers = { 'x-reqid': String(req.query.reqid) };
+                        req.set.headers = {
+                            'x-reqid': String(req.query.reqid),
+                        };
                         return Response.json({
                             id: req.params.id,
                             query: req.query.reqid,

@@ -1,12 +1,13 @@
-import type {
-    RouteDefinition,
-    RequestHandler,
-} from '../types/index';
+import type { RouteDefinition, RequestHandler } from '../types/index';
 import type { RouteModule } from '../compiler/route-module';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
 import { compileRouteSchema } from '../validation/compiler';
 import { createValidatorMiddleware } from '../validation/validator';
-import { methodNotAllowed, autoOptionsHandler, applySet } from '../utils/response';
+import {
+    methodNotAllowed,
+    autoOptionsHandler,
+    applySet,
+} from '../utils/response';
 import { executeHookPlan } from '../lifecycle/executor';
 import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types';
 import { HookChain } from '../chain/chain';
@@ -21,18 +22,21 @@ import { Trie } from './trie';
 import { ROUTE_CONSTANTS } from '../utils/routing';
 import { extractCtxInit } from './param-extract';
 import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
-import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
+import type {
+    CompiledRouteValidators,
+    ValidatorConfig,
+} from '../validation/types';
 
 /**
  * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
  *
  * Responsibilities:
  * - Build the optimized `CompiledHandler` per route (method dispatch + 405/Allow
- *   + auto-HEAD + hook pipeline delegation).
+ * + auto-HEAD + hook pipeline delegation).
  * - Classify each route as static (→ `StaticMap`) or dynamic/wildcard (→ `Trie`).
  * - Populate the `AllowCache`.
  * - Optionally run the `RouteAccessAnalyzer` once per route (compile-time only;
- *   its output is baked into `meta` but never read at runtime in Phase 2).
+ * its output is baked into `meta` but never read at runtime ).
  * - Fail fast on duplicate or ambiguous routes (compile-time error).
  * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
  */
@@ -63,7 +67,7 @@ export class RouterCompiler {
         const nativeRoutes = new Map<string, CompiledHandler>();
         const registeredPaths = new Set<string>();
         // Retained metadata per route (RouteAccessInfo + RouteMeta). Build-time
-        // only; never read on the request hot path (see ROADMAP-phase2 §5.7).
+        // only; never read on the request hot path.
         const compiledRoutes = new Map<string, CompiledRoute>();
 
         for (const def of defs) {
@@ -83,7 +87,7 @@ export class RouterCompiler {
                 | import('../validation/types').CompiledRouteValidators
                 | undefined;
 
-            // Compose the frozen `HookPlan` once at compile time (Phase 4 M4).
+            // Compose the frozen `HookPlan` once at compile time.
             // The HookChain collects ChainNodes tagged with scope + owner; the
             // flattener produces the per-phase arrays with correct ordering
             // (global → local for forward phases, local → global for onError).
@@ -104,15 +108,35 @@ export class RouterCompiler {
                 });
                 routeValidators = validators;
             }
-            chain.addStage('beforeRoute', toHookArray(routeHooks?.beforeRoute), 'local', path);
-            chain.addStage('afterRoute', toHookArray(routeHooks?.afterRoute), 'local', path);
-            chain.addStage('mapResponse', toHookArray(routeHooks?.mapResponse), 'local', path);
+            chain.addStage(
+                'beforeRoute',
+                toHookArray(routeHooks?.beforeRoute),
+                'local',
+                path
+            );
+            chain.addStage(
+                'afterRoute',
+                toHookArray(routeHooks?.afterRoute),
+                'local',
+                path
+            );
+            chain.addStage(
+                'mapResponse',
+                toHookArray(routeHooks?.mapResponse),
+                'local',
+                path
+            );
             // onError: reverse because ModuleLoader merges global→route but
             // onError needs route→global (nearest-first). The flattener orders
             // local → global, so reversed local nodes execute route-first.
-            chain.addStage('onError', toHookArray(routeHooks?.onError).reverse(), 'local', path);
+            chain.addStage(
+                'onError',
+                toHookArray(routeHooks?.onError).reverse(),
+                'local',
+                path
+            );
 
-            // Phase 4 M5: compose plugin hooks into the chain.
+            // compose plugin hooks into the chain.
             // Plugin hooks are scoped (plugin by default) and the flattener
             // orders them between global (validation) and local (route).
             if (plugins) {
@@ -122,21 +146,24 @@ export class RouterCompiler {
             const plan = flatten(chain, path);
             // Merge transform from route hooks and plugins. Route transform takes
             // precedence over plugin transform on key collision.
-            plan.transform = mergeTransformRecords(routeHooks?.transform, plugins);
+            plan.transform = mergeTransformRecords(
+                routeHooks?.transform,
+                plugins
+            );
 
             // Attach compiled validators for response validation post-handler.
             if (routeValidators) {
                 plan.validators = routeValidators;
             }
 
-            // Thread debug flag for error rendering (Phase 6).
+            // Thread debug flag for error rendering.
             plan.debug = this.debug;
 
             // Thread global validation config for response validation.
             plan.validatorConfig = this.config;
 
             // Optional, compile-time-only route field analysis. The result is
-            // baked into `meta` but is unused at runtime in Phase 2, so it can
+            // baked into `meta` but is unused at runtime , so it can
             // never affect request correctness.
             const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
 
@@ -177,8 +204,13 @@ export class RouterCompiler {
 
                 // Optional: cache provably-constant OPTIONS responses natively.
                 // (Loose trailing-slash equivalence is resolved at lookup time in
-                //  Router.fetch, so it never shadows a `:param` empty-value match.)
-                registerNativeOptions(path, def, hasSchema, onRequestHooksCount);
+                // Router.fetch, so it never shadows a `:param` empty-value match.)
+                registerNativeOptions(
+                    path,
+                    def,
+                    hasSchema,
+                    onRequestHooksCount
+                );
             } else {
                 if (registeredPaths.has(path)) {
                     throw new Error(
@@ -198,19 +230,24 @@ export class RouterCompiler {
             }
         }
 
-        return { staticMap, trie, allowCache, nativeRoutes, routes: compiledRoutes };
+        return {
+            staticMap,
+            trie,
+            allowCache,
+            nativeRoutes,
+            routes: compiledRoutes,
+        };
     }
 
     /**
      * Compiles a `RouteModule[]` (the canonical output of the Module Loader)
-     * into the dispatch structures. This is the Phase 1 compiler entry point
+     * into the dispatch structures. This is the compiler entry point
      * for the file-based discovery pipeline
      * (Directory Scanner → Module Loader → `RouteModule` → Compiler).
      *
      * Each `RouteModule` is normalized to the existing `RouteDefinition` shape
      * (the stable contract shared with the prod prebuilt path), then compiled
-     * through {@link compile}. Convention data not yet compiled in Phase 1
-     * (`hooks`) is carried for later phases. `config` is attached for runtime use.
+     * through {@link compile}. Convention data not yet compiled in * (`hooks`) is carried for downstream compilation. `config` is attached for runtime use.
      */
     compileModules(modules: RouteModule[]): CompiledRouter {
         return this.compile(modules.map(toRouteDefinition));
@@ -221,8 +258,8 @@ export class RouterCompiler {
  * Normalizes a `RouteModule` (compiler's intermediate) into the existing
  * `RouteDefinition` (the normalized form between the compiler and the runtime).
  *
- * Convention data not yet compiled in Phase 1 (`hooks`) is carried on the
- * `RouteDefinition` for later phases. `config` is attached for runtime use.
+ * Convention data not yet compiled in (`hooks`) is carried on the
+ * `RouteDefinition` for downstream compilation. `config` is attached for runtime use.
  */
 function toRouteDefinition(mod: RouteModule): RouteDefinition {
     return {
@@ -260,7 +297,10 @@ function buildCompiledHandler(
     providers?: Map<string, unknown>,
     config?: Record<string, unknown>
 ): CompiledHandler {
-    return async (request: Request, ctxInit?: ContextInit): Promise<Response> => {
+    return async (
+        request: Request,
+        ctxInit?: ContextInit
+    ): Promise<Response> => {
         const method = request.method;
         let handler = handlers[method];
 
@@ -272,8 +312,14 @@ function buildCompiledHandler(
             ctxInit ?? extractCtxInit(request, pattern, isWildcard);
 
         // Create the one `BurgerContext` for this request. `meta` is accepted
-        // but ignored at runtime (Phase 2).
-        const ctx = BurgerContext.create(request, resolvedCtxInit, meta, providers, config);
+        // but ignored at runtime.
+        const ctx = BurgerContext.create(
+            request,
+            resolvedCtxInit,
+            meta,
+            providers,
+            config
+        );
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {
@@ -284,7 +330,7 @@ function buildCompiledHandler(
                 handlers,
                 request
             );
-            // Uniform response mutation (ROADMAP-phase2 §8.7): apply `ctx.set`,
+            // Uniform response mutation: apply `ctx.set`,
             // then strip the body from the mutated response.
             const mutated = applySet(response, ctx.set);
             return new Response(null, {
@@ -298,12 +344,7 @@ function buildCompiledHandler(
             return methodNotAllowed(allow);
         }
 
-        const response = await executeHookPlan(
-            ctx,
-            plan,
-            handlers,
-            request
-        );
+        const response = await executeHookPlan(ctx, plan, handlers, request);
         return applySet(response, ctx.set);
     };
 }
@@ -381,7 +422,11 @@ function registerNativeOptions(
     const opt = def.handlers['OPTIONS'];
     if (opt && opt === autoOptionsHandler) {
         try {
-            nativeStaticResponse('OPTIONS', path, new Response(null, { status: 204 }));
+            nativeStaticResponse(
+                'OPTIONS',
+                path,
+                new Response(null, { status: 204 })
+            );
         } catch {
             // Native static response not available for this path; the compiled
             // handler still serves OPTIONS correctly, so ignore.

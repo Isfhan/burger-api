@@ -2,21 +2,20 @@ import { describe, it, expect } from 'bun:test';
 import { BurgerContext } from '../../src/context/context';
 
 /**
- * Dead-path elimination (ROADMAP-phase2 §8.2).
+ * Dead-path elimination.
  *
  * `parseQuery` runs ONLY inside the lazy `query` getter, which is the only
  * place `BurgerContext._query` is assigned. Therefore:
- *   - if `req.query` is never read, `_query` stays `undefined` (no parse ran);
- *   - the first read assigns `_query`; subsequent reads return the same object
- *     (single-parse cache).
+ * - if `req.query` is never read, `_query` stays `undefined` (no parse ran);
+ * - the first read assigns `_query`; subsequent reads return the same object
+ * (single-parse cache).
  * This proves a route that ignores `query` performs zero query parsing/allocation.
  */
 describe('Dead-path elimination (lazy query)', () => {
     it('never parses query when req.query is never read', () => {
-        const ctx = BurgerContext.create(
-            new Request('http://h/?a=1&b=2'),
-            { route: { path: '/', pattern: '/' } }
-        );
+        const ctx = BurgerContext.create(new Request('http://h/?a=1&b=2'), {
+            route: { path: '/', pattern: '/' },
+        });
         // Touch other members, but never `req.query`.
         void ctx.method;
         void ctx.url;

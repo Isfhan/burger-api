@@ -76,8 +76,8 @@ function normalizeOpenapi(raw: Record<string, unknown>): openapi {
  * Each route directory is **self-contained** — no group inheritance merging.
  * Only the route's own files are loaded.
  *
- * Phase 1 keeps convention data raw — `hooks` are carried through verbatim
- * and compiled in Phase 4. `config` is attached for runtime use.
+ * keeps convention data raw — `hooks` are carried through verbatim
+ * and compiled . `config` is attached for runtime use.
  *
  * The loader fails fast on duplicate resolved route paths, matching the
  * compiler's "loud and early" contract (`ROADMAP.md` §6.3).
@@ -93,7 +93,9 @@ export class ModuleLoader {
 
         // Load global hooks once (shared across all routes).
         let globalHooks = scanned.globalHooks
-            ? await this.loadOptional<Record<string, unknown>>(scanned.globalHooks)
+            ? await this.loadOptional<Record<string, unknown>>(
+                  scanned.globalHooks
+              )
             : undefined;
 
         // Extract onRequest from global hooks — these run before routing
@@ -105,7 +107,10 @@ export class ModuleLoader {
             // ESM module namespaces are frozen — clone without onRequest instead of delete.
             if (globalHooks) {
                 const { onRequest: _, ...rest } = globalHooks;
-                globalHooks = Object.keys(rest).length > 0 ? (rest as Record<string, unknown>) : undefined;
+                globalHooks =
+                    Object.keys(rest).length > 0
+                        ? (rest as Record<string, unknown>)
+                        : undefined;
             }
         }
 
@@ -132,15 +137,23 @@ export class ModuleLoader {
         const handlers = this.extractHandlers(routeMod);
 
         // 2. Load convention files from this route's own directory only.
-        const rawSchema = await this.loadOptional<Record<string, unknown>>(route.localFiles.schema);
+        const rawSchema = await this.loadOptional<Record<string, unknown>>(
+            route.localFiles.schema
+        );
         const schema = rawSchema ? normalizeSchema(rawSchema) : undefined;
-        const rawOpenapi = await this.loadOptional<Record<string, unknown>>(route.localFiles.openapi);
+        const rawOpenapi = await this.loadOptional<Record<string, unknown>>(
+            route.localFiles.openapi
+        );
         const openapi = rawOpenapi ? normalizeOpenapi(rawOpenapi) : undefined;
-        const hooks = await this.loadOptional<Record<string, unknown>>(route.localFiles.hooks);
-        const config = await this.loadOptional<Record<string, unknown>>(route.localFiles.config);
+        const hooks = await this.loadOptional<Record<string, unknown>>(
+            route.localFiles.hooks
+        );
+        const config = await this.loadOptional<Record<string, unknown>>(
+            route.localFiles.config
+        );
 
         // 3. Overlay inline exports from route.ts. Route-local inline wins
-        //    over separate files.
+        // over separate files.
         const finalSchema = (routeMod.schema as RouteSchema) ?? schema;
         const finalOpenapi = (routeMod.openapi as openapi) ?? openapi;
         const routeHooks = this.mergeHookObjects(
@@ -149,11 +162,8 @@ export class ModuleLoader {
         );
 
         // 4. Merge global hooks with route-specific hooks.
-        //    Global hooks run first, then route hooks (execution priority).
-        const finalHooks = this.mergeHookObjects(
-            globalHooks,
-            routeHooks
-        );
+        // Global hooks run first, then route hooks (execution priority).
+        const finalHooks = this.mergeHookObjects(globalHooks, routeHooks);
 
         const sourceFiles = { ...route.localFiles };
 
@@ -174,9 +184,9 @@ export class ModuleLoader {
      * minimal `OPTIONS` handler for preflight-triggering methods when the
      * module does not define one (ported from core/api-router.ts).
      */
-    private extractHandlers(
-        mod: Record<string, unknown>
-    ): { [method: string]: RequestHandler } {
+    private extractHandlers(mod: Record<string, unknown>): {
+        [method: string]: RequestHandler;
+    } {
         const handlers: { [method: string]: RequestHandler } = {};
         for (const method of HTTP_METHODS) {
             if (typeof mod[method] === 'function') {
@@ -196,9 +206,7 @@ export class ModuleLoader {
      * Extracts `onRequest` hooks from a raw hook object.
      * Returns them as an array (normalizing single hook or array).
      */
-    private extractOnRequest(
-        hooks?: Record<string, unknown>
-    ): Hook[] {
+    private extractOnRequest(hooks?: Record<string, unknown>): Hook[] {
         if (!hooks?.onRequest) return [];
         const h = hooks.onRequest;
         return Array.isArray(h) ? (h as Hook[]) : [h as Hook];
@@ -241,7 +249,9 @@ export class ModuleLoader {
     async loadProviders(
         scanned: ScanResult
     ): Promise<Record<string, unknown> | undefined> {
-        return this.loadOptional<Record<string, unknown>>(scanned.providersPath);
+        return this.loadOptional<Record<string, unknown>>(
+            scanned.providersPath
+        );
     }
 
     /**
@@ -260,7 +270,10 @@ export class ModuleLoader {
             const b = result[key];
             const o = (override as Record<string, unknown>)[key];
             if (key === 'transform') {
-                result[key] = { ...(b as Record<string, unknown> ?? {}), ...(o as Record<string, unknown> ?? {}) };
+                result[key] = {
+                    ...((b as Record<string, unknown>) ?? {}),
+                    ...((o as Record<string, unknown>) ?? {}),
+                };
             } else if (Array.isArray(b) && Array.isArray(o)) {
                 result[key] = [...b, ...o];
             } else if (Array.isArray(b)) {

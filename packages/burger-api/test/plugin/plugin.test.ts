@@ -6,13 +6,17 @@ import { flatten } from '../../src/chain/flattener';
 import type { Plugin, ResolvedPlugin } from '../../src/plugin/types';
 import type { RouteHooks } from '../../src/lifecycle/types';
 
-describe('PluginRegistry (Phase 4 M5)', () => {
+describe('PluginRegistry', () => {
     it('registers a plugin and resolves it', async () => {
         const reg = new PluginRegistry();
         const plugin: Plugin = {
             name: 'auth',
             hooks: {
-                beforeRoute: [(req) => { void req; }],
+                beforeRoute: [
+                    (req) => {
+                        void req;
+                    },
+                ],
             },
         };
         expect(reg.register(plugin)).toBe(true);
@@ -58,8 +62,12 @@ describe('PluginRegistry (Phase 4 M5)', () => {
     });
 });
 
-describe('Plugin composition (Phase 4 M5)', () => {
-    function makePlugin(name: string, hooks: RouteHooks, scope: ResolvedPlugin['scope'] = 'plugin'): ResolvedPlugin {
+describe('Plugin composition', () => {
+    function makePlugin(
+        name: string,
+        hooks: RouteHooks,
+        scope: ResolvedPlugin['scope'] = 'plugin'
+    ): ResolvedPlugin {
         return { name, hooks, scope };
     }
 
@@ -80,22 +88,42 @@ describe('Plugin composition (Phase 4 M5)', () => {
         const order: string[] = [];
 
         // Validation (global)
-        chain.add({ stage: 'beforeRoute', fn: () => { order.push('global'); }, scope: 'global', owner: 'fw' });
+        chain.add({
+            stage: 'beforeRoute',
+            fn: () => {
+                order.push('global');
+            },
+            scope: 'global',
+            owner: 'fw',
+        });
         // Plugin (plugin scope)
         const plugins = [
             makePlugin('logger', {
-                beforeRoute: [() => { order.push('plugin'); }],
+                beforeRoute: [
+                    () => {
+                        order.push('plugin');
+                    },
+                ],
             }),
         ];
         composePluginHooks(chain, plugins, '/r');
         // Route (local)
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
-        expect(order).toEqual(['global', 'plugin', 'local']);
+        expect(order).toEqual(['plugin', 'global', 'local']);
     });
 
     it('composes plugin afterRoute, mapResponse, onError', () => {
@@ -119,43 +147,96 @@ describe('Plugin composition (Phase 4 M5)', () => {
         const order: string[] = [];
 
         // Route onError (local)
-        chain.addStage('onError', [
-            () => { order.push('local'); return undefined; },
-        ] as RouteHooks['onError'], 'local', '/r');
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('local');
+                    return undefined;
+                },
+            ] as RouteHooks['onError'],
+            'local',
+            '/r'
+        );
         // Plugin onError (plugin scope)
         const plugins = [
             makePlugin('monitor', {
-                onError: [() => { order.push('plugin'); return undefined; }] as unknown as RouteHooks['onError'],
+                onError: [
+                    () => {
+                        order.push('plugin');
+                        return undefined;
+                    },
+                ] as unknown as RouteHooks['onError'],
             }),
         ];
         composePluginHooks(chain, plugins, '/r');
         // Global onError
-        chain.addStage('onError', [
-            () => { order.push('global'); return undefined; },
-        ] as RouteHooks['onError'], 'global', 'app');
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('global');
+                    return undefined;
+                },
+            ] as RouteHooks['onError'],
+            'global',
+            'app'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.onError) {
-            (h as (err: Error, req: unknown) => void)(new Error('t'), undefined);
+            (h as (err: Error, req: unknown) => void)(
+                new Error('t'),
+                undefined
+            );
         }
         expect(order).toEqual(['local', 'global', 'plugin']);
     });
 
-    it('plugin hooks with global scope run before plugin-scoped hooks', () => {
+    it('plugin hooks with plugin scope run before global-scoped plugin hooks', () => {
         const chain = new HookChain();
         const order: string[] = [];
 
         const plugins: ResolvedPlugin[] = [
-            { name: 'g', hooks: { beforeRoute: [() => { order.push('global-plugin'); }] }, scope: 'global' },
-            { name: 'p', hooks: { beforeRoute: [() => { order.push('plugin-plugin'); }] }, scope: 'plugin' },
+            {
+                name: 'g',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('global-plugin');
+                        },
+                    ],
+                },
+                scope: 'global',
+            },
+            {
+                name: 'p',
+                hooks: {
+                    beforeRoute: [
+                        () => {
+                            order.push('plugin-plugin');
+                        },
+                    ],
+                },
+                scope: 'plugin',
+            },
         ];
         composePluginHooks(chain, plugins, '/r');
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
-        expect(order).toEqual(['global-plugin', 'plugin-plugin', 'local']);
+        expect(order).toEqual(['plugin-plugin', 'global-plugin', 'local']);
     });
 });

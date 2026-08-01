@@ -1,21 +1,21 @@
 /**
  * The coercer — builds and applies precomputed value-conversion plans
- * (phase3 §12.6, §7). "Coercion" here means automatic type conversion:
+ * (§7). "Coercion" here means automatic type conversion:
  * turning a string like `"42"` into the number `42`, or `"true"` into the
  * boolean `true`.
  *
  * Responsibilities:
  * - `buildPlan`: inspect a schema slot and record only the fields that need
- *   conversion (number/boolean/date). Returns undefined when there is nothing
- *   to convert.
+ * conversion (number/boolean/date). Returns undefined when there is nothing
+ * to convert.
  * - `apply`: transform a raw string record into a typed record using the plan,
- *   in a single linear pass. Fields not in the plan are copied unchanged (no
- *   extra checks on them).
+ * in a single linear pass. Fields not in the plan are copied unchanged (no
+ * extra checks on them).
  *
- * Conversion is OPT-IN (default OFF, phase3 §7.4). The plan is built once when
+ * Conversion is OPT-IN (default OFF, ). The plan is built once when
  * the app starts; applied per request only when present. It must NOT run when
  * conversion is disabled, must NOT convert the body, and must NOT leak `NaN`
- * (a bad conversion simply fails later in the validator, phase3 §7.11).
+ * (a bad conversion simply fails later in the validator, ).
  */
 
 import { z } from 'zod';
@@ -57,7 +57,7 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
             // A failed conversion (e.g. "abc") yields NaN. Keep the original
             // raw string instead so the downstream validator reports the
             // actual bad input ("received 'abc'") rather than a confusing
-            // "received nan" (phase3 §7.11).
+            // "received nan" ().
             return Number.isNaN(n) ? raw : n;
         }
         case 'boolean': {
@@ -79,7 +79,7 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
  * Builds a coercion plan for a schema slot. Returns undefined when the slot
  * has no coercible fields (so the orchestrator can skip coercion entirely).
  *
- * Currently inspects Zod object shapes (the default provider, phase3 D5).
+ * Currently inspects Zod object shapes (the default provider).
  * Other adapters can be extended by detecting their intent here.
  */
 export function buildPlan(

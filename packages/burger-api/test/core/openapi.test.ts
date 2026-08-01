@@ -5,8 +5,15 @@ import * as path from 'node:path';
 import { DirectoryScanner } from '../../src/compiler/scanner';
 import { ModuleLoader } from '../../src/compiler/module-loader';
 import { generateOpenAPIDocument } from '../../src/core/openapi';
-import { scalarDocs, swaggerDocs, redocDocs } from '../../src/core/docs-providers';
-import type { OpenAPIConfig, OpenAPIObject } from '../../src/types/openapi-config';
+import {
+    scalarDocs,
+    swaggerDocs,
+    redocDocs,
+} from '../../src/core/docs-providers';
+import type {
+    OpenAPIConfig,
+    OpenAPIObject,
+} from '../../src/types/openapi-config';
 import type { RouteDefinition } from '../../src/types/index';
 import { z } from 'zod';
 
@@ -17,7 +24,10 @@ describe('DirectoryScanner — openapi.config.ts discovery', () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-'));
         try {
             mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
-            writeFileSync(path.join(root, 'api', 'users', 'route.ts'), 'export {};');
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.ts'),
+                'export {};'
+            );
             writeFileSync(
                 path.join(root, 'openapi.config.ts'),
                 'export default { title: "Test API" };'
@@ -35,7 +45,10 @@ describe('DirectoryScanner — openapi.config.ts discovery', () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-'));
         try {
             mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
-            writeFileSync(path.join(root, 'api', 'users', 'route.ts'), 'export {};');
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.ts'),
+                'export {};'
+            );
             const scanner = new DirectoryScanner(path.join(root, 'api'), 'api');
             const result = await scanner.scan();
             expect(result.openAPIConfigPath).toBeUndefined();
@@ -47,16 +60,26 @@ describe('DirectoryScanner — openapi.config.ts discovery', () => {
     it('discovers openapi.config.ts in src/ when apiDir is src/api', async () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-'));
         try {
-            mkdirSync(path.join(root, 'src', 'api', 'users'), { recursive: true });
-            writeFileSync(path.join(root, 'src', 'api', 'users', 'route.ts'), 'export {};');
+            mkdirSync(path.join(root, 'src', 'api', 'users'), {
+                recursive: true,
+            });
+            writeFileSync(
+                path.join(root, 'src', 'api', 'users', 'route.ts'),
+                'export {};'
+            );
             writeFileSync(
                 path.join(root, 'src', 'openapi.config.ts'),
                 'export default { title: "Test API" };'
             );
-            const scanner = new DirectoryScanner(path.join(root, 'src', 'api'), 'api');
+            const scanner = new DirectoryScanner(
+                path.join(root, 'src', 'api'),
+                'api'
+            );
             const result = await scanner.scan();
             expect(result.openAPIConfigPath).toBeDefined();
-            expect(result.openAPIConfigPath).toContain(path.join('src', 'openapi.config.ts'));
+            expect(result.openAPIConfigPath).toContain(
+                path.join('src', 'openapi.config.ts')
+            );
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
@@ -70,7 +93,10 @@ describe('ModuleLoader — loadOpenAPIConfig', () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-'));
         try {
             mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
-            writeFileSync(path.join(root, 'api', 'users', 'route.ts'), 'export default { GET() { return Response.json({}); } };');
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.ts'),
+                'export default { GET() { return Response.json({}); } };'
+            );
             writeFileSync(
                 path.join(root, 'openapi.config.ts'),
                 'export default { title: "Loaded API", version: "2.0.0" };'
@@ -91,7 +117,10 @@ describe('ModuleLoader — loadOpenAPIConfig', () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-oapi-'));
         try {
             mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
-            writeFileSync(path.join(root, 'api', 'users', 'route.ts'), 'export default { GET() { return Response.json({}); } };');
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.ts'),
+                'export default { GET() { return Response.json({}); } };'
+            );
             const scanner = new DirectoryScanner(path.join(root, 'api'), 'api');
             const scanned = await scanner.scan();
             const loader = new ModuleLoader();
@@ -105,7 +134,9 @@ describe('ModuleLoader — loadOpenAPIConfig', () => {
 
 // ─── generateOpenAPIDocument — config integration ───
 
-function makeRoute(overrides: Partial<RouteDefinition> & { path: string; handlers: any }): RouteDefinition {
+function makeRoute(
+    overrides: Partial<RouteDefinition> & { path: string; handlers: any }
+): RouteDefinition {
     return {
         schema: {},
         openapi: {},
@@ -154,21 +185,36 @@ describe('generateOpenAPIDocument — config', () => {
     it('includes contact and license from config', () => {
         const config: OpenAPIConfig = {
             contact: { name: 'Team', email: 'api@example.com' },
-            license: { name: 'MIT', url: 'https://opensource.org/licenses/MIT' },
+            license: {
+                name: 'MIT',
+                url: 'https://opensource.org/licenses/MIT',
+            },
             termsOfService: 'https://example.com/tos',
         };
         const doc = generateOpenAPIDocument([], baseOptions, config);
-        expect(doc.info.contact).toEqual({ name: 'Team', email: 'api@example.com' });
-        expect(doc.info.license).toEqual({ name: 'MIT', url: 'https://opensource.org/licenses/MIT' });
+        expect(doc.info.contact).toEqual({
+            name: 'Team',
+            email: 'api@example.com',
+        });
+        expect(doc.info.license).toEqual({
+            name: 'MIT',
+            url: 'https://opensource.org/licenses/MIT',
+        });
         expect(doc.info.termsOfService).toBe('https://example.com/tos');
     });
 
     it('includes externalDocs from config', () => {
         const config: OpenAPIConfig = {
-            externalDocs: { url: 'https://docs.example.com', description: 'Full docs' },
+            externalDocs: {
+                url: 'https://docs.example.com',
+                description: 'Full docs',
+            },
         };
         const doc = generateOpenAPIDocument([], baseOptions, config);
-        expect(doc.externalDocs).toEqual({ url: 'https://docs.example.com', description: 'Full docs' });
+        expect(doc.externalDocs).toEqual({
+            url: 'https://docs.example.com',
+            description: 'Full docs',
+        });
     });
 
     it('collects tags from operations into top-level tags array', () => {
@@ -186,7 +232,9 @@ describe('generateOpenAPIDocument — config', () => {
             makeRoute({
                 path: '/api/admin',
                 handlers: { GET: () => Response.json({}) },
-                openapi: { get: { summary: 'Admin', tags: ['Users', 'Admin'] } },
+                openapi: {
+                    get: { summary: 'Admin', tags: ['Users', 'Admin'] },
+                },
             }),
         ];
         const doc = generateOpenAPIDocument(routes, baseOptions);
@@ -202,7 +250,10 @@ describe('generateOpenAPIDocument — config', () => {
                 schema: {
                     get: {
                         response: {
-                            '200': z.object({ items: z.array(z.string()), total: z.number() }),
+                            '200': z.object({
+                                items: z.array(z.string()),
+                                total: z.number(),
+                            }),
                         },
                     },
                 },
@@ -212,7 +263,9 @@ describe('generateOpenAPIDocument — config', () => {
         const getOp = (doc.paths['/api/items'] as any).get;
         expect(getOp.responses['200']).toBeDefined();
         expect(getOp.responses['200'].description).toBe('Successful response');
-        expect(getOp.responses['200'].content['application/json'].schema).toBeDefined();
+        expect(
+            getOp.responses['200'].content['application/json'].schema
+        ).toBeDefined();
     });
 
     it('user-provided responses in openapi.ts override auto-generated ones', () => {
@@ -253,15 +306,12 @@ describe('ModuleLoader — normalizeOpenapi', () => {
             writeFileSync(
                 path.join(root, 'api', 'posts', 'openapi.ts'),
                 `export const GET = {
-                    summary: 'List posts',
-                    description: 'Returns all posts',
-                    tags: ['Posts'],
-                };`
+ summary: 'List posts',
+ description: 'Returns all posts',
+ tags: ['Posts'],
+ };`
             );
-            const scanner = new DirectoryScanner(
-                path.join(root, 'api'),
-                'api'
-            );
+            const scanner = new DirectoryScanner(path.join(root, 'api'), 'api');
             const result = await scanner.scan();
             const loader = new ModuleLoader();
             const modules = await loader.load(result);
@@ -284,9 +334,7 @@ describe('ModuleLoader — normalizeOpenapi', () => {
             expect(getOp.description).toBe('Returns all posts');
             expect(getOp.tags).toEqual(['Posts']);
             // Tag should appear in top-level tags array
-            const tagNames = ((doc as any).tags ?? []).map(
-                (t: any) => t.name
-            );
+            const tagNames = ((doc as any).tags ?? []).map((t: any) => t.name);
             expect(tagNames).toContain('Posts');
         } finally {
             rmSync(root, { recursive: true, force: true });
@@ -305,13 +353,10 @@ describe('ModuleLoader — normalizeOpenapi', () => {
             writeFileSync(
                 path.join(root, 'api', 'items', 'openapi.ts'),
                 `export default {
-                    get: { summary: 'Get items', tags: ['Items'] },
-                };`
+ get: { summary: 'Get items', tags: ['Items'] },
+ };`
             );
-            const scanner = new DirectoryScanner(
-                path.join(root, 'api'),
-                'api'
-            );
+            const scanner = new DirectoryScanner(path.join(root, 'api'), 'api');
             const result = await scanner.scan();
             const loader = new ModuleLoader();
             const modules = await loader.load(result);
@@ -348,7 +393,9 @@ describe('Docs providers', () => {
             const html = provider(mockSpec);
             expect(typeof html).toBe('string');
             expect(html).toContain('api-reference');
-            expect(html).toContain('cdn.jsdelivr.net/npm/@scalar/api-reference');
+            expect(html).toContain(
+                'cdn.jsdelivr.net/npm/@scalar/api-reference'
+            );
         });
 
         it('includes the spec title in the HTML', () => {

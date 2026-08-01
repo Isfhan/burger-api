@@ -8,7 +8,7 @@ export function open(ws: BurgerWS) {
     ws.data.userId = userId;
     users.set(userId, ws);
 
-    // Phase 10: Access injected services
+    // Access injected services via ctx.services
     const logger = (ws.services as any).logger as { info: (msg: string) => void };
     const db = (ws.services as any).db as { getRecentMessages: (limit: number) => Promise<any[]> };
 

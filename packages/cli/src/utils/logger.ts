@@ -199,7 +199,7 @@ export function dim(message: string): void {
  * bullet('CORS middleware')
  */
 export function bullet(message: string): void {
-    console.log(`  ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
+    console.log(` ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
 }
 
 /**
@@ -251,7 +251,7 @@ export function header(title: string): void {
  */
 export function command(command: string): void {
     console.log(
-        `  ${colors.dim}$${colors.reset} ${colors.cyan}${command}${colors.reset}`
+        ` ${colors.dim}$${colors.reset} ${colors.cyan}${command}${colors.reset}`
     );
 }
 
@@ -264,7 +264,7 @@ export function command(command: string): void {
  * code('import { Burger } from "burger-api"')
  */
 export function code(code: string): void {
-    console.log(`  ${colors.gray}${code}${colors.reset}`);
+    console.log(` ${colors.gray}${code}${colors.reset}`);
 }
 
 /**
@@ -418,12 +418,12 @@ export function formatSize(bytes: number): string {
 }
 
 const LOGO_TEXT = `
-██╗    ██████╗ ██╗   ██╗██████╗  ██████╗ ███████╗██████╗  █████╗ ██████╗ ██╗
-╚██╗   ██╔══██╗██║   ██║██╔══██╗██╔════╝ ██╔════╝██╔══██╗██╔══██╗██╔══██╗██║
- ╚██╗  ██████╦╝██║   ██║██████╔╝██║  ██╗ █████╗  ██████╔╝███████║██████╔╝██║
- ██╔╝  ██╔══██╗██║   ██║██╔══██╗██║  ╚██╗██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║
-██╔╝   ██████╦╝╚██████╔╝██║  ██║╚██████╔╝███████╗██║  ██║██║  ██║██║     ██║
-╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═╝╚═╝   ╚═╝╚═╝     ╚═╝
+██╗ ██████╗ ██╗ ██╗██████╗ ██████╗ ███████╗██████╗ █████╗ ██████╗ ██╗
+╚██╗ ██╔══██╗██║ ██║██╔══██╗██╔════╝ ██╔════╝██╔══██╗██╔══██╗██╔══██╗██║
+ ╚██╗ ██████╦╝██║ ██║██████╔╝██║ ██╗ █████╗ ██████╔╝███████║██████╔╝██║
+ ██╔╝ ██╔══██╗██║ ██║██╔══██╗██║ ╚██╗██╔══╝ ██╔══██╗██╔══██║██╔═══╝ ██║
+██╔╝ ██████╦╝╚██████╔╝██║ ██║╚██████╔╝███████╗██║ ██║██║ ██║██║ ██║
+╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═╝╚═╝ ╚═╝╚═╝ ╚═╝
 `.trim();
 
 /**
@@ -451,9 +451,9 @@ ${reset}`);
  * @param rows - Array of row data
  * @example
  * table([
- *   ['Name', 'Version'],
- *   ['burger-api', '0.6.6'],
- *   ['bun', '1.3.1']
+ * ['Name', 'Version'],
+ * ['burger-api', '0.6.6'],
+ * ['bun', '1.3.1']
  * ]);
  */
 export function table(rows: string[][]): void {

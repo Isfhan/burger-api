@@ -1,6 +1,6 @@
 import { Burger, setDir } from 'burger-api';
 const burger = new Burger({
-    title: 'Lifecycle Hooks (Phase 4 M1)',
+    title: 'Lifecycle Hooks',
     description: 'Demonstrates beforeRoute / afterRoute / mapResponse + middleware equivalence.',
     apiDir: setDir(__dirname, 'api'),
 });

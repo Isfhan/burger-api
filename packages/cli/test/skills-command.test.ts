@@ -6,7 +6,10 @@ import { parseSkillDescription, flattenSkillFiles } from '../src/utils/github';
 
 const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
 
-async function runCli(args: string[], cwd?: string): Promise<{
+async function runCli(
+    args: string[],
+    cwd?: string
+): Promise<{
     exitCode: number;
     stdout: string;
     stderr: string;
@@ -35,7 +38,11 @@ describe('skills command', () => {
     });
 
     test('skills install --help exits 0', async () => {
-        const { exitCode, stdout } = await runCli(['skills', 'install', '--help']);
+        const { exitCode, stdout } = await runCli([
+            'skills',
+            'install',
+            '--help',
+        ]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('[name]');
     });
@@ -47,14 +54,21 @@ describe('skills command', () => {
     });
 
     test('skills available --help exits 0', async () => {
-        const { exitCode, stdout } = await runCli(['skills', 'available', '--help']);
+        const { exitCode, stdout } = await runCli([
+            'skills',
+            'available',
+            '--help',
+        ]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('List available');
     });
 
     test('skills list exits 0 in project with no skills dir', async () => {
         const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
-        writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({ name: 'test', version: '0.0.0' }));
+        writeFileSync(
+            join(tmpDir, 'package.json'),
+            JSON.stringify({ name: 'test', version: '0.0.0' })
+        );
         writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
 
         const { exitCode, stdout } = await runCli(['skills', 'list'], tmpDir);
@@ -66,7 +80,10 @@ describe('skills command', () => {
 
     test('skills list displays installed skill from fixture', async () => {
         const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
-        writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({ name: 'test', version: '0.0.0' }));
+        writeFileSync(
+            join(tmpDir, 'package.json'),
+            JSON.stringify({ name: 'test', version: '0.0.0' })
+        );
         writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
 
         // Create a fake installed skill

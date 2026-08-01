@@ -127,16 +127,16 @@ export const createCommand = new Command('create')
             // Show what we're about to create
             info('Creating project with the following configuration:');
             newline();
-            console.log(`  Name: ${projectName}`);
-            console.log(`  Config File: burger.build.ts`);
+            console.log(` Name: ${projectName}`);
+            console.log(` Config File: burger.build.ts`);
             if (options.useApi) {
-                console.log(`  API Routes: ${options.apiDir || 'api'}`);
+                console.log(` API Routes: ${options.apiDir || 'api'}`);
             }
             if (options.usePages) {
-                console.log(`  Page Routes: ${options.pageDir || 'pages'}`);
+                console.log(` Page Routes: ${options.pageDir || 'pages'}`);
             }
             if (options.addSkills) {
-                console.log(`  AI Agent Skills: burger-api`);
+                console.log(` AI Agent Skills: burger-api`);
             }
             newline();
 
@@ -150,26 +150,26 @@ export const createCommand = new Command('create')
             clack.outro('Project created successfully!');
             newline();
             header('Next Steps');
-            console.log(`  1. Navigate to your project:`);
+            console.log(` 1. Navigate to your project:`);
             command(`cd ${projectName}`);
             newline();
-            console.log(`  2. Start the development server:`);
+            console.log(` 2. Start the development server:`);
             command('bun run dev');
             newline();
-            console.log(`  3. Edit config if needed:`);
+            console.log(` 3. Edit config if needed:`);
             command('burger.build.ts');
             newline();
-            console.log(`  4. Open your browser:`);
-            console.log(`     ${highlight('http://localhost:4000')}`);
+            console.log(` 4. Open your browser:`);
+            console.log(` ${highlight('http://localhost:4000')}`);
             newline();
-            console.log(`  5. Add middleware (optional):`);
+            console.log(` 5. Add middleware (optional):`);
             command('burger-api add cors logger');
             newline();
             if (options.addSkills) {
-                console.log(`  6. AI skills installed at`);
-                console.log(`     ${highlight('.agents/skills/burger-api/')}`);
+                console.log(` 6. AI skills installed at`);
+                console.log(` ${highlight('.agents/skills/burger-api/')}`);
             } else {
-                console.log(`  6. Add AI skills (optional):`);
+                console.log(` 6. Add AI skills (optional):`);
                 command('burger-api skills install');
             }
             newline();
@@ -274,7 +274,8 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
             // Question 8: AI agent skills
             addSkills: () =>
                 clack.confirm({
-                    message: 'Add AI agent skills? (recommended for agentic IDEs)',
+                    message:
+                        'Add AI agent skills? (recommended for agentic IDEs)',
                     initialValue: true,
                 }),
         },

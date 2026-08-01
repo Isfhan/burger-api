@@ -1,5 +1,5 @@
 /**
- * Phase 7: generate command templates + route scaffolding.
+ * generate command templates and route scaffolding.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdir, rm, readFile, readdir } from 'fs/promises';
@@ -54,7 +54,9 @@ describe('generateRouteFiles', () => {
 
     it('hooks.ts contains beforeRoute hook', () => {
         const files = generateRouteFiles('users');
-        expect(files['hooks.ts']).toContain('export async function beforeRoute');
+        expect(files['hooks.ts']).toContain(
+            'export async function beforeRoute'
+        );
         expect(files['hooks.ts']).toContain('BurgerContext');
     });
 
@@ -151,7 +153,10 @@ describe('generate route files to disk', () => {
         expect(written).toContain('hooks.ts');
         expect(written).toContain('config.ts');
 
-        const routeContent = await readFile(join(targetDir, 'route.ts'), 'utf-8');
+        const routeContent = await readFile(
+            join(targetDir, 'route.ts'),
+            'utf-8'
+        );
         expect(routeContent).toContain('export async function GET');
     });
 });

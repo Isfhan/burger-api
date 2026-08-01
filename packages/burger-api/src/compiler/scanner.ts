@@ -25,7 +25,7 @@ import type { ScannedRoute, ScanResult } from './route-module';
  * Convention rules enforced here (fail fast):
  * - Only recognized convention files are acknowledged; `middleware.ts` is forbidden.
  * - Dynamic (`[param]`) and wildcard (`[...]`) folders cannot be mixed at the
- *   same directory level, and there can be at most one of each per level.
+ * same directory level, and there can be at most one of each per level.
  * - Named wildcard folders (`[...slug]`) are skipped (not yet supported).
  */
 export class DirectoryScanner {
@@ -58,11 +58,15 @@ export class DirectoryScanner {
         let providersPath: string | undefined;
         try {
             const parentDir = path.dirname(this.routesDir);
-            const rootEntries = await readdir(parentDir, { withFileTypes: true });
+            const rootEntries = await readdir(parentDir, {
+                withFileTypes: true,
+            });
             for (const entry of rootEntries) {
                 if (!entry.isFile()) continue;
                 if (entry.name === 'hooks.ts') {
-                    globalHooks = path.resolve(path.join(parentDir, entry.name));
+                    globalHooks = path.resolve(
+                        path.join(parentDir, entry.name)
+                    );
                 }
                 if (entry.name === 'openapi.config.ts') {
                     openAPIConfigPath = path.resolve(
@@ -79,13 +83,25 @@ export class DirectoryScanner {
                         path.join(parentDir, entry.name)
                     );
                 }
-                if (globalHooks && openAPIConfigPath && pluginsPath && providersPath) break;
+                if (
+                    globalHooks &&
+                    openAPIConfigPath &&
+                    pluginsPath &&
+                    providersPath
+                )
+                    break;
             }
         } catch {
             // Parent directory may not exist — ignore.
         }
 
-        return { routes, globalHooks, openAPIConfigPath, pluginsPath, providersPath };
+        return {
+            routes,
+            globalHooks,
+            openAPIConfigPath,
+            pluginsPath,
+            providersPath,
+        };
     }
 
     /**
@@ -93,10 +109,7 @@ export class DirectoryScanner {
      * is found. Group folders `(name)` are traversed for URL stripping but
      * do NOT build an inheritance chain.
      */
-    private async walk(
-        dir: string,
-        out: ScannedRoute[]
-    ): Promise<void> {
+    private async walk(dir: string, out: ScannedRoute[]): Promise<void> {
         let dynamicFolderFound = false;
         let wildcardFolderFound = false;
 
@@ -177,7 +190,10 @@ export class DirectoryScanner {
             // absolute temp/working-directory prefix does not leak into the
             // route path (mirrors core/api-router.ts, which used the relative
             // path for this conversion).
-            const relativeFilePath = path.relative(this.routesDir, routeFilePath);
+            const relativeFilePath = path.relative(
+                this.routesDir,
+                routeFilePath
+            );
             const routePath = filePathToApiRoutePath(
                 relativeFilePath,
                 this.prefix

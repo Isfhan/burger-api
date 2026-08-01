@@ -26,7 +26,7 @@ function fakeCtx(
     } as unknown as BurgerContext;
 }
 
-describe('Coercion end-to-end (M4)', () => {
+describe('Coercion end-to-end', () => {
     beforeEach(() => clearValidatorCache());
 
     it('coerces query string -> number/boolean when enabled', async () => {

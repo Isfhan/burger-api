@@ -104,8 +104,8 @@ export class Trie {
     /**
      * Matches a pathname against the trie.
      * @param pathname A pathname. A single trailing slash is preserved so that
-     *        `:param` routes can capture an empty value (e.g. `/users/` → `:id`
-     *        with `id === ""`), matching Bun's native behavior.
+     * `:param` routes can capture an empty value (e.g. `/users/` → `:id`
+     * with `id === ""`), matching Bun's native behavior.
      * @returns the match result, or `null` if no route matches.
      */
     match(pathname: string): TrieMatch | null {

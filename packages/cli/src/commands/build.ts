@@ -2,7 +2,7 @@
  * Build Commands
  *
  * Two commands for packaging your Burger API project:
- * 1. `burger-api build <file>`      — Bundle to .build/bundle/
+ * 1. `burger-api build <file>` — Bundle to .build/bundle/
  * 2. `burger-api build:exec <file>` — Compile to .build/executable/
  *
  * Both use build-time (AOT) route discovery — no filesystem scanning at runtime.
@@ -92,11 +92,11 @@ interface BuildExecutableOptions {
  * Bundles your project into .build/bundle/ using AOT route discovery.
  *
  * Output:
- *   .build/bundle/
- *     app.js             — Bun server (run with: bun .build/bundle/app.js)
- *     index.html         — HTML pages (flat, one per page route)
- *     style-[hash].css   — CSS assets (flat)
- *     app-[hash].js      — JS chunks (flat)
+ * .build/bundle/
+ * app.js — Bun server (run with: bun .build/bundle/app.js)
+ * index.html — HTML pages (flat, one per page route)
+ * style-[hash].css — CSS assets (flat)
+ * app-[hash].js — JS chunks (flat)
  *
  * API-only projects: app.js is a self-contained single file.
  * Projects with HTML pages: deploy the entire .build/bundle/ directory.
@@ -134,7 +134,7 @@ export const buildCommand = new Command('build')
                 const bundleDir = dirname(options.outfile);
                 spin.stop('Build completed successfully!');
                 newline();
-                success(`Bundle:  ${options.outfile}  (${formatSize(size)})`);
+                success(`Bundle: ${options.outfile} (${formatSize(size)})`);
                 newline();
                 if (result.hasPages) {
                     info(`Pages and assets are in: ${bundleDir}/`);

@@ -3,7 +3,7 @@ import { executeHookPlan } from '../../src/lifecycle/executor';
 import type { HookPlan } from '../../src/lifecycle/types';
 import { BurgerContext } from '../../src/context/context';
 
-describe('onError (Phase 4 M2)', () => {
+describe('onError', () => {
     it('catches a handler throw via route-level onError', async () => {
         const plan: HookPlan = {
             beforeRoute: [],
@@ -17,15 +17,19 @@ describe('onError (Phase 4 M2)', () => {
                     }),
             ],
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
-        const res = await executeHookPlan(ctx, plan, {
-            GET: () => {
-                throw new Error('boom');
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        const res = await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => {
+                    throw new Error('boom');
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(res.status).toBe(200);
         const data = await res.json();
         expect(data).toEqual({ ok: true });
@@ -42,17 +46,23 @@ describe('onError (Phase 4 M2)', () => {
                 },
             ],
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
-        const res = await executeHookPlan(ctx, plan, {
-            GET: () => {
-                throw new Error('handler-boom');
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        const res = await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => {
+                    throw new Error('handler-boom');
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(res.status).toBe(500);
-        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
         const data = await res.json();
         expect(data).toHaveProperty('type');
         expect(data).toHaveProperty('title', 'HTTPError');
@@ -78,15 +88,19 @@ describe('onError (Phase 4 M2)', () => {
                 },
             ],
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
-        await executeHookPlan(ctx, plan, {
-            GET: () => {
-                throw new Error('boom');
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => {
+                    throw new Error('boom');
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         // Route onError handled it → global never runs
         expect(order).toEqual(['route']);
     });
@@ -108,15 +122,19 @@ describe('onError (Phase 4 M2)', () => {
                 },
             ],
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
-        await executeHookPlan(ctx, plan, {
-            GET: () => {
-                throw new Error('boom');
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => {
+                    throw new Error('boom');
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(order).toEqual(['first-pass', 'second-handles']);
     });
 
@@ -131,19 +149,23 @@ describe('onError (Phase 4 M2)', () => {
             mapResponse: [],
             onError: [
                 (err) =>
-                    new Response(
-                        JSON.stringify({ caught: err.message }),
-                        { status: 400, headers: { 'Content-Type': 'application/json' } }
-                    ),
+                    new Response(JSON.stringify({ caught: err.message }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' },
+                    }),
             ],
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        const res = await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => new Response('ok', { status: 200 }),
+            },
+            new Request('http://h/test')
         );
-        const res = await executeHookPlan(ctx, plan, {
-            GET: () => new Response('ok', { status: 200 }),
-        }, new Request('http://h/test'));
         expect(res.status).toBe(400);
         const data = await res.json();
         expect(data.caught).toBe('beforeRoute-error');

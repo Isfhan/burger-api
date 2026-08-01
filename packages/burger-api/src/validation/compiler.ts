@@ -1,18 +1,17 @@
 /**
  * The schema preparation component — the core of Validation 2.0
- * (phase3 §12.7, §13.1).
+ * (§13.1).
  *
  * Responsibilities:
  * - Walk a `RouteSchema` and prepare each slot into a `CompiledValidator`.
  * - Detect the adapter (connector) per slot; compute identity; consult the
- *   cache.
- * - Build value-conversion plans (M4) and response validators (M5) when
- *   present.
- * - Look up model refs (M3) before per-slot preparation.
+ * cache.
+ * - Build coercion plans and response validators when present.
+ * - Look up model refs before per-slot preparation.
  *
  * This runs ONCE per route when it is set up (before `serve()`). It never
  * executes when a request comes in and never throws on a per-request path
- * (phase3 §4.10, §18 R9). Every schema is prepared a single time; identical
+ * (§18 R9). Every schema is prepared a single time; identical
  * schemas (by reference or model ref) share one cached validator.
  */
 
@@ -33,7 +32,7 @@ import type {
 } from './types';
 import { buildPlan as buildCoercionPlan } from './coerce';
 
-/** The shared, process-lifetime validator cache (phase3 §5). */
+/** The shared, process-lifetime validator cache (). */
 export const validatorCache = new ValidatorCache();
 
 /** Request slots that can carry a schema in `RouteSchema`. */
@@ -49,7 +48,7 @@ const REQUEST_SLOTS: ValidationSlot[] = [
  * Resolves model-ref strings into concrete schemas before per-slot
  * compilation. A slot value that is a `string` is treated as a model name and
  * looked up in the registry. Throws (naming the method + slot + model) on a
- * missing ref so the failure is fail-fast at compile time (phase3 §9.11).
+ * missing ref so the failure is fail-fast at compile time ().
  */
 function resolveModelRef(
     value: SchemaInput | string,
@@ -92,7 +91,7 @@ export function compileRouteSchema(
         const compiledMethod: CompiledRouteValidators['methods'][string] = {};
 
         // Coercion is opt-in: app-level config.coerce OR per-route
-        // schema[method].coerce override (phase3 §7.6, §11).
+        // schema[method].coerce override (§11).
         const coerceEnabled =
             config.coerce === true ||
             (m as Record<string, unknown>).coerce === true;
@@ -111,15 +110,20 @@ export function compileRouteSchema(
             );
         }
 
-        // Build coercion plans only when coercion is enabled (phase3 §7.4).
+        // Build coercion plans only when coercion is enabled ().
         if (coerceEnabled) {
             const coercion: NonNullable<
                 CompiledRouteValidators['methods'][string]['coercion']
             > = {};
-            for (const slot of ['query', 'params', 'headers', 'cookies'] as const) {
-                const raw = (m as Record<string, SchemaInput | string | undefined>)[
-                    slot
-                ];
+            for (const slot of [
+                'query',
+                'params',
+                'headers',
+                'cookies',
+            ] as const) {
+                const raw = (
+                    m as Record<string, SchemaInput | string | undefined>
+                )[slot];
                 if (raw === undefined) continue;
                 const slotSchema = resolveModelRef(raw, method, slot, registry);
                 const plan: CoercionPlan | undefined = buildCoercionPlan(
@@ -136,7 +140,7 @@ export function compileRouteSchema(
         methods[method] = compiledMethod;
     }
 
-    // Compile response schemas (per-status) when present (phase3 §8).
+    // Compile response schemas (per-status) when present ().
     const response = compileResponseSchemas(schema, cache, registry);
 
     const result: CompiledRouteValidators = { methods };
@@ -146,7 +150,7 @@ export function compileRouteSchema(
 
 /**
  * Compiles per-status `response` schemas into a map of `CompiledValidator`s.
- * Returns undefined when no `response` schemas are declared (phase3 §8.4).
+ * Returns undefined when no `response` schemas are declared ().
  */
 function compileResponseSchemas(
     schema: RouteSchema,
@@ -158,13 +162,22 @@ function compileResponseSchemas(
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
         const m = schema[rawMethod] || {};
-        const responseSchemas = (m as Record<string, Record<string, SchemaInput | string> | undefined>)
-            .response;
+        const responseSchemas = (
+            m as Record<
+                string,
+                Record<string, SchemaInput | string> | undefined
+            >
+        ).response;
         if (!responseSchemas) continue;
         const byStatus: Record<string, CompiledValidator> = {};
         for (const statusKey of Object.keys(responseSchemas)) {
             const raw = responseSchemas[statusKey];
-            const slotSchema = resolveModelRef(raw, rawMethod, 'body', registry);
+            const slotSchema = resolveModelRef(
+                raw,
+                rawMethod,
+                'body',
+                registry
+            );
             byStatus[statusKey] = compileSlot(slotSchema, 'body', cache);
             any = true;
         }
@@ -175,9 +188,9 @@ function compileResponseSchemas(
 
 /**
  * Compiles a single slot schema into a `CompiledValidator`, consulting the
- * cache by identity first (phase3 §4.6, §5). When `modelRef` is provided, it
+ * cache by identity first (§5). When `modelRef` is provided, it
  * is recorded on the compiled validator for future compile-time optimization
- * (serialization reserved for Phase 8).
+ * (serialization reserved for a future release).
  */
 function compileSlot(
     slotSchema: SchemaInput,
@@ -199,7 +212,7 @@ function compileSlot(
 
 /**
  * Clears the shared cache (dev hot reload). The next compile pass repopulates
- * it wholesale (phase3 §5.10).
+ * it wholesale ().
  */
 export function clearValidatorCache(): void {
     validatorCache.clear();

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { SchemaRegistry, schemaRegistry } from '../../src/validation/registry';
 
-describe('SchemaRegistry (M3)', () => {
+describe('SchemaRegistry', () => {
     it('registers and resolves a named schema', () => {
         const reg = new SchemaRegistry();
         const schema = z.object({ id: z.string() });

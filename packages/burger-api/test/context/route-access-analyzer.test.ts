@@ -72,7 +72,7 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         expect(info.has('params')).toBe(false);
     });
 
-    // Phase 4 M7: hook stage detection
+    // hook stage detection
     it('detects which hook stages a route uses', () => {
         const def = {
             path: '/x',

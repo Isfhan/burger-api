@@ -5,7 +5,7 @@ description: Build APIs with BurgerAPI — Bun-first, file-based routing, Standa
 
 # BurgerAPI Development Skill
 
-**Source of truth:** `burger-api-roadmaps/BURGERAPI_VISION.md` (vision wins on conflict).  
+**Source of truth:** [`../../../BURGERAPI_VISION.md`](../../../BURGERAPI_VISION.md) (vision wins on conflict).
 Docs: [burger-api.com/docs](https://burger-api.com/docs)
 
 ## Overview

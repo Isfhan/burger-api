@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { z } from 'zod';
-import { compileRouteSchema, validatorCache, clearValidatorCache } from '../../src/validation/compiler';
+import {
+    compileRouteSchema,
+    validatorCache,
+    clearValidatorCache,
+} from '../../src/validation/compiler';
 import type { CompiledRouteValidators } from '../../src/validation/types';
 
-describe('compileRouteSchema (M2)', () => {
+describe('compileRouteSchema', () => {
     const querySchema = z.object({ search: z.string() });
     const bodySchema = z.object({ name: z.string() });
 
@@ -29,8 +33,12 @@ describe('compileRouteSchema (M2)', () => {
     });
 
     it('cache is keyed by identity: distinct schemas get distinct validators', () => {
-        const a = compileRouteSchema({ get: { query: z.object({ x: z.string() }) } });
-        const b = compileRouteSchema({ get: { query: z.object({ y: z.string() }) } });
+        const a = compileRouteSchema({
+            get: { query: z.object({ x: z.string() }) },
+        });
+        const b = compileRouteSchema({
+            get: { query: z.object({ y: z.string() }) },
+        });
         expect(a.methods.get?.query).not.toBe(b.methods.get?.query);
         expect(validatorCache.size).toBeGreaterThanOrEqual(2);
     });

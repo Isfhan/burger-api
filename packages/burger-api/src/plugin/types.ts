@@ -23,4 +23,3 @@ export interface PluginEntry {
 export type { Scope };
 
 export type MacroFn = (...args: unknown[]) => RouteHooks;
-

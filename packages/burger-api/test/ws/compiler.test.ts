@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ScannedWebSocketRoute } from '../../src/ws/scanner';
 
-describe('WebSocketCompiler (Phase 9)', () => {
+describe('WebSocketCompiler', () => {
     let tempDir: string;
     let compiler: WebSocketCompiler;
 
@@ -18,18 +18,23 @@ describe('WebSocketCompiler (Phase 9)', () => {
         rmSync(tempDir, { recursive: true, force: true });
     });
 
-    const createScannedRoute = (overrides: Partial<ScannedWebSocketRoute> = {}): ScannedWebSocketRoute => ({
+    const createScannedRoute = (
+        overrides: Partial<ScannedWebSocketRoute> = {}
+    ): ScannedWebSocketRoute => ({
         path: '/',
         wsFile: join(tempDir, 'ws.ts'),
         ...overrides,
     });
 
     it('should compile a basic ws.ts file', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-            export const message = (ws, msg) => {};
-            export const close = (ws, code, reason) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ export const message = (ws, msg) => {};
+ export const close = (ws, code, reason) => {};
+ `
+        );
 
         const scanned = createScannedRoute();
         const compiled = await compiler.compile(scanned);
@@ -41,14 +46,20 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should compile ws.ts with hooks', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
-        writeFileSync(join(tempDir, 'hooks.ts'), `
-            export const onOpen = (ws) => {};
-            export const onMessage = (ws, msg) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'hooks.ts'),
+            `
+ export const onOpen = (ws) => {};
+ export const onMessage = (ws, msg) => {};
+ `
+        );
 
         const scanned = createScannedRoute({
             hooksFile: join(tempDir, 'hooks.ts'),
@@ -60,14 +71,20 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should compile ws.ts with config', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
-        writeFileSync(join(tempDir, 'config.ts'), `
-            export const maxPayloadLength = 2048;
-            export const idleTimeout = 60;
-        `);
+        writeFileSync(
+            join(tempDir, 'config.ts'),
+            `
+ export const maxPayloadLength = 2048;
+ export const idleTimeout = 60;
+ `
+        );
 
         const scanned = createScannedRoute({
             configFile: join(tempDir, 'config.ts'),
@@ -79,13 +96,19 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should merge global and route-specific config', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
-        writeFileSync(join(tempDir, 'config.ts'), `
-            export const maxPayloadLength = 2048;
-        `);
+        writeFileSync(
+            join(tempDir, 'config.ts'),
+            `
+ export const maxPayloadLength = 2048;
+ `
+        );
 
         compiler.setGlobalConfig({ maxPayloadLength: 1024, idleTimeout: 30 });
 
@@ -100,13 +123,19 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should merge global and route-specific hooks', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
-        writeFileSync(join(tempDir, 'hooks.ts'), `
-            export const onOpen = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'hooks.ts'),
+            `
+ export const onOpen = (ws) => {};
+ `
+        );
 
         const globalOnOpen = (ws: any) => {};
         compiler.setGlobalHooks({ onOpen: globalOnOpen });
@@ -121,9 +150,12 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should compile multiple routes', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
         const routes = [
             createScannedRoute({ path: '/' }),
@@ -138,13 +170,22 @@ describe('WebSocketCompiler (Phase 9)', () => {
 
     it('should skip failed routes gracefully', async () => {
         // Create a valid route
-        writeFileSync(join(tempDir, 'valid.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'valid.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
         const routes = [
-            createScannedRoute({ path: '/', wsFile: join(tempDir, 'valid.ts') }),
-            createScannedRoute({ path: '/bad', wsFile: '/nonexistent/file.ts' }),
+            createScannedRoute({
+                path: '/',
+                wsFile: join(tempDir, 'valid.ts'),
+            }),
+            createScannedRoute({
+                path: '/bad',
+                wsFile: '/nonexistent/file.ts',
+            }),
         ];
 
         const compiled = await compiler.compileAll(routes);
@@ -155,9 +196,12 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should preserve route params', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ `
+        );
 
         const scanned = createScannedRoute({
             path: '/chat/:room',
@@ -169,14 +213,17 @@ describe('WebSocketCompiler (Phase 9)', () => {
     });
 
     it('should compile all handler types', async () => {
-        writeFileSync(join(tempDir, 'ws.ts'), `
-            export const open = (ws) => {};
-            export const message = (ws, msg) => {};
-            export const close = (ws, code, reason) => {};
-            export const drain = (ws) => {};
-            export const ping = (ws) => {};
-            export const pong = (ws) => {};
-        `);
+        writeFileSync(
+            join(tempDir, 'ws.ts'),
+            `
+ export const open = (ws) => {};
+ export const message = (ws, msg) => {};
+ export const close = (ws, code, reason) => {};
+ export const drain = (ws) => {};
+ export const ping = (ws) => {};
+ export const pong = (ws) => {};
+ `
+        );
 
         const scanned = createScannedRoute();
         const compiled = await compiler.compile(scanned);

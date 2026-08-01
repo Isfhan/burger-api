@@ -1,15 +1,15 @@
 /**
  * The Standard Schema adapter — brings Valibot/ArkType/`~standard` libraries
- * into BurgerAPI with no framework change (phase3 §12.4, §6).
+ * into BurgerAPI with no framework change (§6).
  *
  * Responsibilities:
  * - Compute a stable identity from the `~standard` contract (vendor + shape).
  * - Compile into a `CompiledValidator` whose `validate` calls
- *   `schema['~standard'].validate` and normalizes the result into the common
- *   `ValidationResult` shape.
+ * `schema['~standard'].validate` and normalizes the result into the common
+ * `ValidationResult` shape.
  *
  * This adapter must NOT assume a specific library — it depends only on the
- * `~standard` contract (phase3 §6.10). It registers itself with the detection
+ * `~standard` contract (). It registers itself with the detection
  * seam on load.
  */
 
@@ -36,7 +36,9 @@ function normalizePath(
     );
 }
 
-function normalizeIssues(issues: ReadonlyArray<StandardSchemaV1Issue>): ValidationIssue[] {
+function normalizeIssues(
+    issues: ReadonlyArray<StandardSchemaV1Issue>
+): ValidationIssue[] {
     return issues.map((issue) => ({
         path: normalizePath(issue.path),
         message: issue.message,
@@ -48,7 +50,7 @@ export const StandardAdapter: ValidatorAdapter = {
         const std = schema as StandardSchemaV1;
         const vendor = std['~standard'].vendor ?? 'unknown';
         // Structural fingerprint from the JSON-ish shape of the standard
-        // result types (phase3 D2). Use the vendor + a stable stringification.
+        // Use the vendor + a stable stringification.
         let fingerprint: string;
         try {
             const types = std['~standard'].types;

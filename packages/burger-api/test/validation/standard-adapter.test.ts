@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { StandardAdapter } from '../../src/validation/adapters/standard';
-import type { StandardSchemaV1, ValidationResult } from '../../src/validation/types';
+import type {
+    StandardSchemaV1,
+    ValidationResult,
+} from '../../src/validation/types';
 
 /** A hand-built `~standard` stub (no Valibot dependency needed). */
 function makeStub(ok: boolean): StandardSchemaV1 {
@@ -15,16 +18,14 @@ function makeStub(ok: boolean): StandardSchemaV1 {
                 }
                 return {
                     value,
-                    issues: [
-                        { message: 'stub failed', path: ['field'] },
-                    ],
+                    issues: [{ message: 'stub failed', path: ['field'] }],
                 };
             },
         },
     };
 }
 
-describe('StandardAdapter (M3)', () => {
+describe('StandardAdapter', () => {
     it('detects and supports a ~standard schema', () => {
         const stub = makeStub(true);
         expect(StandardAdapter.supports(stub)).toBe(true);

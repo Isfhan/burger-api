@@ -4,10 +4,10 @@
  * Scaffolds routes, hooks, and plugins with convention files.
  *
  * Examples:
- *   burger-api generate route users
- *   burger-api g route products/[id]
- *   burger-api generate hook cors
- *   burger-api generate plugin jwt
+ * burger-api generate route users
+ * burger-api g route products/[id]
+ * burger-api generate hook cors
+ * burger-api generate plugin jwt
  */
 
 import { Command } from 'commander';
@@ -119,7 +119,7 @@ const hookCommand = new Command('hook')
         code('');
         code('// src/hooks.ts');
         code('export const onRequest = [');
-        code(`    ${name}(),`);
+        code(` ${name}(),`);
         code('];');
         newline();
     });
@@ -152,11 +152,13 @@ const pluginCommand = new Command('plugin')
         success(`Plugin "${className}" created at ${targetDir}`);
         newline();
         header('How to use');
-        code(`import { ${className} } from "./ecosystem/plugins/${name}/${name}";`);
+        code(
+            `import { ${className} } from "./ecosystem/plugins/${name}/${name}";`
+        );
         code('');
         code('// src/plugins.ts');
         code('burger.usePlugin(');
-        code(`    ${className},`);
+        code(` ${className},`);
         code(');');
         newline();
     });
@@ -208,8 +210,8 @@ const wsCommand = new Command('ws')
         header('How to use');
         code(`// In your server entry point (e.g. src/index.ts):`);
         code(`const burger = new Burger({`);
-        code(`    wsDir: "./src/websocket",`);
-        code(`    // ... other options`);
+        code(` wsDir: "./src/websocket",`);
+        code(` // ... other options`);
         code(`});`);
         newline();
         info('Edit ws.ts to add your open/message/close handlers.');

@@ -128,19 +128,19 @@ import { z } from 'zod';
 import type { BurgerRequest } from 'burger-api';
 
 export const schema = {
-    get: {
-        query: z.object({
-            search: z.string().optional(),
-        }),
-    },
+ get: {
+ query: z.object({
+ search: z.string().optional(),
+ }),
+ },
 };
 
 export async function GET(req: BurgerRequest) {
-    return Response.json({
-        message: 'Products endpoint working!',
-        query: req.validated.query,
-        timestamp: new Date().toISOString(),
-    });
+ return Response.json({
+ message: 'Products endpoint working!',
+ query: req.validated.query,
+ timestamp: new Date().toISOString(),
+ });
 }
 EOF
 
@@ -151,23 +151,23 @@ import type { BurgerRequest, Middleware } from 'burger-api';
 
 // Test middleware
 const logger: Middleware = (req: BurgerRequest) => {
-    console.log(`[${req.method}] ${req.url}`);
-    return undefined;
+ console.log(`[${req.method}] ${req.url}`);
+ return undefined;
 };
 
 const burger = new Burger({
-    title: 'Test API',
-    description: 'Testing local burger-api build',
-    apiDir: setDir(__dirname, 'api'),
-    globalMiddleware: [logger],
-    debug: true,
+ title: 'Test API',
+ description: 'Testing local burger-api build',
+ apiDir: setDir(__dirname, 'api'),
+ globalMiddleware: [logger],
+ debug: true,
 });
 
 burger.serve(4000, () => {
-    console.log('🍔 Test server running!');
-    console.log('📚 Docs: http://localhost:4000/docs');
-    console.log('🔗 OpenAPI: http://localhost:4000/openapi.json');
-    console.log('🧪 Test: http://localhost:4000/api/products');
+ console.log('🍔 Test server running!');
+ console.log('📚 Docs: http://localhost:4000/docs');
+ console.log('🔗 OpenAPI: http://localhost:4000/openapi.json');
+ console.log('🧪 Test: http://localhost:4000/api/products');
 });
 EOF
 
@@ -202,14 +202,14 @@ import type { BurgerRequest, Middleware, ServerOptions } from 'burger-api';
 
 // Type should autocomplete when you type "req."
 const middleware: Middleware = (req) => {
-    req. // <-- Autocomplete should show: url, method, params, validated, etc.
-    return undefined;
+ req. // <-- Autocomplete should show: url, method, params, validated, etc.
+ return undefined;
 };
 
 // ServerOptions should show all available options
 const options: ServerOptions = {
-    title: '', // <-- Autocomplete should work here
-    // ... hovering over properties should show documentation
+ title: '', // <-- Autocomplete should work here
+ // ... hovering over properties should show documentation
 };
 ```
 
@@ -228,7 +228,7 @@ Run through this checklist before every publish:
 cat package.json | grep '"version"'
 
 # Update if needed (see Version Management section)
-npm version patch  # or minor/major
+npm version patch # or minor/major
 ```
 
 ### 2. Update Documentation
@@ -249,7 +249,7 @@ rm -rf dist
 bun run build
 
 # Verify no errors
-echo $?  # Should output: 0
+echo $? # Should output: 0
 ```
 
 ### 4. TypeScript Check
@@ -306,11 +306,11 @@ head -10 dist/src/index.d.ts
 cat package.json | grep -E '"(name|version|module|types|files)"'
 
 # Should output:
-#   "name": "burger-api",
-#   "version": "0.6.4",
-#   "module": "dist/src/index.js",
-#   "types": "dist/src/index.d.ts",
-#   "files": ["dist"]
+# "name": "burger-api",
+# "version": "0.6.4",
+# "module": "dist/src/index.js",
+# "types": "dist/src/index.d.ts",
+# "files": ["dist"]
 ```
 
 ### 10. Test with npm pack
@@ -320,7 +320,7 @@ cat package.json | grep -E '"(name|version|module|types|files)"'
 npm pack
 cd ../burger-api-test
 bun add ../burger-api/burger-api-*.tgz
-bun run index.ts  # Should work perfectly
+bun run index.ts # Should work perfectly
 ```
 
 **✅ If all checks pass, you're ready to publish!**
@@ -484,37 +484,37 @@ cat node_modules/burger-api/package.json | grep version
 cat > test.ts << 'EOF'
 import { Burger, setDir } from 'burger-api';
 import type { 
-    BurgerRequest, 
-    BurgerNext, 
-    Middleware, 
-    ServerOptions,
-    RequestHandler 
+ BurgerRequest, 
+ BurgerNext, 
+ Middleware, 
+ ServerOptions,
+ RequestHandler 
 } from 'burger-api';
 
 // Test 1: Types autocomplete
 const options: ServerOptions = {
-    title: 'Test',
-    apiDir: './api',
-    // Typing here should show all available options with docs
+ title: 'Test',
+ apiDir: './api',
+ // Typing here should show all available options with docs
 };
 
 // Test 2: Request type works
 const middleware: Middleware = (req: BurgerRequest) => {
-    // req. should show: url, method, params, validated, etc.
-    console.log(req.url);
-    return undefined;
+ // req. should show: url, method, params, validated, etc.
+ console.log(req.url);
+ return undefined;
 };
 
 // Test 3: Generic types work
 type MyValidated = {
-    params: { id: string };
-    query: { search: string };
+ params: { id: string };
+ query: { search: string };
 };
 
 const handler: RequestHandler = (req: BurgerRequest<MyValidated>) => {
-    // req.validated should be properly typed
-    const id = req.validated.params?.id;
-    return Response.json({ id });
+ // req.validated should be properly typed
+ const id = req.validated.params?.id;
+ return Response.json({ id });
 };
 
 console.log('✅ All types work correctly!');
@@ -533,10 +533,10 @@ cat > api/route.ts << 'EOF'
 import type { BurgerRequest } from 'burger-api';
 
 export async function GET(req: BurgerRequest) {
-    return Response.json({ 
-        message: 'Published version works!',
-        version: '0.5.0'
-    });
+ return Response.json({ 
+ message: 'Published version works!',
+ version: '0.5.0'
+ });
 }
 EOF
 
@@ -544,7 +544,7 @@ cat > index.ts << 'EOF'
 import { Burger, setDir } from 'burger-api';
 
 const burger = new Burger({
-    apiDir: setDir(__dirname, 'api'),
+ apiDir: setDir(__dirname, 'api'),
 });
 
 burger.serve(4000);
@@ -611,8 +611,8 @@ Error: Cannot find module 'burger-api'
 cat package.json | grep -A2 '"module"'
 
 # Should show:
-#   "module": "dist/src/index.js",
-#   "types": "dist/src/index.d.ts",
+# "module": "dist/src/index.js",
+# "types": "dist/src/index.d.ts",
 
 # Verify files are in published package
 npm pack
@@ -679,7 +679,7 @@ bun run build
 
 **Symptoms:**
 ```
-npm notice 📦  burger-api@0.5.0
+npm notice 📦 burger-api@0.5.0
 npm notice === Tarball Contents ===
 npm notice 2.0MB dist/
 ```
@@ -707,27 +707,27 @@ cat .npmignore
 ### Build Commands
 
 ```bash
-bun install          # Install dependencies
-bun run build        # Build package
-bun run typecheck    # Check types
+bun install # Install dependencies
+bun run build # Build package
+bun run typecheck # Check types
 ```
 
 ### Testing Commands
 
 ```bash
-npm pack                            # Create tarball
-bun add ./burger-api-0.5.0.tgz     # Install tarball
-bun link                            # Create global link
+npm pack # Create tarball
+bun add ./burger-api-0.5.0.tgz # Install tarball
+bun link # Create global link
 ```
 
 ### Publishing Commands
 
 ```bash
-npm login            # Login to npm
-npm whoami           # Check login
-npm version patch    # Bump version
-npm publish          # Publish package
-git push --follow-tags  # Push to git
+npm login # Login to npm
+npm whoami # Check login
+npm version patch # Bump version
+npm publish # Publish package
+git push --follow-tags # Push to git
 ```
 
 ### Verification Commands
@@ -757,7 +757,7 @@ Here's the complete workflow from development to publish:
 # ... edit files ...
 
 # 2. Update version
-npm version minor  # or patch/major
+npm version minor # or patch/major
 
 # 3. Update documentation
 # Edit CHANGELOG.md and README.md
@@ -811,6 +811,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Last Updated:** November 1, 2025  
+**Last Updated:** November 1, 2025 
 **Package Version:** 0.5.0
 

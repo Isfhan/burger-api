@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { detectAdapter } from '../../src/validation/adapter';
 import { ZodAdapter } from '../../src/validation/adapters/zod';
 
-describe('ValidatorAdapter detection (M1)', () => {
+describe('ValidatorAdapter detection', () => {
     it('returns the Zod adapter for a Zod schema', () => {
         const schema = z.object({ id: z.string() });
         expect(detectAdapter(schema)).toBe(ZodAdapter);

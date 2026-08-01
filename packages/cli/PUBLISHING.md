@@ -46,9 +46,9 @@ cd packages/cli
 bun install
 
 # Build for your platform
-bun run build:linux   # Linux
-bun run build:win     # Windows
-bun run build:mac     # macOS ARM64
+bun run build:linux # Linux
+bun run build:win # Windows
+bun run build:mac # macOS ARM64
 bun run build:mac-intel # macOS Intel
 
 # Build all platforms
@@ -134,7 +134,7 @@ cat packages/cli/package.json | grep '"version"'
 
 # Update if needed (see Version Management section)
 cd packages/cli
-npm version patch  # or minor/major
+npm version patch # or minor/major
 ```
 
 ### 2. Update Documentation
@@ -193,9 +193,9 @@ The CLI uses **automated GitHub Actions** to build and release executables for a
 cd packages/cli
 
 # Update version (choose appropriate bump)
-npm version patch   # 0.6.4 -> 0.6.5 (bug fixes)
-npm version minor   # 0.6.4 -> 0.7.0 (new features)
-npm version major   # 0.6.4 -> 1.0.0 (breaking changes)
+npm version patch # 0.6.4 -> 0.6.5 (bug fixes)
+npm version minor # 0.6.4 -> 0.7.0 (new features)
+npm version major # 0.6.4 -> 1.0.0 (breaking changes)
 
 # This automatically:
 # - Updates package.json version
@@ -265,7 +265,7 @@ Counting objects: 100% (1/1), done.
 Writing objects: 100% (1/1), 173 bytes | 173.00 KiB/s, done.
 Total 1 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
 To https://github.com/Isfhan/burger-api.git
- * [new tag]         cli/v0.6.5 -> cli/v0.6.5
+ * [new tag] cli/v0.6.5 -> cli/v0.6.5
 ✅ Tag cli/v0.6.5 created and pushed
 ```
 
@@ -298,15 +298,15 @@ git push origin "cli/v${VERSION}"
 2. Sets up Bun and Node.js
 3. Installs dependencies
 4. Builds executables for all platforms:
-   - Linux (x64): `burger-api-linux`
-   - Windows (x64): `burger-api.exe`
-   - macOS (ARM64): `burger-api-mac`
-   - macOS (Intel): `burger-api-mac-intel`
+ - Linux (x64): `burger-api-linux`
+ - Windows (x64): `burger-api.exe`
+ - macOS (ARM64): `burger-api-mac`
+ - macOS (Intel): `burger-api-mac-intel`
 5. Generates SHA256 checksums for all executables
 6. Creates GitHub Release with:
-   - All platform executables
-   - Checksums file
-   - Release notes linking to CHANGELOG.md
+ - All platform executables
+ - Checksums file
+ - Release notes linking to CHANGELOG.md
 
 ---
 
@@ -429,7 +429,7 @@ Get-FileHash burger-api.exe -Algorithm SHA256
 # Test locally first
 cd packages/cli
 bun install
-bun run build:linux  # Test one platform
+bun run build:linux # Test one platform
 ```
 
 ### Issue: Executable doesn't work
@@ -482,7 +482,7 @@ git push origin cli/v0.6.5
 cat packages/cli/package.json | grep version
 
 # Ensure tag matches (use cli/ prefix)
-git tag -a cli/v0.6.5 -m "Release CLI v0.6.5"  # Use same version
+git tag -a cli/v0.6.5 -m "Release CLI v0.6.5" # Use same version
 ```
 
 ---
@@ -493,12 +493,12 @@ git tag -a cli/v0.6.5 -m "Release CLI v0.6.5"  # Use same version
 
 ```bash
 cd packages/cli
-bun install                          # Install dependencies
-bun run build:linux                  # Build for Linux
-bun run build:win                    # Build for Windows
-bun run build:mac                    # Build for macOS ARM64
-bun run build:mac-intel              # Build for macOS Intel
-bun run build:all                    # Build all platforms
+bun install # Install dependencies
+bun run build:linux # Build for Linux
+bun run build:win # Build for Windows
+bun run build:mac # Build for macOS ARM64
+bun run build:mac-intel # Build for macOS Intel
+bun run build:all # Build all platforms
 ```
 
 ### Release Commands
@@ -506,20 +506,20 @@ bun run build:all                    # Build all platforms
 ```bash
 # Complete release workflow
 cd packages/cli
-npm version patch                    # Update version
+npm version patch # Update version
 # Edit CHANGELOG.md manually
 git add CHANGELOG.md
 git commit -m "chore(cli): update changelog"
 git push origin main
 
 # Create and push tag (using release script - recommended)
-cd ../..                              # Go to repo root
+cd ../.. # Go to repo root
 ./packages/cli/scripts/release/release-cli.sh
 
 # Or manually:
 # VERSION=$(node -p "require('./packages/cli/package.json').version")
 # git tag -a "cli/v${VERSION}" -m "Release CLI v${VERSION}"
-# git push origin "cli/v${VERSION}"       # Triggers GitHub Actions
+# git push origin "cli/v${VERSION}" # Triggers GitHub Actions
 ```
 
 ### Verification Commands
@@ -555,7 +555,7 @@ bun run build:linux
 ./dist/burger-api-linux --version
 
 # 3. Update version
-npm version patch  # 0.6.4 -> 0.6.5
+npm version patch # 0.6.4 -> 0.6.5
 
 # 4. Update CHANGELOG.md
 # Edit CHANGELOG.md with new version entry
@@ -616,18 +616,18 @@ Both workflows trigger on the same tag, ensuring version synchronization.
 Before npm publishing can work, you need to configure an npm token:
 
 1. **Create an npm access token:**
-   - Go to https://www.npmjs.com/settings/YOUR_USERNAME/tokens
-   - Click "Generate New Token"
-   - Choose "Automation" token type
-   - Copy the token
+ - Go to https://www.npmjs.com/settings/YOUR_USERNAME/tokens
+ - Click "Generate New Token"
+ - Choose "Automation" token type
+ - Copy the token
 
 2. **Add token to GitHub Secrets:**
-   - Go to your GitHub repository settings
-   - Navigate to "Secrets and variables" → "Actions"
-   - Click "New repository secret"
-   - Name: `NPM_TOKEN`
-   - Value: Paste your npm token
-   - Click "Add secret"
+ - Go to your GitHub repository settings
+ - Navigate to "Secrets and variables" → "Actions"
+ - Click "New repository secret"
+ - Name: `NPM_TOKEN`
+ - Value: Paste your npm token
+ - Click "Add secret"
 
 **Important:** The token must have publish permissions for the `@burger-api` scope.
 
@@ -723,6 +723,6 @@ Excluded from npm package:
 
 ---
 
-**Last Updated:** December 2025  
+**Last Updated:** December 2025 
 **Current Version:** 0.6.5
 

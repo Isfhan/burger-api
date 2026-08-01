@@ -12,11 +12,11 @@ import type { Hook } from '../lifecycle/types';
  * Each route directory is **self-contained** — no parent/group inheritance.
  * Convention data is loaded from the route's own files only.
  *
- * Fields are carried raw through Phase 1 and compiled in later phases:
- * - `schema`  → Phase 3 (validation compilation)
- * - `hooks`   → Phase 4 (hook compilation into a frozen `HookPlan`)
- * - `openapi` → Phase 6 (OpenAPI generation)
- * - `config`  → Attached for runtime use (auth, cache, timeout, …)
+ * Fields are carried raw through and compiled in downstream compilation:
+ * - `schema` → (validation compilation)
+ * - `hooks` → (hook compilation into a frozen `HookPlan`)
+ * - `openapi` → (OpenAPI generation)
+ * - `config` → Attached for runtime use (auth, cache, timeout, …)
  */
 export interface RouteModule {
     /**
@@ -30,18 +30,18 @@ export interface RouteModule {
     handlers: { [method: string]: RequestHandler };
 
     /**
-     * Validation definitions from `schema.ts` (uncompiled; Phase 3).
+     * Validation definitions from `schema.ts` (compiled at route build time).
      */
     schema?: RouteSchema;
 
     /**
-     * Lifecycle hooks from `hooks.ts` (uncompiled; Phase 4).
+     * Lifecycle hooks from `hooks.ts` (compiled into a frozen hook plan).
      * Stored raw so the later hook compiler owns the typing.
      */
     hooks?: Record<string, unknown>;
 
     /**
-     * Documentation metadata from `openapi.ts` (uncompiled; Phase 6).
+     * OpenAPI metadata from `openapi.ts` (merged at compile time).
      */
     openapi?: openapi;
 

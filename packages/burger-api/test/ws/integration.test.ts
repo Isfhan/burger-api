@@ -22,7 +22,10 @@ async function getAvailablePort(): Promise<number> {
 
 function waitForOpen(ws: WebSocket, timeoutMs = 3000): Promise<void> {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('WebSocket open timed out')), timeoutMs);
+        const timer = setTimeout(
+            () => reject(new Error('WebSocket open timed out')),
+            timeoutMs
+        );
         ws.onopen = () => {
             clearTimeout(timer);
             resolve();
@@ -32,17 +35,30 @@ function waitForOpen(ws: WebSocket, timeoutMs = 3000): Promise<void> {
 
 function waitForMessage(ws: WebSocket, timeoutMs = 3000): Promise<string> {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('WebSocket message timed out')), timeoutMs);
+        const timer = setTimeout(
+            () => reject(new Error('WebSocket message timed out')),
+            timeoutMs
+        );
         ws.onmessage = (event) => {
             clearTimeout(timer);
-            resolve(typeof event.data === 'string' ? event.data : event.data.toString());
+            resolve(
+                typeof event.data === 'string'
+                    ? event.data
+                    : event.data.toString()
+            );
         };
     });
 }
 
-function waitForClose(ws: WebSocket, timeoutMs = 3000): Promise<{ code: number; reason: string }> {
+function waitForClose(
+    ws: WebSocket,
+    timeoutMs = 3000
+): Promise<{ code: number; reason: string }> {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('WebSocket close timed out')), timeoutMs);
+        const timer = setTimeout(
+            () => reject(new Error('WebSocket close timed out')),
+            timeoutMs
+        );
         ws.onclose = (event) => {
             clearTimeout(timer);
             resolve({ code: event.code, reason: event.reason });
@@ -50,12 +66,12 @@ function waitForClose(ws: WebSocket, timeoutMs = 3000): Promise<{ code: number; 
     });
 }
 
-describe('WebSocket integration (Phase 9)', () => {
+describe('WebSocket integration', () => {
     let server: Burger | null = null;
     let port: number;
 
     afterAll(async () => {
-        const srv = (server as any);
+        const srv = server as any;
         if (srv?.getServer) {
             srv.getServer()?.stop();
         }
@@ -71,7 +87,9 @@ describe('WebSocket integration (Phase 9)', () => {
                 ws.send(JSON.stringify({ type: 'connected' }));
             },
             message(ws: BurgerWS, message: string | Buffer) {
-                ws.send(JSON.stringify({ type: 'echo', data: message.toString() }));
+                ws.send(
+                    JSON.stringify({ type: 'echo', data: message.toString() })
+                );
             },
         });
 
@@ -127,7 +145,11 @@ describe('WebSocket integration (Phase 9)', () => {
         server = new Burger({ debug: true });
         server.websocket('/room/:roomName', {
             open(ws: BurgerWS) {
-                ws.send(JSON.stringify({ room: (ws as any).data?.route?.params?.roomName }));
+                ws.send(
+                    JSON.stringify({
+                        room: (ws as any).data?.route?.params?.roomName,
+                    })
+                );
             },
         });
 

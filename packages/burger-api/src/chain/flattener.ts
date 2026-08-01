@@ -4,13 +4,13 @@ import type { ChainNode } from './node';
 
 /**
  * Execution order for request hooks (beforeRoute):
- *   Framework → Global → Plugin → Local
+ * Framework → Plugin → Global → Local
  */
-const SCOPE_ORDER_REQUEST = ['framework', 'global', 'plugin', 'local'];
+const SCOPE_ORDER_REQUEST = ['framework', 'plugin', 'global', 'local'];
 
 /**
  * Execution order for response/error hooks (afterRoute, mapResponse, onError):
- *   Local → Global → Plugin → Framework
+ * Local → Global → Plugin → Framework
  */
 const SCOPE_ORDER_RESPONSE = ['local', 'global', 'plugin', 'framework'];
 
@@ -29,10 +29,7 @@ function pushByScope(
     }
 }
 
-export function flatten(
-    chain: HookChain,
-    _routeOwner: string
-): HookPlan {
+export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
     const nodes = chain.getNodes();
 
     let validation: Hook | undefined;
@@ -102,13 +99,33 @@ export function flatten(
         }
     }
 
-    // Request hooks: Framework → Global → Plugin → Route (forward)
-    beforeRoute.push(...frameworkBefore, ...globalBefore, ...pluginBefore, ...localBefore);
+    // Request hooks: Framework → Plugin → Global → Route (forward)
+    beforeRoute.push(
+        ...frameworkBefore,
+        ...pluginBefore,
+        ...globalBefore,
+        ...localBefore
+    );
     // Response hooks: Route → Global → Plugin → Framework (reversed)
-    afterRoute.push(...localAfter, ...globalAfter, ...pluginAfter, ...frameworkAfter);
-    mapResponse.push(...localResp, ...globalResp, ...pluginResp, ...frameworkResp);
+    afterRoute.push(
+        ...localAfter,
+        ...globalAfter,
+        ...pluginAfter,
+        ...frameworkAfter
+    );
+    mapResponse.push(
+        ...localResp,
+        ...globalResp,
+        ...pluginResp,
+        ...frameworkResp
+    );
     // Error hooks: Route → Global → Plugin → Framework (reversed, nearest-first)
-    onError.push(...localError, ...globalError, ...pluginError, ...frameworkError);
+    onError.push(
+        ...localError,
+        ...globalError,
+        ...pluginError,
+        ...frameworkError
+    );
 
     const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
     if (validation) plan.validation = validation;

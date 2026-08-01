@@ -89,14 +89,14 @@ export interface OpenAPIExternalDocs {
  * @example
  * ```ts
  * export default {
- *   title: "My API",
- *   description: "User management API",
- *   version: "2.0.0",
- *   servers: [{ url: "https://api.example.com" }],
- *   contact: { name: "Team", email: "api@example.com" },
- *   license: { name: "MIT" },
- *   docsAuth: { username: "admin", password: process.env.DOCS_PASSWORD },
- *   mapJsonSchema: { zod: z.toJSONSchema },
+ * title: "My API",
+ * description: "User management API",
+ * version: "2.0.0",
+ * servers: [{ url: "https://api.example.com" }],
+ * contact: { name: "Team", email: "api@example.com" },
+ * license: { name: "MIT" },
+ * docsAuth: { username: "admin", password: process.env.DOCS_PASSWORD },
+ * mapJsonSchema: { zod: z.toJSONSchema },
  * } satisfies OpenAPIConfig;
  * ```
  */
@@ -166,8 +166,8 @@ export interface OpenAPIConfig {
      * @example
      * ```ts
      * mapJsonSchema: {
-     *   zod: z.toJSONSchema,
-     *   valibot: toJsonSchema,
+     * zod: z.toJSONSchema,
+     * valibot: toJsonSchema,
      * }
      * ```
      */

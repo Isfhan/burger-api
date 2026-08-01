@@ -155,8 +155,7 @@ describe('RouterCompiler mergeTransformRecords', () => {
                     scope: 'plugin' as const,
                     hooks: {
                         transform: {
-                            contextVal: (ctx: any) =>
-                                `method-${ctx.method}`,
+                            contextVal: (ctx: any) => `method-${ctx.method}`,
                         },
                     },
                 },

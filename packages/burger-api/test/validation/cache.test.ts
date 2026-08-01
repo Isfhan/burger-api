@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { ValidatorCache } from '../../src/validation/cache';
 
-describe('ValidatorCache (M1)', () => {
+describe('ValidatorCache', () => {
     it('stores and retrieves a validator by identity', () => {
         const cache = new ValidatorCache();
         const fake = {

@@ -1,14 +1,14 @@
-// Import stuff  from core
+// Import stuff from core
 import { Server } from './core/server';
 import { ApiRouter } from './core/api-router';
 import { PageRouter } from './core/page-router';
 import { generateOpenAPIDocument } from './core/openapi';
 import { scalarDocs } from './core/docs-providers';
 
-// Import router (Phase 1 — Hybrid Router)
+// Import router
 import { Router } from './router';
 
-// Import compiler pipeline (Phase 1 — Route Module pipeline)
+// Import compiler pipeline
 import { DirectoryScanner } from './compiler/scanner';
 import { ModuleLoader } from './compiler/module-loader';
 import { RouteTree } from './compiler/route-tree';
@@ -17,16 +17,16 @@ import { RouteTree } from './compiler/route-tree';
 import { collectRoutes, compareRoutes, setDir } from './utils/index';
 import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 
-// Import validation (Phase 3)
+// Import validation
 import { schemaRegistry } from './validation/registry';
 
-// Import plugin system (Phase 4 M5)
+// Import plugin system
 import { PluginRegistry } from './plugin/registry';
 import { MacroRegistry } from './plugin/macro';
 import type { Plugin, MacroFn } from './plugin/types';
 import type { Scope } from './chain/node';
 
-// Import WebSocket modules (Phase 9)
+// Import WebSocket modules
 import { WebSocketScanner } from './ws/scanner';
 import { WebSocketCompiler } from './ws/compiler';
 import { WebSocketRouter } from './ws/router';
@@ -73,26 +73,26 @@ export class Burger {
     private pageRouter?: PageRouter;
 
     /**
-     * The compiled API router (Phase 1 Hybrid Router).
+     * The compiled API router.
      * Owns static dispatch (Bun map) + dynamic/wildcard dispatch (trie).
      */
     private dynamicRouter?: Router;
 
     /**
-     * The structural route tree (Phase 1), retained for introspection and
+     * The structural route tree, retained for introspection and
      * deterministic ordering. Built once from the Module Loader output; not
      * used on the request hot path.
      */
     private routeTree?: import('./compiler/route-tree').RouteTree;
 
     /**
-     * Plugin registry (Phase 4 M5). Populated via `.usePlugin()` before `serve()`;
+     * Plugin registry. Populated via `.usePlugin()` before `serve()`;
      * resolved into `HookChain` nodes during `processApiRoutes()`.
      */
     private pluginRegistry = new PluginRegistry();
 
     /**
-     * Macro registry (Phase 4 M6). Populated via `.macro()` before `serve()`;
+     * Macro registry. Populated via `.macro()` before `serve()`;
      * expanded into `ResolvedPlugin` entries during `processApiRoutes()` and
      * composed into the HookChain alongside plugins.
      */
@@ -127,22 +127,22 @@ export class Burger {
     private wsDir?: string;
 
     /**
-     * WebSocket router (Phase 9)
+     * WebSocket router
      */
     private wsRouter?: WebSocketRouter;
 
     /**
-     * WebSocket adapter (Phase 9)
+     * WebSocket adapter
      */
     private wsAdapter?: WebSocketAdapter;
 
     /**
-     * WebSocket config (Phase 9)
+     * WebSocket config
      */
     private wsConfigOptions?: WebSocketConfig;
 
     /**
-     * Programmatic WebSocket routes (Phase 9)
+     * Programmatic WebSocket routes
      */
     private programmaticWsRoutes: Map<string, any> = new Map();
 
@@ -186,11 +186,11 @@ export class Burger {
                 ? new PageRouter(pageDir, pagePrefix || '')
                 : undefined;
 
-        // Initialize WebSocket directory (Phase 9)
+        // Initialize WebSocket directory
         this.wsDir = wsDir;
 
-        // Phase 3: seed the schema registry from ServerOptions.models so model
-        // refs in route schemas resolve at compile time (phase3 §12.12, D10).
+        // seed the schema registry from ServerOptions.models so model
+        // refs in route schemas resolve at compile time (D10).
         // Seeded before routes compile (the registry is read-only after).
         if (options.models) {
             for (const name of Object.keys(options.models)) {
@@ -205,9 +205,9 @@ export class Burger {
      * (name + seed) is deduplicated — calling `.usePlugin()` twice with the same
      * identity is a no-op.
      *
-     * @param plugin  The plugin object or a factory function returning one.
-     * @param scope   Optional scope override (default: `'plugin'`).
-     * @param seed    Optional disambiguation string (e.g. two JWT plugins).
+     * @param plugin The plugin object or a factory function returning one.
+     * @param scope Optional scope override (default: `'plugin'`).
+     * @param seed Optional disambiguation string (e.g. two JWT plugins).
      * @returns `this` for chaining.
      */
     usePlugin(plugin: Plugin, scope?: Scope, seed?: string): this {
@@ -226,8 +226,8 @@ export class Burger {
      * Registers a reusable hook factory (macro). Macros are expanded at compile
      * time into plugin-scoped hooks that apply to every route.
      *
-     * @param name  Unique macro name.
-     * @param fn    Factory function that returns `RouteHooks`.
+     * @param name Unique macro name.
+     * @param fn Factory function that returns `RouteHooks`.
      * @returns `this` for chaining.
      */
     macro(name: string, fn: MacroFn): this {
@@ -239,8 +239,8 @@ export class Burger {
      * Registers an application service. Services are created once at startup
      * and injected into `ctx.services` for every request.
      *
-     * @param name  Service name (accessed as `ctx.services[name]`).
-     * @param service  The service instance.
+     * @param name Service name (accessed as `ctx.services[name]`).
+     * @param service The service instance.
      * @returns `this` for chaining.
      */
     provide(name: string, service: unknown): this {
@@ -249,19 +249,22 @@ export class Burger {
     }
 
     /**
-     * Register a WebSocket route programmatically (Phase 9).
-     * @param path  Route path (e.g., "/chat", "/notifications/:room")
-     * @param handlers  WebSocket handler functions
+     * Register a WebSocket route programmatically.
+     * @param path Route path (e.g., "/chat", "/notifications/:room")
+     * @param handlers WebSocket handler functions
      * @returns `this` for chaining.
      */
-    websocket(path: string, handlers: import('./ws/types').WebSocketHandlers): this {
+    websocket(
+        path: string,
+        handlers: import('./ws/types').WebSocketHandlers
+    ): this {
         this.programmaticWsRoutes.set(path, { path, handlers });
         return this;
     }
 
     /**
-     * Set global WebSocket configuration (Phase 9).
-     * @param config  WebSocket configuration options
+     * Set global WebSocket configuration.
+     * @param config WebSocket configuration options
      * @returns `this` for chaining.
      */
     wsConfig(config: WebSocketConfig): this {
@@ -420,7 +423,7 @@ export class Burger {
             debug: this.options.debug,
             validation: this.options.validation ?? {},
         });
-        // Phase 4 M5/M6: resolve plugins and expand macros, then merge both
+        // M5/M6: resolve plugins and expand macros, then merge both
         // into a single list passed to the compiler. Macro hooks are treated as
         // plugin-scoped entries, so the flattener orders them between global
         // (validation) and local (route) hooks.
@@ -472,13 +475,19 @@ export class Burger {
             this.routes[docsPath] = (ctx: any) => {
                 // Basic auth protection
                 if (config?.docsAuth) {
-                    const authHeader = ctx?.headers?.get?.('authorization') ?? '';
-                    const expected = 'Basic ' + btoa(`${config.docsAuth.username}:${config.docsAuth.password}`);
+                    const authHeader =
+                        ctx?.headers?.get?.('authorization') ?? '';
+                    const expected =
+                        'Basic ' +
+                        btoa(
+                            `${config.docsAuth.username}:${config.docsAuth.password}`
+                        );
                     if (authHeader !== expected) {
                         return new Response('Unauthorized', {
                             status: 401,
                             headers: {
-                                'WWW-Authenticate': 'Basic realm="Documentation"',
+                                'WWW-Authenticate':
+                                    'Basic realm="Documentation"',
                             },
                         });
                     }
@@ -496,7 +505,7 @@ export class Burger {
     }
 
     /**
-     * Process WebSocket routes and add them to the WebSocket router (Phase 9).
+     * Process WebSocket routes and add them to the WebSocket router.
      * @returns A promise that resolves to a boolean indicating if WebSocket routes were configured
      */
     private async processWebSocketRoutes(): Promise<boolean> {
@@ -505,7 +514,8 @@ export class Burger {
 
         // Extract auth hooks from resolved plugins for WebSocket upgrade
         const resolvedPlugins = await this.pluginRegistry.resolveAll();
-        let pluginTransform: import('./lifecycle/types').TransformMap | undefined;
+        let pluginTransform:
+            import('./lifecycle/types').TransformMap | undefined;
         const pluginBeforeRoute: import('./lifecycle/types').Hook[] = [];
 
         for (const plugin of resolvedPlugins) {
@@ -529,7 +539,8 @@ export class Burger {
             debug: this.options.debug,
             providers: this.providers,
             pluginTransform,
-            pluginBeforeRoute: pluginBeforeRoute.length > 0 ? pluginBeforeRoute : undefined,
+            pluginBeforeRoute:
+                pluginBeforeRoute.length > 0 ? pluginBeforeRoute : undefined,
         });
 
         // Add programmatic routes
@@ -552,14 +563,19 @@ export class Burger {
                 // Set global hooks if found
                 if (scanResult.globalHooks) {
                     try {
-                        const hooksModule = await import(scanResult.globalHooks);
+                        const hooksModule = await import(
+                            scanResult.globalHooks
+                        );
                         compiler.setGlobalHooks({
                             onOpen: hooksModule.onOpen,
                             onMessage: hooksModule.onMessage,
                             onClose: hooksModule.onClose,
                         });
                     } catch (error) {
-                        console.error('[WebSocket] Failed to load global hooks:', error);
+                        console.error(
+                            '[WebSocket] Failed to load global hooks:',
+                            error
+                        );
                     }
                 }
 
@@ -569,7 +585,9 @@ export class Burger {
                 }
 
                 // Compile all routes
-                const compiledRoutes = await compiler.compileAll(scanResult.routes);
+                const compiledRoutes = await compiler.compileAll(
+                    scanResult.routes
+                );
 
                 // Add to router
                 this.wsRouter.addRoutes(compiledRoutes);
@@ -595,7 +613,8 @@ export class Burger {
         ]);
 
         // Flag to track if any routes were loaded
-        const routesConfigured = pagesConfigured || apiConfigured || wsConfigured;
+        const routesConfigured =
+            pagesConfigured || apiConfigured || wsConfigured;
 
         // If routes were configured, start the server
         if (routesConfigured) {
@@ -613,14 +632,17 @@ export class Burger {
             // 2. Fall through to HTTP handler
             const combinedFetch: FetchHandler = wsFetchHandler
                 ? async (request, server) => {
-                    // Try WebSocket upgrade (calls server.upgrade internally)
-                    const wsResponse = await wsFetchHandler(request, server as any);
-                    if (wsResponse !== undefined) {
-                        return wsResponse as Response;
-                    }
-                    // Not a WebSocket upgrade or upgrade failed — fall through to HTTP
-                    return fetchHandler(request);
-                }
+                      // Try WebSocket upgrade (calls server.upgrade internally)
+                      const wsResponse = await wsFetchHandler(
+                          request,
+                          server as any
+                      );
+                      if (wsResponse !== undefined) {
+                          return wsResponse as Response;
+                      }
+                      // Not a WebSocket upgrade or upgrade failed — fall through to HTTP
+                      return fetchHandler(request);
+                  }
                 : fetchHandler;
 
             this.server.start({
@@ -650,13 +672,13 @@ export class Burger {
 
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
-export type { BurgerServices } from './context/context';
+export type { BurgerServices, BurgerValidated } from './context/context';
 
 // Export utils used by examples and CLI build pipeline
 export { setDir } from './utils/index';
 export { cleanPrefix, normalizePath } from './utils/index';
 
-// Export error classes (Phase 3 + Phase 6)
+// Export error classes
 export { HTTPError, renderHTTPError } from './errors/http-error';
 export { ValidationError } from './validation/error';
 export { NotFoundError } from './errors/not-found';
@@ -664,7 +686,7 @@ export { UnauthorizedError } from './errors/unauthorized';
 export { ForbiddenError } from './errors/forbidden';
 export { MethodNotAllowedError } from './errors/method-not-allowed';
 
-// Export docs providers (Phase 5)
+// Export docs providers
 export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';
 
 // Export public types
@@ -680,17 +702,17 @@ export type {
     OpenAPIConfig,
 } from './types/index';
 
-// Export lifecycle types (Phase 4)
+// Export lifecycle types
 export type { Hook, ErrorHook } from './lifecycle/types';
 
 // Export validation types
 export type { ValidationIssue } from './validation/types';
 
-// Export plugin types (Phase 4 M5) and macro types (Phase 4 M6)
+// Export plugin types and macro types
 export type { Plugin, MacroFn } from './plugin/types';
 export type { Scope } from './chain/node';
 
-// Export WebSocket types (Phase 9)
+// Export WebSocket types
 export type {
     BurgerWS,
     WebSocketData,

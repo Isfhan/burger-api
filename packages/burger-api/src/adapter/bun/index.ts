@@ -9,7 +9,7 @@ import type {
 /**
  * The primary, optimized runtime adapter. Wraps `Bun.serve` + Bun's native
  * `routes` map for static dispatch, with `Router.fetch` as the fallback for
- * dynamic/wildcard routes (per `ROADMAP.md` §4.2 / Phase 1 hybrid router).
+ * dynamic/wildcard routes (per `ROADMAP.md` §4.2 / hybrid router).
  *
  * This is the ONLY place in the framework that touches a Bun-specific server
  * bootstrap. The framework body (router, compiler, context) remains
@@ -25,25 +25,22 @@ export class BunAdapter implements RuntimeAdapter {
                     return await opts.fetch(request, server);
                 } catch (error) {
                     // Safety net: errors that escape the pipeline.
-                    // In Phase 6+, all HTTPError subclasses are caught
+                    // +, all HTTPError subclasses are caught
                     // within dispatchOnError; this catches edge cases.
                     return renderHTTPError(error, opts.debug ?? false);
                 }
             },
             error(error: Error) {
                 console.error(error);
-                return new Response(
-                    `Internal Server Error: ${error.message}`,
-                    {
-                        status: 500,
-                        headers: { 'Content-Type': 'text/plain' },
-                    }
-                );
+                return new Response(`Internal Server Error: ${error.message}`, {
+                    status: 500,
+                    headers: { 'Content-Type': 'text/plain' },
+                });
             },
             port: opts.port,
         };
 
-        // Add WebSocket handlers if provided (Phase 9)
+        // Add WebSocket handlers if provided
         if (opts.websocket) {
             serverOptions.websocket = opts.websocket;
         }

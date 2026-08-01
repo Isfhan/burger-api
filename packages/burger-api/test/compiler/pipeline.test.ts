@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import {
-    mkdtempSync,
-    mkdirSync,
-    writeFileSync,
-    rmSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { DirectoryScanner } from '../../src/compiler/scanner';
@@ -32,10 +27,7 @@ function makeTree(): string {
         `export const GET = () => Response.json({ list: [] });
 export const POST = () => new Response('created', { status: 201 });`
     );
-    write(
-        'users/config.ts',
-        `export default { auth: true };`
-    );
+    write('users/config.ts', `export default { auth: true };`);
     write(
         'users/[id]/route.ts',
         `export const GET = (req) => Response.json({ id: req.params.id });`
@@ -56,13 +48,15 @@ describe('Pipeline — end to end (self-contained routes)', () => {
         const scanned = await new DirectoryScanner(root, 'api').scan();
         const modules = await new ModuleLoader().load(scanned);
         router = new Router({});
-        router.compile(modules.map((m) => ({
-            path: m.path,
-            handlers: m.handlers,
-            schema: m.schema,
-            openapi: m.openapi,
-            isWildcard: m.isWildcard,
-        })));
+        router.compile(
+            modules.map((m) => ({
+                path: m.path,
+                handlers: m.handlers,
+                schema: m.schema,
+                openapi: m.openapi,
+                isWildcard: m.isWildcard,
+            }))
+        );
     });
     afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -87,17 +81,13 @@ describe('Pipeline — end to end (self-contained routes)', () => {
     });
 
     it('serves a dynamic route with params', async () => {
-        const res = await router.fetch(
-            new Request('http://h/api/users/42')
-        );
+        const res = await router.fetch(new Request('http://h/api/users/42'));
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ id: '42' });
     });
 
     it('serves a wildcard route with wildcardParams', async () => {
-        const res = await router.fetch(
-            new Request('http://h/api/files/a/b/c')
-        );
+        const res = await router.fetch(new Request('http://h/api/files/a/b/c'));
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ rest: ['a', 'b', 'c'] });
     });
@@ -125,8 +115,14 @@ describe('Pipeline — config.ts discovery', () => {
                 mkdirSync(path.dirname(full), { recursive: true });
                 writeFileSync(full, contents);
             };
-            write('items/route.ts', `export const GET = () => new Response('items');`);
-            write('items/config.ts', `export default { cache: true, timeout: 5000 };`);
+            write(
+                'items/route.ts',
+                `export const GET = () => new Response('items');`
+            );
+            write(
+                'items/config.ts',
+                `export default { cache: true, timeout: 5000 };`
+            );
             const scanned = await new DirectoryScanner(root, 'api').scan();
             const modules = await new ModuleLoader().load(scanned);
             const items = modules.find((m) => m.path === '/api/items')!;

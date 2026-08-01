@@ -13,11 +13,7 @@ import { filePathToApiRoutePath } from '../utils/pathConversion';
 import { autoOptionsHandler } from '../utils/response';
 
 // Import types
-import type {
-    RequestHandler,
-    RouteDefinition,
-    TrieNode,
-} from '../types/index';
+import type { RequestHandler, RouteDefinition, TrieNode } from '../types/index';
 
 /**
  * ApiRouter class for handling file-based routing.
@@ -244,7 +240,7 @@ export class ApiRouter {
             // If the route defines any preflight-triggering methods and lacks an OPTIONS handler, auto-add an OPTIONS handler
             if (hasPreflightMethods && typeof handlers.OPTIONS !== 'function') {
                 // if (process.env.NODE_ENV !== 'production') {
-                //     console.debug('Auto-added OPTIONS handler for route:', routePath);
+                // console.debug('Auto-added OPTIONS handler for route:', routePath);
                 // }
                 handlers.OPTIONS = autoOptionsHandler;
             }
@@ -269,7 +265,7 @@ export class ApiRouter {
 
     /**
      * Resolves a request to a route definition and its parameters.
-     * @param pathname  The normalized request pathname.
+     * @param pathname The normalized request pathname.
      * @param method The uppercase HTTP method.
      * @returns {{ route?: RouteDefinition; params: Record<string, string>; wildcardParams?: string[] }} An object containing the matched route (if any), extracted parameters, and wildcard segments (if applicable).
      * @throws {Error} If the request URL is malformed.

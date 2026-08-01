@@ -17,7 +17,10 @@ export class Server {
     private adapter: RuntimeAdapter;
     private handle?: ServerHandle;
 
-    constructor(options: ServerOptions, adapter: RuntimeAdapter = new BunAdapter()) {
+    constructor(
+        options: ServerOptions,
+        adapter: RuntimeAdapter = new BunAdapter()
+    ) {
         this.options = options;
         this.adapter = adapter;
     }

@@ -3,7 +3,7 @@ import { executeHookPlan } from '../../src/lifecycle/executor';
 import type { HookPlan } from '../../src/lifecycle/types';
 import { BurgerContext } from '../../src/context/context';
 
-describe('transform (Phase 4 M3)', () => {
+describe('transform', () => {
     it('injects transformed values onto the context before the handler', async () => {
         const plan: HookPlan = {
             beforeRoute: [],
@@ -20,13 +20,18 @@ describe('transform (Phase 4 M3)', () => {
             { route: { path: '/test', pattern: '/test' } }
         );
         let captured: Record<string, unknown> = {};
-        await executeHookPlan(ctx, plan, {
-            GET: (req) => {
-                const r = req as unknown as Record<string, unknown>;
-                captured = { user: r.user, tenant: r.tenant };
-                return new Response('ok', { status: 200 });
+        await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: (req) => {
+                    const r = req as unknown as Record<string, unknown>;
+                    captured = { user: r.user, tenant: r.tenant };
+                    return new Response('ok', { status: 200 });
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(captured.user).toEqual({ id: 1, name: 'alice' });
         expect(captured.tenant).toBe('acme');
     });
@@ -34,9 +39,7 @@ describe('transform (Phase 4 M3)', () => {
     it('transform runs before beforeRoute (new lifecycle order)', async () => {
         let transformRan = false;
         const plan: HookPlan = {
-            beforeRoute: [
-                () => new Response('blocked', { status: 403 }),
-            ],
+            beforeRoute: [() => new Response('blocked', { status: 403 })],
             afterRoute: [],
             mapResponse: [],
             onError: [],
@@ -47,13 +50,17 @@ describe('transform (Phase 4 M3)', () => {
                 },
             },
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        const res = await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: () => new Response('ok', { status: 200 }),
+            },
+            new Request('http://h/test')
         );
-        const res = await executeHookPlan(ctx, plan, {
-            GET: () => new Response('ok', { status: 200 }),
-        }, new Request('http://h/test'));
         expect(res.status).toBe(403);
         // Transform runs BEFORE beforeRoute, so it executes even if beforeRoute blocks.
         expect(transformRan).toBe(true);
@@ -73,18 +80,22 @@ describe('transform (Phase 4 M3)', () => {
                 },
             },
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
         let total: unknown;
-        await executeHookPlan(ctx, plan, {
-            GET: (req) => {
-                const r = req as unknown as Record<string, unknown>;
-                total = r.total;
-                return new Response('ok', { status: 200 });
+        await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: (req) => {
+                    const r = req as unknown as Record<string, unknown>;
+                    total = r.total;
+                    return new Response('ok', { status: 200 });
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(total).toBe(15);
     });
 
@@ -109,18 +120,22 @@ describe('transform (Phase 4 M3)', () => {
                 },
             },
         };
-        const ctx = BurgerContext.create(
-            new Request('http://h/test'),
-            { route: { path: '/test', pattern: '/test' } }
-        );
-        await executeHookPlan(ctx, plan, {
-            GET: (req) => {
-                const r = req as unknown as Record<string, unknown>;
-                expect(r.user).toEqual({ id: 1 });
-                order.push('handler');
-                return new Response('ok', { status: 200 });
+        const ctx = BurgerContext.create(new Request('http://h/test'), {
+            route: { path: '/test', pattern: '/test' },
+        });
+        await executeHookPlan(
+            ctx,
+            plan,
+            {
+                GET: (req) => {
+                    const r = req as unknown as Record<string, unknown>;
+                    expect(r.user).toEqual({ id: 1 });
+                    order.push('handler');
+                    return new Response('ok', { status: 200 });
+                },
             },
-        }, new Request('http://h/test'));
+            new Request('http://h/test')
+        );
         expect(order).toEqual(['transform', 'beforeRoute', 'handler']);
     });
 });

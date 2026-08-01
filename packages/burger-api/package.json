@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:smoke && bun run test:ws",
+    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:validation && bun run test:compiler && bun run test:adapter && bun run test:provider && bun run test:smoke && bun run test:ws",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
     "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
     "test:lifecycle": "bun test --timeout 30000 test/lifecycle/**/*.test.ts",
@@ -30,7 +30,11 @@
     "test:errors": "bun test --timeout 30000 test/errors/**/*.test.ts",
     "test:smoke": "bun test --timeout 30000 test/plugin-macro-smoke.test.ts",
     "test:ws": "bun test --timeout 30000 test/ws/**/*.test.ts",
-    "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
+    "test:validation": "bun test --timeout 30000 test/validation/**/*.test.ts",
+    "test:compiler": "bun test --timeout 30000 test/compiler/**/*.test.ts",
+    "test:adapter": "bun test --timeout 30000 test/adapter/**/*.test.ts",
+    "test:provider": "bun test --timeout 30000 test/provider/**/*.test.ts",
+    "dev": "bun run examples/basic/src/index.ts"
   },
   "keywords": [
     "burger-api",

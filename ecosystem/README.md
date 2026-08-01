@@ -92,6 +92,6 @@ export default { auth: false };
 
 ## See also
 
-- Vision: `../burger-api-roadmaps/BURGERAPI_VISION.md`
+- Vision: [`../../BURGERAPI_VISION.md`](../../BURGERAPI_VISION.md)
 - Individual packages under `hooks/*` and `plugins/*`
 - Skills: `skills/burger-api/`

@@ -27,7 +27,7 @@ This monorepo contains **BurgerAPI**: a Bun-first, WinterCG-compatible TypeScrip
 API framework with file-based routing, a **hook-based** request lifecycle,
 Standard Schema validation (Zod default), plugins/providers, and OpenAPI.
 
-**Architecture source of truth:** `../burger-api-roadmaps/BURGERAPI_VISION.md`  
+**Architecture source of truth:** [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md)  
 When docs or code disagree with the vision, **the vision wins**.
 
 **Hooks** control the request lifecycle. **Plugins** extend the application.

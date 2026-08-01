@@ -30,7 +30,8 @@ export function generatePackageJson(projectName: string): string {
             build: 'burger-api build src/index.ts',
         },
         dependencies: {
-            'burger-api': '^0.9.7',
+            'burger-api': '^0.15.0',
+            zod: '^4.0.17',
         },
         devDependencies: {
             '@types/bun': 'latest',
@@ -149,21 +150,21 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('const app = new Burger({');
 
     if (options.useApi) {
-        lines.push(`    apiDir: './src/${options.apiDir || 'api'}',`);
+        lines.push(` apiDir: './src/${options.apiDir || 'api'}',`);
         if (options.apiPrefix && options.apiPrefix !== '/api') {
-            lines.push(`    apiPrefix: '${options.apiPrefix}',`);
+            lines.push(` apiPrefix: '${options.apiPrefix}',`);
         }
     }
 
     if (options.usePages) {
-        lines.push(`    pageDir: './src/${options.pageDir || 'pages'}',`);
+        lines.push(` pageDir: './src/${options.pageDir || 'pages'}',`);
         if (options.pagePrefix && options.pagePrefix !== '/') {
-            lines.push(`    pagePrefix: '${options.pagePrefix}',`);
+            lines.push(` pagePrefix: '${options.pagePrefix}',`);
         }
     }
 
     if (options.debug) {
-        lines.push('    debug: true,');
+        lines.push(' debug: true,');
     }
 
     lines.push('});');
@@ -172,9 +173,7 @@ export function generateIndexFile(options: CreateOptions): string {
     // Start server - uses PORT env variable for flexibility (e.g., burger-api serve --port 4000)
     lines.push('const port = Number(process.env.PORT) || 4000;');
     lines.push('app.serve(port, () => {');
-    lines.push(
-        '    console.log(`Server running on http://localhost:${port}`);'
-    );
+    lines.push(' console.log(`Server running on http://localhost:${port}`);');
     lines.push('});');
 
     return lines.join('\n');
@@ -201,11 +200,11 @@ export function generateBurgerConfig(options: CreateOptions): string {
         ' * Edit these paths and prefixes to match your project.',
         ' */',
         'export default {',
-        `    apiDir: ${JSON.stringify(apiDir)},   // folder with API route files`,
-        `    pageDir: ${JSON.stringify(pageDir)},   // folder with HTML pages`,
-        `    apiPrefix: ${JSON.stringify(apiPrefix)},   // URL prefix for API routes`,
-        `    pagePrefix: ${JSON.stringify(pagePrefix)},   // URL prefix for pages`,
-        `    debug: ${debug},   // extra logging when true`,
+        ` apiDir: ${JSON.stringify(apiDir)}, // folder with API route files`,
+        ` pageDir: ${JSON.stringify(pageDir)}, // folder with HTML pages`,
+        ` apiPrefix: ${JSON.stringify(apiPrefix)}, // URL prefix for API routes`,
+        ` pagePrefix: ${JSON.stringify(pagePrefix)}, // URL prefix for pages`,
+        ` debug: ${debug}, // extra logging when true`,
         '};',
         '',
     ].join('\n');
@@ -241,7 +240,7 @@ import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /*
 -----------------------------------------------------------------------------
-   OPENAPI METADATA (Optional but recommended!)
+ OPENAPI METADATA (Optional but recommended!)
 -----------------------------------------------------------------------------
 
  - This creates automatic documentation for your API!
@@ -250,70 +249,70 @@ import type { BurgerContext, BurgerNext } from 'burger-api';
 -----------------------------------------------------------------------------
 */
 export const openapi = {
-    // Documentation for the GET method
-    get: {
-        // 'summary' - A short title shown in the docs (keep it brief!)
-        summary: 'Get all items',
-        
-        // 'description' - A longer explanation of what this endpoint does
-        description: 'Fetches a list of items. You can filter results using query parameters.',
-        
-        // 'tags' - Groups related endpoints together in the docs
-        // All endpoints with the same tag appear in the same section
-        tags: ['Items'],
-        
-        // 'operationId' - A unique ID for this endpoint (useful for code generation)
-        operationId: 'getItems',
-        
-        // 'responses' - Documents what responses the endpoint can return
-        responses: {
-            '200': { description: 'Successfully retrieved items' },
-            '400': { description: 'Invalid query parameters' },
-        },
-    },
-    
-    // Documentation for the POST method
-    post: {
-        summary: 'Create a new item',
-        description: 'Creates a new item with the provided data. Returns the created item.',
-        tags: ['Items'],
-        operationId: 'createItem',
-        responses: {
-            '201': { description: 'Item created successfully' },
-            '400': { description: 'Invalid request body' },
-        },
-    },
-    
-    // Documentation for the PUT method
-    put: {
-        summary: 'Update an item',
-        description: 'Updates an existing item. Provide the item ID in the query string.',
-        tags: ['Items'],
-        operationId: 'updateItem',
-        responses: {
-            '200': { description: 'Item updated successfully' },
-            '400': { description: 'Invalid request data' },
-            '404': { description: 'Item not found' },
-        },
-    },
-    
-    // Documentation for the DELETE method  
-    delete: {
-        summary: 'Delete an item',
-        description: 'Permanently deletes an item by ID.',
-        tags: ['Items'],
-        operationId: 'deleteItem',
-        responses: {
-            '200': { description: 'Item deleted successfully' },
-            '404': { description: 'Item not found' },
-        },
-    },
+ // Documentation for the GET method
+ get: {
+ // 'summary' - A short title shown in the docs (keep it brief!)
+ summary: 'Get all items',
+ 
+ // 'description' - A longer explanation of what this endpoint does
+ description: 'Fetches a list of items. You can filter results using query parameters.',
+ 
+ // 'tags' - Groups related endpoints together in the docs
+ // All endpoints with the same tag appear in the same section
+ tags: ['Items'],
+ 
+ // 'operationId' - A unique ID for this endpoint (useful for code generation)
+ operationId: 'getItems',
+ 
+ // 'responses' - Documents what responses the endpoint can return
+ responses: {
+ '200': { description: 'Successfully retrieved items' },
+ '400': { description: 'Invalid query parameters' },
+ },
+ },
+ 
+ // Documentation for the POST method
+ post: {
+ summary: 'Create a new item',
+ description: 'Creates a new item with the provided data. Returns the created item.',
+ tags: ['Items'],
+ operationId: 'createItem',
+ responses: {
+ '201': { description: 'Item created successfully' },
+ '400': { description: 'Invalid request body' },
+ },
+ },
+ 
+ // Documentation for the PUT method
+ put: {
+ summary: 'Update an item',
+ description: 'Updates an existing item. Provide the item ID in the query string.',
+ tags: ['Items'],
+ operationId: 'updateItem',
+ responses: {
+ '200': { description: 'Item updated successfully' },
+ '400': { description: 'Invalid request data' },
+ '404': { description: 'Item not found' },
+ },
+ },
+ 
+ // Documentation for the DELETE method 
+ delete: {
+ summary: 'Delete an item',
+ description: 'Permanently deletes an item by ID.',
+ tags: ['Items'],
+ operationId: 'deleteItem',
+ responses: {
+ '200': { description: 'Item deleted successfully' },
+ '404': { description: 'Item not found' },
+ },
+ },
 };
 
 
 /*
 -----------------------------------------------------------------------------
-  SCHEMA VALIDATION (Using Zod)
+ SCHEMA VALIDATION (Using Zod)
 -----------------------------------------------------------------------------
 
 - Schemas define what data your API accepts. BurgerAPI automatically:
@@ -322,94 +321,94 @@ export const openapi = {
  - Puts the validated data in ctx.validated for you to use
 
  - You can validate:
-   - 'query'  → URL query parameters like ?search=hello&page=1
-   - 'body'   → Request body (for POST/PUT requests)
-   - 'params' → URL parameters like /items/[id] → { id: "123" }
+ - 'query' → URL query parameters like ?search=hello&page=1
+ - 'body' → Request body (for POST/PUT requests)
+ - 'params' → URL parameters like /items/[id] → { id: "123" }
 -----------------------------------------------------------------------------
 */
 export const schema = {
-    // Schema for GET requests - validates query parameters
-    get: {
-        // 'query' - Validates the URL query string
-        // Example URL: /api?search=burger&limit=10&page=2
-        query: z.object({
-            // 'search' - Optional text to search for
-            // .optional() means this field isn't required
-            search: z.string().optional(),
-            
-            // 'limit' - How many items to return (default: 10)
-            // .coerce.number() converts string "10" to number 10
-            // .min(1) means it must be at least 1
-            // .max(100) means it can't be more than 100
-            // .default(10) uses 10 if not provided
-            limit: z.coerce.number().min(1).max(100).default(10),
-            
-            // 'page' - Which page of results to return
-            page: z.coerce.number().min(1).default(1),
-        }),
-    },
-    
-    // Schema for POST requests - validates the request body
-    post: {
-        // 'body' - Validates JSON data sent in the request body
-        body: z.object({
-            // 'name' - Required, must be at least 1 character
-            // .min(1, '...') shows a custom error message if too short
-            name: z.string().min(1, 'Name is required'),
-            
-            // 'description' - Optional text field
-            description: z.string().optional(),
-            
-            // 'price' - Required, must be a positive number
-            // .positive() ensures the number is greater than 0
-            price: z.number().positive('Price must be greater than 0'),
-            
-            // 'category' - Must be one of these specific values
-            // .enum() only allows the listed values
-            category: z.enum(['food', 'drink', 'dessert']),
-            
-            // 'isAvailable' - Optional boolean, defaults to true
-            isAvailable: z.boolean().default(true),
-        }),
-    },
-    
-    // Schema for PUT requests - validates both query and body
-    put: {
-        // Which item to update (ID in query string)
-        query: z.object({
-            id: z.string().min(1, 'Item ID is required'),
-        }),
-        
-        // What to update (in the request body)
-        // .partial() makes all fields optional (for partial updates)
-        body: z.object({
-            name: z.string().min(1),
-            description: z.string(),
-            price: z.number().positive(),
-            category: z.enum(['food', 'drink', 'dessert']),
-            isAvailable: z.boolean(),
-        }).partial(), // .partial() = all fields become optional
-    },
-    
-    // Schema for DELETE requests - validates query parameters
-    delete: {
-        query: z.object({
-            id: z.string().min(1, 'Item ID is required'),
-        }),
-    },
+ // Schema for GET requests - validates query parameters
+ get: {
+ // 'query' - Validates the URL query string
+ // Example URL: /api?search=burger&limit=10&page=2
+ query: z.object({
+ // 'search' - Optional text to search for
+ // .optional() means this field isn't required
+ search: z.string().optional(),
+ 
+ // 'limit' - How many items to return (default: 10)
+ // .coerce.number() converts string "10" to number 10
+ // .min(1) means it must be at least 1
+ // .max(100) means it can't be more than 100
+ // .default(10) uses 10 if not provided
+ limit: z.coerce.number().min(1).max(100).default(10),
+ 
+ // 'page' - Which page of results to return
+ page: z.coerce.number().min(1).default(1),
+ }),
+ },
+ 
+ // Schema for POST requests - validates the request body
+ post: {
+ // 'body' - Validates JSON data sent in the request body
+ body: z.object({
+ // 'name' - Required, must be at least 1 character
+ // .min(1, '...') shows a custom error message if too short
+ name: z.string().min(1, 'Name is required'),
+ 
+ // 'description' - Optional text field
+ description: z.string().optional(),
+ 
+ // 'price' - Required, must be a positive number
+ // .positive() ensures the number is greater than 0
+ price: z.number().positive('Price must be greater than 0'),
+ 
+ // 'category' - Must be one of these specific values
+ // .enum() only allows the listed values
+ category: z.enum(['food', 'drink', 'dessert']),
+ 
+ // 'isAvailable' - Optional boolean, defaults to true
+ isAvailable: z.boolean().default(true),
+ }),
+ },
+ 
+ // Schema for PUT requests - validates both query and body
+ put: {
+ // Which item to update (ID in query string)
+ query: z.object({
+ id: z.string().min(1, 'Item ID is required'),
+ }),
+ 
+ // What to update (in the request body)
+ // .partial() makes all fields optional (for partial updates)
+ body: z.object({
+ name: z.string().min(1),
+ description: z.string(),
+ price: z.number().positive(),
+ category: z.enum(['food', 'drink', 'dessert']),
+ isAvailable: z.boolean(),
+ }).partial(), // .partial() = all fields become optional
+ },
+ 
+ // Schema for DELETE requests - validates query parameters
+ delete: {
+ query: z.object({
+ id: z.string().min(1, 'Item ID is required'),
+ }),
+ },
 };
 
 
 /*
 -----------------------------------------------------------------------------
-    ROUTE HOOKS (Optional)
+ ROUTE HOOKS (Optional)
 -----------------------------------------------------------------------------
 
  - Hooks run as part of the request lifecycle. Use beforeRoute for:
-   - Logging requests
-   - Checking authentication
-   - Modifying the request
-   - Blocking unauthorized access
+ - Logging requests
+ - Checking authentication
+ - Modifying the request
+ - Blocking unauthorized access
 
  - Return 'undefined' to continue to the handler
  - Return a 'Response' to stop and send that response immediately
@@ -417,21 +416,21 @@ export const schema = {
 -----------------------------------------------------------------------------
  */
 export const hooks = {
-    beforeRoute: [
-        // Example: Log every request to this route
-        async (ctx: BurgerContext) => {
-            console.log(\`[\${new Date().toISOString()}] \${ctx.method} \${ctx.url}\`);
-        },
-    ],
+ beforeRoute: [
+ // Example: Log every request to this route
+ async (ctx: BurgerContext) => {
+ console.log(\`[\${new Date().toISOString()}] \${ctx.method} \${ctx.url}\`);
+ },
+ ],
 };
 
 /*
 -----------------------------------------------------------------------------
-    HTTP HANDLERS
+ HTTP HANDLERS
 -----------------------------------------------------------------------------
 
  - These functions handle the actual requests. They receive:
-   - ctx: The request context with validated data in ctx.validated
+ - ctx: The request context with validated data in ctx.validated
  - They must return a Response object. Use Response.json() for JSON responses.
 -----------------------------------------------------------------------------
 */
@@ -440,44 +439,44 @@ export const hooks = {
  * GET - Fetch items with optional filtering
  * 
  * Example requests:
- * - GET /api           → Get first 10 items
- * - GET /api?limit=5   → Get first 5 items  
+ * - GET /api → Get first 10 items
+ * - GET /api?limit=5 → Get first 5 items 
  * - GET /api?search=burger&page=2 → Search for "burger", page 2
  */
 export async function GET(ctx: BurgerContext) {
-    // Access validated query parameters from the schema
-    const { search, limit, page } = ctx.validated.query;
-    
-    // Mock data (replace with your database query)
-    const mockItems = [
-        { id: '1', name: 'Classic Burger', price: 9.99, category: 'food' },
-        { id: '2', name: 'Cheese Burger', price: 11.99, category: 'food' },
-        { id: '3', name: 'Cola', price: 2.99, category: 'drink' },
-    ];
-    
-    // Filter items if search is provided
-    let items = mockItems;
-    if (search) {
-        items = items.filter(item => 
-            item.name.toLowerCase().includes(search.toLowerCase())
-        );
-    }
-    
-    // Calculate pagination
-    const startIndex = (page - 1) * limit;
-    const paginatedItems = items.slice(startIndex, startIndex + limit);
-    
-    // Return JSON response with status 200 (default)
-    return Response.json({
-        success: true,
-        data: paginatedItems,
-        pagination: {
-            page,
-            limit,
-            total: items.length,
-            totalPages: Math.ceil(items.length / limit),
-        },
-    });
+ // Access validated query parameters from the schema
+ const { search, limit, page } = ctx.validated.query;
+ 
+ // Mock data (replace with your database query)
+ const mockItems = [
+ { id: '1', name: 'Classic Burger', price: 9.99, category: 'food' },
+ { id: '2', name: 'Cheese Burger', price: 11.99, category: 'food' },
+ { id: '3', name: 'Cola', price: 2.99, category: 'drink' },
+ ];
+ 
+ // Filter items if search is provided
+ let items = mockItems;
+ if (search) {
+ items = items.filter(item => 
+ item.name.toLowerCase().includes(search.toLowerCase())
+ );
+ }
+ 
+ // Calculate pagination
+ const startIndex = (page - 1) * limit;
+ const paginatedItems = items.slice(startIndex, startIndex + limit);
+ 
+ // Return JSON response with status 200 (default)
+ return Response.json({
+ success: true,
+ data: paginatedItems,
+ pagination: {
+ page,
+ limit,
+ total: items.length,
+ totalPages: Math.ceil(items.length / limit),
+ },
+ });
 }
 
 /**
@@ -485,33 +484,33 @@ export async function GET(ctx: BurgerContext) {
  * 
  * Example request body:
  * {
- *   "name": "Veggie Burger",
- *   "description": "Delicious plant-based burger",
- *   "price": 12.99,
- *   "category": "food"
+ * "name": "Veggie Burger",
+ * "description": "Delicious plant-based burger",
+ * "price": 12.99,
+ * "category": "food"
  * }
  */
 export async function POST(ctx: BurgerContext) {
-    // Get validated body data - already checked by Zod schema!
-    const { name, description, price, category, isAvailable } = ctx.validated.body;
-    
-    // Create the item (replace with your database insert)
-    const newItem = {
-        id: crypto.randomUUID(), // Generate unique ID
-        name,
-        description: description || null,
-        price,
-        category,
-        isAvailable,
-        createdAt: new Date().toISOString(),
-    };
-    
-    // Return the created item with status 201 (Created)
-    return Response.json({
-        success: true,
-        message: 'Item created successfully',
-        data: newItem,
-    }, { status: 201 });
+ // Get validated body data - already checked by Zod schema!
+ const { name, description, price, category, isAvailable } = ctx.validated.body;
+ 
+ // Create the item (replace with your database insert)
+ const newItem = {
+ id: crypto.randomUUID(), // Generate unique ID
+ name,
+ description: description || null,
+ price,
+ category,
+ isAvailable,
+ createdAt: new Date().toISOString(),
+ };
+ 
+ // Return the created item with status 201 (Created)
+ return Response.json({
+ success: true,
+ message: 'Item created successfully',
+ data: newItem,
+ }, { status: 201 });
 }
 
 /**
@@ -521,25 +520,25 @@ export async function POST(ctx: BurgerContext) {
  * Body: { "name": "Updated Name", "price": 15.99 }
  */
 export async function PUT(ctx: BurgerContext) {
-    // Get the item ID from query parameters
-    const { id } = ctx.validated.query;
-    
-    // Get the fields to update from the request body
-    const updates = ctx.validated.body;
-    
-    // Find and update the item (replace with your database update)
-    // Here we're just simulating an update
-    const updatedItem = {
-        id,
-        ...updates,
-        updatedAt: new Date().toISOString(),
-    };
-    
-    return Response.json({
-        success: true,
-        message: 'Item updated successfully',
-        data: updatedItem,
-    });
+ // Get the item ID from query parameters
+ const { id } = ctx.validated.query;
+ 
+ // Get the fields to update from the request body
+ const updates = ctx.validated.body;
+ 
+ // Find and update the item (replace with your database update)
+ // Here we're just simulating an update
+ const updatedItem = {
+ id,
+ ...updates,
+ updatedAt: new Date().toISOString(),
+ };
+ 
+ return Response.json({
+ success: true,
+ message: 'Item updated successfully',
+ data: updatedItem,
+ });
 }
 
 /**
@@ -548,15 +547,15 @@ export async function PUT(ctx: BurgerContext) {
  * Example: DELETE /api?id=123
  */
 export async function DELETE(ctx: BurgerContext) {
-    // Get the item ID from query parameters
-    const { id } = ctx.validated.query;
-    
-    // Delete the item (replace with your database delete)
-    // Here we're just returning a success message
-    return Response.json({
-        success: true,
-        message: \`Item \${id} deleted successfully\`,
-    });
+ // Get the item ID from query parameters
+ const { id } = ctx.validated.query;
+ 
+ // Delete the item (replace with your database delete)
+ // Here we're just returning a success message
+ return Response.json({
+ success: true,
+ message: \`Item \${id} deleted successfully\`,
+ });
 }
 `;
 }
@@ -568,298 +567,298 @@ export async function DELETE(ctx: BurgerContext) {
  */
 export function generateSampleCss(): string {
     return `
-        :root {
-            --color-primary: hsl(30, 75%, 90%);
-            --color-primary-dark: hsl(30, 75%, 80%);
-            --color-bg: #09090b;
-            --color-surface: hsl(240, 10%, 3.9%);
-            --color-border: hsl(240, 3.7%, 15.9%);
-            --color-success: hsl(120, 50%, 40%);
-            --color-text-muted: hsl(240, 5%, 50%);
-        }
+ :root {
+ --color-primary: hsl(30, 75%, 90%);
+ --color-primary-dark: hsl(30, 75%, 80%);
+ --color-bg: #09090b;
+ --color-surface: hsl(240, 10%, 3.9%);
+ --color-border: hsl(240, 3.7%, 15.9%);
+ --color-success: hsl(120, 50%, 40%);
+ --color-text-muted: hsl(240, 5%, 50%);
+ }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+ * {
+ margin: 0;
+ padding: 0;
+ box-sizing: border-box;
+ }
 
-        body {
-            font-family: 'Poppins', system-ui, sans-serif;
-            min-height: 100vh;
-            background: var(--color-bg);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 60px 20px 40px;
-        }
+ body {
+ font-family: 'Poppins', system-ui, sans-serif;
+ min-height: 100vh;
+ background: var(--color-bg);
+ color: #fff;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ padding: 60px 20px 40px;
+ }
 
-        .hero {
-            text-align: center;
-            max-width: 600px;
-            margin-bottom: 48px;
-        }
+ .hero {
+ text-align: center;
+ max-width: 600px;
+ margin-bottom: 48px;
+ }
 
-        .logo-wrapper {
-            display: flex;
-            flex-wrap: wrap;
-            margin-bottom: 32px;
-        }
+ .logo-wrapper {
+ display: flex;
+ flex-wrap: wrap;
+ margin-bottom: 32px;
+ }
 
-        .logo {
-            width: 80px;
-            height: 80px;
-        }
+ .logo {
+ width: 80px;
+ height: 80px;
+ }
 
-        .logo-text {
-            font-size: 3.5rem;
-            font-weight: 600;
-            color: var(--color-primary);
-        }
+ .logo-text {
+ font-size: 3.5rem;
+ font-weight: 600;
+ color: var(--color-primary);
+ }
 
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: #fff;
-        }
+ h1 {
+ font-size: 2.5rem;
+ font-weight: 600;
+ margin-bottom: 12px;
+ color: #fff;
+ }
 
-        .subtitle {
-            color: var(--color-text-muted);
-            font-size: 1.1rem;
-            margin-bottom: 24px;
-        }
+ .subtitle {
+ color: var(--color-text-muted);
+ font-size: 1.1rem;
+ margin-bottom: 24px;
+ }
 
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: hsla(120, 50%, 40%, 0.1);
-            border: 1px solid hsla(120, 50%, 40%, 0.3);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            color: var(--color-success);
-        }
+ .status {
+ display: inline-flex;
+ align-items: center;
+ gap: 8px;
+ background: hsla(120, 50%, 40%, 0.1);
+ border: 1px solid hsla(120, 50%, 40%, 0.3);
+ padding: 8px 16px;
+ border-radius: 20px;
+ font-size: 0.875rem;
+ color: var(--color-success);
+ }
 
-        .status::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: var(--color-success);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
+ .status::before {
+ content: '';
+ width: 8px;
+ height: 8px;
+ background: var(--color-success);
+ border-radius: 50%;
+ animation: pulse 2s infinite;
+ }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+ @keyframes pulse {
+ 0%, 100% { opacity: 1; }
+ 50% { opacity: 0.5; }
+ }
 
-        /* Edit hint section */
-        .edit-hint {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 12px;
-            padding: 24px 32px;
-            margin-bottom: 48px;
-            max-width: 500px;
-            text-align: center;
-        }
+ /* Edit hint section */
+ .edit-hint {
+ background: var(--color-surface);
+ border: 1px solid var(--color-border);
+ border-radius: 12px;
+ padding: 24px 32px;
+ margin-bottom: 48px;
+ max-width: 500px;
+ text-align: center;
+ }
 
-        .edit-hint p {
-            color: var(--color-text-muted);
-            font-size: 0.95rem;
-            margin-bottom: 8px;
-        }
+ .edit-hint p {
+ color: var(--color-text-muted);
+ font-size: 0.95rem;
+ margin-bottom: 8px;
+ }
 
-        .edit-hint code {
-            color: var(--color-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-        }
+ .edit-hint code {
+ color: var(--color-primary);
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 0.9rem;
+ }
 
-        .edit-hint .hint {
-            font-size: 0.8rem;
-            color: hsl(240, 5%, 40%);
-            margin-top: 12px;
-        }
+ .edit-hint .hint {
+ font-size: 0.8rem;
+ color: hsl(240, 5%, 40%);
+ margin-top: 12px;
+ }
 
-        /* Quick start section */
-        .quick-start {
-            max-width: 500px;
-            width: 100%;
-            margin-bottom: 48px;
-        }
+ /* Quick start section */
+ .quick-start {
+ max-width: 500px;
+ width: 100%;
+ margin-bottom: 48px;
+ }
 
-        .quick-start h2 {
-            font-size: 1rem;
-            font-weight: 500;
-            color: var(--color-text-muted);
-            margin-bottom: 16px;
-            text-align: center;
-        }
+ .quick-start h2 {
+ font-size: 1rem;
+ font-weight: 500;
+ color: var(--color-text-muted);
+ margin-bottom: 16px;
+ text-align: center;
+ }
 
-        .commands {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+ .commands {
+ display: flex;
+ flex-direction: column;
+ gap: 8px;
+ }
 
-        .command {
-            display: flex;
-            align-items: center;
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            transition: border-color 0.2s;
-        }
+ .command {
+ display: flex;
+ align-items: center;
+ background: var(--color-surface);
+ border: 1px solid var(--color-border);
+ border-radius: 8px;
+ padding: 12px 16px;
+ font-family: 'JetBrains Mono', monospace;
+ font-size: 0.85rem;
+ transition: border-color 0.2s;
+ }
 
-        .command:hover {
-            border-color: var(--color-primary-dark);
-        }
+ .command:hover {
+ border-color: var(--color-primary-dark);
+ }
 
-        .command .prefix {
-            color: var(--color-success);
-            margin-right: 8px;
-        }
+ .command .prefix {
+ color: var(--color-success);
+ margin-right: 8px;
+ }
 
-        .command .cmd {
-            color: var(--color-primary);
-        }
+ .command .cmd {
+ color: var(--color-primary);
+ }
 
-        .command .comment {
-            color: var(--color-text-muted);
-            margin-left: auto;
-            font-size: 0.75rem;
-        }
+ .command .comment {
+ color: var(--color-text-muted);
+ margin-left: auto;
+ font-size: 0.75rem;
+ }
 
-        /* Links section */
-        .links {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 48px;
-        }
+ /* Links section */
+ .links {
+ display: flex;
+ gap: 12px;
+ justify-content: center;
+ flex-wrap: wrap;
+ margin-bottom: 48px;
+ }
 
-        .link {
-            color: var(--color-text-muted);
-            text-decoration: none;
-            font-size: 0.9rem;
-            padding: 10px 20px;
-            border: 1px solid var(--color-border);
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
+ .link {
+ color: var(--color-text-muted);
+ text-decoration: none;
+ font-size: 0.9rem;
+ padding: 10px 20px;
+ border: 1px solid var(--color-border);
+ border-radius: 8px;
+ transition: all 0.2s;
+ }
 
-        .link:hover {
-            color: var(--color-primary);
-            border-color: var(--color-primary-dark);
-            background: var(--color-surface);
-        }
+ .link:hover {
+ color: var(--color-primary);
+ border-color: var(--color-primary-dark);
+ background: var(--color-surface);
+ }
 
-        .link.primary {
-            background: var(--color-primary);
-            border-color: var(--color-primary);
-            color: #000;
-        }
+ .link.primary {
+ background: var(--color-primary);
+ border-color: var(--color-primary);
+ color: #000;
+ }
 
-        .link.primary:hover {
-            background: var(--color-primary-dark);
-            border-color: var(--color-primary-dark);
-        }
+ .link.primary:hover {
+ background: var(--color-primary-dark);
+ border-color: var(--color-primary-dark);
+ }
 
-        /* Documentation links */
-        .docs-links {
-            display: flex;
-            gap: 32px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 48px;
-            padding-top: 32px;
-            border-top: 1px solid var(--color-border);
-            max-width: 600px;
-            width: 100%;
-        }
+ /* Documentation links */
+ .docs-links {
+ display: flex;
+ gap: 32px;
+ justify-content: center;
+ flex-wrap: wrap;
+ margin-bottom: 48px;
+ padding-top: 32px;
+ border-top: 1px solid var(--color-border);
+ max-width: 600px;
+ width: 100%;
+ }
 
-        .docs-section h3 {
-            font-size: 0.8rem;
-            font-weight: 500;
-            color: var(--color-text-muted);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+ .docs-section h3 {
+ font-size: 0.8rem;
+ font-weight: 500;
+ color: var(--color-text-muted);
+ margin-bottom: 12px;
+ text-transform: uppercase;
+ letter-spacing: 0.5px;
+ }
 
-        .docs-section a {
-            display: block;
-            color: hsl(240, 5%, 60%);
-            text-decoration: none;
-            font-size: 0.85rem;
-            padding: 4px 0;
-            transition: color 0.2s;
-        }
+ .docs-section a {
+ display: block;
+ color: hsl(240, 5%, 60%);
+ text-decoration: none;
+ font-size: 0.85rem;
+ padding: 4px 0;
+ transition: color 0.2s;
+ }
 
-        .docs-section a:hover {
-            color: var(--color-primary);
-        }
+ .docs-section a:hover {
+ color: var(--color-primary);
+ }
 
-        /* Footer */
-        .footer {
-            margin-top: auto;
-            text-align: center;
-            padding-top: 32px;
-        }
+ /* Footer */
+ .footer {
+ margin-top: auto;
+ text-align: center;
+ padding-top: 32px;
+ }
 
-        .version {
-            font-size: 0.75rem;
-            color: hsl(240, 5%, 35%);
-            margin-bottom: 16px;
-        }
+ .version {
+ font-size: 0.75rem;
+ color: hsl(240, 5%, 35%);
+ margin-bottom: 16px;
+ }
 
-        .social-links {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            margin-bottom: 16px;
-        }
+ .social-links {
+ display: flex;
+ gap: 16px;
+ justify-content: center;
+ margin-bottom: 16px;
+ }
 
-        .social-links a {
-            color: var(--color-text-muted);
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: color 0.2s;
-        }
+ .social-links a {
+ color: var(--color-text-muted);
+ text-decoration: none;
+ font-size: 0.85rem;
+ transition: color 0.2s;
+ }
 
-        .social-links a:hover {
-            color: var(--color-primary);
-        }
+ .social-links a:hover {
+ color: var(--color-primary);
+ }
 
-        .powered-by {
-            color: hsl(240, 5%, 35%);
-            font-size: 0.8rem;
-        }
+ .powered-by {
+ color: hsl(240, 5%, 35%);
+ font-size: 0.8rem;
+ }
 
-        .powered-by a {
-            color: var(--color-primary-dark);
-            text-decoration: none;
-        }
+ .powered-by a {
+ color: var(--color-primary-dark);
+ text-decoration: none;
+ }
 
-        .powered-by a:hover {
-            color: var(--color-primary);
-        }
+ .powered-by a:hover {
+ color: var(--color-primary);
+ }
 
-        @media (max-width: 600px) {
-            h1 { font-size: 2rem; }
-            .docs-links { flex-direction: column; gap: 24px; text-align: center; }
-            .command .comment { display: none; }
-        }
-    `;
+ @media (max-width: 600px) {
+ h1 { font-size: 2rem; }
+ .docs-links { flex-direction: column; gap: 24px; text-align: center; }
+ .command .comment { display: none; }
+ }
+ `;
 }
 
 /**
@@ -908,7 +907,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
     const editHintParagraphs = options.useApi
         ? `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>
-        <p>Edit <code>${apiHintPath}</code> and save to reload the API endpoint.</p>`
+ <p>Edit <code>${apiHintPath}</code> and save to reload the API endpoint.</p>`
         : `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>`;
 
     const tryApiLink = options.useApi
@@ -918,93 +917,93 @@ export function generateIndexPage(options: CreateOptions): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(projectName)}</title>
-    <link rel="icon" type="image/png" href="https://burger-api.com/img/logo.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
-    <!-- Assets: Styles -->
-    <link rel="stylesheet" href="./assets/css/style.css" />
-    <!-- Assets: Scripts -->
-    <script src="./assets/js/app.js" type="module"></script>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>${escapeHtml(projectName)}</title>
+ <link rel="icon" type="image/png" href="https://burger-api.com/img/logo.png">
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+ <!-- Assets: Styles -->
+ <link rel="stylesheet" href="./assets/css/style.css" />
+ <!-- Assets: Scripts -->
+ <script src="./assets/js/app.js" type="module"></script>
 </head>
 <body>
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="logo-wrapper">
-            <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI Logo" class="logo">
-            <span class="logo-text">BurgerAPI</span>
-        </div>
-        <p class="subtitle">Your Project ${escapeHtml(projectName)} is ready</p>
-        <div class="status">Server running</div>
-    </section>
+ <!-- Hero Section -->
+ <section class="hero">
+ <div class="logo-wrapper">
+ <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI Logo" class="logo">
+ <span class="logo-text">BurgerAPI</span>
+ </div>
+ <p class="subtitle">Your Project ${escapeHtml(projectName)} is ready</p>
+ <div class="status">Server running</div>
+ </section>
 
-    <!-- Edit Hint -->
-    <div class="edit-hint">
-        ${editHintParagraphs}
-        <p class="hint">Your changes will automatically refresh the server.</p>
-    </div>
+ <!-- Edit Hint -->
+ <div class="edit-hint">
+ ${editHintParagraphs}
+ <p class="hint">Your changes will automatically refresh the server.</p>
+ </div>
 
-    <!-- Quick Start Commands -->
-    <section class="quick-start">
-        <h2>Quick Start</h2>
-        <div class="commands">
-            <div class="command">
-                <span class="prefix">$</span>
-                <span class="cmd">burger-api add cors logger</span>
-                <span class="comment"># Add middleware</span>
-            </div>
-            <div class="command">
-                <span class="prefix">$</span>
-                <span class="cmd">burger-api build src/index.ts</span>
-                <span class="comment"># Build for production</span>
-            </div>
-        </div>
-    </section>
+ <!-- Quick Start Commands -->
+ <section class="quick-start">
+ <h2>Quick Start</h2>
+ <div class="commands">
+ <div class="command">
+ <span class="prefix">$</span>
+ <span class="cmd">burger-api add cors logger</span>
+ <span class="comment"># Add middleware</span>
+ </div>
+ <div class="command">
+ <span class="prefix">$</span>
+ <span class="cmd">burger-api build src/index.ts</span>
+ <span class="comment"># Build for production</span>
+ </div>
+ </div>
+ </section>
 
-    <!-- Action Links -->
-    <div class="links">
-        <a href="/docs" class="link primary">API Docs</a>
-        ${tryApiLink}
-        <a href="/openapi.json" class="link">OpenAPI</a>
-    </div>
+ <!-- Action Links -->
+ <div class="links">
+ <a href="/docs" class="link primary">API Docs</a>
+ ${tryApiLink}
+ <a href="/openapi.json" class="link">OpenAPI</a>
+ </div>
 
-    <!-- Documentation Links -->
-    <div class="docs-links">
-        <div class="docs-section">
-            <h3>Documentation</h3>
-            <a href="https://burger-api.com/docs" target="_blank">Getting Started</a>
-            <a href="https://burger-api.com/docs/core/configuration" target="_blank">Configuration</a>
-            <a href="https://burger-api.com/docs/request-handling/middleware" target="_blank">Middleware</a>
-        </div>
-        <div class="docs-section">
-            <h3>Resources</h3>
-            <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
-            <a href="https://github.com/isfhan/burger-api/issues" target="_blank">Report Issue</a>
-            <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM Package</a>
-        </div>
-        <div class="docs-section">
-            <h3>Community</h3>
-            <a href="https://github.com/isfhan/burger-api" target="_blank">Contribute</a>
-            <a href="https://github.com/isfhan/burger-api/discussions" target="_blank">Discussions</a>
-            <a href="https://github.com/isfhan/burger-api/stargazers" target="_blank">Star on GitHub</a>
-        </div>
-    </div>
+ <!-- Documentation Links -->
+ <div class="docs-links">
+ <div class="docs-section">
+ <h3>Documentation</h3>
+ <a href="https://burger-api.com/docs" target="_blank">Getting Started</a>
+ <a href="https://burger-api.com/docs/core/configuration" target="_blank">Configuration</a>
+ <a href="https://burger-api.com/docs/request-handling/middleware" target="_blank">Middleware</a>
+ </div>
+ <div class="docs-section">
+ <h3>Resources</h3>
+ <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
+ <a href="https://github.com/isfhan/burger-api/issues" target="_blank">Report Issue</a>
+ <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM Package</a>
+ </div>
+ <div class="docs-section">
+ <h3>Community</h3>
+ <a href="https://github.com/isfhan/burger-api" target="_blank">Contribute</a>
+ <a href="https://github.com/isfhan/burger-api/discussions" target="_blank">Discussions</a>
+ <a href="https://github.com/isfhan/burger-api/stargazers" target="_blank">Star on GitHub</a>
+ </div>
+ </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="version">BurgerAPI v0.10.0 • Bun v1.3+</div>
-        <div class="social-links">
-            <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
-            <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
-            <a href="https://burger-api.com" target="_blank">Website</a>
-        </div>
-        <p class="powered-by">
-            Built with ❤️ using <a href="https://burger-api.com">BurgerAPI</a>
-        </p>
-    </footer>
+ <!-- Footer -->
+ <footer class="footer">
+ <div class="version">BurgerAPI v0.10.0 • Bun v1.3+</div>
+ <div class="social-links">
+ <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
+ <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
+ <a href="https://burger-api.com" target="_blank">Website</a>
+ </div>
+ <p class="powered-by">
+ Built with ❤️ using <a href="https://burger-api.com">BurgerAPI</a>
+ </p>
+ </footer>
 </body>
 </html>
 `;
@@ -1016,6 +1015,34 @@ export function generateIndexPage(options: CreateOptions): string {
  *
  * @returns hooks/index.ts content as a string
  */
+export function generateHooksFile(): string {
+    return `/**
+ * Global lifecycle hooks — apply to every request.
+ * Hook points: onRequest, transform, beforeRoute, afterRoute, mapResponse, onError
+ */
+
+// export const beforeRoute = [];
+`;
+}
+
+export function generatePluginsFile(): string {
+    return `import type { Burger } from 'burger-api';
+
+export default (burger: Burger) => {
+ // burger.usePlugin(myPlugin);
+};
+`;
+}
+
+export function generateProvidersFile(): string {
+    return `import type { Burger } from 'burger-api';
+
+export default (burger: Burger) => {
+ // burger.provide('db', myDatabase);
+};
+`;
+}
+
 export function generateMiddlewareIndex(): string {
     return `/**
  * Route Hooks
@@ -1026,8 +1053,8 @@ export function generateMiddlewareIndex(): string {
  * import { logger } from './logger/logger';
  * 
  * export const beforeRoute = [
- *     logger(),
- *     cors(),
+ * logger(),
+ * cors(),
  * ];
  */
 
@@ -1048,23 +1075,31 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     lines.push("import type { OpenAPIConfig } from 'burger-api';");
     lines.push('');
     lines.push('export default {');
-    lines.push(`    title: '${options.name || 'Burger API'}',`);
-    lines.push(`    description: '${options.name || 'Burger API'} documentation',`);
-    lines.push(`    version: '1.0.0',`);
+    lines.push(` title: '${options.name || 'Burger API'}',`);
+    lines.push(
+        ` description: '${options.name || 'Burger API'} documentation',`
+    );
+    lines.push(` version: '1.0.0',`);
     lines.push('');
-    lines.push('    servers: [');
-    lines.push('        { url: "http://localhost:3000", description: "Development" },');
-    lines.push('    ],');
+    lines.push(' servers: [');
+    lines.push(
+        ' { url: "http://localhost:3000", description: "Development" },'
+    );
+    lines.push(' ],');
     lines.push('');
-    lines.push('    // Uncomment to protect docs with basic auth:');
-    lines.push('    // docsAuth: { username: "admin", password: "changeme" },');
+    lines.push(' // Uncomment to protect docs with basic auth:');
+    lines.push(' // docsAuth: { username: "admin", password: "changeme" },');
     lines.push('');
-    lines.push('    // Uncomment to use Swagger UI instead of Scalar:');
-    lines.push("    // import { swaggerDocs } from 'burger-api';");
-    lines.push('    // provider: swaggerDocs(),');
+    lines.push(' // Uncomment to use Swagger UI instead of Scalar:');
+    lines.push(" // import { swaggerDocs } from 'burger-api';");
+    lines.push(' // provider: swaggerDocs(),');
     lines.push('');
-    lines.push('    // Uncomment to add JSON Schema conversion for custom validation libraries:');
-    lines.push('    // mapJsonSchema: { date: (schema) => ({ type: "string", format: "date-time" }) },');
+    lines.push(
+        ' // Uncomment to add JSON Schema conversion for custom validation libraries:'
+    );
+    lines.push(
+        ' // mapJsonSchema: { date: (schema) => ({ type: "string", format: "date-time" }) },'
+    );
     lines.push('} satisfies OpenAPIConfig;');
     lines.push('');
 
@@ -1113,10 +1148,31 @@ export async function createProject(
             generateOpenAPIConfig(options)
         );
 
+        await Bun.write(
+            join(targetDir, 'src', 'hooks.ts'),
+            generateHooksFile()
+        );
+        await Bun.write(
+            join(targetDir, 'src', 'plugins.ts'),
+            generatePluginsFile()
+        );
+        await Bun.write(
+            join(targetDir, 'src', 'providers.ts'),
+            generateProvidersFile()
+        );
+
         // Create API directory and files if requested
         if (options.useApi) {
             const apiDir = join(targetDir, 'src', options.apiDir || 'api');
-            await Bun.write(join(apiDir, 'route.ts'), generateApiRoute());
+            const routeFiles = generateRouteFiles('hello', {
+                schema: true,
+                openapi: true,
+                hooks: false,
+                config: false,
+            });
+            for (const [name, content] of Object.entries(routeFiles)) {
+                await Bun.write(join(apiDir, name), content);
+            }
         }
 
         // Create Pages directory and files if requested
@@ -1151,11 +1207,18 @@ export async function createProject(
 
         // Download AI agent skills if requested
         if (options.addSkills) {
-            const skillTarget = join(targetDir, '.agents', 'skills', 'burger-api');
+            const skillTarget = join(
+                targetDir,
+                '.agents',
+                'skills',
+                'burger-api'
+            );
             try {
                 await downloadSkill('burger-api', skillTarget);
             } catch (err) {
-                console.warn(`Warning: Could not download AI agent skills: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                console.warn(
+                    `Warning: Could not download AI agent skills: ${err instanceof Error ? err.message : 'Unknown error'}`
+                );
             }
         }
 
@@ -1208,7 +1271,7 @@ export async function installDependencies(projectDir: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────
-// Generate command templates (Phase 7)
+// Generate command templates
 // ─────────────────────────────────────────────────────
 
 export interface GenerateRouteOptions {
@@ -1232,7 +1295,7 @@ export function generateRouteFiles(
         "import type { BurgerContext } from 'burger-api';",
         '',
         'export async function GET(ctx: BurgerContext): Promise<Response> {',
-        '    return Response.json({ ok: true });',
+        ' return Response.json({ ok: true });',
         '}',
         '',
     ].join('\n');
@@ -1242,7 +1305,7 @@ export function generateRouteFiles(
             "import { z } from 'zod/v4';",
             '',
             'export const GET = {',
-            '    query: z.object({}),',
+            ' query: z.object({}),',
             '};',
             '',
         ].join('\n');
@@ -1251,8 +1314,8 @@ export function generateRouteFiles(
     if (options.openapi !== false) {
         files['openapi.ts'] = [
             `export const GET = {`,
-            `    summary: '${routeName} endpoint',`,
-            `    tags: ['${routeName}'],`,
+            ` summary: '${routeName} endpoint',`,
+            ` tags: ['${routeName}'],`,
             `};`,
             '',
         ].join('\n');
@@ -1263,7 +1326,7 @@ export function generateRouteFiles(
             "import type { BurgerContext } from 'burger-api';",
             '',
             'export async function beforeRoute(ctx: BurgerContext) {',
-            '    // Route-level hook',
+            ' // Route-level hook',
             '}',
             '',
         ].join('\n');
@@ -1272,7 +1335,7 @@ export function generateRouteFiles(
     if (options.config !== false) {
         files['config.ts'] = [
             'export default {',
-            '    auth: false,',
+            ' auth: false,',
             '};',
             '',
         ].join('\n');
@@ -1291,9 +1354,9 @@ export function generateHookTemplate(hookName: string): string {
         ` * Import and register in src/hooks.ts.`,
         ` */`,
         `export function ${hookName}() {`,
-        `    return async (ctx: import('burger-api').BurgerContext) => {`,
-        `        // hook logic`,
-        `    };`,
+        ` return async (ctx: import('burger-api').BurgerContext) => {`,
+        ` // hook logic`,
+        ` };`,
         `}`,
         '',
     ].join('\n');
@@ -1307,22 +1370,22 @@ export function generatePluginTemplate(pluginName: string): string {
     return [
         `/**`,
         ` * ${className} plugin.`,
-         ` * Import and register in src/plugins.ts via burger.usePlugin().`,
+        ` * Import and register in src/plugins.ts via burger.usePlugin().`,
         ` */`,
         `import type { Plugin } from 'burger-api';`,
         ``,
         `export const ${className}: Plugin = {`,
-        `    name: '${pluginName}',`,
-        `    hooks: {`,
-        `        // transform, beforeRoute, afterRoute, etc.`,
-        `    },`,
+        ` name: '${pluginName}',`,
+        ` hooks: {`,
+        ` // transform, beforeRoute, afterRoute, etc.`,
+        ` },`,
         `};`,
         '',
     ].join('\n');
 }
 
 // ─────────────────────────────────────────────────────
-// Generate WebSocket templates (Phase 9)
+// Generate WebSocket templates
 // ─────────────────────────────────────────────────────
 
 export interface GenerateWsOptions {
@@ -1344,17 +1407,17 @@ export function generateWsFiles(
         "import type { BurgerWS } from 'burger-api';",
         '',
         'export function open(ws: BurgerWS) {',
-        '    // Handle new connection',
-        '    ws.send(JSON.stringify({ type: "connected" }));',
+        ' // Handle new connection',
+        ' ws.send(JSON.stringify({ type: "connected" }));',
         '}',
         '',
         'export function message(ws: BurgerWS, message: string | Buffer) {',
-        '    // Handle incoming message',
-        '    // ws.send(message); // echo back',
+        ' // Handle incoming message',
+        ' // ws.send(message); // echo back',
         '}',
         '',
         'export function close(ws: BurgerWS, code: number, reason: string) {',
-        '    // Handle connection close',
+        ' // Handle connection close',
         '}',
         '',
     ].join('\n');
@@ -1364,15 +1427,15 @@ export function generateWsFiles(
             "import type { BurgerWS } from 'burger-api';",
             '',
             'export function onOpen(ws: BurgerWS) {',
-            '    // Runs before open handler',
+            ' // Runs before open handler',
             '}',
             '',
             'export function onMessage(ws: BurgerWS, message: string | Buffer) {',
-            '    // Runs before message handler',
+            ' // Runs before message handler',
             '}',
             '',
             'export function onClose(ws: BurgerWS, code: number, reason: string) {',
-            '    // Runs before close handler',
+            ' // Runs before close handler',
             '}',
             '',
         ].join('\n');
@@ -1381,8 +1444,8 @@ export function generateWsFiles(
     if (options.config !== false) {
         files['config.ts'] = [
             'export default {',
-            '    maxPayloadLength: 1024 * 1024, // 1MB',
-            '    idleTimeout: 30,',
+            ' maxPayloadLength: 1024 * 1024, // 1MB',
+            ' idleTimeout: 30,',
             '};',
             '',
         ].join('\n');

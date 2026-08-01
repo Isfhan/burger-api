@@ -10,7 +10,11 @@ import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { resolveBuildConfig } from '../utils/config';
-import { scanApiRoutes, scanPageRoutes, scanWebSocketRoutes } from '../utils/scanner';
+import {
+    scanApiRoutes,
+    scanPageRoutes,
+    scanWebSocketRoutes,
+} from '../utils/scanner';
 import { detectExportedHookNames } from '../utils/route-methods';
 import {
     success,
@@ -72,16 +76,24 @@ export const inspectCommand = new Command('inspect')
         // Config summary
         newline();
         header('Config');
-        bullet(`apiDir:     ${config.apiDir}`);
-        bullet(`pageDir:    ${config.pageDir}`);
-        bullet(`apiPrefix:  ${config.apiPrefix}`);
+        bullet(`apiDir: ${config.apiDir}`);
+        bullet(`pageDir: ${config.pageDir}`);
+        bullet(`apiPrefix: ${config.apiPrefix}`);
         bullet(`pagePrefix: ${config.pagePrefix}`);
-        bullet(`wsDir:      ${config.wsDir}`);
-        bullet(`debug:      ${config.debug}`);
+        bullet(`wsDir: ${config.wsDir}`);
+        bullet(`debug: ${config.debug}`);
 
         // Scan routes
-        const apiEntries = await scanApiRoutes(cwd, config.apiDir, config.apiPrefix);
-        const pageEntries = await scanPageRoutes(cwd, config.pageDir, config.pagePrefix);
+        const apiEntries = await scanApiRoutes(
+            cwd,
+            config.apiDir,
+            config.apiPrefix
+        );
+        const pageEntries = await scanPageRoutes(
+            cwd,
+            config.pageDir,
+            config.pagePrefix
+        );
         const wsEntries = config.wsDir
             ? await scanWebSocketRoutes(cwd, config.wsDir)
             : [];
@@ -90,13 +102,24 @@ export const inspectCommand = new Command('inspect')
         newline();
         header(`API Routes (${apiEntries.length})`);
         if (apiEntries.length === 0) {
-            info('  No API routes found.');
+            info(' No API routes found.');
         } else {
             for (const entry of apiEntries) {
-                const methods = entry.methods ?? ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
+                const methods = entry.methods ?? [
+                    'GET',
+                    'POST',
+                    'PUT',
+                    'DELETE',
+                    'PATCH',
+                    'HEAD',
+                ];
                 const methodStr = methods.join(', ');
-                const relativePath = entry.importPath.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
-                bullet(`${highlight(methodStr.padEnd(30))} ${entry.routePath}  ${dimText(relativePath)}`);
+                const relativePath = entry.importPath
+                    .replace(cwd.replace(/\\/g, '/'), '.')
+                    .replace(/\\/g, '/');
+                bullet(
+                    `${highlight(methodStr.padEnd(30))} ${entry.routePath} ${dimText(relativePath)}`
+                );
             }
         }
 
@@ -104,11 +127,15 @@ export const inspectCommand = new Command('inspect')
         newline();
         header(`Page Routes (${pageEntries.length})`);
         if (pageEntries.length === 0) {
-            info('  No page routes found.');
+            info(' No page routes found.');
         } else {
             for (const entry of pageEntries) {
-                const relativePath = entry.importPath.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
-                bullet(`${highlight('GET'.padEnd(30))} ${entry.routePath}  ${dimText(relativePath)}`);
+                const relativePath = entry.importPath
+                    .replace(cwd.replace(/\\/g, '/'), '.')
+                    .replace(/\\/g, '/');
+                bullet(
+                    `${highlight('GET'.padEnd(30))} ${entry.routePath} ${dimText(relativePath)}`
+                );
             }
         }
 
@@ -116,15 +143,20 @@ export const inspectCommand = new Command('inspect')
         newline();
         header(`WebSocket Routes (${wsEntries.length})`);
         if (wsEntries.length === 0) {
-            info('  No WebSocket routes found.');
+            info(' No WebSocket routes found.');
         } else {
             for (const entry of wsEntries) {
-                const relativePath = entry.importPath.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
+                const relativePath = entry.importPath
+                    .replace(cwd.replace(/\\/g, '/'), '.')
+                    .replace(/\\/g, '/');
                 const features: string[] = [];
                 if (entry.hooksPath) features.push('hooks');
                 if (entry.configPath) features.push('config');
-                const featureStr = features.length > 0 ? ` [${features.join(', ')}]` : '';
-                bullet(`${highlight('WS'.padEnd(30))} ${entry.routePath}  ${dimText(relativePath + featureStr)}`);
+                const featureStr =
+                    features.length > 0 ? ` [${features.join(', ')}]` : '';
+                bullet(
+                    `${highlight('WS'.padEnd(30))} ${entry.routePath} ${dimText(relativePath + featureStr)}`
+                );
             }
         }
 
@@ -135,15 +167,17 @@ export const inspectCommand = new Command('inspect')
         if (globalHooks.length > 0) {
             bullet(`Global: src/hooks.ts ( ${globalHooks.join(', ')} )`);
         } else {
-            info('  Global: src/hooks.ts not found or no hooks exported.');
+            info(' Global: src/hooks.ts not found or no hooks exported.');
         }
 
         // Route hooks
         const routesWithHooks = apiEntries.filter((e) => e.hooksPath);
         if (routesWithHooks.length > 0) {
             for (const entry of routesWithHooks) {
-                const relativePath = entry.hooksPath!.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
-                bullet(`Route:  ${entry.routePath}  ${dimText(relativePath)}`);
+                const relativePath = entry
+                    .hooksPath!.replace(cwd.replace(/\\/g, '/'), '.')
+                    .replace(/\\/g, '/');
+                bullet(`Route: ${entry.routePath} ${dimText(relativePath)}`);
             }
         }
 
@@ -153,7 +187,7 @@ export const inspectCommand = new Command('inspect')
         if (hasPluginsFile(cwd)) {
             bullet('src/plugins.ts found');
         } else {
-            info('  No src/plugins.ts found.');
+            info(' No src/plugins.ts found.');
         }
 
         // Convention file stats
@@ -165,10 +199,10 @@ export const inspectCommand = new Command('inspect')
             const withOpenapi = countConventionFiles(apiEntries, 'openapi.ts');
             const withConfig = countConventionFiles(apiEntries, 'config.ts');
             const withHooks = countConventionFiles(apiEntries, 'hooks.ts');
-            bullet(`schema.ts:   ${withSchema}/${total} routes`);
-            bullet(`openapi.ts:  ${withOpenapi}/${total} routes`);
-            bullet(`config.ts:   ${withConfig}/${total} routes`);
-            bullet(`hooks.ts:    ${withHooks}/${total} routes`);
+            bullet(`schema.ts: ${withSchema}/${total} routes`);
+            bullet(`openapi.ts: ${withOpenapi}/${total} routes`);
+            bullet(`config.ts: ${withConfig}/${total} routes`);
+            bullet(`hooks.ts: ${withHooks}/${total} routes`);
         }
 
         newline();

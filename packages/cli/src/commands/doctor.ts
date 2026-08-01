@@ -58,11 +58,15 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
             check(
                 'burger-api installed',
                 !!depVersion,
-                depVersion ? `Found (${depVersion})` : 'Not found in dependencies'
+                depVersion
+                    ? `Found (${depVersion})`
+                    : 'Not found in dependencies'
             )
         );
     } catch {
-        results.push(check('burger-api installed', false, 'Could not read package.json'));
+        results.push(
+            check('burger-api installed', false, 'Could not read package.json')
+        );
     }
 
     // 3. burger.build.ts
@@ -95,7 +99,11 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
     // 6. Route files
     if (hasApiDir) {
         const config = await resolveBuildConfig(cwd);
-        const routes = await scanApiRoutes(cwd, config.apiDir, config.apiPrefix);
+        const routes = await scanApiRoutes(
+            cwd,
+            config.apiDir,
+            config.apiPrefix
+        );
         results.push(
             check(
                 'route.ts files',
@@ -175,12 +183,12 @@ export const doctorCommand = new Command('doctor')
             if (result.pass) {
                 success(`✓ ${result.name}`);
                 if (result.message !== 'Found') {
-                    info(`  ${result.message}`);
+                    info(` ${result.message}`);
                 }
             } else {
                 errorCount++;
                 logError(`✗ ${result.name}`);
-                info(`  ${result.message}`);
+                info(` ${result.message}`);
             }
         }
 

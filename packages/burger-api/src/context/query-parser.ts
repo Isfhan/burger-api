@@ -5,7 +5,7 @@
  * previously used in the validator. It performs a single linear scan of the
  * raw query string and never constructs a `URL` or `URLSearchParams`.
  *
- * Behavior matches `URLSearchParams` parity (ROADMAP-phase2.md §5.2: "match
+ * Behavior matches `URLSearchParams` parity (: "match
  * `URLSearchParams` parity so the existing validator behavior is preserved
  * exactly"), which includes the `application/x-www-form-urlencoded` rule that
  * `+` decodes to a space. Malformed percent-encoding is preserved verbatim and
@@ -38,13 +38,11 @@ function safeDecode(segment: string): string {
  * - A segment without `=` is a valueless key → `""`.
  * - A repeated key becomes an array of its values, in order.
  * - Every key and value is run through `decodeURIComponent`; `+` is normalized
- *   to a space first (form-encoding parity with `URLSearchParams`).
+ * to a space first (form-encoding parity with `URLSearchParams`).
  * - The `[]` suffix is treated literally (not as an array hint).
  * - Malformed percent-escapes are preserved verbatim; the parser never throws.
  */
-export function parseQuery(
-    search: string
-): Record<string, string | string[]> {
+export function parseQuery(search: string): Record<string, string | string[]> {
     const result: Record<string, string | string[]> = {};
 
     // Tolerate a leading '?'.

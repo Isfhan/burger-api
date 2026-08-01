@@ -9,7 +9,10 @@
 import { readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
-import { detectExportedMethods, detectExportedHookNames } from './route-methods';
+import {
+    detectExportedMethods,
+    detectExportedHookNames,
+} from './route-methods';
 import { ROUTE_CONSTANTS } from './route-conventions';
 import {
     filePathToApiRoutePath,
@@ -24,13 +27,13 @@ export interface ApiRouteScanEntry {
     isWildcard: boolean;
     /** HTTP methods exported by the route module (set by method detection; omit = emit all) */
     methods?: string[];
-    /** Absolute import path of a sibling `hooks.ts`, if the route declares lifecycle hooks (Phase 4). */
+    /** Absolute import path of a sibling `hooks.ts`, if the route declares lifecycle hooks. */
     hooksPath?: string;
-    /** Absolute import path of a sibling `schema.ts`, if present (Phase 4). */
+    /** Absolute import path of a sibling `schema.ts`, if present. */
     schemaPath?: string;
-    /** Absolute import path of a sibling `openapi.ts`, if present (Phase 4). */
+    /** Absolute import path of a sibling `openapi.ts`, if present. */
     openapiPath?: string;
-    /** Absolute import path of a sibling `config.ts`, if present (Phase 4). */
+    /** Absolute import path of a sibling `config.ts`, if present. */
     configPath?: string;
 }
 
@@ -132,17 +135,15 @@ async function scanApiDir(
                 scanEntry.methods = methods;
             }
             // Capture a sibling `hooks.ts` so the build entry can wire
-            // lifecycle hooks (Phase 4). Only when it actually exports hooks.
+            // lifecycle hooks. Only when it actually exports hooks.
             const hooksFile = path.join(dir, 'hooks.ts');
             if (existsSync(hooksFile)) {
                 const hookNames = await detectExportedHookNames(hooksFile);
                 if (hookNames) {
-                    scanEntry.hooksPath = hooksFile
-                        .split(path.sep)
-                        .join('/');
+                    scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
                 }
             }
-            // Capture sibling convention files for build entry merging (Phase 4)
+            // Capture sibling convention files for build entry merging
             const schemaFile = path.join(dir, 'schema.ts');
             if (existsSync(schemaFile)) {
                 scanEntry.schemaPath = schemaFile.split(path.sep).join('/');
@@ -223,7 +224,7 @@ async function scanPageDir(
 }
 
 // ─────────────────────────────────────────────────────
-// WebSocket route scanner (Phase 9)
+// WebSocket route scanner
 // ─────────────────────────────────────────────────────
 
 export interface WebSocketRouteScanEntry {

@@ -1,16 +1,22 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { WebSocketAdapter } from '../../src/ws/adapter';
 import { WebSocketRouter } from '../../src/ws/router';
-import type { CompiledWebSocketRoute, WebSocketConfig } from '../../src/ws/types';
+import type {
+    CompiledWebSocketRoute,
+    WebSocketConfig,
+} from '../../src/ws/types';
 
-describe('WebSocketAdapter (Phase 9)', () => {
+describe('WebSocketAdapter', () => {
     let router: WebSocketRouter;
 
     beforeEach(() => {
         router = new WebSocketRouter();
     });
 
-    const createRoute = (path: string, overrides: Partial<CompiledWebSocketRoute> = {}): CompiledWebSocketRoute => ({
+    const createRoute = (
+        path: string,
+        overrides: Partial<CompiledWebSocketRoute> = {}
+    ): CompiledWebSocketRoute => ({
         path,
         handlers: {},
         config: {},
@@ -131,7 +137,9 @@ describe('WebSocketAdapter (Phase 9)', () => {
         let openCalled = false;
         const route = createRoute('/chat', {
             handlers: {
-                open: (ws) => { openCalled = true; },
+                open: (ws) => {
+                    openCalled = true;
+                },
             },
         });
         router.addRoute(route);
@@ -157,7 +165,9 @@ describe('WebSocketAdapter (Phase 9)', () => {
         let receivedMessage: any = null;
         const route = createRoute('/chat', {
             handlers: {
-                message: (ws, msg) => { receivedMessage = msg; },
+                message: (ws, msg) => {
+                    receivedMessage = msg;
+                },
             },
         });
         router.addRoute(route);
@@ -214,12 +224,20 @@ describe('WebSocketAdapter (Phase 9)', () => {
         const callOrder: string[] = [];
         const route = createRoute('/chat', {
             handlers: {
-                open: (ws) => { callOrder.push('handler.open'); },
-                message: (ws, msg) => { callOrder.push('handler.message'); },
+                open: (ws) => {
+                    callOrder.push('handler.open');
+                },
+                message: (ws, msg) => {
+                    callOrder.push('handler.message');
+                },
             },
             hooks: {
-                onOpen: (ws) => { callOrder.push('hook.onOpen'); },
-                onMessage: (ws, msg) => { callOrder.push('hook.onMessage'); },
+                onOpen: (ws) => {
+                    callOrder.push('hook.onOpen');
+                },
+                onMessage: (ws, msg) => {
+                    callOrder.push('hook.onMessage');
+                },
             },
         });
         router.addRoute(route);
@@ -239,7 +257,12 @@ describe('WebSocketAdapter (Phase 9)', () => {
         wsOption.open(mockWs);
         wsOption.message(mockWs, 'hello');
 
-        expect(callOrder).toEqual(['hook.onOpen', 'handler.open', 'hook.onMessage', 'handler.message']);
+        expect(callOrder).toEqual([
+            'hook.onOpen',
+            'handler.open',
+            'hook.onMessage',
+            'handler.message',
+        ]);
     });
 
     it('should handle errors in hooks gracefully', () => {
@@ -248,7 +271,9 @@ describe('WebSocketAdapter (Phase 9)', () => {
                 open: (ws) => {},
             },
             hooks: {
-                onOpen: (ws) => { throw new Error('Hook error'); },
+                onOpen: (ws) => {
+                    throw new Error('Hook error');
+                },
             },
         });
         router.addRoute(route);
@@ -272,7 +297,9 @@ describe('WebSocketAdapter (Phase 9)', () => {
     it('should handle errors in handlers gracefully', () => {
         const route = createRoute('/chat', {
             handlers: {
-                open: (ws) => { throw new Error('Handler error'); },
+                open: (ws) => {
+                    throw new Error('Handler error');
+                },
             },
         });
         router.addRoute(route);
@@ -316,7 +343,9 @@ describe('WebSocketAdapter (Phase 9)', () => {
         let sentMessage: any = null;
         const route = createRoute('/chat', {
             handlers: {
-                open: (ws) => { ws.send('test'); },
+                open: (ws) => {
+                    ws.send('test');
+                },
             },
         });
         router.addRoute(route);
@@ -327,9 +356,15 @@ describe('WebSocketAdapter (Phase 9)', () => {
         // Mock WebSocket (needs sendText for BurgerWSContext.send with string)
         const mockWs = {
             data: { route },
-            send: (msg: any) => { sentMessage = msg; },
-            sendText: (msg: any) => { sentMessage = msg; },
-            sendBinary: (msg: any) => { sentMessage = msg; },
+            send: (msg: any) => {
+                sentMessage = msg;
+            },
+            sendText: (msg: any) => {
+                sentMessage = msg;
+            },
+            sendBinary: (msg: any) => {
+                sentMessage = msg;
+            },
             close: () => {},
             terminate: () => {},
             subscribe: () => {},

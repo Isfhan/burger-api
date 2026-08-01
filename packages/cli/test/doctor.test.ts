@@ -1,5 +1,5 @@
 /**
- * Phase 7: doctor command — check functions and project validation.
+ * doctor command — check functions and project validation.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';
@@ -110,10 +110,7 @@ describe('doctor checks (via project structure)', () => {
     });
 
     it('detects route.ts files in src/api/', async () => {
-        await createFile(
-            'src/api/route.ts',
-            'export async function GET() {}'
-        );
+        await createFile('src/api/route.ts', 'export async function GET() {}');
         const exists = existsSync(join(tmpDir, 'src', 'api', 'route.ts'));
         expect(exists).toBe(true);
     });

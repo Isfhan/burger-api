@@ -20,7 +20,7 @@ afterAll(async () => {
     await stopExampleServer(server);
 });
 
-describe('Phase 4 M5-M6 — Plugin & Macro Integration', () => {
+describe('M6 — Plugin & Macro Integration', () => {
     it('plugin beforeRoute runs before the handler', async () => {
         const res = await fetch(`${BASE_URL}/api`);
         expect(res.status).toBe(200);

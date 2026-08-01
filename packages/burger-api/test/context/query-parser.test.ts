@@ -20,7 +20,7 @@ describe('parseQuery (fast Bun-native parser)', () => {
     });
 
     it('normalizes + to a space (URLSearchParams / form-encoding parity)', () => {
-        // Backward compatibility: Phase 1 used URLSearchParams, which decodes +.
+        // Backward compatibility: used URLSearchParams, which decodes +.
         expect(parseQuery('search=test+product+search')).toEqual({
             search: 'test product search',
         });

@@ -31,7 +31,10 @@ interface DevCommandOptions {
 /**
  * Shared implementation for dev/serve commands.
  */
-async function runDevServer(options: DevCommandOptions, isAlias: boolean): Promise<void> {
+async function runDevServer(
+    options: DevCommandOptions,
+    isAlias: boolean
+): Promise<void> {
     const file = options.file;
     const port = options.port;
 
@@ -43,7 +46,9 @@ async function runDevServer(options: DevCommandOptions, isAlias: boolean): Promi
 
     newline();
     if (isAlias) {
-        warning("burger-api serve is deprecated — use 'burger-api dev' instead");
+        warning(
+            "burger-api serve is deprecated — use 'burger-api dev' instead"
+        );
         newline();
     }
     info('Starting development server...');
@@ -84,9 +89,7 @@ async function runDevServer(options: DevCommandOptions, isAlias: boolean): Promi
             process.exit(exitCode);
         }
     } catch (err) {
-        logError(
-            err instanceof Error ? err.message : 'Failed to start server'
-        );
+        logError(err instanceof Error ? err.message : 'Failed to start server');
         process.exit(1);
     }
 }

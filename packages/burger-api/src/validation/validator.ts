@@ -1,11 +1,11 @@
 /**
  * The validator coordinator — the evolution of
- * `createValidationMiddleware` (phase3 §12.11, §13.6).
+ * `createValidationMiddleware` (§13.6).
  *
  * It consumes the prepared `CompiledRouteValidators` produced by the schema
  * preparation component. When a request comes in it runs `cv.validate(value)`
  * once per slot — no walk over the raw schema, no adapter (connector)
- * selection, no preparing at request time (phase3 §15.3). It does NOT redesign
+ * selection, no preparing at request time (). It does NOT redesign
  * the hook pipeline.
  *
  * Behavior mirrors the legacy lifecycle so existing applications behave
@@ -15,10 +15,15 @@
  * - returns 422 with RFC 9457 problem details on failure.
  */
 
-import type { BurgerContext } from '../context/context';
+import type { BurgerContext, BurgerValidated } from '../context/context';
 import type { BurgerNext } from '../types/index';
 import type { Hook } from '../lifecycle/types';
-import type { CompiledRouteValidators, ValidatorConfig, ValidationIssue, ValidationSlot } from './types';
+import type {
+    CompiledRouteValidators,
+    ValidatorConfig,
+    ValidationIssue,
+    ValidationSlot,
+} from './types';
 import { apply as applyCoercion } from './coerce';
 import { ValidationError } from './error';
 
@@ -33,7 +38,8 @@ function splitCookiePairs(header: string): Array<[string, string]> {
     let i = 0;
     while (i < header.length) {
         // Skip leading whitespace/separators between pairs.
-        while (i < header.length && (header[i] === ' ' || header[i] === ';')) i++;
+        while (i < header.length && (header[i] === ' ' || header[i] === ';'))
+            i++;
         if (i >= header.length) break;
 
         const eq = header.indexOf('=', i);
@@ -68,8 +74,10 @@ function splitCookiePairs(header: string): Array<[string, string]> {
     return pairs;
 }
 
-/** Parses a `Cookie` header value into a flat record (phase3 §5 cookie slot). */
-export function parseCookies(header: string | null | undefined): Record<string, string> {
+/** Parses a `Cookie` header value into a flat record (cookie slot). */
+export function parseCookies(
+    header: string | null | undefined
+): Record<string, string> {
     const out: Record<string, string> = {};
     if (!header) return out;
     for (const [key, rawValue] of splitCookiePairs(header)) {
@@ -203,9 +211,7 @@ export function createValidatorMiddleware(
                     }
                 } catch (error: unknown) {
                     const msg =
-                        error instanceof Error
-                            ? error.message
-                            : String(error);
+                        error instanceof Error ? error.message : String(error);
                     if (!errorsBySlot) errorsBySlot = {};
                     errorsBySlot.body = [{ path: [], message: msg }];
                 }
@@ -222,7 +228,7 @@ export function createValidatorMiddleware(
             });
         }
 
-        ctx.validated = validated;
+        ctx.validated = validated as BurgerValidated;
         return undefined;
     };
 }

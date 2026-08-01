@@ -56,8 +56,12 @@ describe('onRequest hook (pre-routing)', () => {
 
     it('runs multiple onRequest hooks in order', async () => {
         const order: string[] = [];
-        const hook1: Hook = () => { order.push('first'); };
-        const hook2: Hook = () => { order.push('second'); };
+        const hook1: Hook = () => {
+            order.push('first');
+        };
+        const hook2: Hook = () => {
+            order.push('second');
+        };
 
         const router = new Router();
         router.compile([helloRoute()], undefined, undefined, [hook1, hook2]);
@@ -93,9 +97,7 @@ describe('onRequest hook (pre-routing)', () => {
         const router = new Router();
         router.compile([helloRoute()], undefined, undefined, [inspector]);
 
-        await router.fetch(
-            new Request('http://localhost/api/hello')
-        );
+        await router.fetch(new Request('http://localhost/api/hello'));
         expect(capturedMethod).toBe('GET');
         expect(capturedUrl).toContain('/api/hello');
     });

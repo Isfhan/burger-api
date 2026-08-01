@@ -24,9 +24,7 @@ describe('Provider system (burger.provide)', () => {
     });
 
     it('each context gets its own services object (shallow copy)', () => {
-        const providers = new Map<string, unknown>([
-            ['db', { count: 0 }],
-        ]);
+        const providers = new Map<string, unknown>([['db', { count: 0 }]]);
         const ctx1 = BurgerContext.create(
             new Request('http://localhost/'),
             undefined,
@@ -46,9 +44,7 @@ describe('Provider system (burger.provide)', () => {
     });
 
     it('providers map mutation after create does not affect existing contexts', () => {
-        const providers = new Map<string, unknown>([
-            ['db', { count: 0 }],
-        ]);
+        const providers = new Map<string, unknown>([['db', { count: 0 }]]);
         const ctx = BurgerContext.create(
             new Request('http://localhost/'),
             undefined,

@@ -1,5 +1,5 @@
 /**
- * Phase 7: inspect command — route scanning + convention detection.
+ * inspect command — route scanning and convention detection.
  */
 import { describe, it, expect } from 'bun:test';
 import { join } from 'path';
@@ -23,11 +23,7 @@ describe('inspect uses existing scanner', () => {
     });
 
     it('scanApiRoutes with parity fixtures covers dynamic + group routes', async () => {
-        const entries = await scanApiRoutes(
-            parityFixturesDir,
-            './api',
-            '/api'
-        );
+        const entries = await scanApiRoutes(parityFixturesDir, './api', '/api');
         const paths = entries.map((e) => e.routePath).sort();
         expect(paths.some((p) => p.includes(':id'))).toBe(true);
         expect(paths.some((p) => p.includes('groups'))).toBe(true);

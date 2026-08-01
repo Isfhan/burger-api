@@ -112,7 +112,10 @@ describe('Router integration: BurgerContext threading', () => {
         const entry = routes!.get('/meta/:id');
         expect(entry).toBeDefined();
         // RouteMeta retained.
-        expect(entry!.route).toEqual({ path: '/meta/:id', pattern: '/meta/:id' });
+        expect(entry!.route).toEqual({
+            path: '/meta/:id',
+            pattern: '/meta/:id',
+        });
         // RouteAccessInfo (frozen hint) retained; runtime never depends on it.
         expect(entry!.meta).toBeDefined();
         expect(entry!.meta!.has('query')).toBe(true);

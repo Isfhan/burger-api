@@ -6,12 +6,12 @@ This directory contains all installation and uninstallation scripts for the Burg
 
 ```
 scripts/
-├── install/          # Installation scripts
-│   ├── install.sh   # Linux/macOS installer
-│   └── install.ps1  # Windows installer
-└── uninstall/        # Uninstallation scripts
-    ├── uninstall.sh # Linux/macOS uninstaller
-    └── uninstall.ps1 # Windows uninstaller
+├── install/ # Installation scripts
+│ ├── install.sh # Linux/macOS installer
+│ └── install.ps1 # Windows installer
+└── uninstall/ # Uninstallation scripts
+ ├── uninstall.sh # Linux/macOS uninstaller
+ └── uninstall.ps1 # Windows uninstaller
 ```
 
 ## Quick Reference
@@ -47,10 +47,10 @@ When deploying to the website repository:
 1. Copy all files from `install/` to website public directory
 2. Copy all files from `uninstall/` to website public directory
 3. Ensure files are accessible at the root URLs:
-   - `https://burger-api.com/install.sh`
-   - `https://burger-api.com/install.ps1`
-   - `https://burger-api.com/uninstall.sh`
-   - `https://burger-api.com/uninstall.ps1`
+ - `https://burger-api.com/install.sh`
+ - `https://burger-api.com/install.ps1`
+ - `https://burger-api.com/uninstall.sh`
+ - `https://burger-api.com/uninstall.ps1`
 
 ## Features
 

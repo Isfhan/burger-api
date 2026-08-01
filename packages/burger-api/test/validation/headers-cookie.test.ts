@@ -19,7 +19,8 @@ function fakeCtx(
     } = {}
 ): BurgerContext {
     const headers = new Headers();
-    if (opts.headers) for (const [k, v] of Object.entries(opts.headers)) headers.set(k, v);
+    if (opts.headers)
+        for (const [k, v] of Object.entries(opts.headers)) headers.set(k, v);
     if (opts.cookie) headers.set('cookie', opts.cookie);
     return {
         method,
@@ -31,7 +32,7 @@ function fakeCtx(
     } as unknown as BurgerContext;
 }
 
-describe('headers/cookie slots + response (M5)', () => {
+describe('headers/cookie slots + response', () => {
     beforeEach(() => clearValidatorCache());
 
     it('validates a required header and attaches validated.headers', async () => {
@@ -74,11 +75,18 @@ describe('headers/cookie slots + response (M5)', () => {
 
     it('parses RFC 6265 quoted cookie values containing ; and =', async () => {
         const schema = {
-            get: { cookies: z.object({ session: z.string(), csrftoken: z.string() }) },
+            get: {
+                cookies: z.object({
+                    session: z.string(),
+                    csrftoken: z.string(),
+                }),
+            },
         };
         const validators = compileRouteSchema(schema, {});
         const mw = createValidatorMiddleware(validators);
-        const ctx = fakeCtx('get', { cookie: 'session="a;b=c"; csrftoken=token' });
+        const ctx = fakeCtx('get', {
+            cookie: 'session="a;b=c"; csrftoken=token',
+        });
         await mw(ctx);
         expect((ctx.validated as any).cookies).toEqual({
             session: 'a;b=c',

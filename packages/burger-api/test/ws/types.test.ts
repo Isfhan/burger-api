@@ -6,7 +6,7 @@ import {
 } from '../../src/ws/types';
 import type { BurgerWS } from '../../src/ws/types';
 
-describe('BurgerWSContext (Phase 9)', () => {
+describe('BurgerWSContext', () => {
     // Mock Bun's ServerWebSocket
     const createMockWs = (overrides: Record<string, any> = {}): any => ({
         send: () => {},
@@ -38,7 +38,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy send method', () => {
         let sentMessage: any = null;
         const mockWs = createMockWs({
-            sendText: (msg: any) => { sentMessage = msg; },
+            sendText: (msg: any) => {
+                sentMessage = msg;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -50,7 +52,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy sendText method', () => {
         let sentMessage: any = null;
         const mockWs = createMockWs({
-            sendText: (msg: any) => { sentMessage = msg; },
+            sendText: (msg: any) => {
+                sentMessage = msg;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -62,7 +66,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy sendBinary method', () => {
         let sentMessage: any = null;
         const mockWs = createMockWs({
-            sendBinary: (msg: any) => { sentMessage = msg; },
+            sendBinary: (msg: any) => {
+                sentMessage = msg;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -75,7 +81,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy subscribe method', () => {
         let subscribedTopic: string | null = null;
         const mockWs = createMockWs({
-            subscribe: (topic: string) => { subscribedTopic = topic; },
+            subscribe: (topic: string) => {
+                subscribedTopic = topic;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -87,7 +95,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy unsubscribe method', () => {
         let unsubscribedTopic: string | null = null;
         const mockWs = createMockWs({
-            unsubscribe: (topic: string) => { unsubscribedTopic = topic; },
+            unsubscribe: (topic: string) => {
+                unsubscribedTopic = topic;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -99,7 +109,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy publish method', () => {
         let published: { topic: string; message: any } | null = null;
         const mockWs = createMockWs({
-            publishText: (topic: string, msg: any) => { published = { topic, message: msg }; },
+            publishText: (topic: string, msg: any) => {
+                published = { topic, message: msg };
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -112,7 +124,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy publishText method', () => {
         let published: { topic: string; message: any } | null = null;
         const mockWs = createMockWs({
-            publishText: (topic: string, msg: any) => { published = { topic, message: msg }; },
+            publishText: (topic: string, msg: any) => {
+                published = { topic, message: msg };
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -125,7 +139,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy publishBinary method', () => {
         let published: { topic: string; message: any } | null = null;
         const mockWs = createMockWs({
-            publishBinary: (topic: string, msg: any) => { published = { topic, message: msg }; },
+            publishBinary: (topic: string, msg: any) => {
+                published = { topic, message: msg };
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -139,7 +155,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy close method', () => {
         let closeCall: { code?: number; reason?: string } | null = null;
         const mockWs = createMockWs({
-            close: (code?: number, reason?: string) => { closeCall = { code, reason }; },
+            close: (code?: number, reason?: string) => {
+                closeCall = { code, reason };
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -152,7 +170,9 @@ describe('BurgerWSContext (Phase 9)', () => {
     it('should proxy terminate method', () => {
         let terminated = false;
         const mockWs = createMockWs({
-            terminate: () => { terminated = true; },
+            terminate: () => {
+                terminated = true;
+            },
         });
 
         const ctx = new BurgerWSContext(mockWs);
@@ -192,7 +212,7 @@ describe('BurgerWSContext (Phase 9)', () => {
     });
 });
 
-describe('WebSocketReadyState enum (Phase 9)', () => {
+describe('WebSocketReadyState enum', () => {
     it('should have correct values', () => {
         expect(WebSocketReadyState.CONNECTING).toBe(0);
         expect(WebSocketReadyState.OPEN).toBe(1);
@@ -201,7 +221,7 @@ describe('WebSocketReadyState enum (Phase 9)', () => {
     });
 });
 
-describe('WebSocketCloseCode enum (Phase 9)', () => {
+describe('WebSocketCloseCode enum', () => {
     it('should have correct values', () => {
         expect(WebSocketCloseCode.NORMAL_CLOSURE).toBe(1000);
         expect(WebSocketCloseCode.GOING_AWAY).toBe(1001);

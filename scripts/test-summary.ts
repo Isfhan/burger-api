@@ -65,6 +65,46 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'chain',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:chain'],
+        kind: 'tests',
+    },
+    {
+        label: 'plugin',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:plugin'],
+        kind: 'tests',
+    },
+    {
+        label: 'core',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:core'],
+        kind: 'tests',
+    },
+    {
+        label: 'errors',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:errors'],
+        kind: 'tests',
+    },
+    {
+        label: 'validation',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:validation'],
+        kind: 'tests',
+    },
+    {
+        label: 'compiler',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:compiler'],
+        kind: 'tests',
+    },
+    {
+        label: 'adapter',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:adapter'],
+        kind: 'tests',
+    },
+    {
+        label: 'provider',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:provider'],
+        kind: 'tests',
+    },
+    {
         label: 'ws',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:ws'],
         kind: 'tests',

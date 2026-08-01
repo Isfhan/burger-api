@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { WebSocketRouter } from '../../src/ws/router';
 import type { CompiledWebSocketRoute } from '../../src/ws/types';
 
-describe('WebSocketRouter (Phase 9)', () => {
+describe('WebSocketRouter', () => {
     let router: WebSocketRouter;
 
-    const createRoute = (path: string, overrides: Partial<CompiledWebSocketRoute> = {}): CompiledWebSocketRoute => ({
+    const createRoute = (
+        path: string,
+        overrides: Partial<CompiledWebSocketRoute> = {}
+    ): CompiledWebSocketRoute => ({
         path,
         handlers: {},
         config: {},
@@ -151,7 +154,9 @@ describe('WebSocketRouter (Phase 9)', () => {
         router.addRoute(route3);
 
         expect(router.match('/chat')?.route.path).toBe('/chat');
-        expect(router.match('/notifications')?.route.path).toBe('/notifications');
+        expect(router.match('/notifications')?.route.path).toBe(
+            '/notifications'
+        );
         expect(router.match('/status')?.route.path).toBe('/status');
     });
 

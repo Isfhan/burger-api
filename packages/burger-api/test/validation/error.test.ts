@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'bun:test';
 import { renderValidationError } from '../../src/validation/error';
-import type { ValidationResult, ValidatorConfig } from '../../src/validation/types';
+import type {
+    ValidationResult,
+    ValidatorConfig,
+} from '../../src/validation/types';
 
 const fail: ValidationResult = {
     success: false,
     issues: [
-        { path: ['query', 'n'], message: 'Expected number', code: 'invalid_type' },
+        {
+            path: ['query', 'n'],
+            message: 'Expected number',
+            code: 'invalid_type',
+        },
     ],
 };
 
@@ -13,7 +20,7 @@ function bodyOf(res: Response): any {
     return res.json();
 }
 
-describe('renderValidationError (M6)', () => {
+describe('renderValidationError', () => {
     it('plain format emits issues under the slot key', async () => {
         const res = renderValidationError(fail, {
             status: 422,
@@ -34,12 +41,17 @@ describe('renderValidationError (M6)', () => {
             slot: 'query',
             config: { errorFormat: 'problem+json' },
         });
-        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
         const b = await bodyOf(res);
         expect(b.type).toBe('about:blank');
         expect(b.title).toBe('Validation Error');
         expect(b.status).toBe(422);
-        expect(b.errors[0]).toEqual({ path: ['query', 'n'], message: 'Expected number' });
+        expect(b.errors[0]).toEqual({
+            path: ['query', 'n'],
+            message: 'Expected number',
+        });
     });
 
     it('does NOT leak stacks or source in production', async () => {
@@ -87,9 +99,7 @@ describe('renderValidationError (M6)', () => {
             status: 422,
             isDev: false,
             errorsBySlot: {
-                query: [
-                    { path: ['query', 'n'], message: 'Expected number' },
-                ],
+                query: [{ path: ['query', 'n'], message: 'Expected number' }],
                 body: [{ path: ['body', 'name'], message: 'Required' }],
             },
             config: {},

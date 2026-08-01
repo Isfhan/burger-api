@@ -84,7 +84,8 @@ export function createBunBuildOptions(options: {
         sourcemap:
             options.sourcemap === undefined
                 ? undefined
-                : (options.sourcemap as 'none' | 'linked' | 'inline' | 'external'),
+                : (options.sourcemap as
+                      'none' | 'linked' | 'inline' | 'external'),
     };
 
     const ext = buildOptions as unknown as Record<string, unknown>;
@@ -115,7 +116,8 @@ export async function runBunBuildOrThrow(
         result = await Bun.build(buildOptions);
     } catch (err) {
         const detail = extractBunBuildDetails(err);
-        const message = err instanceof Error ? err.message : 'Bun.build failed.';
+        const message =
+            err instanceof Error ? err.message : 'Bun.build failed.';
         if (detail) {
             throw new Error(`${message}\n${detail}`);
         }

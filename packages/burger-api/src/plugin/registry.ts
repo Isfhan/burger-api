@@ -23,7 +23,10 @@ export class PluginRegistry {
         return this.entries.has(this.key(name, seed));
     }
 
-    async resolve(name: string, seed?: string): Promise<ResolvedPlugin | undefined> {
+    async resolve(
+        name: string,
+        seed?: string
+    ): Promise<ResolvedPlugin | undefined> {
         const k = this.key(name, seed);
         const cached = this.resolved.get(k);
         if (cached) return cached;
@@ -31,9 +34,10 @@ export class PluginRegistry {
         const entry = this.entries.get(k);
         if (!entry) return undefined;
 
-        const raw = typeof entry.plugin === 'function'
-            ? await (entry.plugin as () => Plugin | Promise<Plugin>)()
-            : entry.plugin;
+        const raw =
+            typeof entry.plugin === 'function'
+                ? await (entry.plugin as () => Plugin | Promise<Plugin>)()
+                : entry.plugin;
 
         const hooks: RouteHooks = raw.hooks ?? {};
         const resolved: ResolvedPlugin = {

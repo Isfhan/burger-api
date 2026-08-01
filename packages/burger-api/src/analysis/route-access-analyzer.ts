@@ -3,16 +3,16 @@ import type { RouteDefinition } from '../types/index';
 import { freezeRouteAccessInfo } from '../context/route-access';
 
 /**
- * `RouteAccessAnalyzer` (M3) — an OPTIONAL, compile-time-only, self-contained
+ * `RouteAccessAnalyzer` — an optional, compile-time-only, self-contained
  * static analyzer.
  *
  * It inspects a route's handler + middleware *source* (via
  * `Function.prototype.toString()`) to produce a frozen `RouteAccessInfo` hint
  * describing which `BurgerContext` fields each route touches. Nothing here is
- * read at runtime in Phase 2, so any failure degrades to a safe default and can
+ * read at runtime , so any failure degrades to a safe default and can
  * never affect request correctness.
  *
- * Design constraints (ROADMAP-phase2.md §7):
+ * Design constraints ():
  * - Self-contained: no import from `@burger-api/cli`, no `node:fs`.
  * - Reuses the discipline of `cli/src/utils/route-methods.ts`, not its code.
  * - `debug: true` → skip analysis entirely (return the safe empty default).
@@ -34,7 +34,12 @@ const FIELD_KEYS: readonly ContextField[] = [
     'wildcardParams',
 ];
 
-const HOOK_STAGES = ['beforeRoute', 'afterRoute', 'mapResponse', 'onError'] as const;
+const HOOK_STAGES = [
+    'beforeRoute',
+    'afterRoute',
+    'mapResponse',
+    'onError',
+] as const;
 
 /**
  * Strips block (`/* *\/`) and line (`//`) comments so that field tokens inside
@@ -54,9 +59,7 @@ function stripComments(source: string): string {
  */
 function referencesField(source: string, field: string): boolean {
     const dot = new RegExp(`\\.\\s*${field}\\b`);
-    const bracket = new RegExp(
-        `\\[\\s*['"]\\s*${field}\\s*['"]\\s*\\]`
-    );
+    const bracket = new RegExp(`\\[\\s*['"]\\s*${field}\\s*['"]\\s*\\]`);
     return dot.test(source) || bracket.test(source);
 }
 
@@ -70,7 +73,7 @@ function safeToString(fn: unknown): string {
 
 /**
  * Detects indirect/aliased access patterns the per-field scanner cannot
- * resolve statically. Per ROADMAP-phase2 §6.3.1 the analyzer is conservative:
+ * resolve statically. The analyzer is conservative:
  * when it cannot prove which fields a route reads, the whole route is marked
  * `unknown: true` (every field treated as used) rather than risk hiding a field
  * the handler actually needs.
@@ -96,7 +99,7 @@ export function analyzeRouteAccess(
     def: RouteDefinition,
     debug = false
 ): RouteAccessInfo {
-    // Phase 4 M7: detect hook stages before debug/field analysis so hooks are
+    // detect hook stages before debug/field analysis so hooks are
     // always recorded even in debug mode or when field analysis is skipped.
     const usedHooks: string[] = [];
     const hooks = def.hooks;
@@ -110,8 +113,8 @@ export function analyzeRouteAccess(
         }
     }
 
-    // `debug` disables analysis per Phase 2 contract and forces the safe
-    // "all fields used" default (ROADMAP-phase2 §6.3.1).
+    // `debug` disables analysis per contract and forces the safe
+    // "all fields used" default when analysis cannot resolve fields.
     if (debug) {
         return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
     }

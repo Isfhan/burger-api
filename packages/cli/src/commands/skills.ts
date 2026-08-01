@@ -2,7 +2,12 @@ import { Command } from 'commander';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
-import { skillExists, downloadSkill, getSkillList, getSkillInfo } from '../utils/github';
+import {
+    skillExists,
+    downloadSkill,
+    getSkillList,
+    getSkillInfo,
+} from '../utils/github';
 import {
     spinner,
     success,
@@ -135,7 +140,7 @@ const listCommand = new Command('list')
             info('No skills installed yet.');
             newline();
             info('Install the default skill:');
-            info('  burger-api skills install');
+            info(' burger-api skills install');
             clack.outro('Done');
             process.exit(0);
         }
@@ -147,11 +152,14 @@ const listCommand = new Command('list')
                 const skillPath = join(dir, e.name, 'SKILL.md');
                 if (!existsSync(skillPath)) return null;
                 const raw = readFileSync(skillPath, 'utf-8');
-                const descLine = raw.split('\n').find((l) =>
-                    l.startsWith('description:')
-                );
+                const descLine = raw
+                    .split('\n')
+                    .find((l) => l.startsWith('description:'));
                 const description = descLine
-                    ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+                    ? descLine
+                          .slice('description:'.length)
+                          .trim()
+                          .replace(/^['"]|['"]$/g, '')
                     : '(no description)';
                 return { name: e.name, description };
             })
@@ -162,10 +170,10 @@ const listCommand = new Command('list')
             info('No valid skills found in .agents/skills/.');
             newline();
             info('Install the default skill:');
-            info('  burger-api skills install');
+            info(' burger-api skills install');
         } else {
             for (const s of skills) {
-                info(`  ${s.name} — ${s.description}`);
+                info(` ${s.name} — ${s.description}`);
             }
             newline();
             header('Discovery');
@@ -184,9 +192,8 @@ const availableCommand = new Command('available')
 
         let list: string[];
         try {
-            list = await withSpinner(
-                'Fetching available skills...',
-                () => getSkillList()
+            list = await withSpinner('Fetching available skills...', () =>
+                getSkillList()
             );
         } catch {
             logError('Could not fetch skill list from GitHub.');

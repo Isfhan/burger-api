@@ -9,7 +9,7 @@
 import type { BuildConfig } from '../types/index';
 import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
 
-/** Paths to app-level convention files for production builds (Phase 4). */
+/** Paths to app-level convention files for production builds. */
 export interface AppConventionPaths {
     /** Path to `src/hooks.ts` — exports all 6 hook points */
     hooksPath?: string;
@@ -76,7 +76,7 @@ export function generateVirtualEntrySource(
     }
 
     // Import a sibling `hooks.ts` for any route that declares lifecycle hooks
-    // (Phase 4). Each route is self-contained — no global tier merging.
+    //. Each route is self-contained — no global tier merging.
     apiEntries.forEach((e, i) => {
         if (e.hooksPath) {
             lines.push(`import * as _h${i} from '${e.hooksPath}';`);
@@ -84,8 +84,8 @@ export function generateVirtualEntrySource(
     });
 
     // Import per-route convention files (schema, openapi, config) for
-    // build-time merging (Phase 4). These are separate from route.ts.
-    const hasOpenapiEntry = apiEntries.some(e => e.openapiPath);
+    // build-time merging. These are separate from route.ts.
+    const hasOpenapiEntry = apiEntries.some((e) => e.openapiPath);
     apiEntries.forEach((e, i) => {
         if (e.schemaPath) {
             lines.push(`import * as _s${i} from '${e.schemaPath}';`);
@@ -100,27 +100,37 @@ export function generateVirtualEntrySource(
     if (hasOpenapiEntry) {
         lines.push('');
         lines.push('function __normOpenapi(mod) {');
-        lines.push('  const out = {};');
-        lines.push('  for (const k of Object.keys(mod)) {');
-        lines.push('    out[/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(k) ? k.toLowerCase() : k] = mod[k];');
-        lines.push('  }');
-        lines.push('  return out;');
+        lines.push(' const out = {};');
+        lines.push(' for (const k of Object.keys(mod)) {');
+        lines.push(
+            ' out[/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(k) ? k.toLowerCase() : k] = mod[k];'
+        );
+        lines.push(' }');
+        lines.push(' return out;');
         lines.push('}');
     }
 
-    // Import app-level convention files for production builds (Phase 4)
+    // Import app-level convention files for production builds
     if (appConventions) {
         if (appConventions.hooksPath) {
-            lines.push(`import * as __globalHooks from '${appConventions.hooksPath}';`);
+            lines.push(
+                `import * as __globalHooks from '${appConventions.hooksPath}';`
+            );
         }
         if (appConventions.pluginsPath) {
-            lines.push(`import * as __pluginsModule from '${appConventions.pluginsPath}';`);
+            lines.push(
+                `import * as __pluginsModule from '${appConventions.pluginsPath}';`
+            );
         }
         if (appConventions.providersPath) {
-            lines.push(`import * as __providersModule from '${appConventions.providersPath}';`);
+            lines.push(
+                `import * as __providersModule from '${appConventions.providersPath}';`
+            );
         }
         if (appConventions.openapiConfigPath) {
-            lines.push(`import __openapiConfig from '${appConventions.openapiConfigPath}';`);
+            lines.push(
+                `import __openapiConfig from '${appConventions.openapiConfigPath}';`
+            );
         }
     }
 
@@ -131,24 +141,24 @@ export function generateVirtualEntrySource(
         const methods = methodsToEmit(e);
         const hasPreflight = PREFLIGHT_METHODS.some((m) => methods.includes(m));
 
-        lines.push('  {');
-        lines.push(`    path: ${JSON.stringify(e.routePath)},`);
-        lines.push('    handlers: {');
+        lines.push(' {');
+        lines.push(` path: ${JSON.stringify(e.routePath)},`);
+        lines.push(' handlers: {');
         for (const m of methods) {
-            lines.push(`      ${m}: _r${i}.${m},`);
+            lines.push(` ${m}: _r${i}.${m},`);
         }
         if (!methods.includes('OPTIONS') && hasPreflight) {
-            lines.push(
-                `      OPTIONS: () => new Response(null, { status: 204 }),`
-            );
+            lines.push(` OPTIONS: () => new Response(null, { status: 204 }),`);
         }
-        lines.push('    },');
-        lines.push(`    schema: ${e.schemaPath ? `_s${i}` : `_r${i}.schema`},`);
-        lines.push(`    openapi: ${e.openapiPath ? `__normOpenapi(_o${i})` : `_r${i}.openapi`},`);
-        lines.push(`    config: ${e.configPath ? `_c${i}` : `_r${i}.config`},`);
-        lines.push(`    hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
-        lines.push(`    isWildcard: ${e.isWildcard},`);
-        lines.push('  },');
+        lines.push(' },');
+        lines.push(` schema: ${e.schemaPath ? `_s${i}` : `_r${i}.schema`},`);
+        lines.push(
+            ` openapi: ${e.openapiPath ? `__normOpenapi(_o${i})` : `_r${i}.openapi`},`
+        );
+        lines.push(` config: ${e.configPath ? `_c${i}` : `_r${i}.config`},`);
+        lines.push(` hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
+        lines.push(` isWildcard: ${e.isWildcard},`);
+        lines.push(' },');
     });
 
     lines.push('];');
@@ -157,11 +167,11 @@ export function generateVirtualEntrySource(
     lines.push('const pageRoutes = [');
     pageEntries.forEach((p, i) => {
         lines.push(
-            `  { path: ${JSON.stringify(p.routePath)}, handler: _p${i}.default },`
+            ` { path: ${JSON.stringify(p.routePath)}, handler: _p${i}.default },`
         );
         if (p.routePath !== '/' && !p.routePath.endsWith('/')) {
             lines.push(
-                `  { path: ${JSON.stringify(p.routePath + '/')}, handler: _p${i}.default },`
+                ` { path: ${JSON.stringify(p.routePath + '/')}, handler: _p${i}.default },`
             );
         }
     });
@@ -170,29 +180,29 @@ export function generateVirtualEntrySource(
 
     lines.push('const app = new Burger({');
     if (optionsImportPath) {
-        lines.push('  ...__burgerOptions,');
+        lines.push(' ...__burgerOptions,');
     } else {
-        lines.push(`  debug: ${config.debug === true},`);
+        lines.push(` debug: ${config.debug === true},`);
     }
     if (appConventions?.hooksPath) {
-        lines.push('  globalHooks: __globalHooks,');
+        lines.push(' globalHooks: __globalHooks,');
     }
     if (appConventions?.pluginsPath) {
-        lines.push('  pluginsModule: __pluginsModule,');
+        lines.push(' pluginsModule: __pluginsModule,');
     }
     if (appConventions?.providersPath) {
-        lines.push('  providersModule: __providersModule,');
+        lines.push(' providersModule: __providersModule,');
     }
     if (appConventions?.openapiConfigPath) {
-        lines.push('  openapi: __openapiConfig,');
+        lines.push(' openapi: __openapiConfig,');
     }
-    lines.push('  apiRoutes,');
-    lines.push('  pageRoutes,');
+    lines.push(' apiRoutes,');
+    lines.push(' pageRoutes,');
     lines.push('});');
     lines.push('');
     lines.push('const port = Number(process.env.PORT) || 4000;');
     lines.push('app.serve(port, () => {');
-    lines.push('  console.log(`Server running on http://localhost:${port}`);');
+    lines.push(' console.log(`Server running on http://localhost:${port}`);');
     lines.push('});');
 
     return lines.join('\n');

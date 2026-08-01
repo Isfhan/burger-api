@@ -10,7 +10,12 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
 import { generateMiddlewareIndex } from '../utils/templates';
-import { middlewareExists, pluginExists, detectEcosystemType, downloadMiddleware } from '../utils/github';
+import {
+    middlewareExists,
+    pluginExists,
+    detectEcosystemType,
+    downloadMiddleware,
+} from '../utils/github';
 import {
     spinner,
     success,
@@ -151,7 +156,8 @@ export const addCommand = new Command('add')
             for (const name of results.success) {
                 const isPlugin = existsSync(join(pluginsDir, name));
                 if (isPlugin) {
-                    const className = name.charAt(0).toUpperCase() + name.slice(1);
+                    const className =
+                        name.charAt(0).toUpperCase() + name.slice(1);
                     code(
                         `import { ${className} } from "./ecosystem/plugins/${name}/${name}";`
                     );
@@ -173,7 +179,7 @@ export const addCommand = new Command('add')
                     .forEach((name) => {
                         const className =
                             name.charAt(0).toUpperCase() + name.slice(1);
-                        code(`    ${className},`);
+                        code(` ${className},`);
                     });
                 code(');');
                 newline();
@@ -187,7 +193,7 @@ export const addCommand = new Command('add')
                 results.success
                     .filter((n) => existsSync(join(hooksDir, n)))
                     .forEach((name) => {
-                        code(`    ${name}(),`);
+                        code(` ${name}(),`);
                     });
                 code('];');
                 newline();

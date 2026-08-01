@@ -12,16 +12,36 @@ export function composePluginHooks(
         const scope = plugin.scope;
 
         if (hooks.beforeRoute) {
-            chain.addStage('beforeRoute', toHookArray(hooks.beforeRoute), scope, plugin.name);
+            chain.addStage(
+                'beforeRoute',
+                toHookArray(hooks.beforeRoute),
+                scope,
+                plugin.name
+            );
         }
         if (hooks.afterRoute) {
-            chain.addStage('afterRoute', toHookArray(hooks.afterRoute), scope, plugin.name);
+            chain.addStage(
+                'afterRoute',
+                toHookArray(hooks.afterRoute),
+                scope,
+                plugin.name
+            );
         }
         if (hooks.mapResponse) {
-            chain.addStage('mapResponse', toHookArray(hooks.mapResponse), scope, plugin.name);
+            chain.addStage(
+                'mapResponse',
+                toHookArray(hooks.mapResponse),
+                scope,
+                plugin.name
+            );
         }
         if (hooks.onError) {
-            chain.addStage('onError', toHookArray(hooks.onError), scope, plugin.name);
+            chain.addStage(
+                'onError',
+                toHookArray(hooks.onError),
+                scope,
+                plugin.name
+            );
         }
         if (hooks.transform) {
             // Plugin transform keys are accumulated at the plan level, not as chain

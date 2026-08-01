@@ -241,7 +241,7 @@ app.serve(4000, () => { return 1; });
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain("hostname: '0.0.0.0'");
         expect(tempSource).toContain('nested');
         expect(tempSource).toContain('text');
         expect(tempSource).toContain('`');
@@ -279,7 +279,7 @@ app.serve(4000, () => { return 1; });
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain("hostname: '0.0.0.0'");
         expect(tempSource).toContain('a');
         expect(tempSource).toContain('b');
         expect(tempSource).toContain('c');

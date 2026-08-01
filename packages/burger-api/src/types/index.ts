@@ -91,14 +91,14 @@ export interface ServerOptions extends Omit<
 
     /**
      * Reusable named schemas ("models") referenced by string from any route's
-     * `schema` (Phase 3). Resolved at compile time; fail-fast on missing refs.
-     * Seeded from `burger.build.ts` models by the CLI (phase3 §12.12, D10).
+     * `schema`. Resolved at compile time; fail-fast on missing refs.
+     * Seeded from `burger.build.ts` models by the CLI (D10).
      */
     models?: Record<string, SchemaInput>;
 
     /**
-     * Validation 2.0 configuration (Phase 3): coercion, response-validation
-     * mode, and error rendering (phase3 §14.8).
+     * Validation 2.0 configuration: coercion, response-validation
+     * mode, and error rendering ().
      */
     validation?: ValidatorConfig;
 
@@ -139,9 +139,7 @@ export interface ServerOptions extends Omit<
  * - undefined: I'm done, continue to the next hook or handler
  */
 export type BurgerNext =
-    | Response
-    | ((response: Response) => Promise<Response>)
-    | undefined;
+    Response | ((response: Response) => Promise<Response>) | undefined;
 
 /**
  * A request handler function that processes incoming HTTP requests.
@@ -229,7 +227,7 @@ export type RouteSchema = {
         headers?: SchemaInput | string;
         cookies?: SchemaInput | string;
         body?: SchemaInput | string;
-        /** Per-route opt-in override for coercion (phase3 §7, §11). */
+        /** Per-route opt-in override for coercion (§11). */
         coerce?: boolean;
         /** Per-status-code response schemas, validated after the handler. */
         response?: Record<string, SchemaInput>;
@@ -276,7 +274,7 @@ export interface TrieNode {
     route?: RouteDefinition; // Route definition at leaf node
 }
 
-// Re-export the public-facing Phase 2 context types so consumers can reference
+// Re-export the public-facing context types so consumers can reference
 // them from the package root (e.g. `RouteMeta`, `ContextSet`).
 export type {
     ContextField,
@@ -286,7 +284,7 @@ export type {
     RouteMeta,
 } from '../context/types';
 
-// Re-export OpenAPI config types (Phase 5)
+// Re-export OpenAPI config types
 export type {
     OpenAPIConfig,
     DocsProvider,

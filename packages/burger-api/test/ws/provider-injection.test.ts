@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { BurgerWSContext } from '../../src/ws/types';
 
-describe('BurgerWSContext (Phase 10)', () => {
+describe('BurgerWSContext', () => {
     const createMockWs = (data: Record<string, unknown> = {}) => ({
         data,
         send: () => {},
@@ -75,7 +75,10 @@ describe('BurgerWSContext (Phase 10)', () => {
             const providers = new Map<string, unknown>([
                 ['db', { query: () => 'result' }],
             ]);
-            const ws = new BurgerWSContext(createMockWs({ route: {} }), providers);
+            const ws = new BurgerWSContext(
+                createMockWs({ route: {} }),
+                providers
+            );
 
             // Simulate open handler
             capturedServices = ws.services;
@@ -87,7 +90,10 @@ describe('BurgerWSContext (Phase 10)', () => {
             const providers = new Map<string, unknown>([
                 ['cache', { get: () => 'cached' }],
             ]);
-            const ws = new BurgerWSContext(createMockWs({ route: {} }), providers);
+            const ws = new BurgerWSContext(
+                createMockWs({ route: {} }),
+                providers
+            );
 
             // Simulate message handler
             capturedServices = ws.services;
@@ -99,7 +105,10 @@ describe('BurgerWSContext (Phase 10)', () => {
             const providers = new Map<string, unknown>([
                 ['logger', { warn: () => {} }],
             ]);
-            const ws = new BurgerWSContext(createMockWs({ route: {} }), providers);
+            const ws = new BurgerWSContext(
+                createMockWs({ route: {} }),
+                providers
+            );
 
             // Simulate close handler
             capturedServices = ws.services;

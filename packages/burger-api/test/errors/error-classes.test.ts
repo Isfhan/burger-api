@@ -141,7 +141,9 @@ describe('renderHTTPError', () => {
         const err = new NotFoundError('User 42 not found');
         const res = renderHTTPError(err, false);
         expect(res.status).toBe(404);
-        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
@@ -169,7 +171,9 @@ describe('renderHTTPError', () => {
     it('wraps unknown errors as HTTPError(500) in production', async () => {
         const res = renderHTTPError(new Error('something broke'), false);
         expect(res.status).toBe(500);
-        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
@@ -214,7 +218,9 @@ describe('renderHTTPError', () => {
 
 describe('ValidationError', () => {
     it('has status 422 and structured issues', () => {
-        const issues = [{ path: ['body', 'name'], message: 'required', code: 'required' }];
+        const issues = [
+            { path: ['body', 'name'], message: 'required', code: 'required' },
+        ];
         const err = new ValidationError('body', issues);
         expect(err.status).toBe(422);
         expect(err.slot).toBe('body');
@@ -223,11 +229,15 @@ describe('ValidationError', () => {
     });
 
     it('toResponse renders with errors slot in problem+json format', async () => {
-        const issues = [{ path: ['name'], message: 'required', code: 'required' }];
+        const issues = [
+            { path: ['name'], message: 'required', code: 'required' },
+        ];
         const err = new ValidationError('body', issues);
         const res = err.toResponse(false);
         expect(res.status).toBe(422);
-        expect(res.headers.get('content-type')).toBe('application/problem+json');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
@@ -239,9 +249,16 @@ describe('ValidationError', () => {
     });
 
     it('toResponse groups by errorsBySlot when provided', async () => {
-        const issues = [{ path: ['q'], message: 'invalid', code: 'invalid_string' }];
+        const issues = [
+            { path: ['q'], message: 'invalid', code: 'invalid_string' },
+        ];
         const err = new ValidationError('query', issues, {
-            errorsBySlot: { query: issues, body: [{ path: ['name'], message: 'required', code: 'required' }] },
+            errorsBySlot: {
+                query: issues,
+                body: [
+                    { path: ['name'], message: 'required', code: 'required' },
+                ],
+            },
         });
         const res = err.toResponse(false);
         const body = await res.json();

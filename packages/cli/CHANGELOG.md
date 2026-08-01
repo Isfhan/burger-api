@@ -4,60 +4,60 @@ All notable changes to the Burger API CLI will be documented in this file.
 
 ## Version 0.10.0 - (July 24, 2026)
 
--   **Changed** – Scanner no longer detects `globalHooksPath` inside `apiDir`.
-    Global hooks now live at app root (sibling of `index.ts`), not inside the
-    routes directory.
--   **Changed** – Virtual-entry: removed global tier hooks merge logic.
--   **Aligned** – With `burger-api` 0.15.0 self-contained route architecture.
+- **Changed** – Scanner no longer detects `globalHooksPath` inside `apiDir`.
+ Global hooks now live at app root (sibling of `index.ts`), not inside the
+ routes directory.
+- **Changed** – Virtual-entry: removed global tier hooks merge logic.
+- **Aligned** – With `burger-api` 0.15.0 self-contained route architecture.
 
 ## Version 0.9.9 - (June 29, 2026)
 
--   **Added** – `burger-api skills install [name]` to download AI agent skills
-    (defaults to `burger-api`).
--   **Added** – `burger-api skills list` to show locally installed skills.
--   **Added** – `burger-api skills available` to list remote skills from the
-    ecosystem.
--   **Added** – Optional "Add AI agent skills?" prompt during `create` (default:
-    yes).
--   **Changed** – `create` no longer auto-installs `.llm-context/`. Skills are
-    downloaded to `.agents/skills/burger-api/` instead.
--   **Migration** – Existing projects with `ecosystem/.llm-context/` can adopt
-    the new format with `burger-api skills install`.
+- **Added** – `burger-api skills install [name]` to download AI agent skills
+ (defaults to `burger-api`).
+- **Added** – `burger-api skills list` to show locally installed skills.
+- **Added** – `burger-api skills available` to list remote skills from the
+ ecosystem.
+- **Added** – Optional "Add AI agent skills?" prompt during `create` (default:
+ yes).
+- **Changed** – `create` no longer auto-installs `.llm-context/`. Skills are
+ downloaded to `.agents/skills/burger-api/` instead.
+- **Migration** – Existing projects with `ecosystem/.llm-context/` can adopt
+ the new format with `burger-api skills install`.
 
 ## Version 0.9.8 - (May 16, 2026)
 
--   **Create** – Scaffolded `index.html` uses your API route prefix and
-    `src/<apiDir>` / `src/<pageDir>` paths in hints and the “Try API” link;
-    pages-only projects no longer show a broken `/api` link or API file hint.
--   **Tests** – Coverage for `generateIndexPage` (custom prefix, defaults,
-    pages-only).
+- **Create** – Scaffolded `index.html` uses your API route prefix and
+ `src/<apiDir>` / `src/<pageDir>` paths in hints and the “Try API” link;
+ pages-only projects no longer show a broken `/api` link or API file hint.
+- **Tests** – Coverage for `generateIndexPage` (custom prefix, defaults,
+ pages-only).
 
 ## Version 0.9.7 - (May 16, 2026)
 
--   **CLI** – One-shot commands return to the shell reliably (GitHub `fetch`
-    timeouts clear after each request; `bun install` stderr is drained).
--   **CLI** – `parseAsync` at the entry so async command errors do not strand
-    the process.
--   **CLI** – `serve` uses one-shot signal listeners (`once`) for Ctrl+C /
-    Ctrl+Break.
--   **Tests** – Process-exit checks for `--version` and invalid `list` flags;
-    optional GitHub `ls` test via `BURGER_API_CLI_LIST_EXIT_TEST=1`.
+- **CLI** – One-shot commands return to the shell reliably (GitHub `fetch`
+ timeouts clear after each request; `bun install` stderr is drained).
+- **CLI** – `parseAsync` at the entry so async command errors do not strand
+ the process.
+- **CLI** – `serve` uses one-shot signal listeners (`once`) for Ctrl+C /
+ Ctrl+Break.
+- **Tests** – Process-exit checks for `--version` and invalid `list` flags;
+ optional GitHub `ls` test via `BURGER_API_CLI_LIST_EXIT_TEST=1`.
 
 ## Version 0.9.6 - (March 18, 2026)
 
--   ✨ **Create** – New projects get a config file (`burger.config.ts`) from
-    your answers; the build uses this config when present.
--   🔨 **Build** – One build pipeline for both bundle and executable; routes
-    are found at build time so production is fast and reliable.
--   📂 **Defaults** – Executable output: `.build/executable/<project>` (or
-    `.exe` on Windows); bundle: `.build/bundle/app.js`.
--   🧪 **Tests** – New tests for routes, config, and build output; CI catches
-    broken builds early.
--   🐛 **Fixed** – Invalid route combinations are caught at build time.
--   🐛 **Fixed** – Production build keeps your middleware and options (e.g.
-    title, description) instead of dropping them.
--   📚 **Docs** – README updated with production build steps and test
-    commands.
+- ✨ **Create** – New projects get a config file (`burger.config.ts`) from
+ your answers; the build uses this config when present.
+- 🔨 **Build** – One build pipeline for both bundle and executable; routes
+ are found at build time so production is fast and reliable.
+- 📂 **Defaults** – Executable output: `.build/executable/<project>` (or
+ `.exe` on Windows); bundle: `.build/bundle/app.js`.
+- 🧪 **Tests** – New tests for routes, config, and build output; CI catches
+ broken builds early.
+- 🐛 **Fixed** – Invalid route combinations are caught at build time.
+- 🐛 **Fixed** – Production build keeps your middleware and options (e.g.
+ title, description) instead of dropping them.
+- 📚 **Docs** – README updated with production build steps and test
+ commands.
 
 ## Version 0.7.0 - (December 23, 2025)
 

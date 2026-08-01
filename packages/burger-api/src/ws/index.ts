@@ -3,22 +3,22 @@
  */
 
 export type {
-  WebSocketData,
-  WebSocketConfig,
-  WebSocketRouteDefinition,
-  WebSocketHandlers,
-  WebSocketHooks,
-  CompiledWebSocketRoute,
-  BurgerWS,
-  WebSocketModule,
-  WebSocketHooksModule,
-  WebSocketConfigModule,
+    WebSocketData,
+    WebSocketConfig,
+    WebSocketRouteDefinition,
+    WebSocketHandlers,
+    WebSocketHooks,
+    CompiledWebSocketRoute,
+    BurgerWS,
+    WebSocketModule,
+    WebSocketHooksModule,
+    WebSocketConfigModule,
 } from './types';
 
 export {
-  WebSocketReadyState,
-  WebSocketCloseCode,
-  BurgerWSContext,
+    WebSocketReadyState,
+    WebSocketCloseCode,
+    BurgerWSContext,
 } from './types';
 
 export { WebSocketScanner } from './scanner';

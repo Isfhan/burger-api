@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ZodAdapter } from '../../src/validation/adapters/zod';
 import type { ValidationResult } from '../../src/validation/types';
 
-describe('ZodAdapter (M1)', () => {
+describe('ZodAdapter', () => {
     const schema = z.object({ id: z.string(), n: z.number() });
 
     it('produces a stable identity for the same schema reference', () => {
@@ -30,7 +30,10 @@ describe('ZodAdapter (M1)', () => {
 
     it('validate returns success:false with normalized issues for invalid input', () => {
         const cv = ZodAdapter.compile(schema, 'query');
-        const result = cv.validate({ id: 'a', n: 'not-a-number' }) as ValidationResult;
+        const result = cv.validate({
+            id: 'a',
+            n: 'not-a-number',
+        }) as ValidationResult;
         expect(result.success).toBe(false);
         if (!result.success) {
             expect(Array.isArray(result.issues)).toBe(true);
@@ -46,7 +49,9 @@ describe('ZodAdapter (M1)', () => {
     it('normalizeIssues maps Zod path segments to (string|number)[]', () => {
         const nested = z.object({ outer: z.object({ inner: z.string() }) });
         const cv = ZodAdapter.compile(nested, 'body');
-        const result = cv.validate({ outer: { inner: 42 } }) as ValidationResult;
+        const result = cv.validate({
+            outer: { inner: 42 },
+        }) as ValidationResult;
         expect(result.success).toBe(false);
         if (!result.success) {
             const issue = result.issues[0];

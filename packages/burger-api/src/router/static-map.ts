@@ -17,8 +17,8 @@ export class StaticMap {
     /**
      * Registers a compiled handler for a static path.
      * @throws if a *different* handler is already registered at the same path
-     *         (duplicate static route). Re-setting the same handler reference
-     *         (used for loose trailing-slash variants) is allowed.
+     * (duplicate static route). Re-setting the same handler reference
+     * (used for loose trailing-slash variants) is allowed.
      */
     set(path: string, handler: CompiledHandler): void {
         const existing = this.map.get(path);

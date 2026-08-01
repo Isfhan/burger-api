@@ -2,10 +2,10 @@
 
 ## Source of truth
 
-Product and architecture decisions: `../burger-api-roadmaps/BURGERAPI_VISION.md`  
+Product and architecture decisions: [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md)  
 When anything conflicts, **the vision wins**. Do not invent architecture. Ask if unclear.
 
-Also: `AGENTS.md`, `../burger-api-roadmaps/ARCHITECTURE.md`.
+Also: `AGENTS.md`.
 
 ---
 

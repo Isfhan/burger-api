@@ -4,7 +4,7 @@ import type { RouteModule } from './route-module';
  * A lightweight structural view of the compiled route set, used for
  * introspection and deterministic ordering. It performs NO dispatch logic
  * (that belongs to the router's `StaticMap`/`Trie`); it only organizes
- * `RouteModule`s by their path so later phases and tooling can walk the
+ * `RouteModule`s by their path so downstream compilation and tooling can walk the
  * application shape predictably.
  *
  * Built once after the Module Loader produces the `RouteModule[]`; frozen for

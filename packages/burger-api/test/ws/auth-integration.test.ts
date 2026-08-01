@@ -1,29 +1,36 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { WebSocketAdapter } from '../../src/ws/adapter';
 import { WebSocketRouter } from '../../src/ws/router';
-import type { CompiledWebSocketRoute, WebSocketConfig } from '../../src/ws/types';
+import type {
+    CompiledWebSocketRoute,
+    WebSocketConfig,
+} from '../../src/ws/types';
 import type { BurgerContext } from '../../src/context/context';
 
-describe('WebSocket Auth Integration (Phase 10)', () => {
+describe('WebSocket Auth Integration', () => {
     let router: WebSocketRouter;
 
     beforeEach(() => {
         router = new WebSocketRouter();
     });
 
-    const createRoute = (path: string, overrides: Partial<CompiledWebSocketRoute> = {}): CompiledWebSocketRoute => ({
+    const createRoute = (
+        path: string,
+        overrides: Partial<CompiledWebSocketRoute> = {}
+    ): CompiledWebSocketRoute => ({
         path,
         handlers: {},
         config: {},
         ...overrides,
     });
 
-    const createUpgradeRequest = (path = '/chat') => new Request(`http://localhost${path}`, {
-        headers: {
-            upgrade: 'websocket',
-            connection: 'Upgrade',
-        },
-    });
+    const createUpgradeRequest = (path = '/chat') =>
+        new Request(`http://localhost${path}`, {
+            headers: {
+                upgrade: 'websocket',
+                connection: 'Upgrade',
+            },
+        });
 
     const createMockServer = () => ({
         upgrade: (_req: any, opts: any) => {
@@ -121,7 +128,10 @@ describe('WebSocket Auth Integration (Phase 10)', () => {
                     async (ctx: BurgerContext) => {
                         return new Response(
                             JSON.stringify({ detail: 'Unauthorized' }),
-                            { status: 401, headers: { 'Content-Type': 'application/json' } }
+                            {
+                                status: 401,
+                                headers: { 'Content-Type': 'application/json' },
+                            }
                         );
                     },
                 ],

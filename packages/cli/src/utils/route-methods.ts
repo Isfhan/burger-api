@@ -74,7 +74,9 @@ export async function detectExportedMethods(
 
     // Scan each export { ... } block and collect all HTTP method names inside it
     EXPORT_NAMED_BLOCK_RE.lastIndex = 0;
-    while ((match = EXPORT_NAMED_BLOCK_RE.exec(contentWithoutComments)) !== null) {
+    while (
+        (match = EXPORT_NAMED_BLOCK_RE.exec(contentWithoutComments)) !== null
+    ) {
         const blockContent = match[1] ?? '';
         let methodMatch: RegExpExecArray | null;
         METHOD_NAME_RE.lastIndex = 0;
@@ -111,7 +113,7 @@ const EXPORT_HOOK_FUNCTION_RE =
 /**
  * Detect which lifecycle hook names a `hooks.ts` module exports. Mirrors
  * {@link detectExportedMethods} but for hook exports rather than HTTP methods
- * (Phase 4). Used by the build scanner to decide whether a route directory
+ *. Used by the build scanner to decide whether a route directory
  * carries a usable `hooks.ts`.
  */
 export async function detectExportedHookNames(
@@ -129,7 +131,9 @@ export async function detectExportedHookNames(
 
     let match: RegExpExecArray | null;
     EXPORT_HOOK_CONST_RE.lastIndex = 0;
-    while ((match = EXPORT_HOOK_CONST_RE.exec(contentWithoutComments)) !== null) {
+    while (
+        (match = EXPORT_HOOK_CONST_RE.exec(contentWithoutComments)) !== null
+    ) {
         if (match[1]) found.add(match[1]);
     }
 

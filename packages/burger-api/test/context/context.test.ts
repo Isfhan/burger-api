@@ -22,13 +22,15 @@ describe('BurgerContext (prototype-based request)', () => {
         });
         expect(ctx.params).toBeUndefined();
         expect(ctx.wildcardParams).toBeUndefined();
-        // route is always present in Phase 2 for matched routes.
+        // route is always present in for matched routes.
         expect(ctx.route).toEqual({ path: '/', pattern: '/' });
     });
 
     it('parses query lazily and caches it (single parse)', () => {
         const raw = new Request('http://h/?q=hello+world&a=1&a=2');
-        const ctx = BurgerContext.create(raw, { route: { path: '/', pattern: '/' } });
+        const ctx = BurgerContext.create(raw, {
+            route: { path: '/', pattern: '/' },
+        });
         const first = ctx.query;
         expect(first).toEqual({ q: 'hello world', a: ['1', '2'] });
         // Second access returns the identical cached object (no re-parse).
@@ -40,7 +42,9 @@ describe('BurgerContext (prototype-based request)', () => {
             method: 'POST',
             headers: { 'x-test': 'yes' },
         });
-        const ctx = BurgerContext.create(raw, { route: { path: '/p', pattern: '/p' } });
+        const ctx = BurgerContext.create(raw, {
+            route: { path: '/p', pattern: '/p' },
+        });
         expect(ctx.method).toBe('POST');
         expect(ctx.url).toBe('http://h/p?x=1');
         expect(ctx.headers.get('x-test')).toBe('yes');
@@ -54,10 +58,17 @@ describe('BurgerContext (prototype-based request)', () => {
             method: 'POST',
             body: JSON.stringify({ ok: true }),
         });
-        const ctx = BurgerContext.create(raw, { route: { path: '/', pattern: '/' } });
+        const ctx = BurgerContext.create(raw, {
+            route: { path: '/', pattern: '/' },
+        });
         expect(await ctx.json()).toEqual({ ok: true });
-        const raw2 = new Request('http://h/', { method: 'POST', body: 'plain' });
-        const ctx2 = BurgerContext.create(raw2, { route: { path: '/', pattern: '/' } });
+        const raw2 = new Request('http://h/', {
+            method: 'POST',
+            body: 'plain',
+        });
+        const ctx2 = BurgerContext.create(raw2, {
+            route: { path: '/', pattern: '/' },
+        });
         expect(await ctx2.text()).toBe('plain');
         expect(typeof ctx2.arrayBuffer).toBe('function');
         expect(typeof ctx2.blob).toBe('function');
@@ -69,7 +80,7 @@ describe('BurgerContext (prototype-based request)', () => {
         const ctx = BurgerContext.create(new Request('http://h/'), {
             route: { path: '/', pattern: '/' },
         });
-        // Starts undefined so the validation middleware runs (Phase 1 parity).
+        // Starts undefined so the validation middleware runs.
         expect(ctx.validated).toBeUndefined();
         ctx.validated = { params: { id: '1' } };
         expect(ctx.validated).toEqual({ params: { id: '1' } });
@@ -81,19 +92,24 @@ describe('BurgerContext (prototype-based request)', () => {
 
     it('creates exactly one instance per request (no wrapper per middleware)', () => {
         const raw = new Request('http://h/');
-        const ctx = BurgerContext.create(raw, { route: { path: '/', pattern: '/' } });
+        const ctx = BurgerContext.create(raw, {
+            route: { path: '/', pattern: '/' },
+        });
         expect(ctx).toBe(ctx);
         expect(Object.getPrototypeOf(ctx)).toBe(BurgerContext.prototype);
     });
 });
 
-describe('applySet (response mutation, Phase 2 only)', () => {
+describe('applySet (response mutation, only)', () => {
     it('merges headers over the existing response and overrides status', () => {
         const res = new Response('body', {
             status: 200,
             headers: { 'content-type': 'text/plain', existing: 'keep' },
         });
-        const out = applySet(res, { status: 201, headers: { 'x-new': '1', existing: 'over' } });
+        const out = applySet(res, {
+            status: 201,
+            headers: { 'x-new': '1', existing: 'over' },
+        });
         expect(out.status).toBe(201);
         expect(out.headers.get('x-new')).toBe('1');
         expect(out.headers.get('existing')).toBe('over');

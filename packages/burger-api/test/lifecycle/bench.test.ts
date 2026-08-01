@@ -20,11 +20,7 @@ function makeHooks(n: number): any[] {
     return hooks;
 }
 
-async function fireN(
-    router: Router,
-    path: string,
-    n: number
-): Promise<number> {
+async function fireN(router: Router, path: string, n: number): Promise<number> {
     const start = performance.now();
     const requests = Array.from({ length: n }, (_, i) =>
         router.fetch(new Request(`http://h${path}?n=${i}`))
@@ -84,8 +80,7 @@ describe('Lifecycle performance regression checks', () => {
             {
                 path: '/prov',
                 handlers: {
-                    GET: (req: any) =>
-                        Response.json({ v: req.pluginValue }),
+                    GET: (req: any) => Response.json({ v: req.pluginValue }),
                 },
                 hooks: {
                     transform: {

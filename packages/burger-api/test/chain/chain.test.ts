@@ -3,7 +3,7 @@ import { HookChain } from '../../src/chain/chain';
 import { flatten } from '../../src/chain/flattener';
 import type { Hook, ErrorHook } from '../../src/lifecycle/types';
 
-describe('HookChain (Phase 4 M4)', () => {
+describe('HookChain', () => {
     it('starts empty', () => {
         const chain = new HookChain();
         expect(chain.getNodes()).toHaveLength(0);
@@ -30,13 +30,18 @@ describe('HookChain (Phase 4 M4)', () => {
 
     it('clears all nodes', () => {
         const chain = new HookChain();
-        chain.add({ stage: 'beforeRoute', fn: () => undefined, scope: 'local', owner: '/test' });
+        chain.add({
+            stage: 'beforeRoute',
+            fn: () => undefined,
+            scope: 'local',
+            owner: '/test',
+        });
         chain.clear();
         expect(chain.getNodes()).toHaveLength(0);
     });
 });
 
-describe('Flattener (Phase 4 M4)', () => {
+describe('Flattener', () => {
     it('produces empty arrays for an empty chain', () => {
         const chain = new HookChain();
         const plan = flatten(chain, '/test');
@@ -47,12 +52,39 @@ describe('Flattener (Phase 4 M4)', () => {
         expect(plan.transform).toBeUndefined();
     });
 
-    it('orders beforeRoute: global → plugin → local', () => {
+    it('orders beforeRoute: plugin → global → local', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('beforeRoute', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('beforeRoute', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('plugin');
+                },
+            ],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('global');
+                },
+            ],
+            'global',
+            'g'
+        );
 
         const plan = flatten(chain, '/r');
         expect(plan.beforeRoute).toHaveLength(3);
@@ -60,31 +92,103 @@ describe('Flattener (Phase 4 M4)', () => {
         for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
-        expect(order).toEqual(['global', 'plugin', 'local']);
+        expect(order).toEqual(['plugin', 'global', 'local']);
     });
 
-    it('orders beforeRoute with framework scope: framework → global → plugin → local', () => {
+    it('orders beforeRoute with framework scope: framework → plugin → global → local', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('beforeRoute', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('beforeRoute', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('beforeRoute', [() => { order.push('global'); }], 'global', 'g');
-        chain.addStage('beforeRoute', [() => { order.push('framework'); }], 'framework', 'fw');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('plugin');
+                },
+            ],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('global');
+                },
+            ],
+            'global',
+            'g'
+        );
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('framework');
+                },
+            ],
+            'framework',
+            'fw'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {
             (h as (req: unknown) => void)(undefined);
         }
-        expect(order).toEqual(['framework', 'global', 'plugin', 'local']);
+        expect(order).toEqual(['framework', 'plugin', 'global', 'local']);
     });
 
     it('orders afterRoute with framework scope: local → global → plugin → framework', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('afterRoute', [() => { order.push('framework'); }], 'framework', 'fw');
-        chain.addStage('afterRoute', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('afterRoute', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('afterRoute', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage(
+            'afterRoute',
+            [
+                () => {
+                    order.push('framework');
+                },
+            ],
+            'framework',
+            'fw'
+        );
+        chain.addStage(
+            'afterRoute',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'afterRoute',
+            [
+                () => {
+                    order.push('plugin');
+                },
+            ],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'afterRoute',
+            [
+                () => {
+                    order.push('global');
+                },
+            ],
+            'global',
+            'g'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.afterRoute) {
@@ -96,9 +200,36 @@ describe('Flattener (Phase 4 M4)', () => {
     it('orders mapResponse reversed: local → global → plugin', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('mapResponse', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('mapResponse', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('mapResponse', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('plugin');
+                },
+            ],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('global');
+                },
+            ],
+            'global',
+            'g'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.mapResponse) {
@@ -110,10 +241,46 @@ describe('Flattener (Phase 4 M4)', () => {
     it('orders mapResponse with framework scope: local → global → plugin → framework', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('mapResponse', [() => { order.push('framework'); }], 'framework', 'fw');
-        chain.addStage('mapResponse', [() => { order.push('local'); }], 'local', '/r');
-        chain.addStage('mapResponse', [() => { order.push('plugin'); }], 'plugin', 'p');
-        chain.addStage('mapResponse', [() => { order.push('global'); }], 'global', 'g');
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('framework');
+                },
+            ],
+            'framework',
+            'fw'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('local');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('plugin');
+                },
+            ],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    order.push('global');
+                },
+            ],
+            'global',
+            'g'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.mapResponse) {
@@ -125,19 +292,46 @@ describe('Flattener (Phase 4 M4)', () => {
     it('orders onError nearest-first: local → global → plugin', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('onError', [
-            () => { order.push('global'); return undefined; },
-        ] as ErrorHook[], 'global', 'g');
-        chain.addStage('onError', [
-            () => { order.push('plugin'); return undefined; },
-        ] as ErrorHook[], 'plugin', 'p');
-        chain.addStage('onError', [
-            () => { order.push('local'); return undefined; },
-        ] as ErrorHook[], 'local', '/r');
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('global');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'global',
+            'g'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('plugin');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('local');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.onError) {
-            (h as (err: Error, req: unknown) => void)(new Error('test'), undefined);
+            (h as (err: Error, req: unknown) => void)(
+                new Error('test'),
+                undefined
+            );
         }
         expect(order).toEqual(['local', 'global', 'plugin']);
     });
@@ -145,22 +339,57 @@ describe('Flattener (Phase 4 M4)', () => {
     it('orders onError with framework scope: local → global → plugin → framework', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('onError', [
-            () => { order.push('framework'); return undefined; },
-        ] as ErrorHook[], 'framework', 'fw');
-        chain.addStage('onError', [
-            () => { order.push('local'); return undefined; },
-        ] as ErrorHook[], 'local', '/r');
-        chain.addStage('onError', [
-            () => { order.push('plugin'); return undefined; },
-        ] as ErrorHook[], 'plugin', 'p');
-        chain.addStage('onError', [
-            () => { order.push('global'); return undefined; },
-        ] as ErrorHook[], 'global', 'g');
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('framework');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'framework',
+            'fw'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('local');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('plugin');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'plugin',
+            'p'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    order.push('global');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'global',
+            'g'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.onError) {
-            (h as (err: Error, req: unknown) => void)(new Error('test'), undefined);
+            (h as (err: Error, req: unknown) => void)(
+                new Error('test'),
+                undefined
+            );
         }
         expect(order).toEqual(['local', 'global', 'plugin', 'framework']);
     });
@@ -170,8 +399,18 @@ describe('Flattener (Phase 4 M4)', () => {
         const routeHook = () => 'route';
         const validationHook = () => 'validation';
 
-        chain.add({ stage: 'beforeRoute', fn: validationHook, scope: 'global', owner: 'framework' });
-        chain.add({ stage: 'beforeRoute', fn: routeHook, scope: 'local', owner: '/r' });
+        chain.add({
+            stage: 'beforeRoute',
+            fn: validationHook,
+            scope: 'global',
+            owner: 'framework',
+        });
+        chain.add({
+            stage: 'beforeRoute',
+            fn: routeHook,
+            scope: 'local',
+            owner: '/r',
+        });
 
         const plan = flatten(chain, '/r');
         expect(plan.beforeRoute).toHaveLength(2);
@@ -183,11 +422,22 @@ describe('Flattener (Phase 4 M4)', () => {
     it('preserves insertion order within the same scope', () => {
         const chain = new HookChain();
         const order: string[] = [];
-        chain.addStage('beforeRoute', [
-            () => { order.push('a'); },
-            () => { order.push('b'); },
-            () => { order.push('c'); },
-        ], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    order.push('a');
+                },
+                () => {
+                    order.push('b');
+                },
+                () => {
+                    order.push('c');
+                },
+            ],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         for (const h of plan.beforeRoute) {
@@ -203,10 +453,47 @@ describe('Flattener (Phase 4 M4)', () => {
         const resp: string[] = [];
         const err: string[] = [];
 
-        chain.addStage('beforeRoute', [() => { before.push('bh'); }], 'local', '/r');
-        chain.addStage('afterRoute', [() => { after.push('ah'); }], 'local', '/r');
-        chain.addStage('mapResponse', [() => { resp.push('or'); }], 'local', '/r');
-        chain.addStage('onError', [() => { err.push('oe'); return undefined; }] as ErrorHook[], 'local', '/r');
+        chain.addStage(
+            'beforeRoute',
+            [
+                () => {
+                    before.push('bh');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'afterRoute',
+            [
+                () => {
+                    after.push('ah');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'mapResponse',
+            [
+                () => {
+                    resp.push('or');
+                },
+            ],
+            'local',
+            '/r'
+        );
+        chain.addStage(
+            'onError',
+            [
+                () => {
+                    err.push('oe');
+                    return undefined;
+                },
+            ] as ErrorHook[],
+            'local',
+            '/r'
+        );
 
         const plan = flatten(chain, '/r');
         expect(plan.beforeRoute).toHaveLength(1);

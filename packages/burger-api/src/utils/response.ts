@@ -56,7 +56,7 @@ import type { ContextSet } from '../context/types';
  * Reports whether a `ContextSet` carries any response mutation.
  *
  * `applySet` uses this to skip rebuilding the `Response` when nothing changed
- * (ROADMAP-phase2 §8.7 — zero work when no mutations exist).
+ * (no work when no mutations exist).
  */
 export function hasSetMutations(set?: ContextSet): boolean {
     if (!set) return false;
@@ -80,12 +80,12 @@ export function hasSetMutations(set?: ContextSet): boolean {
 /**
  * Merges a `ContextSet` (`req.set`) into the outgoing `Response`.
  *
- * Rules (see ROADMAP-phase2.md §8.7):
+ * Rules (see ):
  * - `set.headers` is merged *over* the response's existing headers; explicitly
- *   set values win. Headers the handler already set are kept unless overridden
- *   by name.
+ * set values win. Headers the handler already set are kept unless overridden
+ * by name.
  * - `set.status` overrides the response status **only when defined**; otherwise
- *   the handler's status is preserved.
+ * the handler's status is preserved.
  * - Runs exactly once, at the single pipeline exit, for every response path.
  *
  * The `set` object is optional and, when it carries no mutation, the original

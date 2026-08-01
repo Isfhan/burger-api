@@ -76,9 +76,7 @@ describe('DirectoryScanner — inventory', () => {
     });
 
     it('groups only affect URL path (no inheritance chain)', () => {
-        const dashboard = routes.find(
-            (r) => r.routePath === '/api/dashboard'
-        )!;
+        const dashboard = routes.find((r) => r.routePath === '/api/dashboard')!;
         // (admin) group is stripped from URL — route path is /api/dashboard
         expect(dashboard.routePath).toBe('/api/dashboard');
         // No groupFiles or groupChain — self-contained
@@ -115,7 +113,10 @@ describe('DirectoryScanner — convention validation', () => {
         try {
             mkdirSync(path.join(root, 'x', '[id]'), { recursive: true });
             mkdirSync(path.join(root, 'x', '[...]'), { recursive: true });
-            writeFileSync(path.join(root, 'x', '[id]', 'route.ts'), 'export {};');
+            writeFileSync(
+                path.join(root, 'x', '[id]', 'route.ts'),
+                'export {};'
+            );
             const scanner = new DirectoryScanner(root, 'api');
             await expect(scanner.scan()).rejects.toThrow(
                 /dynamic and wildcard/

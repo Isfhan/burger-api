@@ -1,24 +1,28 @@
 import type { BurgerContext } from '../context/context';
-import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
+import type {
+    CompiledRouteValidators,
+    ValidatorConfig,
+} from '../validation/types';
 
 /**
  * The forward lifecycle phases that run inside the single request pipeline.
  * `onError` is a separate error-path interceptor.
  *
  * The fixed forward order is:
- *   onRequest → Routing → transform → Validation → beforeRoute
- *   → Handler → afterRoute → mapResponse → applySet
+ * onRequest → Routing → transform → Validation → beforeRoute
+ * → Handler → afterRoute → mapResponse → applySet
  */
-export type HookStage = 'validation' | 'beforeRoute' | 'afterRoute' | 'mapResponse';
+export type HookStage =
+    'validation' | 'beforeRoute' | 'afterRoute' | 'mapResponse';
 
 /**
  * A lifecycle hook function.
  *
  * Uses the 3-return-type contract:
- *  - `beforeRoute` — `Response` short-circuits the pipeline; `undefined`
- *    continues.
- *  - `afterRoute` / `mapResponse` — `Response` replaces the response;
- *    `(res) => Response` transforms it; `undefined` / `void` continues.
+ * - `beforeRoute` — `Response` short-circuits the pipeline; `undefined`
+ * continues.
+ * - `afterRoute` / `mapResponse` — `Response` replaces the response;
+ * `(res) => Response` transforms it; `undefined` / `void` continues.
  */
 export type Hook = (ctx: BurgerContext) => unknown;
 
@@ -79,8 +83,8 @@ export interface HookPlan {
  * Example:
  * ```ts
  * export const transform = {
- *   user: (ctx) => loadUser(ctx),
- *   tenant: (ctx) => ctx.headers.get('X-Tenant'),
+ * user: (ctx) => loadUser(ctx),
+ * tenant: (ctx) => ctx.headers.get('X-Tenant'),
  * };
  * ```
  */

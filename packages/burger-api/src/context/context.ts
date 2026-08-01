@@ -13,14 +13,34 @@ import { parseCookies } from './cookie-parser';
  *
  * ```ts
  * declare module "burger-api" {
- *   interface BurgerServices {
- *     db: Database;
- *     logger: Logger;
- *   }
+ * interface BurgerServices {
+ * db: Database;
+ * logger: Logger;
+ * }
  * }
  * ```
  */
 export interface BurgerServices {}
+
+/**
+ * Module augmentation target for validated request data (`ctx.validated`).
+ * Default slots match the validator (`params`, `query`, `body`, `headers`, `cookie`).
+ *
+ * ```ts
+ * declare module "burger-api" {
+ * interface BurgerValidated {
+ * body: { name: string };
+ * }
+ * }
+ * ```
+ */
+export interface BurgerValidated {
+    params?: unknown;
+    query?: unknown;
+    body?: unknown;
+    headers?: unknown;
+    cookie?: unknown;
+}
 
 /**
  * Module augmentation target for adding custom properties to BurgerContext.
@@ -28,11 +48,11 @@ export interface BurgerServices {}
  *
  * ```ts
  * declare module "burger-api" {
- *   interface BurgerContext {
- *     user: User;
- *     session: Session;
- *     tenant: Tenant;
- *   }
+ * interface BurgerContext {
+ * user: User;
+ * session: Session;
+ * tenant: Tenant;
+ * }
  * }
  * ```
  *
@@ -50,15 +70,15 @@ export interface BurgerContext {}
  *
  * Design:
  * - One **shared, frozen prototype** carries every lazy getter and every
- *   delegated `Request` method. Per-request instances hold **only mutable
- *   state** (`_raw`, `_query`, `_cookies`, `validated`, `set`, `services`,
- *   `_ctxInit`), so every instance has an identical shape — preserving the
- *   monomorphic hidden class.
+ * delegated `Request` method. Per-request instances hold **only mutable
+ * state** (`_raw`, `_query`, `_cookies`, `validated`, `set`, `services`,
+ * `_ctxInit`), so every instance has an identical shape — preserving the
+ * monomorphic hidden class.
  * - Fields are parsed **lazily** and **at most once** (single-parse guarantee);
- *   a field a route never reads is never parsed and never allocated.
+ * a field a route never reads is never parsed and never allocated.
  * - The standard `Request` surface is **delegated** to the underlying `Request`
- *   (`_raw`); `BurgerContext` does not extend `Request` and does not copy its
- *   state.
+ * (`_raw`); `BurgerContext` does not extend `Request` and does not copy its
+ * state.
  *
  * `BurgerContext` is the object that flows through the hook pipeline and into
  * handlers.
@@ -88,24 +108,24 @@ export class BurgerContext {
      * state. Starts `undefined` so the validation hook runs (it
      * short-circuits when `ctx.validated` is already truthy).
      */
-    validated: Record<string, unknown> | undefined = undefined;
+    validated: BurgerValidated | undefined = undefined;
 
     /**
      * The response-mutation object exposed through `ctx.set`. Mutable instance
      * state; merged into the response by `applySet` at the pipeline exit.
-     * `cookies` is reserved for Phase 7.
+     * `cookies` is reserved for a future release.
      */
     set: ContextSet = Object.create(null);
 
     /**
-     * Injected application services. Populated by `burger.provide()` (Phase 4).
+     * Injected application services. Populated by `burger.provide()`.
      * Typed via module augmentation of `BurgerServices`:
      * ```ts
      * declare module "burger-api" {
-     *   interface BurgerServices {
-     *     db: Database;
-     *     mailer: Mailer;
-     *   }
+     * interface BurgerServices {
+     * db: Database;
+     * mailer: Mailer;
+     * }
      * }
      * ```
      */
@@ -123,7 +143,7 @@ export class BurgerContext {
      * obvious allocation site.
      *
      * `meta` (a `RouteAccessInfo` hint) is accepted but **ignored at runtime** in
-     * Phase 2 — behavior never depends on it, because every field is already
+     * behavior never depends on it, because every field is already
      * available lazily on the stable prototype.
      */
     static create(
@@ -140,7 +160,9 @@ export class BurgerContext {
         ctx._cookies = undefined;
         ctx.validated = undefined;
         ctx.set = Object.create(null);
-        ctx.services = (providers ? Object.fromEntries(providers) : Object.create(null)) as BurgerServices;
+        ctx.services = (
+            providers ? Object.fromEntries(providers) : Object.create(null)
+        ) as BurgerServices;
         ctx._config = config;
         return ctx;
     }
@@ -179,7 +201,7 @@ export class BurgerContext {
         return this._ctxInit.wildcardParams;
     }
 
-    /** The matched-route identity (seeded from `ctxInit`). Always present in Phase 2. */
+    /** The matched-route identity (seeded from `ctxInit`). Always present . */
     get route(): RouteMeta | undefined {
         return this._ctxInit.route;
     }
@@ -246,7 +268,7 @@ export class BurgerContext {
 /**
  * Generic delegation of the full Bun `Request` surface.
  *
- * ROADMAP-phase2 §6.1.1 asks that *every* member Bun exposes on `Request` be
+ * The design requires that *every* member Bun exposes on `Request` be
  * reachable through `BurgerContext` without hand-maintaining a list. Rather
  * than a `Proxy` (which breaks hidden-class optimization and adds per-access
  * trap overhead), we copy the remaining `Request.prototype` members onto the
@@ -286,7 +308,7 @@ for (const name of Object.getOwnPropertyNames(Request.prototype)) {
 }
 
 /**
- * Freeze the shared prototype's **getters** (ROADMAP-phase2 §13). The lazy and
+ * Freeze the shared prototype's **getters**. The lazy and
  * delegated getters (`query`, `params`, `route`, `headers`, `method`, `url`,
  * `signal`, `body`, `bodyUsed`, plus any generic `Request` getters) are made
  * non-configurable so a handler cannot replace them on the shared prototype and

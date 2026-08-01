@@ -1,7 +1,8 @@
+import type { RouteDefinition } from '../types/index';
 import type {
-    RouteDefinition,
-} from '../types/index';
-import type { CompiledRouteValidators, ValidatorConfig } from '../validation/types';
+    CompiledRouteValidators,
+    ValidatorConfig,
+} from '../validation/types';
 import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
 
 /**
@@ -11,7 +12,7 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
  * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior regardless of which
  * lookup mechanism reached it.
  *
- * Phase 2: the handler receives the raw `Request` plus an optional `ctxInit`
+ * the handler receives the raw `Request` plus an optional `ctxInit`
  * (seeded by `Router.fetch`) and is responsible for creating the single
  * `BurgerContext` for the request.
  */
@@ -30,9 +31,9 @@ export interface CompiledRoute {
     allow: string;
     /** The matched-route identity (`path` + `pattern`), retained for introspection. */
     route?: RouteMeta;
-    /** The optional RouteAccessAnalyzer hint (unused at runtime in Phase 2). */
+    /** The optional RouteAccessAnalyzer hint (unused at runtime ). */
     meta?: RouteAccessInfo;
-    /** The precompiled validators for this route (Phase 3). Undefined when the
+    /** The precompiled validators for this route. Undefined when the
      * route has no `schema`. Consumed by the validation orchestrator. */
     validators?: CompiledRouteValidators;
 }
@@ -66,6 +67,6 @@ export interface CompiledRouter {
 export interface RouterConfig {
     /** When true, the optional RouteAccessAnalyzer is skipped at compile time. */
     debug?: boolean;
-    /** Phase 3 validation configuration (coercion / response / errors). */
+    /** validation configuration (coercion / response / errors). */
     validation?: ValidatorConfig;
 }
