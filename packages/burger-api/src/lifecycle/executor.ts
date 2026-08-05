@@ -81,8 +81,8 @@ export async function executeHookPlan(
             }
         }
 
-        response = await runResponsePhase(plan.afterRoute, ctx, response);
-        response = await runResponsePhase(plan.mapResponse, ctx, response);
+        response = await runResponseHooks(plan.afterRoute, ctx, response);
+        response = await runResponseHooks(plan.mapResponse, ctx, response);
 
         return response;
     } catch (error) {
@@ -140,11 +140,11 @@ async function dispatchOnError(
 }
 
 /**
- * Runs one response-phase (`afterRoute` / `mapResponse`). Each hook may return
- * a `Response` (replace), a transform function `(res) => Response` (transform),
- * or `undefined` / `void` (continue).
+ * Runs one response hook point (`afterRoute` / `mapResponse`). Each hook may
+ * return a `Response` (replace), a transform function `(res) => Response`
+ * (transform), or `undefined` / `void` (continue).
  */
-async function runResponsePhase(
+async function runResponseHooks(
     hooks: Hook[],
     ctx: BurgerContext,
     response: Response

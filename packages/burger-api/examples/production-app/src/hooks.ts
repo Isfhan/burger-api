@@ -18,7 +18,7 @@ export const rateLimiter = (ctx: BurgerContext) => {
     return undefined;
 };
 
-export const corsMiddleware = (ctx: BurgerContext) => {
+export const corsHook = (ctx: BurgerContext) => {
     return async (response: Response) => {
         const headers = new Headers(response.headers);
         headers.set('Access-Control-Allow-Origin', '*');
@@ -32,4 +32,4 @@ export const corsMiddleware = (ctx: BurgerContext) => {
     };
 };
 
-export const beforeRoute = [globalLogger, corsMiddleware, rateLimiter, authGuard];
+export const beforeRoute = [globalLogger, corsHook, rateLimiter, authGuard];

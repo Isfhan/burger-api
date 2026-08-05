@@ -12,8 +12,11 @@ export function filePathToApiRoutePath(
     filePath: string,
     prefix: string
 ): string {
-    if (filePath.endsWith('route.ts')) {
-        filePath = filePath.slice(0, -'route.ts'.length);
+    for (const ext of ['.ts', '.js', '.mjs']) {
+        if (filePath.endsWith(`route${ext}`)) {
+            filePath = filePath.slice(0, -`route${ext}`.length);
+            break;
+        }
     }
 
     const segments = filePath.split(path.sep);

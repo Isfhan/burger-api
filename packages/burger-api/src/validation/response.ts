@@ -1,6 +1,6 @@
 /**
  * The response validator — validates a handler's return against declared
- * per-status schemas (§8).
+ * per-status schemas.
  *
  * Responsibilities:
  * - Select the response schema by status (exact code, then class `2xx`).

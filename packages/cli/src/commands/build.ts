@@ -105,7 +105,7 @@ export const buildCommand = new Command('build')
     .description('Bundle your project into .build/bundle/')
     .argument(
         '<file>',
-        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+        'Entry file (used for compatibility; config from burger.build.ts or conventions)'
     )
     .option('--outfile <path>', 'Output bundle path', '.build/bundle/app.js')
     .option('--minify', 'Minify the output')
@@ -164,7 +164,7 @@ export const buildExecutableCommand = new Command('build:exec')
     )
     .argument(
         '<file>',
-        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+        'Entry file (used for compatibility; config from burger.build.ts or conventions)'
     )
     .option('--outfile <path>', 'Output executable path')
     .option(

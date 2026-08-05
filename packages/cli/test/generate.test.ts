@@ -161,6 +161,47 @@ describe('generate route files to disk', () => {
     });
 });
 
+describe('generate — JavaScript (--lang js)', () => {
+    it('generateRouteFiles emits .js files with JSDoc', () => {
+        const files = generateRouteFiles('users', {}, 'js');
+        expect(files['route.js']).toBeDefined();
+        expect(files['schema.js']).toBeDefined();
+        expect(files['openapi.js']).toBeDefined();
+        expect(files['hooks.js']).toBeDefined();
+        expect(files['config.js']).toBeDefined();
+        expect(files['route.ts']).toBeUndefined();
+        expect(files['route.js']).toContain(
+            "@param {import('burger-api').BurgerContext} ctx"
+        );
+        expect(files['route.js']).not.toContain(': BurgerContext');
+    });
+
+    it('generateHookTemplate is type-free for JS', () => {
+        const js = generateHookTemplate('cors', 'js');
+        expect(js).toContain('export function cors()');
+        expect(js).toContain('src/hooks.js');
+        expect(js).not.toContain('BurgerContext');
+    });
+
+    it('generatePluginTemplate uses JSDoc type for JS', () => {
+        const js = generatePluginTemplate('jwt', 'js');
+        expect(js).toContain("@type {import('burger-api').Plugin}");
+        expect(js).toContain('src/plugins.js');
+        expect(js).not.toContain('import type');
+    });
+
+    it('generateWsFiles emits ws.js with JSDoc', () => {
+        const files = generateWsFiles('chat', {}, 'js');
+        expect(files['ws.js']).toBeDefined();
+        expect(files['hooks.js']).toBeDefined();
+        expect(files['config.js']).toBeDefined();
+        expect(files['ws.js']).toContain(
+            "@param {import('burger-api').BurgerWS} ws"
+        );
+        expect(files['ws.js']).not.toContain(': BurgerWS');
+    });
+});
+
 describe('generateWsFiles', () => {
     it('generates all convention files by default', () => {
         const files = generateWsFiles('chat');

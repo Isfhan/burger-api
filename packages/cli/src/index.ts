@@ -18,7 +18,7 @@ import { addCommand } from './commands/add';
 import { skillsCommand } from './commands/skills';
 import { listCommand } from './commands/list';
 import { buildCommand, buildExecutableCommand } from './commands/build';
-import { devCommand, serveCommand } from './commands/dev';
+import { devCommand } from './commands/dev';
 import { startCommand } from './commands/start';
 import { generateCommand } from './commands/generate';
 import { inspectCommand } from './commands/inspect';
@@ -70,7 +70,6 @@ program.addCommand(buildCommand); // Bundle to JS file
 program.addCommand(buildExecutableCommand); // Compile to executable
 program.addCommand(devCommand); // Development server with hot reload
 program.addCommand(startCommand); // Production server
-program.addCommand(serveCommand); // Deprecated alias for dev
 program.addCommand(generateCommand); // Scaffold routes, hooks, plugins
 program.addCommand(inspectCommand); // Display routes, config, hooks
 program.addCommand(doctorCommand); // Validate project structure

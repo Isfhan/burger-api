@@ -20,37 +20,44 @@ Or manually copy to `ecosystem/plugins/oidc/`.
 
 ## Usage
 
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
+
 ### Google OIDC
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { oidc } from "./ecosystem/plugins/oidc/oidc";
+import type { Burger } from "burger-api";
+import { oidc } from "../ecosystem/plugins/oidc/oidc";
 
-const burger = new Burger();
-
-burger.usePlugin(oidc({
-  issuer: "https://accounts.google.com",
-  audience: "my-client-id",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(oidc({
+    issuer: "https://accounts.google.com",
+    audience: "my-client-id",
+  }));
+}
 ```
 
 ### Auth0
 
 ```typescript
-burger.usePlugin(oidc({
-  issuer: "https://my-tenant.auth0.com/",
-  audience: "https://api.myapp.com",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(oidc({
+    issuer: "https://my-tenant.auth0.com/",
+    audience: "https://api.myapp.com",
+  }));
+}
 ```
 
 ### Azure AD
 
 ```typescript
-burger.usePlugin(oidc({
-  issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0",
-  audience: "my-app-id",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(oidc({
+    issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0",
+    audience: "my-app-id",
+  }));
+}
 ```
 
 ## Configuration options
@@ -69,7 +76,7 @@ burger.usePlugin(oidc({
 ### Disable auth for public routes
 
 ```typescript
-// api/public/config.ts
+// src/api/public/config.ts
 export default {
   auth: false,
 };
@@ -78,7 +85,7 @@ export default {
 ### Require authentication
 
 ```typescript
-// api/private/config.ts
+// src/api/private/config.ts
 export default {
   auth: {
     required: true,

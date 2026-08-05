@@ -38,13 +38,13 @@ describe('doctor checks (via project structure)', () => {
             'package.json',
             JSON.stringify({
                 name: 'test',
-                dependencies: { 'burger-api': '^0.15.0' },
+                dependencies: { 'burger-api': '^1.0.0' },
             })
         );
         const pkg = JSON.parse(
             readFileSync(join(tmpDir, 'package.json'), 'utf-8')
         );
-        expect(pkg.dependencies['burger-api']).toBe('^0.15.0');
+        expect(pkg.dependencies['burger-api']).toBe('^1.0.0');
     });
 
     it('detects burger-api in devDependencies', async () => {
@@ -52,13 +52,13 @@ describe('doctor checks (via project structure)', () => {
             'package.json',
             JSON.stringify({
                 name: 'test',
-                devDependencies: { 'burger-api': '^0.15.0' },
+                devDependencies: { 'burger-api': '^1.0.0' },
             })
         );
         const pkg = JSON.parse(
             readFileSync(join(tmpDir, 'package.json'), 'utf-8')
         );
-        expect(pkg.devDependencies['burger-api']).toBe('^0.15.0');
+        expect(pkg.devDependencies['burger-api']).toBe('^1.0.0');
     });
 
     it('detects src/api/ directory', async () => {
@@ -120,7 +120,7 @@ describe('doctor checks (via project structure)', () => {
             'package.json',
             JSON.stringify({
                 name: 'test',
-                dependencies: { 'burger-api': '^0.15.0' },
+                dependencies: { 'burger-api': '^1.0.0' },
             })
         );
         await createFile('burger.build.ts', 'export default {}');

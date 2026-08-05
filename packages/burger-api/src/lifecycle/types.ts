@@ -5,7 +5,7 @@ import type {
 } from '../validation/types';
 
 /**
- * The forward lifecycle phases that run inside the single request pipeline.
+ * The forward hook points that run inside the single request pipeline.
  * `onError` is a separate error-path interceptor.
  *
  * The fixed forward order is:
@@ -41,7 +41,7 @@ export type ErrorHook = (
 ) => Response | void | undefined;
 
 /**
- * The frozen, per-route, per-phase hook plan. Composed ONCE at compile time
+ * The frozen, per-route hook plan. Composed ONCE at compile time
  * (RouterCompiler.compile) and executed inside the single pipeline.
  *
  * `validation` runs after `transform` but before `beforeRoute`. It is a
@@ -56,9 +56,9 @@ export interface HookPlan {
     validation?: Hook;
     /** Runs global → route. */
     beforeRoute: Hook[];
-    /** Response-transform phase; runs route → global. */
+    /** Response-transform hooks; run route → global. */
     afterRoute: Hook[];
-    /** Final mutation phase; may touch `ctx.set`; runs route → global. */
+    /** Final response hooks; may touch `ctx.set`; run route → global. */
     mapResponse: Hook[];
     /** Error interceptor; runs nearest-first (route → global). */
     onError: ErrorHook[];

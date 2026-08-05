@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the security headers middleware.
+ * Configuration options for the security headers hook.
  */
 export interface SecurityHeadersOptions {
     /**
@@ -131,13 +131,13 @@ export interface SecurityHeadersOptions {
 }
 
 /**
- * Creates a security headers middleware to protect against common web vulnerabilities.
+ * Creates a security headers hook to protect against common web vulnerabilities.
  *
- * This middleware adds various security-related HTTP headers to responses to help
+ * This hook adds various security-related HTTP headers to responses to help
  * protect your application from attacks like XSS, clickjacking, and more.
  *
  * @param options - Configuration options for security headers
- * @returns A middleware function that adds security headers to responses
+ * @returns A hook function that adds security headers to responses
  *
  * @example
  * ```typescript

@@ -10,7 +10,7 @@ This example includes:
 -   **Product API** with validation
 -   **Error handling** for invalid requests
 -   **Zod validation** for request body and parameters
--   **Route-specific middleware** for logging (middleware is code that runs
+-   **Route-specific hooks** for logging (hooks are code that run
     around your handler)
 
 ## Features Demonstrated
@@ -197,17 +197,24 @@ The test suite includes **15 tests** covering:
 ```
 error-handling/
 ├── README.md              # This file
-├── index.ts              # Server entry point
 ├── api.test.ts           # Test suite
-├── api/                  # API routes
-│   └── products/
-│       ├── route.ts      # POST /api/products
-│       ├── detail/
-│       │   └── route.ts  # GET /api/products/detail
-│       └── [id]/
-│           └── route.ts  # GET /api/products/:id
-└── middleware/
-    └── logger.ts         # Global logger middleware
+└── src/
+    ├── index.ts          # Server entry point
+    ├── hooks.ts          # Global logger hook
+    └── api/              # API routes
+        ├── hooks.ts      # Route-level hooks
+        └── products/
+            ├── route.ts  # POST /api/products
+            ├── schema.ts # POST request schema
+            ├── openapi.ts# OpenAPI metadata
+            ├── hooks.ts  # Route-specific hooks
+            ├── detail/
+            │   └── route.ts  # GET /api/products/detail
+            └── [id]/
+                ├── route.ts  # GET /api/products/:id
+                ├── schema.ts # Params schema
+                ├── openapi.ts# OpenAPI metadata
+                └── hooks.ts  # Route-specific hooks
 ```
 
 ## Key Concepts
@@ -215,7 +222,7 @@ error-handling/
 1. **Validation**: Using Zod schemas to validate request data
 2. **Error Handling**: Proper error responses for invalid requests
 3. **Type Safety**: TypeScript types inferred from Zod schemas
-4. **Middleware**: Route-specific middleware for logging
+4. **Hooks**: Route-specific hooks for logging
 
 ## Troubleshooting
 

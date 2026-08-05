@@ -19,14 +19,14 @@ Request logging hook factory for burger-api framework. Hooks are code that runs 
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add logger
 ```
 
 ## Usage
@@ -34,13 +34,13 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { logger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [logger()];
+export const beforeRoute = [logger()];
 
 // index.ts
 import { Burger } from 'burger-api';
-new Burger({ apiDir: './api' }).serve(4000);
+new Burger({ apiDir: './src/api' }).serve(4000);
 ```
 
 **Output:**
@@ -53,9 +53,9 @@ new Burger({ apiDir: './api' }).serve(4000);
 ### With Request IDs
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const onRequest = [createLogger({
+export const beforeRoute = [createLogger({
     requestId: true,
     requestIdHeader: 'X-Request-ID',
 })];
@@ -74,9 +74,9 @@ The request ID is:
 ### JSON Format
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const onRequest = [createLogger({
+export const beforeRoute = [createLogger({
     format: 'json',
 })];
 ```
@@ -89,9 +89,9 @@ export const onRequest = [createLogger({
 ### With Additional Options
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const onRequest = [createLogger({
+export const beforeRoute = [createLogger({
     colors: true,
     logQuery: true,
     logHeaders: false
@@ -101,9 +101,9 @@ export const onRequest = [createLogger({
 ### Skip Health Check Endpoints
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     skip: '/health' // Don't log health check requests
 })];
 ```
@@ -111,9 +111,9 @@ export const beforeHandle = [createLogger({
 ### Skip Multiple Paths with Regex
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     skip: /^\/(health|metrics|favicon\.ico)/ // Skip health, metrics, favicon
 })];
 ```
@@ -121,12 +121,12 @@ export const beforeHandle = [createLogger({
 ### Custom Skip Function
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
-    skip: (req) => {
+export const beforeRoute = [createLogger({
+    skip: (ctx) => {
         // Skip OPTIONS requests and health checks
-        return req.method === 'OPTIONS' || req.url.includes('/health');
+        return ctx.method === 'OPTIONS' || ctx.url.includes('/health');
     }
 })];
 ```
@@ -134,9 +134,9 @@ export const beforeHandle = [createLogger({
 ### Custom Formatter
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     formatter: (info) => {
         // Custom format: "[timestamp] method path status duration"
         return `[${info.timestamp}] ${info.method} ${info.path} - ${info.status} (${info.duration}ms)`;
@@ -147,9 +147,9 @@ export const beforeHandle = [createLogger({
 ### JSON Logging
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     colors: false, // Disable colors for JSON
     formatter: (info) => {
         return JSON.stringify({
@@ -171,13 +171,13 @@ export const beforeHandle = [createLogger({
 ### Log to File
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 import fs from 'fs';
 
 const logStream = fs.createWriteStream('app.log', { flags: 'a' });
 
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     colors: false, // No colors for file logging
     logFn: (message) => {
         logStream.write(message + '\n');
@@ -188,9 +188,9 @@ export const beforeHandle = [createLogger({
 ### Detailed Logging (Development)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     logQuery: true,
     logHeaders: true,
     logBody: true // ⚠️ Be careful with sensitive data
@@ -294,7 +294,7 @@ Custom function to output log messages. Use this to log to files, external servi
 
 ### `skip`
 
-- **Type**: `string | RegExp | ((req: BurgerRequest) => boolean)`
+- **Type**: `string | RegExp | ((ctx: BurgerContext) => boolean)`
 - **Default**: `undefined`
 
 Skip logging for specific requests:
@@ -327,14 +327,14 @@ The logger automatically color-codes output for better readability:
 ### Production Logging Setup
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 import fs from 'fs';
 
 const isDev = process.env.NODE_ENV === 'development';
 const logFile = fs.createWriteStream('production.log', { flags: 'a' });
 
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     colors: isDev,
     logQuery: isDev,
     logHeaders: isDev,
@@ -358,7 +358,7 @@ export const beforeHandle = [createLogger({
 ### Integration with External Logging Services
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 
 // Example: Send logs to external service
@@ -370,7 +370,7 @@ async function sendToLoggingService(logData: any) {
     });
 }
 
-export const beforeHandle = [createLogger({
+export const beforeRoute = [createLogger({
     colors: false,
     formatter: (info) => {
         // Still log to console
@@ -387,7 +387,7 @@ export const beforeHandle = [createLogger({
 ### Different Logs for Different Routes
 
 ```typescript
-// api/admin/hooks.ts
+// src/api/admin/hooks.ts
 import { createLogger } from '../../ecosystem/hooks/logger/logger';
 
 // Detailed logging for admin routes
@@ -399,7 +399,7 @@ const adminLogger = createLogger({
     }
 });
 
-export const beforeHandle = [adminLogger];
+export const beforeRoute = [adminLogger];
 ```
 
 ## Performance Notes
@@ -444,9 +444,9 @@ createLogger({
 
 ```typescript
 createLogger({
-    skip: (req) => {
-        // Custom logic in response transformer
-        return false; // Log everything, filter in formatter
+    skip: (ctx) => {
+        // Log everything, filter in formatter
+        return false;
     },
     formatter: (info) => {
         if (info.status >= 400) {
@@ -459,11 +459,11 @@ createLogger({
 
 ## 🐰 Bun.js Optimization
 
-This middleware leverages **Bun-specific APIs** for enhanced performance when running on Bun.js v1.3.1+:
+This hook leverages **Bun-specific APIs** for enhanced performance when running on Bun.js v1.3.1+:
 
 ### High-Precision Timing with `Bun.nanoseconds()`
 
-Instead of `Date.now()` (millisecond precision), the middleware uses `Bun.nanoseconds()` when available:
+Instead of `Date.now()` (millisecond precision), the hook uses `Bun.nanoseconds()` when available:
 
 ```typescript
 // Standard timing (1ms precision):

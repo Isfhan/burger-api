@@ -22,27 +22,26 @@ Or manually copy to `ecosystem/plugins/jwt-auth/`.
 
 ## Usage
 
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
+
 ### Basic HMAC (HS256)
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { jwtAuth } from "./ecosystem/plugins/jwt-auth/jwt-auth";
+import type { Burger } from "burger-api";
+import { jwtAuth } from "../ecosystem/plugins/jwt-auth/jwt-auth";
 
-const burger = new Burger();
-
-burger.usePlugin(jwtAuth({
-  secret: process.env.JWT_SECRET,
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(jwtAuth({
+    secret: process.env.JWT_SECRET,
+  }));
+}
 ```
 
 ### RS256 (Asymmetric)
 
 ```typescript
-// src/plugins.ts
-import { Burger } from "burger-api";
-import { jwtAuth } from "./ecosystem/plugins/jwt-auth/jwt-auth";
-
 // Load public key (e.g., from JWKS endpoint)
 const publicKey = await crypto.subtle.importKey(
   "spki",
@@ -52,21 +51,25 @@ const publicKey = await crypto.subtle.importKey(
   ["verify"]
 );
 
-burger.usePlugin(jwtAuth({
-  publicKey,
-  algorithm: "RS256",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(jwtAuth({
+    publicKey,
+    algorithm: "RS256",
+  }));
+}
 ```
 
 ### With issuer and audience validation
 
 ```typescript
-burger.usePlugin(jwtAuth({
-  secret: process.env.JWT_SECRET,
-  algorithm: "HS256",
-  issuer: "https://auth.myapp.com",
-  audience: "https://api.myapp.com",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(jwtAuth({
+    secret: process.env.JWT_SECRET,
+    algorithm: "HS256",
+    issuer: "https://auth.myapp.com",
+    audience: "https://api.myapp.com",
+  }));
+}
 ```
 
 ## Configuration options
@@ -87,7 +90,7 @@ burger.usePlugin(jwtAuth({
 ### Disable auth for public routes
 
 ```typescript
-// api/public/config.ts
+// src/api/public/config.ts
 export default {
   auth: false,
 };
@@ -96,7 +99,7 @@ export default {
 ### Require specific roles
 
 ```typescript
-// api/admin/config.ts
+// src/api/admin/config.ts
 export default {
   auth: {
     required: true,

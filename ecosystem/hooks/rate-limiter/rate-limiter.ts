@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the rate limiter middleware.
+ * Configuration options for the rate limiter hook.
  */
 export interface RateLimiterOptions {
     /**
@@ -55,14 +55,14 @@ interface RateLimitRecord {
 }
 
 /**
- * Creates a rate limiter middleware to prevent API abuse.
+ * Creates a rate limiter hook to prevent API abuse.
  *
- * This middleware tracks the number of requests from each client within a time window
+ * This hook tracks the number of requests from each client within a time window
  * and blocks requests that exceed the specified limit. It uses an in-memory store
  * to track request counts.
  *
  * @param options - Configuration options for rate limiting
- * @returns A middleware function that enforces rate limits
+ * @returns A hook function that enforces rate limits
  *
  * @example
  * ```typescript

@@ -1,7 +1,7 @@
 // Import stuff from burger-api
 import { Burger, setDir } from 'burger-api';
 
-// Create a new Burger instance with OpenAPI metadata and global middleware.
+// Create a new Burger instance with OpenAPI metadata and global hooks.
 const burger = new Burger({
     title: 'Demo API',
     description:

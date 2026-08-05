@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'bun:test';
 import {
     generateBurgerConfig,
+    generateJsConfig,
+    generateHooksIndex,
+    generateOpenAPIConfig,
+    generatePluginsFile,
+    generateProvidersFile,
+    generateRouteFiles,
+    generateTsConfig,
     generatePackageJson,
 } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
@@ -64,5 +71,95 @@ describe('generatePackageJson', () => {
         const pkg = JSON.parse(content);
 
         expect(pkg.dependencies['burger-api']).toBeDefined();
+    });
+
+    it('generates .js entry scripts for JS projects', () => {
+        const pkg = JSON.parse(generatePackageJson('my-project', 'js'));
+
+        expect(pkg.scripts.dev).toBe('burger-api dev -f src/index.js');
+        expect(pkg.scripts.start).toBe('burger-api start -f src/index.js');
+        expect(pkg.scripts.build).toBe('burger-api build src/index.js');
+    });
+});
+
+describe('JS scaffold (--lang js)', () => {
+    const jsOptions: CreateOptions = {
+        name: 'my-api',
+        useApi: true,
+        apiDir: 'api',
+        apiPrefix: '/api',
+        debug: false,
+        usePages: false,
+        pageDir: 'pages',
+        pagePrefix: '/',
+        lang: 'js',
+    };
+
+    it('generateJsConfig enables checkJs and strict JSDoc checking', () => {
+        const config = JSON.parse(generateJsConfig());
+
+        expect(config.compilerOptions.checkJs).toBe(true);
+        expect(config.compilerOptions.strict).toBe(true);
+        expect(config.compilerOptions.noEmit).toBe(true);
+        expect(config.include).toContain('src');
+    });
+
+    it('generateRouteFiles emits .js files with JSDoc types for JS', () => {
+        const files = generateRouteFiles('hello', {}, 'js');
+
+        expect(Object.keys(files).sort()).toEqual([
+            'config.js',
+            'hooks.js',
+            'openapi.js',
+            'route.js',
+            'schema.js',
+        ]);
+        expect(files['route.js']).toContain(
+            "@param {import('burger-api').BurgerContext} ctx"
+        );
+        expect(files['route.js']).not.toContain(': BurgerContext');
+        expect(files['hooks.js']).toContain(
+            "@param {import('burger-api').BurgerContext} ctx"
+        );
+    });
+
+    it('generateRouteFiles keeps .ts files with types for TS', () => {
+        const files = generateRouteFiles('hello', {}, 'ts');
+
+        expect(files['route.ts']).toContain(
+            'export async function GET(ctx: BurgerContext): Promise<Response>'
+        );
+        expect(files['route.js']).toBeUndefined();
+    });
+
+    it('generateOpenAPIConfig omits type-only imports for JS', () => {
+        const js = generateOpenAPIConfig(jsOptions);
+        const ts = generateOpenAPIConfig({ ...jsOptions, lang: 'ts' });
+
+        expect(js).not.toContain("import type { OpenAPIConfig }");
+        expect(js).not.toContain('satisfies OpenAPIConfig');
+        expect(ts).toContain("import type { OpenAPIConfig }");
+        expect(ts).toContain('satisfies OpenAPIConfig;');
+    });
+
+    it('generatePluginsFile/generateProvidersFile are type-free for JS', () => {
+        expect(generatePluginsFile('js')).not.toContain('import type');
+        expect(generatePluginsFile('js')).toContain('export default (burger) =>');
+        expect(generateProvidersFile('js')).not.toContain('import type');
+        expect(generateProvidersFile('ts')).toContain(
+            "import type { Burger } from 'burger-api';"
+        );
+    });
+
+    it('generateHooksIndex drops TS-only annotations for JS', () => {
+        expect(generateHooksIndex('js')).not.toContain(': unknown[]');
+        expect(generateHooksIndex('ts')).toContain(': unknown[]');
+    });
+
+    it('generateTsConfig still emits for TS projects', () => {
+        const config = JSON.parse(generateTsConfig());
+
+        expect(config.compilerOptions.strict).toBe(true);
+        expect(config.compilerOptions.types).toEqual(['bun-types']);
     });
 });

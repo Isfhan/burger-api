@@ -1,10 +1,17 @@
 /**
  * WebSocket directory scanner
- * Scans src/websocket/ for ws.ts files
+ * Scans the WebSocket directory for ws.ts / ws.js / ws.mjs files
  */
 
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
+import {
+    splitConventionName,
+    type ConventionFile,
+} from '../compiler/conventions';
+
+/** WebSocket convention stems (extension is `.ts` / `.js` / `.mjs`). */
+const WS_CONVENTION_FILES = ['ws', 'hooks', 'config'] as const;
 
 /**
  * Scanned WebSocket route
@@ -16,17 +23,17 @@ export interface ScannedWebSocketRoute {
     path: string;
 
     /**
-     * Absolute path to ws.ts file
+     * Absolute path to ws.ts / ws.js / ws.mjs file
      */
     wsFile: string;
 
     /**
-     * Absolute path to hooks.ts file (if any)
+     * Absolute path to hooks file (if any)
      */
     hooksFile?: string;
 
     /**
-     * Absolute path to config.ts file (if any)
+     * Absolute path to config file (if any)
      */
     configFile?: string;
 
@@ -88,21 +95,26 @@ export class WebSocketScanner {
 
         // Detect global hooks at the parent directory
         let globalHooks: string | undefined;
+        const parentDir = path.dirname(this.wsDir);
+        let rootEntries: { name: string; isFile: () => boolean }[] = [];
         try {
-            const parentDir = path.dirname(this.wsDir);
-            const rootEntries = await readdir(parentDir, {
+            rootEntries = await readdir(parentDir, {
                 withFileTypes: true,
             });
-            for (const entry of rootEntries) {
-                if (entry.isFile() && entry.name === 'hooks.ts') {
-                    globalHooks = path.resolve(
-                        path.join(parentDir, entry.name)
-                    );
-                    break;
-                }
-            }
         } catch {
             // Parent directory may not exist
+        }
+        for (const entry of rootEntries) {
+            if (!entry.isFile()) continue;
+            const split = splitConventionName(entry.name);
+            if (!split || split.stem !== 'hooks') continue;
+            if (globalHooks) {
+                throw new Error(
+                    `Conflicting app-level hooks files "${globalHooks}" and "${path.join(parentDir, entry.name)}" — ` +
+                        `use only one of .ts/.js/.mjs.`
+                );
+            }
+            globalHooks = path.resolve(path.join(parentDir, entry.name));
         }
 
         return { routes, globalHooks };
@@ -122,31 +134,39 @@ export class WebSocketScanner {
         const entries = await readdir(dir, { withFileTypes: true });
         const subDirs: string[] = [];
 
+        // Collect ws / hooks / config files across all accepted extensions.
+        const wsFiles: Map<string, string> = new Map();
         for (const entry of entries) {
             if (entry.isDirectory()) {
                 subDirs.push(entry.name);
                 continue;
             }
-
-            // Only process ws.ts files
-            if (entry.name !== 'ws.ts') continue;
-
-            const wsFile = path.resolve(path.join(dir, entry.name));
-            const dirName = path.basename(dir);
-
-            // Check for hooks.ts and config.ts in the same directory
-            let hooksFile: string | undefined;
-            let configFile: string | undefined;
-
-            for (const otherEntry of entries) {
-                if (!otherEntry.isFile()) continue;
-                if (otherEntry.name === 'hooks.ts') {
-                    hooksFile = path.resolve(path.join(dir, otherEntry.name));
-                }
-                if (otherEntry.name === 'config.ts') {
-                    configFile = path.resolve(path.join(dir, otherEntry.name));
-                }
+            if (!entry.isFile()) continue;
+            const split = splitConventionName(entry.name);
+            if (
+                !split ||
+                !(WS_CONVENTION_FILES as readonly string[]).includes(
+                    split.stem
+                )
+            ) {
+                continue;
             }
+            const abs = path.resolve(path.join(dir, entry.name));
+            const existing = wsFiles.get(split.stem);
+            if (existing) {
+                throw new Error(
+                    `Conflicting convention files "${existing}" and "${abs}" in "${dir}" — ` +
+                        `use only one of .ts/.js/.mjs per convention file.`
+                );
+            }
+            wsFiles.set(split.stem, abs);
+        }
+
+        const wsFile = wsFiles.get('ws');
+        if (wsFile) {
+            const dirName = path.basename(dir);
+            const hooksFile = wsFiles.get('hooks');
+            const configFile = wsFiles.get('config');
 
             // Build route path
             const routePath = this.buildRoutePath(dir);
@@ -267,6 +287,6 @@ export class WebSocketScanner {
      */
     private extractGroupName(name: string): string {
         const match = name.match(/^\((.+)\)$/);
-        return match ? match[1] : name;
+        return match ? (match[1] ?? name) : name;
     }
 }

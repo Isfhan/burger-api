@@ -1,5 +1,5 @@
 /**
- * Spawns test/ecosystem-harness per middleware and asserts minimal HTTP behavior.
+ * Spawns test/ecosystem-harness per hook and asserts minimal HTTP behavior.
  */
 import { describe, it, expect } from 'bun:test';
 import { join } from 'path';
@@ -12,7 +12,7 @@ import {
 const harnessDir = join(import.meta.dir, 'ecosystem-harness');
 
 async function withHarness(
-    mw: string,
+    hook: string,
     fn: (baseUrl: string) => Promise<void>
 ): Promise<void> {
     let server: RunningExampleServer | null = null;
@@ -20,9 +20,7 @@ async function withHarness(
         server = await startExampleServer({
             exampleDir: harnessDir,
             healthPath: '/api',
-            env: { ...process.env, TEST_MW: mw },
-            acceptedStatuses:
-                mw === 'jwt-auth' || mw === 'api-key-auth' ? [401] : [200],
+            env: { ...process.env, TEST_MW: hook },
         });
         await fn(server.baseUrl);
     } finally {
@@ -30,7 +28,7 @@ async function withHarness(
     }
 }
 
-describe('ecosystem middleware harness', () => {
+describe('ecosystem hook harness', () => {
     it('cors: allows origin and sets CORS headers', async () => {
         await withHarness('cors', async (base) => {
             const res = await fetch(`${base}/api`, {
@@ -77,29 +75,6 @@ describe('ecosystem middleware harness', () => {
             const res = await fetch(`${base}/api`);
             expect(res.ok).toBe(true);
             expect(res.headers.get('X-Frame-Options')).toBeTruthy();
-        });
-    });
-
-    it('jwt-auth: rejects without token', async () => {
-        await withHarness('jwt-auth', async (base) => {
-            const res = await fetch(`${base}/api`);
-            expect(res.status).toBe(401);
-        });
-    });
-
-    it('api-key-auth: rejects without key', async () => {
-        await withHarness('api-key-auth', async (base) => {
-            const res = await fetch(`${base}/api`);
-            expect(res.status).toBe(401);
-        });
-    });
-
-    it('api-key-auth: accepts X-API-Key', async () => {
-        await withHarness('api-key-auth', async (base) => {
-            const res = await fetch(`${base}/api`, {
-                headers: { 'X-API-Key': 'harness-key' },
-            });
-            expect(res.ok).toBe(true);
         });
     });
 

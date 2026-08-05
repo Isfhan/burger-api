@@ -6,6 +6,7 @@ import type {
 } from './types';
 import { parseQuery } from './query-parser';
 import { parseCookies } from './cookie-parser';
+import type { InferValidated } from '../types/inference';
 
 /**
  * Empty interface for module augmentation. Users extend this to type
@@ -24,7 +25,11 @@ export interface BurgerServices {}
 
 /**
  * Module augmentation target for validated request data (`ctx.validated`).
- * Default slots match the validator (`params`, `query`, `body`, `headers`, `cookie`).
+ * Default slots match the validator (`params`, `query`, `body`, `headers`, `cookies`).
+ *
+ * With schema-driven inference (`BurgerContext<typeof GET>`), `ctx.validated`
+ * is typed from `schema.ts` automatically. Augmentation remains the escape
+ * hatch for anything inference cannot express:
  *
  * ```ts
  * declare module "burger-api" {
@@ -39,7 +44,7 @@ export interface BurgerValidated {
     query?: unknown;
     body?: unknown;
     headers?: unknown;
-    cookie?: unknown;
+    cookies?: unknown;
 }
 
 /**
@@ -68,6 +73,23 @@ export interface BurgerContext {}
  * `BurgerContext.create` entry point. It is never re-allocated inside the
  * hook pipeline.
  *
+ * Generic over the route's `schema.ts` method export for `ctx.validated`
+ * inference:
+ *
+ * ```ts
+ * // schema.ts
+ * export const GET = { query: z.object({ q: z.string() }) };
+ *
+ * // route.ts
+ * import type { GET as RouteSchema } from './schema';
+ * export async function GET(ctx: BurgerContext<typeof RouteSchema>) {
+ *     ctx.validated.query; // { q: string } | undefined
+ * }
+ * ```
+ *
+ * The default type parameter keeps plain `BurgerContext` annotations working
+ * (slots fall back to `unknown`, `BurgerValidated` augmentation applies).
+ *
  * Design:
  * - One **shared, frozen prototype** carries every lazy getter and every
  * delegated `Request` method. Per-request instances hold **only mutable
@@ -83,7 +105,7 @@ export interface BurgerContext {}
  * `BurgerContext` is the object that flows through the hook pipeline and into
  * handlers.
  */
-export class BurgerContext {
+export class BurgerContext<TRoute = unknown> {
     /**
      * The underlying `Request`. Delegated to for the standard `Request` surface.
      * Never copied; only this reference is held.
@@ -107,8 +129,11 @@ export class BurgerContext {
      * Validated data attached by the validation hook. Mutable instance
      * state. Starts `undefined` so the validation hook runs (it
      * short-circuits when `ctx.validated` is already truthy).
+     * Typed from `schema.ts` via `BurgerContext<typeof GET>`; falls back to
+     * `BurgerValidated` (augmentation) when no generic is supplied.
      */
-    validated: BurgerValidated | undefined = undefined;
+    validated: (InferValidated<TRoute> & BurgerValidated) | undefined =
+        undefined;
 
     /**
      * The response-mutation object exposed through `ctx.set`. Mutable instance
@@ -201,7 +226,7 @@ export class BurgerContext {
         return this._ctxInit.wildcardParams;
     }
 
-    /** The matched-route identity (seeded from `ctxInit`). Always present . */
+    /** The matched-route identity (seeded from `ctxInit`). Always present. */
     get route(): RouteMeta | undefined {
         return this._ctxInit.route;
     }
@@ -315,8 +340,8 @@ for (const name of Object.getOwnPropertyNames(Request.prototype)) {
  * leak state across requests. The delegation **methods** (incl. `json`, `text`,
  * `arrayBuffer`, `blob`, `formData`, `clone`) are intentionally left
  * writable/configurable so the framework can reassign `req.json` per instance
- * (validator.ts) and user hooks can attach custom properties (§6.1.4).
- * Freezing only getters preserves both the §13 safety goal and the documented
+ * (validator.ts) and user hooks can attach custom properties.
+ * Freezing only getters preserves the safety goal and the documented
  * mutability contract without breaking existing validation behavior.
  */
 for (const name of Object.getOwnPropertyNames(BurgerContext.prototype)) {

@@ -19,18 +19,25 @@ import { downloadSkill } from './github';
  * @param projectName - Name of the project
  * @returns package.json content as a string
  */
-export function generatePackageJson(projectName: string): string {
+export function generatePackageJson(
+    projectName: string,
+    lang: 'ts' | 'js' = 'ts'
+): string {
+    const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
     const packageJson = {
         name: projectName,
         version: '0.1.0',
         type: 'module',
         scripts: {
-            dev: 'burger-api dev',
-            start: 'burger-api start',
-            build: 'burger-api build src/index.ts',
+            dev: lang === 'js' ? 'burger-api dev -f src/index.js' : 'burger-api dev',
+            start:
+                lang === 'js'
+                    ? 'burger-api start -f src/index.js'
+                    : 'burger-api start',
+            build: `burger-api build ${entry}`,
         },
         dependencies: {
-            'burger-api': '^0.15.0',
+            'burger-api': '^1.0.0',
             zod: '^4.0.17',
         },
         devDependencies: {
@@ -83,6 +90,40 @@ export function generateTsConfig(): string {
     };
 
     return JSON.stringify(tsconfig, null, 2);
+}
+
+/**
+ * Generate jsconfig.json for JavaScript projects (`--lang js`).
+ * Enables editor type-checking of JSDoc annotations (checkJs).
+ *
+ * @returns jsconfig.json content as a string
+ */
+export function generateJsConfig(): string {
+    const jsconfig = {
+        compilerOptions: {
+            lib: ['ESNext'],
+            target: 'ESNext',
+            module: 'ESNext',
+            moduleDetection: 'force',
+            jsx: 'react-jsx',
+            checkJs: true,
+
+            // Best practices for JSDoc type safety
+            strict: true,
+            noImplicitAny: true,
+            noUncheckedIndexedAccess: true,
+
+            // Module resolution for Bun
+            moduleResolution: 'bundler',
+            allowSyntheticDefaultImports: true,
+            esModuleInterop: true,
+            skipLibCheck: true,
+            noEmit: true,
+        },
+        include: ['src'],
+    };
+
+    return JSON.stringify(jsconfig, null, 2);
 }
 
 /**
@@ -170,7 +211,7 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('});');
     lines.push('');
 
-    // Start server - uses PORT env variable for flexibility (e.g., burger-api serve --port 4000)
+    // Start server - uses PORT env variable for flexibility (e.g., burger-api start --port 4000)
     lines.push('const port = Number(process.env.PORT) || 4000;');
     lines.push('app.serve(port, () => {');
     lines.push(' console.log(`Server running on http://localhost:${port}`);');
@@ -208,356 +249,6 @@ export function generateBurgerConfig(options: CreateOptions): string {
         '};',
         '',
     ].join('\n');
-}
-
-/**
- * Generate a comprehensive API route file with full examples
- * Includes: OpenAPI metadata, Zod schemas, all HTTP methods, middleware
- * Every line has beginner-friendly comments explaining what it does
- *
- * @returns route.ts content as a string
- */
-export function generateApiRoute(): string {
-    return `/**
- * =============================================================================
- * BURGER API - EXAMPLE ROUTE FILE
- * =============================================================================
- * 
- * This file shows you everything you can do with BurgerAPI routes!
- * 
- * KEY CONCEPTS:
- * - This file is automatically loaded because it's named "route.ts"
- * - The folder path becomes the URL path (e.g., /api/route.ts → /api)
- * - Export functions named after HTTP methods: GET, POST, PUT, DELETE, etc.
- * 
- * =============================================================================
- */
-
-
-import { z } from 'zod';
-import type { BurgerContext, BurgerNext } from 'burger-api';
-
-
-/*
------------------------------------------------------------------------------
- OPENAPI METADATA (Optional but recommended!)
------------------------------------------------------------------------------
-
- - This creates automatic documentation for your API!
- - Visit /docs in your browser to see beautiful Swagger UI documentation.
- - Each HTTP method (get, post, put, delete) can have its own documentation.
------------------------------------------------------------------------------
-*/
-export const openapi = {
- // Documentation for the GET method
- get: {
- // 'summary' - A short title shown in the docs (keep it brief!)
- summary: 'Get all items',
- 
- // 'description' - A longer explanation of what this endpoint does
- description: 'Fetches a list of items. You can filter results using query parameters.',
- 
- // 'tags' - Groups related endpoints together in the docs
- // All endpoints with the same tag appear in the same section
- tags: ['Items'],
- 
- // 'operationId' - A unique ID for this endpoint (useful for code generation)
- operationId: 'getItems',
- 
- // 'responses' - Documents what responses the endpoint can return
- responses: {
- '200': { description: 'Successfully retrieved items' },
- '400': { description: 'Invalid query parameters' },
- },
- },
- 
- // Documentation for the POST method
- post: {
- summary: 'Create a new item',
- description: 'Creates a new item with the provided data. Returns the created item.',
- tags: ['Items'],
- operationId: 'createItem',
- responses: {
- '201': { description: 'Item created successfully' },
- '400': { description: 'Invalid request body' },
- },
- },
- 
- // Documentation for the PUT method
- put: {
- summary: 'Update an item',
- description: 'Updates an existing item. Provide the item ID in the query string.',
- tags: ['Items'],
- operationId: 'updateItem',
- responses: {
- '200': { description: 'Item updated successfully' },
- '400': { description: 'Invalid request data' },
- '404': { description: 'Item not found' },
- },
- },
- 
- // Documentation for the DELETE method 
- delete: {
- summary: 'Delete an item',
- description: 'Permanently deletes an item by ID.',
- tags: ['Items'],
- operationId: 'deleteItem',
- responses: {
- '200': { description: 'Item deleted successfully' },
- '404': { description: 'Item not found' },
- },
- },
-};
-
-
-/*
------------------------------------------------------------------------------
- SCHEMA VALIDATION (Using Zod)
------------------------------------------------------------------------------
-
-- Schemas define what data your API accepts. BurgerAPI automatically:
- - Validates incoming data against these schemas
- - Returns a 400 error if validation fails
- - Puts the validated data in ctx.validated for you to use
-
- - You can validate:
- - 'query' → URL query parameters like ?search=hello&page=1
- - 'body' → Request body (for POST/PUT requests)
- - 'params' → URL parameters like /items/[id] → { id: "123" }
------------------------------------------------------------------------------
-*/
-export const schema = {
- // Schema for GET requests - validates query parameters
- get: {
- // 'query' - Validates the URL query string
- // Example URL: /api?search=burger&limit=10&page=2
- query: z.object({
- // 'search' - Optional text to search for
- // .optional() means this field isn't required
- search: z.string().optional(),
- 
- // 'limit' - How many items to return (default: 10)
- // .coerce.number() converts string "10" to number 10
- // .min(1) means it must be at least 1
- // .max(100) means it can't be more than 100
- // .default(10) uses 10 if not provided
- limit: z.coerce.number().min(1).max(100).default(10),
- 
- // 'page' - Which page of results to return
- page: z.coerce.number().min(1).default(1),
- }),
- },
- 
- // Schema for POST requests - validates the request body
- post: {
- // 'body' - Validates JSON data sent in the request body
- body: z.object({
- // 'name' - Required, must be at least 1 character
- // .min(1, '...') shows a custom error message if too short
- name: z.string().min(1, 'Name is required'),
- 
- // 'description' - Optional text field
- description: z.string().optional(),
- 
- // 'price' - Required, must be a positive number
- // .positive() ensures the number is greater than 0
- price: z.number().positive('Price must be greater than 0'),
- 
- // 'category' - Must be one of these specific values
- // .enum() only allows the listed values
- category: z.enum(['food', 'drink', 'dessert']),
- 
- // 'isAvailable' - Optional boolean, defaults to true
- isAvailable: z.boolean().default(true),
- }),
- },
- 
- // Schema for PUT requests - validates both query and body
- put: {
- // Which item to update (ID in query string)
- query: z.object({
- id: z.string().min(1, 'Item ID is required'),
- }),
- 
- // What to update (in the request body)
- // .partial() makes all fields optional (for partial updates)
- body: z.object({
- name: z.string().min(1),
- description: z.string(),
- price: z.number().positive(),
- category: z.enum(['food', 'drink', 'dessert']),
- isAvailable: z.boolean(),
- }).partial(), // .partial() = all fields become optional
- },
- 
- // Schema for DELETE requests - validates query parameters
- delete: {
- query: z.object({
- id: z.string().min(1, 'Item ID is required'),
- }),
- },
-};
-
-
-/*
------------------------------------------------------------------------------
- ROUTE HOOKS (Optional)
------------------------------------------------------------------------------
-
- - Hooks run as part of the request lifecycle. Use beforeRoute for:
- - Logging requests
- - Checking authentication
- - Modifying the request
- - Blocking unauthorized access
-
- - Return 'undefined' to continue to the handler
- - Return a 'Response' to stop and send that response immediately
- - Define hooks in a hooks.ts file or export hooks from this route module
------------------------------------------------------------------------------
- */
-export const hooks = {
- beforeRoute: [
- // Example: Log every request to this route
- async (ctx: BurgerContext) => {
- console.log(\`[\${new Date().toISOString()}] \${ctx.method} \${ctx.url}\`);
- },
- ],
-};
-
-/*
------------------------------------------------------------------------------
- HTTP HANDLERS
------------------------------------------------------------------------------
-
- - These functions handle the actual requests. They receive:
- - ctx: The request context with validated data in ctx.validated
- - They must return a Response object. Use Response.json() for JSON responses.
------------------------------------------------------------------------------
-*/
-
-/**
- * GET - Fetch items with optional filtering
- * 
- * Example requests:
- * - GET /api → Get first 10 items
- * - GET /api?limit=5 → Get first 5 items 
- * - GET /api?search=burger&page=2 → Search for "burger", page 2
- */
-export async function GET(ctx: BurgerContext) {
- // Access validated query parameters from the schema
- const { search, limit, page } = ctx.validated.query;
- 
- // Mock data (replace with your database query)
- const mockItems = [
- { id: '1', name: 'Classic Burger', price: 9.99, category: 'food' },
- { id: '2', name: 'Cheese Burger', price: 11.99, category: 'food' },
- { id: '3', name: 'Cola', price: 2.99, category: 'drink' },
- ];
- 
- // Filter items if search is provided
- let items = mockItems;
- if (search) {
- items = items.filter(item => 
- item.name.toLowerCase().includes(search.toLowerCase())
- );
- }
- 
- // Calculate pagination
- const startIndex = (page - 1) * limit;
- const paginatedItems = items.slice(startIndex, startIndex + limit);
- 
- // Return JSON response with status 200 (default)
- return Response.json({
- success: true,
- data: paginatedItems,
- pagination: {
- page,
- limit,
- total: items.length,
- totalPages: Math.ceil(items.length / limit),
- },
- });
-}
-
-/**
- * POST - Create a new item
- * 
- * Example request body:
- * {
- * "name": "Veggie Burger",
- * "description": "Delicious plant-based burger",
- * "price": 12.99,
- * "category": "food"
- * }
- */
-export async function POST(ctx: BurgerContext) {
- // Get validated body data - already checked by Zod schema!
- const { name, description, price, category, isAvailable } = ctx.validated.body;
- 
- // Create the item (replace with your database insert)
- const newItem = {
- id: crypto.randomUUID(), // Generate unique ID
- name,
- description: description || null,
- price,
- category,
- isAvailable,
- createdAt: new Date().toISOString(),
- };
- 
- // Return the created item with status 201 (Created)
- return Response.json({
- success: true,
- message: 'Item created successfully',
- data: newItem,
- }, { status: 201 });
-}
-
-/**
- * PUT - Update an existing item
- * 
- * Example: PUT /api?id=123
- * Body: { "name": "Updated Name", "price": 15.99 }
- */
-export async function PUT(ctx: BurgerContext) {
- // Get the item ID from query parameters
- const { id } = ctx.validated.query;
- 
- // Get the fields to update from the request body
- const updates = ctx.validated.body;
- 
- // Find and update the item (replace with your database update)
- // Here we're just simulating an update
- const updatedItem = {
- id,
- ...updates,
- updatedAt: new Date().toISOString(),
- };
- 
- return Response.json({
- success: true,
- message: 'Item updated successfully',
- data: updatedItem,
- });
-}
-
-/**
- * DELETE - Remove an item
- * 
- * Example: DELETE /api?id=123
- */
-export async function DELETE(ctx: BurgerContext) {
- // Get the item ID from query parameters
- const { id } = ctx.validated.query;
- 
- // Delete the item (replace with your database delete)
- // Here we're just returning a success message
- return Response.json({
- success: true,
- message: \`Item \${id} deleted successfully\`,
- });
-}
-`;
 }
 
 /**
@@ -953,7 +644,7 @@ export function generateIndexPage(options: CreateOptions): string {
  <div class="command">
  <span class="prefix">$</span>
  <span class="cmd">burger-api add cors logger</span>
- <span class="comment"># Add middleware</span>
+ <span class="comment"># Add hooks</span>
  </div>
  <div class="command">
  <span class="prefix">$</span>
@@ -976,7 +667,7 @@ export function generateIndexPage(options: CreateOptions): string {
  <h3>Documentation</h3>
  <a href="https://burger-api.com/docs" target="_blank">Getting Started</a>
  <a href="https://burger-api.com/docs/core/configuration" target="_blank">Configuration</a>
- <a href="https://burger-api.com/docs/request-handling/middleware" target="_blank">Middleware</a>
+ <a href="https://burger-api.com/docs/core/request-handling" target="_blank">Request Handling</a>
  </div>
  <div class="docs-section">
  <h3>Resources</h3>
@@ -994,7 +685,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
  <!-- Footer -->
  <footer class="footer">
- <div class="version">BurgerAPI v0.10.0 • Bun v1.3+</div>
+ <div class="version">BurgerAPI v1.0.0 • Bun v1.3+</div>
  <div class="social-links">
  <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
  <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
@@ -1025,7 +716,16 @@ export function generateHooksFile(): string {
 `;
 }
 
-export function generatePluginsFile(): string {
+export function generatePluginsFile(lang: 'ts' | 'js' = 'ts'): string {
+    if (lang === 'js') {
+        return `// Register plugins here — apply to every request.
+// burger.usePlugin(myPlugin);
+
+export default (burger) => {
+ // burger.usePlugin(myPlugin);
+};
+`;
+    }
     return `import type { Burger } from 'burger-api';
 
 export default (burger: Burger) => {
@@ -1034,7 +734,16 @@ export default (burger: Burger) => {
 `;
 }
 
-export function generateProvidersFile(): string {
+export function generateProvidersFile(lang: 'ts' | 'js' = 'ts'): string {
+    if (lang === 'js') {
+        return `// Register services here — injected into ctx.services.
+// burger.provide('db', myDatabase);
+
+export default (burger) => {
+ // burger.provide('db', myDatabase);
+};
+`;
+    }
     return `import type { Burger } from 'burger-api';
 
 export default (burger: Burger) => {
@@ -1043,7 +752,25 @@ export default (burger: Burger) => {
 `;
 }
 
-export function generateMiddlewareIndex(): string {
+export function generateHooksIndex(lang: 'ts' | 'js' = 'ts'): string {
+    if (lang === 'js') {
+        return `/**
+ * Route Hooks
+ * 
+ * Define lifecycle hooks in hooks.js files. Example (api/hooks.js):
+ * 
+ * import { cors } from './cors/cors';
+ * import { logger } from './logger/logger';
+ * 
+ * export const beforeRoute = [
+ * logger(),
+ * cors(),
+ * ];
+ */
+
+export const beforeRoute = [];
+`;
+    }
     return `/**
  * Route Hooks
  * 
@@ -1072,8 +799,10 @@ export const beforeRoute: unknown[] = [];
 export function generateOpenAPIConfig(options: CreateOptions): string {
     const lines: string[] = [];
 
-    lines.push("import type { OpenAPIConfig } from 'burger-api';");
-    lines.push('');
+    if (options.lang !== 'js') {
+        lines.push("import type { OpenAPIConfig } from 'burger-api';");
+        lines.push('');
+    }
     lines.push('export default {');
     lines.push(` title: '${options.name || 'Burger API'}',`);
     lines.push(
@@ -1100,7 +829,11 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     lines.push(
         ' // mapJsonSchema: { date: (schema) => ({ type: "string", format: "date-time" }) },'
     );
-    lines.push('} satisfies OpenAPIConfig;');
+    if (options.lang === 'js') {
+        lines.push('};');
+    } else {
+        lines.push('} satisfies OpenAPIConfig;');
+    }
     lines.push('');
 
     return lines.join('\n');
@@ -1118,58 +851,74 @@ export async function createProject(
     options: CreateOptions
 ): Promise<void> {
     const spin = spinner('Creating project structure...');
+    const lang: 'ts' | 'js' = options.lang === 'js' ? 'js' : 'ts';
+    const ext = lang === 'js' ? 'js' : 'ts';
 
     try {
         // Create base files that every project needs
         await Bun.write(
             join(targetDir, 'package.json'),
-            generatePackageJson(options.name)
+            generatePackageJson(options.name, lang)
         );
-        await Bun.write(join(targetDir, 'tsconfig.json'), generateTsConfig());
+        if (lang === 'js') {
+            await Bun.write(
+                join(targetDir, 'jsconfig.json'),
+                generateJsConfig()
+            );
+        } else {
+            await Bun.write(
+                join(targetDir, 'tsconfig.json'),
+                generateTsConfig()
+            );
+        }
         await Bun.write(join(targetDir, '.gitignore'), generateGitIgnore());
         await Bun.write(
             join(targetDir, '.prettierrc'),
             generatePrettierConfig()
         );
         await Bun.write(
-            join(targetDir, 'burger.build.ts'),
+            join(targetDir, `burger.build.${ext}`),
             generateBurgerConfig(options)
         );
 
         // Create src directory and index file
         await Bun.write(
-            join(targetDir, 'src', 'index.ts'),
+            join(targetDir, 'src', `index.${ext}`),
             generateIndexFile(options)
         );
 
         // Create openapi.config.ts in src/
         await Bun.write(
-            join(targetDir, 'src', 'openapi.config.ts'),
+            join(targetDir, 'src', `openapi.config.${ext}`),
             generateOpenAPIConfig(options)
         );
 
         await Bun.write(
-            join(targetDir, 'src', 'hooks.ts'),
+            join(targetDir, 'src', `hooks.${ext}`),
             generateHooksFile()
         );
         await Bun.write(
-            join(targetDir, 'src', 'plugins.ts'),
-            generatePluginsFile()
+            join(targetDir, 'src', `plugins.${ext}`),
+            generatePluginsFile(lang)
         );
         await Bun.write(
-            join(targetDir, 'src', 'providers.ts'),
-            generateProvidersFile()
+            join(targetDir, 'src', `providers.${ext}`),
+            generateProvidersFile(lang)
         );
 
         // Create API directory and files if requested
         if (options.useApi) {
             const apiDir = join(targetDir, 'src', options.apiDir || 'api');
-            const routeFiles = generateRouteFiles('hello', {
-                schema: true,
-                openapi: true,
-                hooks: false,
-                config: false,
-            });
+            const routeFiles = generateRouteFiles(
+                'hello',
+                {
+                    schema: true,
+                    openapi: true,
+                    hooks: false,
+                    config: false,
+                },
+                lang
+            );
             for (const [name, content] of Object.entries(routeFiles)) {
                 await Bun.write(join(apiDir, name), content);
             }
@@ -1201,8 +950,8 @@ export async function createProject(
         // Create ecosystem/hooks directory for installed hooks
         const ecosystemHooksDir = join(targetDir, 'ecosystem', 'hooks');
         await Bun.write(
-            join(ecosystemHooksDir, 'index.ts'),
-            generateMiddlewareIndex()
+            join(ecosystemHooksDir, `index.${ext}`),
+            generateHooksIndex(lang)
         );
 
         // Download AI agent skills if requested
@@ -1287,53 +1036,103 @@ export interface GenerateRouteOptions {
  */
 export function generateRouteFiles(
     routeName: string,
-    options: GenerateRouteOptions = {}
+    options: GenerateRouteOptions = {},
+    lang: 'ts' | 'js' = 'ts'
 ): Record<string, string> {
     const files: Record<string, string> = {};
+    const ext = lang === 'js' ? 'js' : 'ts';
 
-    files['route.ts'] = [
-        "import type { BurgerContext } from 'burger-api';",
-        '',
-        'export async function GET(ctx: BurgerContext): Promise<Response> {',
-        ' return Response.json({ ok: true });',
-        '}',
-        '',
-    ].join('\n');
-
-    if (options.schema !== false) {
-        files['schema.ts'] = [
-            "import { z } from 'zod/v4';",
-            '',
-            'export const GET = {',
-            ' query: z.object({}),',
-            '};',
+    if (lang === 'js') {
+        files['route.js'] = [
+            '/**',
+            ' * GET /{your-route}',
+            ' * @param {import(\'burger-api\').BurgerContext} ctx',
+            ' * @returns {Promise<Response>}',
+            ' */',
+            'export async function GET(ctx) {',
+            ' return Response.json({ ok: true });',
+            '}',
             '',
         ].join('\n');
-    }
-
-    if (options.openapi !== false) {
-        files['openapi.ts'] = [
-            `export const GET = {`,
-            ` summary: '${routeName} endpoint',`,
-            ` tags: ['${routeName}'],`,
-            `};`,
-            '',
-        ].join('\n');
-    }
-
-    if (options.hooks !== false) {
-        files['hooks.ts'] = [
+    } else {
+        files['route.ts'] = [
             "import type { BurgerContext } from 'burger-api';",
             '',
-            'export async function beforeRoute(ctx: BurgerContext) {',
-            ' // Route-level hook',
+            'export async function GET(ctx: BurgerContext): Promise<Response> {',
+            ' return Response.json({ ok: true });',
             '}',
             '',
         ].join('\n');
     }
 
+    if (options.schema !== false) {
+        if (lang === 'js') {
+            files['schema.js'] = [
+                "import { z } from 'zod/v4';",
+                '',
+                'export const GET = {',
+                ' query: z.object({}),',
+                '};',
+                '',
+            ].join('\n');
+        } else {
+            files['schema.ts'] = [
+                "import { z } from 'zod/v4';",
+                '',
+                'export const GET = {',
+                ' query: z.object({}),',
+                '};',
+                '',
+            ].join('\n');
+        }
+    }
+
+    if (options.openapi !== false) {
+        if (lang === 'js') {
+            files['openapi.js'] = [
+                `export const GET = {`,
+                ` summary: '${routeName} endpoint',`,
+                ` tags: ['${routeName}'],`,
+                `};`,
+                '',
+            ].join('\n');
+        } else {
+            files['openapi.ts'] = [
+                `export const GET = {`,
+                ` summary: '${routeName} endpoint',`,
+                ` tags: ['${routeName}'],`,
+                `};`,
+                '',
+            ].join('\n');
+        }
+    }
+
+    if (options.hooks !== false) {
+        if (lang === 'js') {
+            files['hooks.js'] = [
+                '/**',
+                ' * Route-level hook.',
+                ' * @param {import(\'burger-api\').BurgerContext} ctx',
+                ' */',
+                'export async function beforeRoute(ctx) {',
+                ' // Route-level hook',
+                '}',
+                '',
+            ].join('\n');
+        } else {
+            files['hooks.ts'] = [
+                "import type { BurgerContext } from 'burger-api';",
+                '',
+                'export async function beforeRoute(ctx: BurgerContext) {',
+                ' // Route-level hook',
+                '}',
+                '',
+            ].join('\n');
+        }
+    }
+
     if (options.config !== false) {
-        files['config.ts'] = [
+        files[`config.${ext}`] = [
             'export default {',
             ' auth: false,',
             '};',
@@ -1347,7 +1146,24 @@ export function generateRouteFiles(
 /**
  * Generate a hook factory template for `burger-api generate hook <name>`.
  */
-export function generateHookTemplate(hookName: string): string {
+export function generateHookTemplate(
+    hookName: string,
+    lang: 'ts' | 'js' = 'ts'
+): string {
+    if (lang === 'js') {
+        return [
+            `/**`,
+            ` * ${hookName} hook factory.`,
+            ` * Import and register in src/hooks.js.`,
+            ` */`,
+            `export function ${hookName}() {`,
+            ` return async (ctx) => {`,
+            ` // hook logic`,
+            ` };`,
+            `}`,
+            '',
+        ].join('\n');
+    }
     return [
         `/**`,
         ` * ${hookName} hook factory.`,
@@ -1365,8 +1181,27 @@ export function generateHookTemplate(hookName: string): string {
 /**
  * Generate a plugin template for `burger-api generate plugin <name>`.
  */
-export function generatePluginTemplate(pluginName: string): string {
+export function generatePluginTemplate(
+    pluginName: string,
+    lang: 'ts' | 'js' = 'ts'
+): string {
     const className = pluginName.charAt(0).toUpperCase() + pluginName.slice(1);
+    if (lang === 'js') {
+        return [
+            `/**`,
+            ` * ${className} plugin.`,
+            ` * Import and register in src/plugins.js via burger.usePlugin().`,
+            ` */`,
+            `/** @type {import('burger-api').Plugin} */`,
+            `export const ${className} = {`,
+            ` name: '${pluginName}',`,
+            ` hooks: {`,
+            ` // transform, beforeRoute, afterRoute, etc.`,
+            ` },`,
+            `};`,
+            '',
+        ].join('\n');
+    }
     return [
         `/**`,
         ` * ${className} plugin.`,
@@ -1399,50 +1234,94 @@ export interface GenerateWsOptions {
  */
 export function generateWsFiles(
     routePath: string,
-    options: GenerateWsOptions = {}
+    options: GenerateWsOptions = {},
+    lang: 'ts' | 'js' = 'ts'
 ): Record<string, string> {
     const files: Record<string, string> = {};
+    const ext = lang === 'js' ? 'js' : 'ts';
 
-    files['ws.ts'] = [
-        "import type { BurgerWS } from 'burger-api';",
-        '',
-        'export function open(ws: BurgerWS) {',
-        ' // Handle new connection',
-        ' ws.send(JSON.stringify({ type: "connected" }));',
-        '}',
-        '',
-        'export function message(ws: BurgerWS, message: string | Buffer) {',
-        ' // Handle incoming message',
-        ' // ws.send(message); // echo back',
-        '}',
-        '',
-        'export function close(ws: BurgerWS, code: number, reason: string) {',
-        ' // Handle connection close',
-        '}',
-        '',
-    ].join('\n');
-
-    if (options.hooks !== false) {
-        files['hooks.ts'] = [
+    if (lang === 'js') {
+        files['ws.js'] = [
+            '/**',
+            ' * @param {import(\'burger-api\').BurgerWS} ws',
+            ' */',
+            'export function open(ws) {',
+            ' // Handle new connection',
+            ' ws.send(JSON.stringify({ type: "connected" }));',
+            '}',
+            '',
+            'export function message(ws, message) {',
+            ' // Handle incoming message',
+            ' // ws.send(message); // echo back',
+            '}',
+            '',
+            'export function close(ws, code, reason) {',
+            ' // Handle connection close',
+            '}',
+            '',
+        ].join('\n');
+    } else {
+        files['ws.ts'] = [
             "import type { BurgerWS } from 'burger-api';",
             '',
-            'export function onOpen(ws: BurgerWS) {',
-            ' // Runs before open handler',
+            'export function open(ws: BurgerWS) {',
+            ' // Handle new connection',
+            ' ws.send(JSON.stringify({ type: "connected" }));',
             '}',
             '',
-            'export function onMessage(ws: BurgerWS, message: string | Buffer) {',
-            ' // Runs before message handler',
+            'export function message(ws: BurgerWS, message: string | Buffer) {',
+            ' // Handle incoming message',
+            ' // ws.send(message); // echo back',
             '}',
             '',
-            'export function onClose(ws: BurgerWS, code: number, reason: string) {',
-            ' // Runs before close handler',
+            'export function close(ws: BurgerWS, code: number, reason: string) {',
+            ' // Handle connection close',
             '}',
             '',
         ].join('\n');
     }
 
+    if (options.hooks !== false) {
+        if (lang === 'js') {
+            files['hooks.js'] = [
+                '/**',
+                ' * @param {import(\'burger-api\').BurgerWS} ws',
+                ' */',
+                'export function onOpen(ws) {',
+                ' // Runs before open handler',
+                '}',
+                '',
+                'export function onMessage(ws, message) {',
+                ' // Runs before message handler',
+                '}',
+                '',
+                'export function onClose(ws, code, reason) {',
+                ' // Runs before close handler',
+                '}',
+                '',
+            ].join('\n');
+        } else {
+            files['hooks.ts'] = [
+                "import type { BurgerWS } from 'burger-api';",
+                '',
+                'export function onOpen(ws: BurgerWS) {',
+                ' // Runs before open handler',
+                '}',
+                '',
+                'export function onMessage(ws: BurgerWS, message: string | Buffer) {',
+                ' // Runs before message handler',
+                '}',
+                '',
+                'export function onClose(ws: BurgerWS, code: number, reason: string) {',
+                ' // Runs before close handler',
+                '}',
+                '',
+            ].join('\n');
+        }
+    }
+
     if (options.config !== false) {
-        files['config.ts'] = [
+        files[`config.${ext}`] = [
             'export default {',
             ' maxPayloadLength: 1024 * 1024, // 1MB',
             ' idleTimeout: 30,',

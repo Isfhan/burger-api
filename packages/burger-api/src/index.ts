@@ -1,9 +1,9 @@
 // Import stuff from core
 import { Server } from './core/server';
-import { ApiRouter } from './core/api-router';
 import { PageRouter } from './core/page-router';
 import { generateOpenAPIDocument } from './core/openapi';
 import { scalarDocs } from './core/docs-providers';
+import { timingSafeEqual } from './utils/timing-safe';
 
 // Import router
 import { Router } from './router';
@@ -43,7 +43,6 @@ import type {
     DocsProvider,
 } from './types/index';
 import type { WebSocketConfig } from './ws/types';
-import type { HTMLBundle } from 'bun';
 
 export class Burger {
     /**
@@ -52,13 +51,8 @@ export class Burger {
     private server: Server;
 
     /**
-     * The API router instance
-     */
-    private apiRouter?: ApiRouter;
-
-    /**
      * The resolved API directory (dev path) — retained so the Route Module
-     * pipeline can re-scan it without poking at ApiRouter internals.
+     * pipeline can re-scan it without poking at router internals.
      */
     private apiDir?: string;
 
@@ -118,7 +112,7 @@ export class Burger {
      * The routes object
      */
     private routes: {
-        [key: string]: HTMLBundle | RequestHandler;
+        [key: string]: RequestHandler;
     } = {};
 
     /**
@@ -157,6 +151,12 @@ export class Burger {
     private readonly OPENAPI_ERROR = OPENAPI_ERROR;
 
     /**
+     * Set once API routes have been compiled. Guards `processApiRoutes()` from
+     * re-running when both `serve()` and `fetchHandler()` are used.
+     */
+    private routesProcessed = false;
+
+    /**
      * Constructor for the Burger class.
      * @param options - The options for the server and router.
      * The options object should contain the following properties:
@@ -166,17 +166,13 @@ export class Burger {
      * - wsDir: The directory path to load WebSocket routes from.
      */
     constructor(private options: ServerOptions) {
-        // Create server instance
-        this.server = new Server(options);
+        // Create server instance (adapter seam: injectable for tests/embed,
+        // otherwise the Bun adapter is loaded lazily on first serve()).
+        this.server = new Server(options, options.adapter);
 
         // Fast initialization for routers with nullish coalescing
         const { apiDir, pageDir, apiPrefix, pagePrefix, wsDir } = options;
 
-        // Initialize API router only when using runtime scanning (no prebuilt apiRoutes)
-        this.apiRouter =
-            apiDir && !Array.isArray(options.apiRoutes)
-                ? new ApiRouter(apiDir, apiPrefix || 'api')
-                : undefined;
         this.apiDir = apiDir;
         this.apiPrefix = apiPrefix || 'api';
 
@@ -190,7 +186,7 @@ export class Burger {
         this.wsDir = wsDir;
 
         // seed the schema registry from ServerOptions.models so model
-        // refs in route schemas resolve at compile time (D10).
+        // refs in route schemas resolve at compile time.
         // Seeded before routes compile (the registry is read-only after).
         if (options.models) {
             for (const name of Object.keys(options.models)) {
@@ -213,13 +209,6 @@ export class Burger {
     usePlugin(plugin: Plugin, scope?: Scope, seed?: string): this {
         this.pluginRegistry.register(plugin, scope ?? 'plugin', seed);
         return this;
-    }
-
-    /**
-     * @deprecated Use `usePlugin()` instead.
-     */
-    use(plugin: Plugin, scope?: Scope, seed?: string): this {
-        return this.usePlugin(plugin, scope, seed);
     }
 
     /**
@@ -330,6 +319,7 @@ export class Burger {
      * @returns A promise that resolves to a boolean
      */
     private async processApiRoutes(): Promise<boolean> {
+        if (this.routesProcessed) return true;
         // Production path: use pre-built API routes (no filesystem scan)
         let apiRoutes: RouteDefinition[];
         let globalOnRequest: import('./lifecycle/types').Hook[] | undefined;
@@ -472,17 +462,18 @@ export class Burger {
 
             // Docs UI: use configured provider or default to Scalar
             const provider: DocsProvider = config?.provider ?? scalarDocs();
+            const expectedAuth = config?.docsAuth
+                ? 'Basic ' +
+                  btoa(
+                      `${config.docsAuth.username}:${config.docsAuth.password}`
+                  )
+                : null;
             this.routes[docsPath] = (ctx: any) => {
-                // Basic auth protection
-                if (config?.docsAuth) {
+                // Basic auth protection (timing-safe comparison)
+                if (expectedAuth !== null) {
                     const authHeader =
                         ctx?.headers?.get?.('authorization') ?? '';
-                    const expected =
-                        'Basic ' +
-                        btoa(
-                            `${config.docsAuth.username}:${config.docsAuth.password}`
-                        );
-                    if (authHeader !== expected) {
+                    if (!timingSafeEqual(authHeader, expectedAuth)) {
                         return new Response('Unauthorized', {
                             status: 401,
                             headers: {
@@ -501,6 +492,7 @@ export class Burger {
             };
         }
 
+        this.routesProcessed = true;
         return true;
     }
 
@@ -598,6 +590,44 @@ export class Burger {
     }
 
     /**
+     * Builds the Web-Standard fetch handler for this app.
+     *
+     * The returned handler dispatches the raw `Request` through the compiled
+     * routes (static map first, then the trie fallback for dynamic/wildcard
+     * routes and loose trailing-slash variants). API routes must be provided
+     * AOT (`apiRoutes` option) or discovered from the filesystem on first
+     * call — never per request.
+     *
+     * Runtime-agnostic: usable with `Bun.serve`, `Deno.serve`, Vercel,
+     * Cloudflare Workers (`export default { fetch }`), and Node 24+. Pages and
+     * WebSocket are Bun-only and are not served by this handler.
+     *
+     * ```ts
+     * import { Burger, toFetchHandler } from 'burger-api';
+     * const burger = new Burger({ apiRoutes });
+     * export default { fetch: toFetchHandler(burger) };
+     * ```
+     */
+    public async fetchHandler(): Promise<FetchHandler> {
+        await this.processApiRoutes();
+        const routes = this.routes;
+        const router = this.dynamicRouter;
+        return async (request: Request): Promise<Response> => {
+            const pathname = new URL(request.url).pathname;
+            const handler = routes[pathname];
+            if (handler) {
+                return (
+                    handler as unknown as (
+                        req: Request
+                    ) => Promise<Response>
+                )(request);
+            }
+            if (router) return router.fetch(request);
+            return this.NOT_FOUND;
+        };
+    }
+
+    /**
      * Starts the server and begins listening for incoming requests.
      * @param port - The port number to listen on. Defaults to `4000`.
      * @param cb - An optional cb function to be executed when the server is listening.
@@ -645,7 +675,7 @@ export class Burger {
                   }
                 : fetchHandler;
 
-            this.server.start({
+            await this.server.start({
                 staticRoutes: this.routes,
                 fetch: combinedFetch,
                 websocket: wsOptions,
@@ -689,6 +719,19 @@ export { MethodNotAllowedError } from './errors/method-not-allowed';
 // Export docs providers
 export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';
 
+// Export the Web-Standard (WinterCG) fetch entry
+export { toFetchHandler } from './adapter/web-standard';
+export type { FetchHandlerEntry } from './adapter/web-standard';
+
+// Export adapter contract types
+export type {
+    RuntimeAdapter,
+    AdapterStartOptions,
+    ServerHandle,
+} from './adapter/types';
+export type { BunAdapterStartOptions } from './adapter/bun/types';
+export type { ServerInfo } from './types/index';
+
 // Export public types
 export type {
     ServerOptions,
@@ -700,6 +743,9 @@ export type {
     ContextSet,
     RouteMeta,
     OpenAPIConfig,
+    DocsAuth,
+    DocsProvider,
+    OpenAPIObject,
 } from './types/index';
 
 // Export lifecycle types
@@ -707,6 +753,14 @@ export type { Hook, ErrorHook } from './lifecycle/types';
 
 // Export validation types
 export type { ValidationIssue } from './validation/types';
+
+// Export schema-driven validated inference types
+export type {
+    InferValidated,
+    InferSchemaOutput,
+    RouteMethodSchema,
+    DefaultValidated,
+} from './types/inference';
 
 // Export plugin types and macro types
 export type { Plugin, MacroFn } from './plugin/types';

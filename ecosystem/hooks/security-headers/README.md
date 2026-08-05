@@ -17,14 +17,14 @@ Security headers hook factory for burger-api framework. Hooks are code that runs
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add security-headers
 ```
 
 ## Usage
@@ -32,37 +32,37 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage (Default Security)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [securityHeaders()];
+export const beforeRoute = [securityHeaders()];
 
 // index.ts
 import { Burger } from 'burger-api';
-new Burger({ apiDir: './api' }).serve(4000);
+new Burger({ apiDir: './src/api' }).serve(4000);
 ```
 
 ### Strict Security (Production Recommended)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { strictSecurity } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [strictSecurity()];
+export const beforeRoute = [strictSecurity()];
 ```
 
 ### Relaxed Security (Development)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { relaxedSecurity } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [relaxedSecurity()];
+export const beforeRoute = [relaxedSecurity()];
 ```
 
 ### Custom Content Security Policy
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [securityHeaders({
+export const beforeRoute = [securityHeaders({
     contentSecurityPolicy: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.example.com"],
@@ -77,9 +77,9 @@ export const beforeHandle = [securityHeaders({
 ### Custom HSTS Configuration
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [securityHeaders({
+export const beforeRoute = [securityHeaders({
     strictTransportSecurity: {
         maxAge: 63072000, // 2 years
         includeSubDomains: true,
@@ -91,9 +91,9 @@ export const beforeHandle = [securityHeaders({
 ### Disable Specific Headers
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [securityHeaders({
+export const beforeRoute = [securityHeaders({
     contentSecurityPolicy: false, // Disable CSP
     xssProtection: false, // Disable X-XSS-Protection
     frameOptions: false // Disable X-Frame-Options
@@ -226,9 +226,10 @@ Controls which browser features and APIs can be used.
 ### Strict Security (Production)
 
 ```typescript
-import { strictSecurity } from './ecosystem/hooks/security-headers/security-headers';
+// src/hooks.ts
+import { strictSecurity } from '../ecosystem/hooks/security-headers/security-headers';
 
-strictSecurity();
+export const beforeRoute = [strictSecurity()];
 ```
 
 **Applies:**
@@ -241,9 +242,10 @@ strictSecurity();
 ### Relaxed Security (Development)
 
 ```typescript
-import { relaxedSecurity } from './ecosystem/hooks/security-headers/security-headers';
+// src/hooks.ts
+import { relaxedSecurity } from '../ecosystem/hooks/security-headers/security-headers';
 
-relaxedSecurity();
+export const beforeRoute = [relaxedSecurity()];
 ```
 
 **Applies:**
@@ -257,9 +259,9 @@ relaxedSecurity();
 ### API with External Resources
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
-export const beforeHandle = [securityHeaders({
+export const beforeRoute = [securityHeaders({
     contentSecurityPolicy: {
         defaultSrc: ["'self'"],
         scriptSrc: [
@@ -297,12 +299,12 @@ export const beforeHandle = [securityHeaders({
 ### Environment-Specific Security
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { strictSecurity, relaxedSecurity } from '../ecosystem/hooks/security-headers/security-headers';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-export const beforeHandle = [
+export const beforeRoute = [
     isDev ? relaxedSecurity() : strictSecurity()
 ];
 ```
@@ -310,11 +312,11 @@ export const beforeHandle = [
 ### API-Only Application
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
 
 // Minimal headers for JSON API
-export const beforeHandle = [securityHeaders({
+export const beforeRoute = [securityHeaders({
     contentSecurityPolicy: false, // Not needed for API
     frameOptions: 'DENY',
     contentTypeOptions: 'nosniff',
@@ -422,7 +424,7 @@ If legitimate resources are blocked:
 
 ### Headers Not Appearing
 
-Make sure the middleware is applied globally or to the specific route.
+Make sure the hook is wired globally in `src/hooks.ts` or in the route's own `hooks.ts`.
 
 ## References
 

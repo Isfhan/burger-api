@@ -20,36 +20,39 @@ Or manually copy to `ecosystem/plugins/basic-auth/`.
 
 ## Usage
 
-### Basic usage
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { basicAuth } from "./ecosystem/plugins/basic-auth/basic-auth";
+import type { Burger } from "burger-api";
+import { basicAuth } from "../ecosystem/plugins/basic-auth/basic-auth";
 
-const burger = new Burger();
-
-burger.usePlugin(basicAuth({
-  validate: async (username, password) => {
-    // Check against database
-    const user = await db.users.findByUsername(username);
-    if (user && user.password === password) {
-      return { id: user.id, username: user.username, roles: user.roles };
-    }
-    return null;
-  },
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(basicAuth({
+    validate: async (username, password) => {
+      // Check against database
+      const user = await db.users.findByUsername(username);
+      if (user && user.password === password) {
+        return { id: user.id, username: user.username, roles: user.roles };
+      }
+      return null;
+    },
+  }));
+}
 ```
 
 ### With custom realm
 
 ```typescript
-burger.usePlugin(basicAuth({
-  validate: async (username, password) => {
-    // ... validation logic
-  },
-  realm: "My API",
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(basicAuth({
+    validate: async (username, password) => {
+      // ... validation logic
+    },
+    realm: "My API",
+  }));
+}
 ```
 
 ## Configuration options
@@ -84,7 +87,7 @@ validate: async (username, password) => {
 ### Disable auth for public routes
 
 ```typescript
-// api/public/config.ts
+// src/api/public/config.ts
 export default {
   auth: false,
 };
@@ -93,7 +96,7 @@ export default {
 ### Require authentication
 
 ```typescript
-// api/private/config.ts
+// src/api/private/config.ts
 export default {
   auth: {
     required: true,

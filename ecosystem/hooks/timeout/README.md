@@ -12,14 +12,14 @@ Request timeout hook factory for burger-api framework. Hooks are code that runs 
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add timeout
 ```
 
 ## Usage
@@ -27,29 +27,29 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage (30 second timeout)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
-export const beforeHandle = [requestTimeout()];
+export const beforeRoute = [requestTimeout()];
 
 // index.ts
 import { Burger } from 'burger-api';
-new Burger({ apiDir: './api' }).serve(4000);
+new Burger({ apiDir: './src/api' }).serve(4000);
 ```
 
 ### Custom Timeout Duration
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
-export const beforeHandle = [requestTimeout({ ms: 5000 })];
+export const beforeRoute = [requestTimeout({ ms: 5000 })];
 ```
 
 ### Custom Error Response
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
-export const beforeHandle = [requestTimeout({
+export const beforeRoute = [requestTimeout({
     ms: 10000,
     message: 'The server took too long to respond',
     onTimeout: () => Response.json(
@@ -66,11 +66,11 @@ export const beforeHandle = [requestTimeout({
 ### Route-Specific Timeouts
 
 ```typescript
-// api/reports/generate/hooks.ts
+// src/api/reports/generate/hooks.ts
 import { requestTimeout } from '../../../ecosystem/hooks/timeout/timeout';
 
 // Longer timeout for report generation
-export const beforeHandle = [requestTimeout({ ms: 120000 })]; // 2 minutes
+export const beforeRoute = [requestTimeout({ ms: 120000 })]; // 2 minutes
 ```
 
 ## Configuration Options
@@ -106,7 +106,7 @@ Custom error message for timeout response.
 ### Different Timeouts for Different Routes
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
 
 // Short timeout for quick endpoints
@@ -118,48 +118,44 @@ const normalTimeout = requestTimeout({ ms: 30000 }); // Default
 // Long timeout for heavy operations
 const longTimeout = requestTimeout({ ms: 120000 });
 
-export const beforeHandle = [normalTimeout];
+export const beforeRoute = [normalTimeout];
 ```
 
 Then override in specific routes:
 
 ```typescript
-// api/search/hooks.ts - Quick operation
+// src/api/search/hooks.ts - Quick operation
 import { requestTimeout } from '../../ecosystem/hooks/timeout/timeout';
-export const beforeHandle = [requestTimeout({ ms: 5000 })];
+export const beforeRoute = [requestTimeout({ ms: 5000 })];
 
-// api/analytics/report/hooks.ts - Slow operation
+// src/api/analytics/report/hooks.ts - Slow operation
 import { requestTimeout } from '../../ecosystem/hooks/timeout/timeout';
-export const beforeHandle = [requestTimeout({ ms: 120000 })];
+export const beforeRoute = [requestTimeout({ ms: 120000 })];
 ```
 
 ### Progressive Timeout Warnings
 
 ```typescript
-import { requestTimeout } from './ecosystem/hooks/timeout/timeout';
+// route.ts
+export async function POST(ctx: BurgerContext) {
+    const startTime = Date.now();
 
-// You can implement this in your handlers
-handlers: {
-    POST: async (req) => {
-        const startTime = Date.now();
-        
-        // Set up warning timer
-        const warningTimer = setTimeout(() => {
-            console.warn(`Request taking longer than expected: ${req.url}`);
-        }, 5000); // Warn after 5 seconds
-        
-        try {
-            const result = await processRequest();
-            clearTimeout(warningTimer);
-            
-            const duration = Date.now() - startTime;
-            console.log(`Request completed in ${duration}ms`);
-            
-            return Response.json({ result });
-        } catch (error) {
-            clearTimeout(warningTimer);
-            throw error;
-        }
+    // Set up warning timer
+    const warningTimer = setTimeout(() => {
+        console.warn(`Request taking longer than expected: ${ctx.url}`);
+    }, 5000); // Warn after 5 seconds
+
+    try {
+        const result = await processRequest();
+        clearTimeout(warningTimer);
+
+        const duration = Date.now() - startTime;
+        console.log(`Request completed in ${duration}ms`);
+
+        return Response.json({ result });
+    } catch (error) {
+        clearTimeout(warningTimer);
+        throw error;
     }
 }
 ```
@@ -167,10 +163,10 @@ handlers: {
 ### Environment-Specific Timeouts
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
 
-export const beforeHandle = [requestTimeout({
+export const beforeRoute = [requestTimeout({
     ms: process.env.NODE_ENV === 'development'
         ? 300000  // 5 minutes in dev (for debugging)
         : 30000   // 30 seconds in production
@@ -207,11 +203,15 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 
 1. **Timeout Set**: When a request arrives, a timeout timer is started.
 
-2. **Request Processing**: The request continues through middleware and handlers normally.
+2. **Request Processing**: The request continues through hooks and handlers normally.
 
 3. **Completion Check**:
    - If response completes before timeout: Timer is cleared, normal response sent
-   - If timeout expires first: Aborts request and returns 408 error
+   - If timeout expires first: Returns a 408 error response
+
+> Note: `requestTimeout` detects timeouts after the handler completes — the
+> handler still runs to completion. For hard enforcement that stops handlers
+> mid-execution, use `AbortSignal` inside the handler.
 
 4. **Cleanup**: Timer is always cleared to prevent memory leaks.
 
@@ -278,12 +278,8 @@ Monitor which endpoints are timing out:
 const timeout = requestTimeout({
     ms: 30000,
     onTimeout: () => {
-        console.error(`Request timeout: ${req.url}`, {
-            method: req.method,
-            url: req.url,
-            timestamp: new Date().toISOString()
-        });
-        
+        console.error(`Request timeout: ${new Date().toISOString()}`);
+
         return Response.json(
             { error: 'Request timeout' },
             { status: 408 }
@@ -310,20 +306,19 @@ If endpoints frequently timeout:
 const gatewayTimeout = requestTimeout({ ms: 5000 });
 
 // Forward to backend services with their own timeouts
-handlers: {
-    GET: async (req) => {
-        try {
-            // Backend service might have longer timeout
-            const response = await fetch('http://backend-service/api/data', {
-                signal: AbortSignal.timeout(10000)
-            });
-            return response;
-        } catch (error) {
-            if (error.name === 'TimeoutError') {
-                return Response.json({ error: 'Backend timeout' }, { status: 504 });
-            }
-            throw error;
+// route.ts
+export async function GET(ctx: BurgerContext) {
+    try {
+        // Backend service might have longer timeout
+        const response = await fetch('http://backend-service/api/data', {
+            signal: AbortSignal.timeout(10000)
+        });
+        return response;
+    } catch (error) {
+        if (error instanceof Error && error.name === 'TimeoutError') {
+            return Response.json({ error: 'Backend timeout' }, { status: 504 });
         }
+        throw error;
     }
 }
 ```
@@ -331,27 +326,26 @@ handlers: {
 ### Graceful Degradation
 
 ```typescript
-handlers: {
-    GET: async (req) => {
-        // Try to get fresh data with timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        try {
-            const freshData = await fetchFreshData({ signal: controller.signal });
-            clearTimeout(timeoutId);
-            return Response.json({ data: freshData, cached: false });
-        } catch (error) {
-            clearTimeout(timeoutId);
-            
-            // Fall back to cached data
-            const cachedData = await getCachedData();
-            if (cachedData) {
-                return Response.json({ data: cachedData, cached: true });
-            }
-            
-            throw error;
+// route.ts
+export async function GET(ctx: BurgerContext) {
+    // Try to get fresh data with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    try {
+        const freshData = await fetchFreshData({ signal: controller.signal });
+        clearTimeout(timeoutId);
+        return Response.json({ data: freshData, cached: false });
+    } catch (error) {
+        clearTimeout(timeoutId);
+
+        // Fall back to cached data
+        const cachedData = await getCachedData();
+        if (cachedData) {
+            return Response.json({ data: cachedData, cached: true });
         }
+
+        throw error;
     }
 }
 ```
@@ -361,19 +355,18 @@ handlers: {
 For operations that truly need more time, use background jobs:
 
 ```typescript
-handlers: {
-    POST: async (req) => {
-        // Instead of processing synchronously...
-        // Create a background job
-        const job = await jobQueue.add('process-data', { data: req.body });
-        
-        // Return immediately with job ID
-        return Response.json({
-            jobId: job.id,
-            status: 'processing',
-            statusUrl: `/api/jobs/${job.id}`
-        }, { status: 202 }); // 202 Accepted
-    }
+// route.ts
+export async function POST(ctx: BurgerContext) {
+    // Instead of processing synchronously...
+    // Create a background job
+    const job = await jobQueue.add('process-data', { data: await ctx.json() });
+
+    // Return immediately with job ID
+    return Response.json({
+        jobId: job.id,
+        status: 'processing',
+        statusUrl: `/api/jobs/${job.id}`
+    }, { status: 202 }); // 202 Accepted
 }
 ```
 
@@ -382,16 +375,14 @@ handlers: {
 ### Simulate Timeout
 
 ```typescript
-// In your handler
-handlers: {
-    GET: async (req) => {
-        // Simulate slow operation
-        if (process.env.NODE_ENV === 'test') {
-            await new Promise(resolve => setTimeout(resolve, 35000)); // Longer than timeout
-        }
-        
-        return Response.json({ data: 'result' });
+// route.ts
+export async function GET(ctx: BurgerContext) {
+    // Simulate slow operation
+    if (process.env.NODE_ENV === 'test') {
+        await new Promise(resolve => setTimeout(resolve, 35000)); // Longer than timeout
     }
+
+    return Response.json({ data: 'result' });
 }
 ```
 
@@ -432,11 +423,11 @@ requestTimeout({ ms: 60000 }) // 1 minute
 
 ### Timeout Not Working
 
-Ensure the middleware runs before your handlers:
+Ensure the hook runs before your handlers:
 
 ```typescript
-// api/hooks.ts
-export const beforeHandle = [
+// src/hooks.ts
+export const beforeRoute = [
     requestTimeout({ ms: 30000 }),
     // ... other hooks
 ];

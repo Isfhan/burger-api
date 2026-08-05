@@ -1,6 +1,6 @@
 /**
  * The validator adapter (connector) layer — the only place that decides
- * *which* schema library a schema uses (§13.3).
+ * *which* schema library a schema uses.
  *
  * Responsibilities:
  * - Define the `ValidatorAdapter` interface (produce identity + prepare).
@@ -8,7 +8,7 @@
  * - Allow registration of additional adapters (future libraries).
  *
  * This module performs detection when the app starts only; it never runs
- * when a request comes in (). It does not contain the schema-check
+ * when a request comes in. It does not contain the schema-check
  * logic — that lives in each adapter implementation.
  */
 
@@ -23,10 +23,10 @@ import type {
 /**
  * A stable connector between BurgerAPI's request flow and a concrete schema
  * library. The coordinator (orchestrator) and cache depend only on this
- * interface, never on a concrete library (§18 R12).
+ * interface, never on a concrete library.
  */
 export interface ValidatorAdapter {
-    /** Stable identity for a schema; drives cache sharing (). */
+    /** Stable identity for a schema; drives cache sharing. */
     identity(schema: SchemaInput): string;
     /**
      * Prepare a schema slot into a reusable `CompiledValidator`. The
@@ -83,7 +83,7 @@ export function registerAdapter(adapter: ValidatorAdapter): void {
  *
  * Detection order (R5): Zod brand first (default provider),
  * then any registered adapter, then the built-in Standard Schema adapter.
- * Throws on unknown schemas to fail fast at compile time () —
+ * Throws on unknown schemas to fail fast at compile time —
  * never a request-time surprise.
  */
 export function detectAdapter(schema: SchemaInput): ValidatorAdapter {

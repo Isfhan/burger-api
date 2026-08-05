@@ -36,9 +36,7 @@ jobs:
                   registry-url: 'https://registry.npmjs.org'
 
             - name: Install dependencies
-              run: |
-                  cd packages/cli
-                  bun install
+              run: bun install
 
             - name: Get version from tag
               id: get_version
@@ -67,11 +65,25 @@ jobs:
                   echo "✅ Version match: $PACKAGE_VERSION"
               shell: bash
 
-            # - name: Run CLI tests
-            #   run: |
-            #       cd packages/cli
-            #       bun test --timeout 30000 ./test
-            #   shell: bash
+            - name: Build framework (dist for linked packages + tests)
+              run: |
+                  cd packages/burger-api
+                  bun run build
+              shell: bash
+
+            - name: Register global links (E2E scaffolds resolve local packages)
+              run: |
+                  cd packages/burger-api
+                  bun link
+                  cd ../cli
+                  bun link
+              shell: bash
+
+            - name: Run CLI tests
+              run: |
+                  cd packages/cli
+                  bun test --timeout 30000 ./test
+              shell: bash
 
             - name: Check what will be published
               run: |

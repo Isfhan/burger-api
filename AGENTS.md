@@ -16,14 +16,15 @@ not invent architecture. If unclear, stop and ask.
 
 ## Project Overview
 
-BurgerAPI is a **Bun-first**, WinterCG-compatible, **file-based** TypeScript API
-framework: file-based routing, end-to-end type safety, hook-based request
-lifecycle, small core + rich ecosystem.
+BurgerAPI is a **Bun-first**, WinterCG-compatible, **file-based** TypeScript
+**and JavaScript** API framework: file-based routing, end-to-end type safety,
+hook-based request lifecycle, small core + rich ecosystem.
 
 **Tech:** Bun >= 1.3.0 (primary), Node 24+ / edge where practical · TypeScript
-ESM · Zod ^4 / Standard Schema **Packages:** `burger-api`, `@burger-api/cli`
-**Status:** Pre-1.0 — vision locked; core uses BurgerContext and vision hook
-names (0.15.x) **Homepage:** https://burger-api.com
+and JavaScript ESM (`.ts` / `.js` / `.mjs` conventions) · Zod ^4 / Standard
+Schema **Packages:** `burger-api`, `@burger-api/cli` **Status:** 1.0.0 —
+vision locked; core uses BurgerContext and vision hook names **Homepage:**
+https://burger-api.com
 
 ### Target public architecture (vision)
 
@@ -43,11 +44,15 @@ burger.build.ts # build-time only (CLI) — not runtime config
 
 | File         | Role                                                                |
 | ------------ | ------------------------------------------------------------------- |
-| `route.ts`   | Handlers: `export async function GET(ctx: BurgerContext)`           |
-| `schema.ts`  | Per-method named exports: `export const GET = { body, query, ... }` |
-| `hooks.ts`   | Route hooks only for that route                                     |
-| `openapi.ts` | Per-method OpenAPI metadata                                         |
-| `config.ts`  | Route options: auth, cache, timeout, …                              |
+| `route.*`    | Handlers: `export async function GET(ctx: BurgerContext)`           |
+| `schema.*`   | Per-method named exports: `export const GET = { body, query, ... }` |
+| `hooks.*`    | Route hooks only for that route                                     |
+| `openapi.*`  | Per-method OpenAPI metadata                                         |
+| `config.*`   | Route options: auth, cache, timeout, …                              |
+
+Extension is `.ts`, `.js`, or `.mjs` — scaffolded with `--lang ts|js` (default
+`ts`). A route directory must not contain both `route.ts` and `route.js` (scanner
+fails loud).
 
 Per-method named exports (`GET`, `POST`, …) replace lowercase method objects in
 route/schema/openapi.
@@ -71,6 +76,10 @@ Error → `onError`. Scopes: Framework → Plugin → Global → Route (response
 reversed).
 
 **Context:** public type **`BurgerContext`**. Standard Web **`Response`** only.
+**Deploy surface:** `app.serve(port)` for Bun; `toFetchHandler(app)` returns
+`(request, ...env) => Promise<Response>` for WinterCG targets (Cloudflare
+Workers, Vercel, Deno Deploy, Node 24+) — HTTP-only, no filesystem scanning,
+no Bun imports.
 **Validation:** throw `ValidationError` → onError → default 422 + RFC 9457.
 **Ecosystem:**
 
@@ -80,8 +89,8 @@ ecosystem/plugins/ # app integrations (jwt, session, env, …)
 ecosystem/skills/ # AI skills
 ```
 
-**Auth:** ecosystem plugins under `ecosystem/plugins/`, integrating with hooks +
-`config.ts`. Core is auth-agnostic.
+**Auth:** ecosystem plugins under `ecosystem/plugins/` **only** (auth hooks were
+removed in 1.0), integrating with hooks + `config.ts`. Core is auth-agnostic.
 
 **Not planned:** group/folder inheritance, route `use.ts` / `webhook.ts`, ORM,
 dedicated webhook router. **WebSocket:** file-based router under `src/ws/` (and
@@ -92,8 +101,10 @@ reusable hook factories (public API).
 
 The following have been removed: `BurgerRequest`, `Middleware` type,
 `beforeHandle`/`afterHandle`/`onResponse`/`provide`, group inheritance,
-`burger.config.ts`, `use.ts`/`webhook.ts` discovery. All public API now uses
-`BurgerContext`, hooks
+`burger.config.ts`, `use.ts`/`webhook.ts` discovery, `Burger.use`, CLI `serve`
+(command), auth factories under `ecosystem/hooks/` (api-key-auth, jwt-auth — use
+`ecosystem/plugins/` instead), and the legacy `core/api-router.ts` shell. All
+public API now uses `BurgerContext`, hooks
 (`beforeRoute`/`afterRoute`/`mapResponse`/`transform`/`onRequest`/`onError`),
 and plugins.
 
@@ -115,9 +126,11 @@ bun test
 
 - `packages/burger-api/` — core (`Burger`, compiler, router, lifecycle, OpenAPI,
   adapters). Live discovery: `compiler/scanner.ts` +
-  `compiler/module-loader.ts`. Do not build on legacy `core/api-router.ts`.
+  `compiler/module-loader.ts`. Adapters: `adapter/bun/` (Bun-only) and
+  `adapter/web-standard/` (`toFetchHandler`, WinterCG). Do not build on legacy
+  `core/api-router.ts` (removed).
 - `packages/cli/` — create, dev, start, build, add, list, skills, generate,
-  inspect, doctor (`burger.build.ts`; `serve` deprecated alias of `dev`)
+  inspect, doctor (`burger.build.ts`; `create --lang ts|js --defaults`)
 - `ecosystem/hooks/` — official lifecycle hooks
 - `ecosystem/plugins/` — official plugins (add as they land)
 - Hybrid router: Bun static routes + trie (static > `:param` > `*`)
@@ -191,7 +204,8 @@ supported where practical.
 Do not reintroduce: middleware layer/type, group inheritance, lowercase schema
 method objects as the primary pattern, `BurgerRequest` as a public type,
 lifecycle hook named `provide`, route-level `use.ts` as the plugin system,
-first-class `webhook.ts`.
+first-class `webhook.ts`, `Burger.use`, CLI `serve`, or auth under
+`ecosystem/hooks/`.
 
 ## Code Conventions (target)
 

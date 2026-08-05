@@ -66,7 +66,7 @@ describe('CLI process exit', () => {
             const { exitCode, stdout, elapsedMs } = await runCli(['ls']);
 
             expect(exitCode).toBe(0);
-            expect(stdout).toContain('Available Middleware');
+            expect(stdout).toContain('Available Hooks and Plugins');
             expect(elapsedMs).toBeLessThan(18_000);
         }
     );

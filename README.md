@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/isfhan/burger-api">
-    <img src="https://img.shields.io/badge/under%20development-red.svg" alt="Under Development" />
+    <img src="https://img.shields.io/badge/version-1.0.0-green.svg" alt="Version 1.0.0" />
   </a>
   <a href="./LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
@@ -23,22 +23,20 @@
 
 ## 📖 About
 
-This monorepo contains **BurgerAPI**: a Bun-first, WinterCG-compatible TypeScript
-API framework with file-based routing, a **hook-based** request lifecycle,
-Standard Schema validation (Zod default), plugins/providers, and OpenAPI.
+This monorepo contains **BurgerAPI**: a Bun-first, WinterCG-compatible API
+framework with file-based routing, a **hook-based** request lifecycle, Standard
+Schema validation (Zod default), plugins/providers, and OpenAPI. TypeScript and
+JavaScript are both first-class.
 
 **Architecture source of truth:** [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md)  
 When docs or code disagree with the vision, **the vision wins**.
 
 **Hooks** control the request lifecycle. **Plugins** extend the application.
-They are separate concepts (not a middleware framework).
-
-**This project is under active development and should not be used in production
-yet.** 
+They are separate concepts.
 
 **📌 Releases:**
-- **burger-api** 0.14.0 (July 21, 2026)
-- **@burger-api/cli** 0.9.9 (June 29, 2026)
+- **burger-api** 1.0.0
+- **@burger-api/cli** 1.0.0
 
 ## 📦 Packages
 
@@ -59,12 +57,13 @@ published to npm.
     file structure, including dynamic `[id]` parameters and `[...slug]`
     wildcards
 -   🪝 **Hook lifecycle** - `onRequest`, `transform`, `beforeRoute`, `afterRoute`,
-     `mapResponse`, `onError` (target API; see vision)
+     `mapResponse`, `onError`; global hooks in `src/hooks.ts`, route hooks in
+     `api/**/hooks.ts`
 -   ✅ **Type-Safe Validation** - Optional `schema.ts` with per-method exports;
-     Standard Schema (Zod default); `ctx.validated`; RFC 9457 errors (target: throw
+     Standard Schema (Zod default); `ctx.validated`; RFC 9457 errors (throw
      `ValidationError` → 422 via `onError`)
 -   📚 **Automatic OpenAPI Generation** - OpenAPI 3.0 + docs UI
--   🔌 **Plugins & providers** - `src/plugins.ts` / `src/providers.ts` (target)
+-   🔌 **Plugins & providers** - `src/plugins.ts` / `src/providers.ts`
 -   🎯 **Route convention files** - `route.ts`, `schema.ts`, `hooks.ts`,
      `openapi.ts`, `config.ts` (self-contained routes, no group inheritance)
 -   🔀 **Automatic HEAD** - `HEAD` requests are derived from `GET` automatically
@@ -72,6 +71,9 @@ published to npm.
 -   ❌ **Proper 405 Responses** - a known route requested with an unsupported
     method returns `405` with an `Allow` header listing the supported methods
 -   🔗 **Loose Trailing Slash** - `/foo` and `/foo/` match the same route
+-   🌍 **WinterCG deploy surface** - `app.serve(port)` on Bun;
+    `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+
+-   🟨 **JavaScript first-class** - same conventions in `.ts` / `.js` / `.mjs`
 
 ### 🛠️ [`packages/cli`](./packages/cli)
 
@@ -81,9 +83,11 @@ your development workflow.
 #### ✨ Key Features
 
 -   🚀 **Project Scaffolding** - Create new burger-api projects with interactive
-    prompts
--   📦 **Middleware Management** - Browse and add middleware from the ecosystem
--   🔨 **Build Tools** - Bundle projects or compile to standalone executables
+    prompts (`--lang ts|js`, `--defaults`)
+-   🔌 **Ecosystem Management** - Browse and add hooks and plugins from the
+    ecosystem
+-   🔨 **Build Tools** - Bundle projects (AOT routes) or compile to standalone
+    executables
 -   🔥 **Development Server** - Hot reload development server with auto-restart
 -   🎯 **Zero Dependencies** - Uses Bun's native APIs for file operations and
     downloads
@@ -126,7 +130,7 @@ For detailed documentation, see
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) installed (version 1.2.20 or later)
+-   [Bun](https://bun.sh) installed (version 1.3.0 or later)
 
 ### Installation
 
@@ -160,7 +164,7 @@ bun run build
 # Full suite: route-sync + framework (examples + ecosystem smoke) + CLI + typecheck
 bun run test:all
 
-# Framework package only (examples + ecosystem middleware smoke tests)
+# Framework package only (examples + ecosystem smoke tests)
 bun run test:framework
 
 # CLI tests only
@@ -209,7 +213,7 @@ burger-api build:exec src/index.ts
 ## ⚙️ AOT Routing (How builds work)
 
 BurgerAPI uses file-based routing. In development, routes are discovered by
-scanning files when a request comes in. In production builds, routes are
+scanning files when the server starts. In production builds, routes are
 discovered when the app is built — prepared ahead of time (AOT) — so no scanning
 is needed while the server is running.
 
@@ -228,20 +232,20 @@ BurgerAPI maps your file structure to routes automatically.
 
 | Pattern        | File                              | URL match            |
 | -------------- | --------------------------------- | -------------------- |
-| Static         | `api/health/route.ts`             | `/api/health`        |
-| Parameter      | `api/users/[id]/route.ts`         | `/api/users/123`     |
-| Wildcard       | `api/files/[...]/route.ts`        | `/api/files/a/b/c`   |
+| Static         | `src/api/health/route.ts`         | `/api/health`        |
+| Parameter      | `src/api/users/[id]/route.ts`     | `/api/users/123`     |
+| Wildcard       | `src/api/files/[...]/route.ts`    | `/api/files/a/b/c`   |
 
 -   **Static routes** are matched exactly and dispatched by Bun's native
     `routes` map (O(1)).
 -   **Parameter routes** (`[id]`) capture a single path segment into
-    `req.params.id`.
+    `ctx.params.id`.
 -   **Wildcard routes** (`[...]`) capture the remaining segments into
-    `req.wildcardParams` (an array). A wildcard route also matches its own base
+    `ctx.wildcardParams` (an array). A wildcard route also matches its own base
     path — `/api/files/[...]` matches both `/api/files/a/b/c` and `/api/files`.
 -   **Trailing slash** is loose by default: `/api/health` and `/api/health/`
     resolve to the same route. A trailing slash on a parameter route is treated
-    as an empty parameter value (e.g. `/api/users/` → `req.params.id === ""`).
+    as an empty parameter value (e.g. `/api/users/` → `ctx.params.id === ""`).
 -   **HEAD** is automatic: a `HEAD` request to a route that defines `GET` runs
     the `GET` handler and returns the response with the body removed.
 -   **405** is correct: requesting a known route with an unsupported method
@@ -253,11 +257,10 @@ BurgerAPI maps your file structure to routes automatically.
     no framework code in the code that runs on every request (the hot path).
 -   **Dynamic routes** use BurgerAPI's optimized internal trie (a tree structure
     for fast path matching), matched in `O(number of path segments)`.
--   **Shared prepared handlers** run the same middleware request flow (pipeline)
-    for static and dynamic routes, so behavior (and optimizations) never drift
-    between them.
--   **Bun-first architecture**: the framework is built exclusively for Bun.js
-    and uses `Bun.serve` as the server.
+-   **Shared prepared handlers** run the same hook lifecycle for static and
+    dynamic routes, so behavior (and optimizations) never drift between them.
+-   **Bun-first architecture**: Bun is the primary runtime, with a WinterCG
+    adapter (`toFetchHandler`) for non-Bun targets.
 
 ## 🏗️ Architecture
 
@@ -280,21 +283,20 @@ BurgerAPI maps your file structure to routes automatically.
                 └───────────────┬────────────────┘
                                 │
                                  ▼
-                  Shared request flow (middleware → handler)
+                  Shared request flow (hooks → handler)
 ```
 
 Static routes are dispatched directly by Bun; dynamic and wildcard routes are
 dispatched by the internal trie via a single `fetch` fallback. Both paths run
-the **same prepared handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`, and
-middleware behavior are identical regardless of how the route was matched.
+the **same prepared handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`,
+and hook behavior are identical regardless of how the route was matched.
 
 ## 🧭 Routing/Build Ownership (Contributor Guide)
 
 If you want to contribute, this split helps:
 
 - Framework route behavior:
-  - `packages/burger-api/src/core/api-router.ts`
-  - `packages/burger-api/src/core/page-router.ts`
+  - `packages/burger-api/src/compiler/` (scanner, module-loader, conventions)
   - `packages/burger-api/src/router/` (Hybrid Router: `compiler`, `trie`,
     `static-map`, `allow-cache`, `router`)
   - `packages/burger-api/src/utils/pathConversion.ts`
@@ -324,9 +326,9 @@ burger-api/
 │   │   ├── src/             # Source code
 │   │   ├── examples/        # Example projects
 │   │   └── dist/            # Build output
-│   └── cli/                 # CLI tool (under development)
+│   └── cli/                 # CLI tool (published to npm)
 │       └── src/             # CLI source code
-├── ecosystem/               # Middleware templates (ready-to-use)
+├── ecosystem/               # Official hooks + plugins (ready-to-use)
 ├── package.json             # Workspace root configuration
 └── README.md                # This file
 ```

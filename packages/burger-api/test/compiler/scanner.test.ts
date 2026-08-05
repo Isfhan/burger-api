@@ -102,7 +102,20 @@ describe('DirectoryScanner — convention validation', () => {
                 'export {};'
             );
             const scanner = new DirectoryScanner(root, 'api');
-            await expect(scanner.scan()).rejects.toThrow(/middleware\.ts/);
+            await expect(scanner.scan()).rejects.toThrow(/middleware/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects middleware.js too (forbidden across extensions)', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'users'), { recursive: true });
+            writeFileSync(path.join(root, 'users', 'route.js'), 'export {};');
+            writeFileSync(path.join(root, 'users', 'middleware.js'), 'export {};');
+            const scanner = new DirectoryScanner(root, 'api');
+            await expect(scanner.scan()).rejects.toThrow(/middleware/);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
@@ -121,6 +134,110 @@ describe('DirectoryScanner — convention validation', () => {
             await expect(scanner.scan()).rejects.toThrow(
                 /dynamic and wildcard/
             );
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('DirectoryScanner — JavaScript (.js / .mjs)', () => {
+    it('discovers route.js with its .js convention siblings', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'users'), { recursive: true });
+            writeFileSync(path.join(root, 'users', 'route.js'), 'export {};');
+            writeFileSync(path.join(root, 'users', 'schema.js'), 'export {};');
+            writeFileSync(
+                path.join(root, 'users', 'config.js'),
+                'export default { auth: false };'
+            );
+            const scanner = new DirectoryScanner(root, 'api');
+            const result = await scanner.scan();
+
+            expect(result.routes).toHaveLength(1);
+            const users = result.routes[0]!;
+            expect(users.routePath).toBe('/api/users');
+            expect(users.localFiles.route).toContain('route.js');
+            expect(users.localFiles.schema).toContain('schema.js');
+            expect(users.localFiles.config).toContain('config.js');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('discovers route.mjs', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'm'), { recursive: true });
+            writeFileSync(path.join(root, 'm', 'route.mjs'), 'export {};');
+            const scanner = new DirectoryScanner(root, 'api');
+            const result = await scanner.scan();
+            expect(result.routes[0]?.routePath).toBe('/api/m');
+            expect(result.routes[0]?.localFiles.route).toContain('route.mjs');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('throws when route.ts and route.js coexist in the same directory', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'users'), { recursive: true });
+            writeFileSync(path.join(root, 'users', 'route.ts'), 'export {};');
+            writeFileSync(path.join(root, 'users', 'route.js'), 'export {};');
+            const scanner = new DirectoryScanner(root, 'api');
+            await expect(scanner.scan()).rejects.toThrow(/Conflicting/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('throws when schema.ts and schema.js coexist', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'users'), { recursive: true });
+            writeFileSync(path.join(root, 'users', 'route.ts'), 'export {};');
+            writeFileSync(path.join(root, 'users', 'schema.ts'), 'export {};');
+            writeFileSync(path.join(root, 'users', 'schema.js'), 'export {};');
+            const scanner = new DirectoryScanner(root, 'api');
+            await expect(scanner.scan()).rejects.toThrow(/Conflicting/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('detects app-level hooks.js / plugins.mjs at the routes parent', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.js'),
+                'export {};'
+            );
+            writeFileSync(path.join(root, 'hooks.js'), 'export {};');
+            writeFileSync(path.join(root, 'plugins.mjs'), 'export {};');
+            const scanner = new DirectoryScanner(path.join(root, 'api'));
+            const result = await scanner.scan();
+
+            expect(result.globalHooks).toContain('hooks.js');
+            expect(result.pluginsPath).toContain('plugins.mjs');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('throws on conflicting app-level hooks.ts + hooks.js', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'api', 'users'), { recursive: true });
+            writeFileSync(
+                path.join(root, 'api', 'users', 'route.ts'),
+                'export {};'
+            );
+            writeFileSync(path.join(root, 'hooks.ts'), 'export {};');
+            writeFileSync(path.join(root, 'hooks.js'), 'export {};');
+            const scanner = new DirectoryScanner(path.join(root, 'api'));
+            await expect(scanner.scan()).rejects.toThrow(/Conflicting/);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }

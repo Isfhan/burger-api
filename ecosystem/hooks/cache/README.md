@@ -13,14 +13,14 @@ HTTP caching hook factory for burger-api framework. Hook factories are code that
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add cache
 ```
 
 ## Usage
@@ -28,10 +28,10 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage (No Caching)
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
+// src/hooks.ts — global hooks, applies to every request
 import { noCache } from '../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [
+export const beforeRoute = [
     noCache() // Prevent all caching
 ];
 
@@ -39,7 +39,7 @@ export const beforeHandle = [
 import { Burger } from 'burger-api';
 
 const app = new Burger({
-    apiDir: './api',
+    apiDir: './src/api',
 });
 
 app.serve(4000);
@@ -48,10 +48,10 @@ app.serve(4000);
 ### Public Cache (1 hour)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { publicCache } from '../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [
+export const beforeRoute = [
     publicCache(3600) // Cache for 1 hour
 ];
 ```
@@ -59,10 +59,10 @@ export const beforeHandle = [
 ### Private Cache (User-Specific Data)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { privateCache } from '../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [
+export const beforeRoute = [
     privateCache(300) // Cache privately for 5 minutes
 ];
 ```
@@ -70,19 +70,20 @@ export const beforeHandle = [
 ### Immutable Assets
 
 ```typescript
-import { immutableCache } from './ecosystem/hooks/cache/cache';
+// src/hooks.ts
+import { immutableCache } from '../ecosystem/hooks/cache/cache';
 
 // For static assets with content-based filenames (e.g., app.a1b2c3d4.js)
-const assetCache = immutableCache(); // Cache for 1 year, immutable
+export const beforeRoute = [immutableCache()]; // Cache for 1 year, immutable
 ```
 
 ### CDN Cache
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cdnCache } from '../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [
+export const beforeRoute = [
     cdnCache(300, 3600) // Browser: 5 min, CDN: 1 hour
 ];
 ```
@@ -90,15 +91,18 @@ export const beforeHandle = [
 ### Custom Configuration
 
 ```typescript
-import { cacheControl } from './ecosystem/hooks/cache/cache';
+// src/hooks.ts
+import { cacheControl } from '../ecosystem/hooks/cache/cache';
 
-const customCache = cacheControl({
-    directive: 'public',
-    maxAge: 3600,
-    sMaxAge: 7200,
-    mustRevalidate: true,
-    vary: ['Accept-Encoding', 'Accept']
-});
+export const beforeRoute = [
+    cacheControl({
+        directive: 'public',
+        maxAge: 3600,
+        sMaxAge: 7200,
+        mustRevalidate: true,
+        vary: ['Accept-Encoding', 'Accept']
+    })
+];
 ```
 
 ## Configuration Options
@@ -206,68 +210,72 @@ Cache-Control: public, max-age=300, s-maxage=3600, must-revalidate
 ### Route-Specific Caching
 
 ```typescript
-// api/products/hooks.ts - Cache product list
+// src/api/products/hooks.ts - Cache product list
 import { publicCache } from '../../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [publicCache(600)]; // 10 minutes
+export const beforeRoute = [publicCache(600)]; // 10 minutes
 ```
 
 ```typescript
-// api/users/profile/hooks.ts - Don't cache user data
+// src/api/users/profile/hooks.ts - Don't cache user data
 import { noCache } from '../../../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [noCache()];
+export const beforeRoute = [noCache()];
 ```
 
 ### Content-Based Caching
 
 ```typescript
-import { cacheControl } from './ecosystem/hooks/cache/cache';
+// route.ts
+import type { BurgerContext } from 'burger-api';
 
-// Different caching based on content type
-handlers: {
-    GET: async (req) => {
-        const data = await fetchData();
-        
-        // Apply different cache rules based on data
-        const headers = new Headers();
-        
-        if (data.isStatic) {
-            headers.set('Cache-Control', 'public, max-age=86400'); // 1 day
-        } else if (data.isUserSpecific) {
-            headers.set('Cache-Control', 'private, max-age=300'); // 5 min
-        } else {
-            headers.set('Cache-Control', 'no-cache');
-        }
-        
-        return new Response(JSON.stringify(data), { headers });
+export async function GET(ctx: BurgerContext) {
+    const data = await fetchData();
+
+    // Apply different cache rules based on data
+    const headers = new Headers();
+
+    if (data.isStatic) {
+        headers.set('Cache-Control', 'public, max-age=86400'); // 1 day
+    } else if (data.isUserSpecific) {
+        headers.set('Cache-Control', 'private, max-age=300'); // 5 min
+    } else {
+        headers.set('Cache-Control', 'no-cache');
     }
+
+    return Response.json(data, { headers });
 }
 ```
 
 ### With Vary Header
 
 ```typescript
-import { cacheControl } from './ecosystem/hooks/cache/cache';
+// src/hooks.ts
+import { cacheControl } from '../ecosystem/hooks/cache/cache';
 
 // Cache varies by Accept and Authorization headers
-const apiCache = cacheControl({
-    directive: 'private',
-    maxAge: 300,
-    vary: ['Accept', 'Authorization']
-});
+export const beforeRoute = [
+    cacheControl({
+        directive: 'private',
+        maxAge: 300,
+        vary: ['Accept', 'Authorization']
+    })
+];
 ```
 
 ### Conditional Requests with ETag
 
 ```typescript
-import { cacheControl } from './ecosystem/hooks/cache/cache';
+// src/hooks.ts
+import { cacheControl } from '../ecosystem/hooks/cache/cache';
 
-const cacheWithETag = cacheControl({
-    directive: 'public',
-    maxAge: 3600,
-    etag: true // Generate ETag
-});
+export const beforeRoute = [
+    cacheControl({
+        directive: 'public',
+        maxAge: 3600,
+        etag: true // Generate ETag
+    })
+];
 
 // Client can then use If-None-Match header
 // Server returns 304 Not Modified if content unchanged
@@ -276,11 +284,14 @@ const cacheWithETag = cacheControl({
 ### Environment-Specific Caching
 
 ```typescript
-import { noCache, publicCache } from './ecosystem/hooks/cache/cache';
+// src/hooks.ts
+import { noCache, publicCache } from '../ecosystem/hooks/cache/cache';
 
-const cacheMiddleware = process.env.NODE_ENV === 'production'
-    ? publicCache(3600)  // 1 hour in production
-    : noCache();          // No cache in development
+export const beforeRoute = [
+    process.env.NODE_ENV === 'production'
+        ? publicCache(3600) // 1 hour in production
+        : noCache() // No cache in development
+];
 ```
 
 ## Common Caching Strategies
@@ -367,8 +378,8 @@ Tells caches to key responses by these request headers.
 ### 1. Default to No Cache for APIs
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
-export const beforeHandle = [noCache()];
+// src/hooks.ts — global hooks, applies to every request
+export const beforeRoute = [noCache()];
 
 // Then add caching to specific routes via their hooks.ts
 ```

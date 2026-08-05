@@ -120,7 +120,7 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
-        if (config?.auth === false) {
+        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 

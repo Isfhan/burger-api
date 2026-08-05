@@ -2,6 +2,22 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 1.0.0 - (August 2, 2026)
+
+- **Added** – `--lang ts|js` and `--yes`/`--defaults` flags on `create`; JS
+  scaffolds use `jsconfig.json` (`checkJs: true`) and `.js` convention files
+  with JSDoc types.
+- **Added** – `-l, --lang` on `generate route|hook|plugin|ws`; language
+  auto-detected via `jsconfig.json` presence.
+- **Changed** – `generate ws` now uses `config.wsDir` (was hardcoded
+  `src/websocket`).
+- **Changed** – API + WS scanners accept `.ts`/`.js`/`.mjs` conventions and
+  fail loud when conflicting files coexist (e.g. `route.ts` + `route.js`).
+- **Changed** – Scaffold pins `burger-api@^1.0.0`.
+- **Removed** – `burger-api serve` command (use `dev`); `burger.config.ts`
+  renamed `burger.build.ts`.
+- **Aligned** – With `burger-api` 1.0.0 vision-locked API.
+
 ## Version 0.10.0 - (July 24, 2026)
 
 - **Changed** – Scanner no longer detects `globalHooksPath` inside `apiDir`.

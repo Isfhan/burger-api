@@ -165,7 +165,7 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
-        if (config?.auth === false) {
+        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 
@@ -194,23 +194,28 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         }
       },
 
-      mapResponse: (ctx: BurgerContext, response: Response): Response => {
-        // Check if we need to add WWW-Authenticate header
-        const user = (ctx as { user?: BasicAuthUser }).user;
-        if (!user) {
-          // Add WWW-Authenticate header for 401 responses
-          const newResponse = new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
-          newResponse.headers.set(
-            "WWW-Authenticate",
-            `Basic realm="${realm}"`
-          );
-          return newResponse;
-        }
-        return response;
+      mapResponse: (ctx: BurgerContext): ((response: Response) => Response) => {
+        // 1.0 contract: response hooks return a transform function;
+        // the framework applies it to the response. (Legacy two-arg form is
+        // not supported by the pipeline.)
+        return (response: Response) => {
+          // Check if we need to add WWW-Authenticate header
+          const user = (ctx as { user?: BasicAuthUser }).user;
+          if (!user) {
+            // Add WWW-Authenticate header for 401 responses
+            const newResponse = new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            });
+            newResponse.headers.set(
+              "WWW-Authenticate",
+              `Basic realm="${realm}"`
+            );
+            return newResponse;
+          }
+          return response;
+        };
       },
     },
   };

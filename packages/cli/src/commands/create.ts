@@ -68,7 +68,16 @@ function validateDirUnderSrc(
 export const createCommand = new Command('create')
     .description('Create a new Burger API project')
     .argument('<project-name>', 'Name of your project')
-    .action(async (projectName: string) => {
+    .option(
+        '-l, --lang <lang>',
+        'Project language: ts or js (default: ts)',
+        'ts'
+    )
+    .option(
+        '-y, --yes, --defaults',
+        'Use default answers for all prompts (non-interactive)'
+    )
+    .action(async (projectName: string, options: { lang: string; yes?: boolean }) => {
         // Start with a nice intro
         clack.intro('Create a new BurgerAPI project');
 
@@ -81,6 +90,12 @@ export const createCommand = new Command('create')
                 process.exit(1);
             }
 
+            if (options.lang !== 'ts' && options.lang !== 'js') {
+                clack.outro('Invalid language');
+                logError(`--lang must be "ts" or "js" (got "${options.lang}")`);
+                process.exit(1);
+            }
+
             // Check if directory already exists
             const targetDir = join(process.cwd(), projectName);
             if (existsSync(targetDir)) {
@@ -90,19 +105,26 @@ export const createCommand = new Command('create')
             }
 
             // Ask user questions to configure the project
-            const options = await askQuestions(projectName);
+            const answered = options.yes
+                ? defaultOptions(projectName)
+                : await askQuestions(projectName);
 
             // User cancelled
-            if (clack.isCancel(options)) {
+            if (clack.isCancel(answered)) {
                 clack.outro('Operation cancelled');
                 process.exit(0);
             }
 
+            const optionsWithLang: CreateOptions = {
+                ...answered,
+                lang: options.lang as 'ts' | 'js',
+            };
+
             // Validate apiDir/pageDir stay under targetDir/src (prevent path traversal)
-            if (options.useApi) {
+            if (optionsWithLang.useApi) {
                 const apiDirError = validateDirUnderSrc(
                     targetDir,
-                    options.apiDir || 'api',
+                    optionsWithLang.apiDir || 'api',
                     'API directory'
                 );
                 if (apiDirError) {
@@ -111,10 +133,10 @@ export const createCommand = new Command('create')
                     process.exit(1);
                 }
             }
-            if (options.usePages) {
+            if (optionsWithLang.usePages) {
                 const pageDirError = validateDirUnderSrc(
                     targetDir,
-                    options.pageDir || 'pages',
+                    optionsWithLang.pageDir || 'pages',
                     'Page directory'
                 );
                 if (pageDirError) {
@@ -128,20 +150,22 @@ export const createCommand = new Command('create')
             info('Creating project with the following configuration:');
             newline();
             console.log(` Name: ${projectName}`);
-            console.log(` Config File: burger.build.ts`);
-            if (options.useApi) {
-                console.log(` API Routes: ${options.apiDir || 'api'}`);
+            console.log(
+                ` Config File: burger.build.${options.lang === 'js' ? 'js' : 'ts'}`
+            );
+            if (optionsWithLang.useApi) {
+                console.log(` API Routes: ${optionsWithLang.apiDir || 'api'}`);
             }
-            if (options.usePages) {
-                console.log(` Page Routes: ${options.pageDir || 'pages'}`);
+            if (optionsWithLang.usePages) {
+                console.log(` Page Routes: ${optionsWithLang.pageDir || 'pages'}`);
             }
-            if (options.addSkills) {
+            if (optionsWithLang.addSkills) {
                 console.log(` AI Agent Skills: burger-api`);
             }
             newline();
 
             // Create the project
-            await createProject(targetDir, options);
+            await createProject(targetDir, optionsWithLang);
 
             // Install dependencies
             await installDependencies(targetDir);
@@ -162,10 +186,10 @@ export const createCommand = new Command('create')
             console.log(` 4. Open your browser:`);
             console.log(` ${highlight('http://localhost:4000')}`);
             newline();
-            console.log(` 5. Add middleware (optional):`);
+            console.log(` 5. Add hooks and plugins (optional):`);
             command('burger-api add cors logger');
             newline();
-            if (options.addSkills) {
+            if (optionsWithLang.addSkills) {
                 console.log(` 6. AI skills installed at`);
                 console.log(` ${highlight('.agents/skills/burger-api/')}`);
             } else {
@@ -180,6 +204,24 @@ export const createCommand = new Command('create')
             process.exit(1);
         }
     });
+
+/**
+ * Default project options for non-interactive mode (`--yes`).
+ * Mirrors the initial values of the interactive prompts.
+ */
+function defaultOptions(projectName: string): CreateOptions {
+    return {
+        name: projectName,
+        useApi: true,
+        apiDir: 'api',
+        apiPrefix: '/api',
+        debug: false,
+        usePages: false,
+        pageDir: 'pages',
+        pagePrefix: '/',
+        addSkills: true,
+    };
+}
 
 /**
  * Ask user questions to configure their project

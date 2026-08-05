@@ -1,6 +1,6 @@
 /**
  * The Standard Schema adapter — brings Valibot/ArkType/`~standard` libraries
- * into BurgerAPI with no framework change (§6).
+ * into BurgerAPI with no framework change.
  *
  * Responsibilities:
  * - Compute a stable identity from the `~standard` contract (vendor + shape).
@@ -9,7 +9,7 @@
  * `ValidationResult` shape.
  *
  * This adapter must NOT assume a specific library — it depends only on the
- * `~standard` contract (). It registers itself with the detection
+ * `~standard` contract. It registers itself with the detection
  * seam on load.
  */
 

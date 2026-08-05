@@ -13,11 +13,35 @@ import {
     detectExportedMethods,
     detectExportedHookNames,
 } from './route-methods';
-import { ROUTE_CONSTANTS } from './route-conventions';
+import { ROUTE_CONSTANTS, splitConventionName } from './route-conventions';
 import {
     filePathToApiRoutePath,
     filePathToPageRoutePath,
 } from './route-conventions';
+
+/**
+ * Returns the first existing convention file for `stem` in `dir`
+ * (`route.ts`, `route.js`, `route.mjs` …). Throws when more than one
+ * variant exists (fail loud — mirrors the framework scanner).
+ */
+function findConventionFile(
+    dir: string,
+    stem: string
+): string | undefined {
+    let found: string | undefined;
+    for (const ext of ROUTE_CONSTANTS.CONVENTION_EXTENSIONS) {
+        const candidate = path.join(dir, `${stem}${ext}`);
+        if (!existsSync(candidate)) continue;
+        if (found) {
+            throw new Error(
+                `Conflicting convention files "${found}" and "${candidate}" in "${dir}" — ` +
+                    `a route directory must not contain both ${stem}.ts and ${stem}.js (or .mjs).`
+            );
+        }
+        found = candidate;
+    }
+    return found;
+}
 
 export interface ApiRouteScanEntry {
     /** Absolute import path used by generated build entry */
@@ -27,13 +51,13 @@ export interface ApiRouteScanEntry {
     isWildcard: boolean;
     /** HTTP methods exported by the route module (set by method detection; omit = emit all) */
     methods?: string[];
-    /** Absolute import path of a sibling `hooks.ts`, if the route declares lifecycle hooks. */
+    /** Absolute import path of a sibling hooks file (`hooks.ts|.js|.mjs`), if the route declares lifecycle hooks. */
     hooksPath?: string;
-    /** Absolute import path of a sibling `schema.ts`, if present. */
+    /** Absolute import path of a sibling `schema.*`, if present. */
     schemaPath?: string;
-    /** Absolute import path of a sibling `openapi.ts`, if present. */
+    /** Absolute import path of a sibling `openapi.*`, if present. */
     openapiPath?: string;
-    /** Absolute import path of a sibling `config.ts`, if present. */
+    /** Absolute import path of a sibling `config.*`, if present. */
     configPath?: string;
 }
 
@@ -120,44 +144,54 @@ async function scanApiDir(
             continue;
         }
 
-        if (entry.isFile() && entry.name === 'route.ts') {
-            const routePath = filePathToApiRoutePath(relativePath, prefix);
-            const importPath = entryPath.split(path.sep).join('/');
-            const methods = await detectExportedMethods(entryPath);
-            const scanEntry: ApiRouteScanEntry = {
-                importPath,
-                routePath,
-                isWildcard: routePath.includes(
-                    ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
-                ),
-            };
-            if (methods !== undefined) {
-                scanEntry.methods = methods;
-            }
-            // Capture a sibling `hooks.ts` so the build entry can wire
-            // lifecycle hooks. Only when it actually exports hooks.
-            const hooksFile = path.join(dir, 'hooks.ts');
-            if (existsSync(hooksFile)) {
-                const hookNames = await detectExportedHookNames(hooksFile);
-                if (hookNames) {
-                    scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
-                }
-            }
-            // Capture sibling convention files for build entry merging
-            const schemaFile = path.join(dir, 'schema.ts');
-            if (existsSync(schemaFile)) {
-                scanEntry.schemaPath = schemaFile.split(path.sep).join('/');
-            }
-            const openapiFile = path.join(dir, 'openapi.ts');
-            if (existsSync(openapiFile)) {
-                scanEntry.openapiPath = openapiFile.split(path.sep).join('/');
-            }
-            const configFile = path.join(dir, 'config.ts');
-            if (existsSync(configFile)) {
-                scanEntry.configPath = configFile.split(path.sep).join('/');
-            }
-            out.push(scanEntry);
+        if (!entry.isFile()) continue;
+    }
+
+    // Convention files are resolved per directory (once) across all
+    // accepted extensions (.ts/.js/.mjs).
+    const routeFile = findConventionFile(dir, 'route');
+    if (routeFile) {
+        const routePath = filePathToApiRoutePath(
+            path.join(basePath, path.basename(routeFile)),
+            prefix
+        );
+        const importPath = routeFile.split(path.sep).join('/');
+        const methods = await detectExportedMethods(routeFile);
+        const scanEntry: ApiRouteScanEntry = {
+            importPath,
+            routePath,
+            isWildcard: routePath.includes(
+                ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
+            ),
+        };
+        if (methods !== undefined) {
+            scanEntry.methods = methods;
         }
+        // Capture a sibling hooks file so the build entry can wire
+        // lifecycle hooks. Only when it actually exports hooks.
+        const hooksFile = findConventionFile(dir, 'hooks');
+        if (hooksFile) {
+            const hookNames = await detectExportedHookNames(hooksFile);
+            if (hookNames) {
+                scanEntry.hooksPath = hooksFile
+                    .split(path.sep)
+                    .join('/');
+            }
+        }
+        // Capture sibling convention files for build entry merging
+        const schemaFile = findConventionFile(dir, 'schema');
+        if (schemaFile) {
+            scanEntry.schemaPath = schemaFile.split(path.sep).join('/');
+        }
+        const openapiFile = findConventionFile(dir, 'openapi');
+        if (openapiFile) {
+            scanEntry.openapiPath = openapiFile.split(path.sep).join('/');
+        }
+        const configFile = findConventionFile(dir, 'config');
+        if (configFile) {
+            scanEntry.configPath = configFile.split(path.sep).join('/');
+        }
+        out.push(scanEntry);
     }
 }
 
@@ -270,32 +304,31 @@ async function scanWsDir(
             await scanWsDir(entryPath, relativePath, out);
             continue;
         }
+    }
 
-        if (entry.isFile() && entry.name === 'ws.ts') {
-            const importPath = entryPath.split(path.sep).join('/');
+    const wsFile = findConventionFile(dir, 'ws');
+    if (wsFile) {
+        const importPath = wsFile.split(path.sep).join('/');
 
-            // Build route path from directory structure
-            const routePath = buildWsRoutePath(basePath);
+        // Build route path from directory structure
+        const routePath = buildWsRoutePath(basePath);
 
-            const scanEntry: WebSocketRouteScanEntry = {
-                importPath,
-                routePath,
-            };
+        const scanEntry: WebSocketRouteScanEntry = {
+            importPath,
+            routePath,
+        };
 
-            // Check for sibling hooks.ts
-            const hooksFile = path.join(dir, 'hooks.ts');
-            if (existsSync(hooksFile)) {
-                scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
-            }
-
-            // Check for sibling config.ts
-            const configFile = path.join(dir, 'config.ts');
-            if (existsSync(configFile)) {
-                scanEntry.configPath = configFile.split(path.sep).join('/');
-            }
-
-            out.push(scanEntry);
+        // Check for sibling hooks/config
+        const hooksFile = findConventionFile(dir, 'hooks');
+        if (hooksFile) {
+            scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
         }
+        const configFile = findConventionFile(dir, 'config');
+        if (configFile) {
+            scanEntry.configPath = configFile.split(path.sep).join('/');
+        }
+
+        out.push(scanEntry);
     }
 }
 

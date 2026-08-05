@@ -5,7 +5,7 @@ import {
     validatorCache,
     clearValidatorCache,
 } from '../../src/validation/compiler';
-import { createValidatorMiddleware } from '../../src/validation/validator';
+import { createValidationHook } from '../../src/validation/validator';
 import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
@@ -37,9 +37,9 @@ describe('Coercion end-to-end', () => {
             },
         };
         const validators = compileRouteSchema(schema, { coerce: true });
-        const middleware = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { n: '42', b: 'true' });
-        const next = await middleware(ctx);
+        const next = await hook(ctx);
         expect(next).toBeUndefined();
         expect((ctx.validated as any).query).toEqual({ n: 42, b: true });
     });
@@ -49,10 +49,10 @@ describe('Coercion end-to-end', () => {
             get: { query: z.object({ n: z.number() }) },
         };
         const validators = compileRouteSchema(schema, { coerce: false });
-        const middleware = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { n: '42' });
         // Without coercion, "42" is not a number => ValidationError.
-        await expect(middleware(ctx)).rejects.toThrow(ValidationError);
+        await expect(hook(ctx)).rejects.toThrow(ValidationError);
     });
 
     it('does not build a coercion plan when disabled', () => {
@@ -71,9 +71,9 @@ describe('Coercion end-to-end', () => {
             },
         };
         const validators = compileRouteSchema(schema, { coerce: false });
-        const middleware = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { n: '7' });
-        await middleware(ctx);
+        await hook(ctx);
         expect((ctx.validated as any).query).toEqual({ n: 7 });
     });
 });

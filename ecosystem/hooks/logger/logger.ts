@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the logger middleware.
+ * Configuration options for the logger hook.
  */
 export interface LoggerOptions {
     /**
@@ -25,7 +25,7 @@ export interface LoggerOptions {
     /**
      * Whether to log request body (for POST/PUT/PATCH requests).
      * ⚠️ WARNING: This will consume the request body stream, making it unavailable
-     * to subsequent middleware or handlers. This is a limitation of the Web Streams API.
+     * to subsequent hooks or handlers. This is a limitation of the Web Streams API.
      * Only enable this for debugging purposes, not in production.
      * @default false
      */
@@ -119,13 +119,13 @@ const colors = {
 };
 
 /**
- * Creates a logger middleware for request/response logging.
+ * Creates a logger hook for request/response logging.
  *
- * This middleware logs HTTP requests with method, URL, status code, and response time.
+ * This hook logs HTTP requests with method, URL, status code, and response time.
  * It supports colorized output, custom formatting, and filtering.
  *
  * @param options - Configuration options for logging behavior
- * @returns A middleware function that logs requests and responses
+ * @returns A hook function that logs requests and responses
  *
  * @example
  * ```typescript
@@ -409,7 +409,7 @@ function colorize(info: LogInfo, message: string): string {
  * @example
  * ```typescript
  * // api/hooks.ts
- * import { logger } from 'burger-api/middleware/logger';
+ * import { logger } from '../ecosystem/hooks/logger/logger';
  *
  * export const beforeRoute = [logger()];
  * ```

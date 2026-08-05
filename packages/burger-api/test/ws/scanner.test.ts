@@ -40,6 +40,37 @@ describe('WebSocketScanner', () => {
         expect(result.routes[0].path).toBe('/');
     });
 
+    it('should find ws.js and ws.mjs files with js conventions', async () => {
+        mkdirSync(join(tempDir, 'chat'));
+        mkdirSync(join(tempDir, 'room'));
+        writeFileSync(join(tempDir, 'chat', 'ws.js'), 'export default {};');
+        writeFileSync(join(tempDir, 'chat', 'hooks.js'), 'export {};');
+        writeFileSync(join(tempDir, 'room', 'ws.mjs'), 'export default {};');
+        writeFileSync(
+            join(tempDir, 'room', 'config.js'),
+            'export default {};'
+        );
+
+        const scanner = new WebSocketScanner(tempDir);
+        const result = await scanner.scan();
+
+        const chat = result.routes.find((r) => r.path === '/chat');
+        expect(chat?.wsFile).toContain('ws.js');
+        expect(chat?.hooksFile).toContain('hooks.js');
+
+        const room = result.routes.find((r) => r.path === '/room');
+        expect(room?.wsFile).toContain('ws.mjs');
+        expect(room?.configFile).toContain('config.js');
+    });
+
+    it('should throw on conflicting ws.ts + ws.js', async () => {
+        writeFileSync(join(tempDir, 'ws.ts'), 'export default {};');
+        writeFileSync(join(tempDir, 'ws.js'), 'export default {};');
+
+        const scanner = new WebSocketScanner(tempDir);
+        await expect(scanner.scan()).rejects.toThrow(/Conflicting/);
+    });
+
     it('should find ws.ts in nested directories', async () => {
         // Create nested structure
         mkdirSync(join(tempDir, 'chat'), { recursive: true });

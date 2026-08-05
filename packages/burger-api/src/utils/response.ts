@@ -1,5 +1,5 @@
 /**
- * The method not allowed response (legacy constant, kept for backward compat).
+ * The shared 405 response.
  */
 export const METHOD_NOT_ALLOWED = new Response('Method Not Allowed', {
     status: 405,

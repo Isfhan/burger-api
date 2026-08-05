@@ -20,55 +20,60 @@ Or manually copy to `ecosystem/plugins/env/`.
 
 ## Usage
 
-### Basic usage
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { env } from "./ecosystem/plugins/env/env";
+import type { Burger } from "burger-api";
+import { env } from "../ecosystem/plugins/env/env";
 
-const burger = new Burger();
-
-burger.usePlugin(env({
-  required: {
-    DATABASE_URL: { type: "url" },
-    JWT_SECRET: { type: "string" },
-  },
-  optional: {
-    PORT: { type: "number", default: 3000 },
-    LOG_LEVEL: { type: "string", default: "info" },
-  },
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(env({
+    required: {
+      DATABASE_URL: { type: "url" },
+      JWT_SECRET: { type: "string" },
+    },
+    optional: {
+      PORT: { type: "number", default: 3000 },
+      LOG_LEVEL: { type: "string", default: "info" },
+    },
+  }));
+}
 ```
 
 ### With custom validation
 
 ```typescript
-burger.usePlugin(env({
-  required: {
-    API_KEY: {
-      type: "string",
-      validate: (value) => value.startsWith("sk_"),
-      description: "API key must start with sk_",
+export default function (burger: Burger) {
+  burger.usePlugin(env({
+    required: {
+      API_KEY: {
+        type: "string",
+        validate: (value) => value.startsWith("sk_"),
+        description: "API key must start with sk_",
+      },
     },
-  },
-}));
+  }));
+}
 ```
 
 ### With custom error handler
 
 ```typescript
-burger.usePlugin(env({
-  required: {
-    DATABASE_URL: { type: "url" },
-  },
-  onError: (errors) => {
-    console.error("Environment validation failed:");
-    errors.forEach((error) => {
-      console.error(`  ${error.name}: ${error.message}`);
-    });
-  },
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(env({
+    required: {
+      DATABASE_URL: { type: "url" },
+    },
+    onError: (errors) => {
+      console.error("Environment validation failed:");
+      errors.forEach((error) => {
+        console.error(`  ${error.name}: ${error.message}`);
+      });
+    },
+  }));
+}
 ```
 
 ## Configuration options

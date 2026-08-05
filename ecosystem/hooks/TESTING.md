@@ -8,10 +8,10 @@ works correctly in a real Bun.js environment.
 
 ## Prerequisites
 
--   **Bun v1.3.1 or later** installed
-    ([Install Bun](https://bun.sh/docs/installation))
--   Basic understanding of HTTP requests
--   A tool like `curl`, Postman, or your browser
+- **Bun v1.3.1 or later** installed
+  ([Install Bun](https://bun.sh/docs/installation))
+- Basic understanding of HTTP requests
+- A tool like `curl`, Postman, or your browser
 
 ### Verify Bun Installation
 
@@ -30,8 +30,8 @@ bun upgrade
 
 ```bash
 # Create a new directory for testing
-mkdir burger-api-middleware-test
-cd burger-api-middleware-test
+mkdir burger-api-hook-test
+cd burger-api-hook-test
 
 # Initialize a new Bun project
 bun init -y
@@ -43,58 +43,62 @@ bun add burger-api
 ### Step 2: Copy Hooks to Test
 
 ```bash
-# Create middleware directory
+# Create the ecosystem directory
 mkdir -p ecosystem/hooks
 
-# Copy the middleware you want to test
+# Copy the hooks you want to test
 # For example, to test CORS:
-cp -r /path/to/burger-api/middlewares/cors ./ecosystem/hooks/
+cp -r /path/to/burger-api/ecosystem/hooks/cors ./ecosystem/hooks/
 
-# Or copy all middleware:
-cp -r /path/to/burger-api/middlewares/* ./ecosystem/hooks/
+# Or copy all hooks:
+cp -r /path/to/burger-api/ecosystem/hooks/* ./ecosystem/hooks/
 ```
 
 ### Step 3: Create Test Server
 
-Create `index.ts` in your test project:
+Global hooks live in `src/hooks.ts` (sibling of `index.ts`), auto-discovered
+by the dev server:
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts — global hooks, applies to every request
 import { logger } from '../ecosystem/hooks/logger/logger';
 import { cors } from '../ecosystem/hooks/cors/cors';
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeHandle = [
+export const onRequest = [
+    cors(), // Test CORS (pre-routing, answers OPTIONS preflight)
+];
+
+export const beforeRoute = [
     logger(), // Test logger
-    cors(), // Test CORS
     rateLimit(), // Test rate limiter
 ];
 
 // index.ts
 import { Burger } from 'burger-api';
 
-const app = new Burger({ apiDir: './api' });
-app.serve(4000, () => {
+const burger = new Burger({ apiDir: './src/api' });
+burger.serve(4000, () => {
     console.log('🚀 Test server started on http://localhost:4000');
 });
 ```
 
 ### Step 4: Create Test Routes
 
-Create `api/test/route.ts`:
+Create `src/api/test/route.ts`:
 
 ```typescript
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     return Response.json({
         message: 'Test route working!',
         timestamp: new Date().toISOString(),
     });
 }
 
-export async function POST(req: BurgerRequest) {
-    const body = await req.json();
+export async function POST(ctx: BurgerContext) {
+    const body = await ctx.json();
     return Response.json({
         message: 'POST received',
         received: body,
@@ -102,13 +106,11 @@ export async function POST(req: BurgerRequest) {
 }
 ```
 
-````
-
 ### Step 5: Run Test Server
 
 ```bash
 bun run index.ts
-````
+```
 
 You should see: `🚀 Test server started on http://localhost:4000`
 
@@ -121,10 +123,10 @@ You should see: `🚀 Test server started on http://localhost:4000`
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin: '*',
         credentials: true,
@@ -150,9 +152,12 @@ curl -i http://localhost:4000/api/test \
 
 **Expected Results:**
 
--   Should see `Access-Control-Allow-Origin` header
--   OPTIONS request should return 204
--   Should see `Access-Control-Allow-Methods` header
+- Should see `Access-Control-Allow-Origin` header
+- OPTIONS request should return 204
+- Should see `Access-Control-Allow-Methods` header
+
+> Note: `credentials: true` cannot be combined with a `'*'` origin — use an
+> explicit origin or an array of origins instead.
 
 ---
 
@@ -161,10 +166,10 @@ curl -i http://localhost:4000/api/test \
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit({
         windowMs: 60000,
         maxRequests: 5, // Only 5 requests for easy testing
@@ -185,10 +190,10 @@ done
 
 **Expected Results:**
 
--   First 5 requests: Status 200
--   6th request: Status 429 (Too Many Requests)
--   Should see `X-RateLimit-Limit`, `X-RateLimit-Remaining` headers
--   Should see `Retry-After` header on 429 response
+- First 5 requests: Status 200
+- 6th request: Status 429 (Too Many Requests)
+- Should see `X-RateLimit-Limit`, `X-RateLimit-Remaining` headers
+- Should see `Retry-After` header on 429 response
 
 ---
 
@@ -197,10 +202,10 @@ done
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeHandle = [
+export const beforeRoute = [
     createLogger({
         colors: true,
         logQuery: true,
@@ -225,9 +230,11 @@ curl -X POST http://localhost:4000/api/test \
 
 **Expected Results:**
 
--   Should see colorized logs in console
--   Format: `[timestamp] METHOD /path STATUS duration`
--   Should log query parameters if enabled
+- Should see colorized logs in console
+- Format: `[timestamp] [requestId] METHOD /path STATUS duration`
+- Should log query parameters if enabled
+- Each response includes an `X-Request-ID` header value in the log (set on
+  the context as `ctx.requestId`, request ID generation enabled by default)
 
 ---
 
@@ -236,10 +243,10 @@ curl -X POST http://localhost:4000/api/test \
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         threshold: 100, // Low threshold for testing
         encodings: ['gzip', 'deflate'],
@@ -249,19 +256,17 @@ export const beforeHandle = [
 
 **Test Route (return large response):**
 
-Create `api/large/route.ts`:
+Create `src/api/large/route.ts`:
 
 ```typescript
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     // Generate large response
     const data = Array(1000).fill('x').join('');
     return Response.json({ data });
 }
 ```
-
-````
 
 **Test Commands:**
 
@@ -276,13 +281,13 @@ curl -i http://localhost:4000/api/large
 # Check compression with verbose
 curl -i --compressed http://localhost:4000/api/large \
   -H "Accept-Encoding: gzip, deflate"
-````
+```
 
 **Expected Results:**
 
--   With `Accept-Encoding`: Should see `Content-Encoding: gzip` header
--   Without: No `Content-Encoding` header
--   Response should be smaller when compressed
+- With `Accept-Encoding`: Should see `Content-Encoding: gzip` header
+- Without: No `Content-Encoding` header
+- Response should be smaller when compressed
 
 ---
 
@@ -291,13 +296,13 @@ curl -i --compressed http://localhost:4000/api/large \
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import {
     securityHeaders,
     strictSecurity,
 } from '../ecosystem/hooks/security-headers/security-headers';
 
-export const beforeHandle = [
+export const beforeRoute = [
     strictSecurity(), // or securityHeaders() for custom config
 ];
 ```
@@ -314,146 +319,37 @@ curl -v http://localhost:4000/api/test 2>&1 | grep -i "x-\|content-security\|str
 
 **Expected Results:**
 
--   Should see `X-Frame-Options: DENY`
--   Should see `X-Content-Type-Options: nosniff`
--   Should see `Content-Security-Policy` header
--   Should see `Strict-Transport-Security` header
+- Should see `X-Frame-Options: DENY`
+- Should see `X-Content-Type-Options: nosniff`
+- Should see `Content-Security-Policy` header
+- Should see `Strict-Transport-Security` header
 
 ---
 
-### 6. JWT Authentication Hooks
+### 6. Timeout Hooks
 
 **Setup:**
 
 ```typescript
-// api/hooks.ts
-import { jwt } from '../ecosystem/hooks/jwt-auth/jwt-auth';
-
-const SECRET = 'test-secret-key-12345';
-
-export const beforeHandle = [jwt({ secret: SECRET })];
-```
-
-**Create a login route** (to get tokens) - `api/login/route.ts`:
-
-```typescript
-import type { BurgerRequest } from 'burger-api';
-import { createJWT } from '../../ecosystem/hooks/jwt-auth/jwt-auth';
-
-const SECRET = 'test-secret-key-12345';
-
-export async function POST(req: BurgerRequest) {
-    // Create a test token
-    const token = await createJWT(
-        {
-            sub: 'user-123',
-            email: 'test@example.com',
-            exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-        },
-        SECRET,
-        'HS256'
-    );
-
-    return Response.json({ token });
-}
-```
-
-````
-
-**Test Commands:**
-
-```bash
-# Get a token
-TOKEN=$(curl -s -X POST http://localhost:4000/api/login | jq -r '.token')
-
-# Test without token (should fail)
-curl -i http://localhost:4000/api/test
-
-# Test with valid token (should work)
-curl -i http://localhost:4000/api/test \
-  -H "Authorization: Bearer $TOKEN"
-
-# Test with invalid token (should fail)
-curl -i http://localhost:4000/api/test \
-  -H "Authorization: Bearer invalid-token"
-````
-
-**Expected Results:**
-
--   Without token: 401 Unauthorized
--   With valid token: 200 OK
--   With invalid token: 401 Unauthorized
--   Should see user data attached to request in protected routes
-
----
-
-### 7. API Key Authentication Hooks
-
-**Setup:**
-
-```typescript
-// api/hooks.ts
-import { apiKey } from '../ecosystem/hooks/api-key-auth/api-key-auth';
-
-export const beforeHandle = [
-    apiKey({
-        keys: ['test-key-123', 'test-key-456'],
-    }),
-];
-```
-
-**Test Commands:**
-
-```bash
-# Test without API key (should fail)
-curl -i http://localhost:4000/api/test
-
-# Test with valid API key in header
-curl -i http://localhost:4000/api/test \
-  -H "X-API-Key: test-key-123"
-
-# Test with invalid API key
-curl -i http://localhost:4000/api/test \
-  -H "X-API-Key: invalid-key"
-
-# Test with query parameter
-curl -i "http://localhost:4000/api/test?api_key=test-key-123"
-```
-
-**Expected Results:**
-
--   Without key: 401 Unauthorized
--   With valid key: 200 OK
--   With invalid key: 401 Unauthorized
-
----
-
-### 8. Timeout Hooks
-
-**Setup:**
-
-```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { requestTimeout } from '../ecosystem/hooks/timeout/timeout';
 
-export const beforeHandle = [
+export const beforeRoute = [
     requestTimeout({ ms: 2000 }), // 2 second timeout
 ];
 ```
 
-**Create slow route** - `api/slow/route.ts`:
+**Create slow route** - `src/api/slow/route.ts`:
 
 ```typescript
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
     // Simulate slow operation
     await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 seconds
     return Response.json({ message: 'Done' });
 }
 ```
-
-````
 
 **Test Commands:**
 
@@ -463,24 +359,28 @@ curl -i http://localhost:4000/api/test
 
 # Test slow route (should timeout)
 curl -i http://localhost:4000/api/slow
-````
+```
 
 **Expected Results:**
 
--   Normal route: 200 OK
--   Slow route: 408 Request Timeout
+- Normal route: 200 OK
+- Slow route: 408 Request Timeout
+
+> Note: `requestTimeout` detects timeouts after the handler completes — the
+> handler still runs to completion. For hard enforcement that stops handlers
+> mid-execution, use `AbortSignal` inside the handler.
 
 ---
 
-### 9. Cache Control Hooks
+### 7. Cache Control Hooks
 
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { publicCache } from '../ecosystem/hooks/cache/cache';
 
-export const beforeHandle = [
+export const beforeRoute = [
     publicCache(3600), // Cache for 1 hour
 ];
 ```
@@ -497,20 +397,20 @@ curl -i http://localhost:4000/api/test | grep -i cache-control
 
 **Expected Results:**
 
--   Should see `Cache-Control: public, max-age=3600`
--   Response should include caching directives
+- Should see `Cache-Control: public, max-age=3600`
+- Response should include caching directives
 
 ---
 
-### 10. Body Size Limiter Hooks
+### 8. Body Size Limiter Hooks
 
 **Setup:**
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-export const beforeHandle = [
+export const beforeRoute = [
     bodySizeLimiter({
         maxSize: 1024, // 1KB for easy testing
     }),
@@ -539,9 +439,9 @@ curl -i -X POST http://localhost:4000/api/test \
 
 **Expected Results:**
 
--   Small payload: 200 OK
--   Large payload: 413 Payload Too Large
--   Should see error message with size information
+- Small payload: 200 OK
+- Large payload: 413 Payload Too Large
+- Should see error message with size information
 
 ---
 
@@ -550,17 +450,20 @@ curl -i -X POST http://localhost:4000/api/test \
 **Complete Setup:**
 
 ```typescript
-// api/hooks.ts
-import { logger } from '../ecosystem/hooks/logger/logger';
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
+import { logger } from '../ecosystem/hooks/logger/logger';
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 import { compress } from '../ecosystem/hooks/compression/compression';
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
 import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-export const beforeHandle = [
+export const onRequest = [
+    cors({ origin: '*' }), // Enable CORS (pre-routing)
+];
+
+export const beforeRoute = [
     logger(), // Log all requests
-    cors({ origin: '*' }), // Enable CORS
     securityHeaders(), // Add security headers
     rateLimit({ maxRequests: 100 }), // Limit to 100 req/min
     compress({ threshold: 1024 }), // Compress responses
@@ -570,8 +473,8 @@ export const beforeHandle = [
 // index.ts
 import { Burger } from 'burger-api';
 
-const app = new Burger({ apiDir: 'api' });
-app.serve(4000, () => {
+const burger = new Burger({ apiDir: './src/api' });
+burger.serve(4000, () => {
     console.log('🚀 Test server started on http://localhost:4000');
 });
 ```
@@ -589,11 +492,11 @@ curl -i -X POST http://localhost:4000/api/test \
 
 **Expected Results:**
 
--   Logger should print the request
--   CORS headers should be present
--   Security headers should be present
--   Rate limit headers should be present
--   Content should be compressed (if large enough)
+- Logger should print the request
+- CORS headers should be present
+- Security headers should be present
+- Rate limit headers should be present
+- Content should be compressed (if large enough)
 
 ---
 
@@ -602,20 +505,16 @@ curl -i -X POST http://localhost:4000/api/test \
 ### 1. Enable Verbose Logging
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeHandle = [
+export const beforeRoute = [
     createLogger({
         colors: true,
         logHeaders: true,
         logQuery: true,
     }),
 ];
-
-// index.ts
-import { Burger } from 'burger-api';
-new Burger({ apiDir: './api', debug: true }).serve(4000);
 ```
 
 ### 2. Test One Hook at a Time
@@ -623,32 +522,34 @@ new Burger({ apiDir: './api', debug: true }).serve(4000);
 Start with one hook and add more gradually:
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 // Test 1: Just logger
-export const beforeHandle = [logger()];
+export const beforeRoute = [logger()];
 
 // Test 2: Logger + CORS
-export const beforeHandle = [logger(), cors()];
+export const onRequest = [cors()];
+export const beforeRoute = [logger()];
 
 // Test 3: Logger + CORS + Rate Limiter
-export const beforeHandle = [logger(), cors(), rateLimit()];
+export const onRequest = [cors()];
+export const beforeRoute = [logger(), rateLimit()];
 ```
 
 ### 3. Check Console Output
 
 Watch the terminal for:
 
--   Log messages from logger middleware
--   Warning messages (e.g., brotli not supported)
--   Error messages
+- Log messages from the logger hook
+- Warning messages (e.g., brotli not supported)
+- Error messages
 
 ### 4. Use Browser DevTools
 
 Open http://localhost:4000/api/test in your browser and check:
 
--   Network tab for headers
--   Console for any JavaScript errors
--   Response payload
+- Network tab for headers
+- Console for any JavaScript errors
+- Response payload
 
 ---
 
@@ -659,7 +560,7 @@ Create `test-all.sh`:
 ```bash
 #!/bin/bash
 
-echo "🧪 Testing all middleware..."
+echo "🧪 Testing all hooks..."
 echo ""
 
 echo "1️⃣ Testing basic request..."
@@ -700,9 +601,11 @@ chmod +x test-all.sh
 
 ### Hooks Not Working?
 
-1. **Check import paths**: Make sure imports are correct
-2. **Check hooks order**: Some hooks depend on others
-3. **Check Bun version**: Run `bun --version` (need v1.0.0+)
+1. **Check import paths**: Make sure imports point at `ecosystem/hooks/<name>/<name>`
+2. **Check hook points**: `cors()` belongs in `onRequest` (pre-routing, for
+   preflight); the rest belong in `beforeRoute` (or `afterRoute` /
+   `mapResponse` for response decoration)
+3. **Check Bun version**: Run `bun --version` (need v1.3.1+)
 4. **Check console errors**: Look for any error messages
 5. **Test hooks in isolation**: Remove other hooks temporarily
 
@@ -710,25 +613,27 @@ chmod +x test-all.sh
 
 **Issue**: "Cannot find module 'burger-api'"
 
--   **Solution**: Run `bun add burger-api` in your test project
+- **Solution**: Run `bun add burger-api` in your test project
 
 **Issue**: Hooks not applying to routes
 
--   **Solution**: Make sure hooks are defined in `api/hooks.ts` (global) or
-    route-specific `hooks.ts` files
+- **Solution**: Make sure hooks are defined in `src/hooks.ts` (global, sibling
+  of `index.ts`) or in a route's own `hooks.ts` next to `route.ts`. There are
+  no folder-level or group-level hook files.
 
 **Issue**: CORS not working
 
--   **Solution**: Check that origin is correctly configured
+- **Solution**: Check that origin is correctly configured, and that `cors()`
+  is in `onRequest` so preflight requests are answered before routing
 
 **Issue**: Rate limiter always returns 429
 
--   **Solution**: Restart server or increase `maxRequests`
+- **Solution**: Restart server or increase `maxRequests`
 
 **Issue**: Compression not working
 
--   **Solution**: Ensure response is large enough (above threshold) and client
-    sends `Accept-Encoding` header
+- **Solution**: Ensure response is large enough (above threshold) and client
+  sends `Accept-Encoding` header
 
 ---
 
@@ -736,11 +641,11 @@ chmod +x test-all.sh
 
 After testing:
 
-1. ✅ Verify all middleware work as expected
+1. ✅ Verify all hooks work as expected
 2. ✅ Test edge cases (invalid inputs, errors, etc.)
-3. ✅ Test middleware combinations
+3. ✅ Test hook combinations
 4. ✅ Document any issues found
-5. ✅ Create your own custom middleware
+5. ✅ Create your own custom hook factory
 
 ---
 
@@ -748,7 +653,7 @@ After testing:
 
 If you find any issues:
 
-1. Note which middleware has the issue
+1. Note which hook has the issue
 2. Include your test setup code
 3. Include the exact error message
 4. Include Bun version: `bun --version`

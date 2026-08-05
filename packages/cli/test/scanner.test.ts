@@ -2,6 +2,8 @@
  * Parity tests: CLI scanner produces same route paths as framework conventions.
  */
 import { describe, it, expect } from 'bun:test';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
 
@@ -18,6 +20,7 @@ const routeMethodsFixturesDir = join(
     'fixtures',
     'route-methods'
 );
+const jsRoutesFixturesDir = join(import.meta.dir, 'fixtures', 'js-routes');
 
 describe('scanApiRoutes', () => {
     it('converts file paths to route paths matching framework (static, dynamic, group)', async () => {
@@ -107,6 +110,48 @@ describe('scanApiRoutes', () => {
             expect.arrayContaining(['GET', 'POST'])
         );
         expect(rootEntry.methods).toHaveLength(2);
+    });
+});
+
+describe('scanApiRoutes — JavaScript (.js / .mjs)', () => {
+    it('discovers route.js with .js convention siblings', async () => {
+        const entries = await scanApiRoutes(
+            jsRoutesFixturesDir,
+            './api',
+            '/api'
+        );
+        const users = entries.find((e) => e.routePath === '/api/users');
+        expect(users).toBeDefined();
+        expect(users?.importPath).toContain('route.js');
+        expect(users?.schemaPath).toContain('schema.js');
+        expect(users?.configPath).toContain('config.js');
+        expect(users?.methods).toEqual(['GET']);
+    });
+
+    it('discovers route.mjs with .mjs convention siblings', async () => {
+        const entries = await scanApiRoutes(
+            jsRoutesFixturesDir,
+            './api',
+            '/api'
+        );
+        const files = entries.find((e) => e.routePath === '/api/files');
+        expect(files).toBeDefined();
+        expect(files?.importPath).toContain('route.mjs');
+        expect(files?.openapiPath).toContain('openapi.mjs');
+    });
+
+    it('throws when route.ts and route.js coexist', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        try {
+            mkdirSync(join(root, 'api', 'users'), { recursive: true });
+            writeFileSync(join(root, 'api', 'users', 'route.ts'), 'export {};');
+            writeFileSync(join(root, 'api', 'users', 'route.js'), 'export {};');
+            await expect(
+                scanApiRoutes(root, './api', '/api')
+            ).rejects.toThrow(/Conflicting convention files/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });
 

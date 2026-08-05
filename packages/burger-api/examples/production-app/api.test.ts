@@ -2,7 +2,7 @@
  * Test suite for production-app example
  *
  * @file examples/production-app/api.test.ts
- * @description Tests production-ready application with middleware, auth, rate limiting, and CORS
+ * @description Tests production-ready application with global hooks, auth, rate limiting, and CORS
  *
  * Usage:
  *   1. Start the server: bun run examples/production-app/src/index.ts
@@ -67,7 +67,7 @@ describe('Production App', () => {
                 expect(data).toHaveProperty('message');
             });
 
-            it('should execute global middleware', async () => {
+            it('should execute global hooks', async () => {
                 const data = await fetchJSON('/api');
                 expect(data).toHaveProperty('message');
             });

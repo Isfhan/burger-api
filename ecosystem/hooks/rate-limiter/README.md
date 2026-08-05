@@ -16,14 +16,14 @@ Rate limiting hook factory for burger-api framework. Hook factories are code tha
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add rate-limiter
 ```
 
 ## Usage
@@ -31,10 +31,10 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage (100 requests per minute)
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
+// src/hooks.ts — global hooks, applies to every request
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit() // 100 requests per minute per IP
 ];
 
@@ -42,7 +42,7 @@ export const beforeHandle = [
 import { Burger } from 'burger-api';
 
 const app = new Burger({
-    apiDir: './api',
+    apiDir: './src/api',
 });
 
 app.serve(4000);
@@ -51,10 +51,10 @@ app.serve(4000);
 ### Custom Limits
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
         maxRequests: 50 // 50 requests per 15 minutes
@@ -65,17 +65,17 @@ export const beforeHandle = [
 ### Rate Limiting by API Key
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit({
         windowMs: 60000, // 1 minute
         maxRequests: 100,
-        keyGenerator: (req) => {
+        keyGenerator: (ctx) => {
             // Use API key or fall back to IP
-            return req.headers.get('X-API-Key') || 
-                   req.headers.get('X-Forwarded-For') || 
+            return ctx.headers.get('X-API-Key') || 
+                   ctx.headers.get('X-Forwarded-For') || 
                    'anonymous';
         }
     })
@@ -85,12 +85,13 @@ export const beforeHandle = [
 ### Custom Error Response
 
 ```typescript
-import { rateLimit } from './ecosystem/hooks/rate-limiter/rate-limiter';
+// src/hooks.ts
+import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
 const limiter = rateLimit({
     windowMs: 60000,
     maxRequests: 100,
-    handler: (req) => {
+    handler: (ctx) => {
         return Response.json(
             {
                 error: 'Rate Limit Exceeded',
@@ -106,18 +107,18 @@ const limiter = rateLimit({
 ### Route-Specific Rate Limiting
 
 ```typescript
-// api/auth/login/hooks.ts
+// src/api/auth/login/hooks.ts
 import { rateLimit } from '../../../ecosystem/hooks/rate-limiter/rate-limiter';
 
 // Stricter rate limit for login endpoint
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
         maxRequests: 5, // Only 5 login attempts
-        keyGenerator: (req) => {
+        keyGenerator: (ctx) => {
             // Rate limit by IP + username combination
-            const ip = req.headers.get('X-Forwarded-For') || 'unknown';
-            const username = req.headers.get('X-Username') || 'anonymous';
+            const ip = ctx.headers.get('X-Forwarded-For') || 'unknown';
+            const username = ctx.headers.get('X-Username') || 'anonymous';
             return `${ip}:${username}`;
         }
     })
@@ -142,7 +143,7 @@ Maximum number of requests allowed per time window.
 
 ### `keyGenerator`
 
-- **Type**: `(req: BurgerRequest) => string`
+- **Type**: `(ctx: BurgerContext) => string`
 - **Default**: IP-based key generator
 
 Custom function to generate a unique key for each client. Common strategies:
@@ -154,7 +155,7 @@ Custom function to generate a unique key for each client. Common strategies:
 
 ### `handler`
 
-- **Type**: `(req: BurgerRequest) => Response`
+- **Type**: `(ctx: BurgerContext) => Response`
 - **Default**: Returns JSON error with 429 status
 
 Custom handler for when rate limit is exceeded. Allows you to customize the error response.
@@ -175,7 +176,7 @@ If `true`, only failed requests count against the rate limit. Useful for login t
 
 ## Response Headers
 
-The middleware automatically adds the following headers to all responses:
+The hook automatically adds the following headers to all responses:
 
 ### `X-RateLimit-Limit`
 
@@ -198,7 +199,7 @@ Unix timestamp (seconds) when the rate limit window resets.
 ### Multiple Rate Limits
 
 ```typescript
-import { rateLimit } from './ecosystem/hooks/rate-limiter/rate-limiter';
+import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
 // Global rate limit: 1000 requests per hour
 const globalLimit = rateLimit({
@@ -214,20 +215,20 @@ const writeLimit = rateLimit({
 ```
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
+// src/hooks.ts — global hooks, applies to every request
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
-import { globalLimit } from '../middleware/limits';
+import { globalLimit } from '../ecosystem/hooks/limits';
 
-export const beforeHandle = [globalLimit];
+export const beforeRoute = [globalLimit];
 ```
 
 Then in specific routes:
 
 ```typescript
-// api/posts/hooks.ts
-import { writeLimit } from '../../middleware/limits';
+// src/api/posts/hooks.ts
+import { writeLimit } from '../../ecosystem/hooks/limits';
 
-export const beforeHandle = [writeLimit]; // Additional rate limit for this route
+export const beforeRoute = [writeLimit]; // Additional rate limit for this route
 ```
 
 ### Skip Failed Login Attempts
@@ -237,8 +238,8 @@ const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     maxRequests: 5,
     skipSuccessfulRequests: true, // Only count failed logins
-    keyGenerator: (req) => {
-        return req.headers.get('X-Forwarded-For') || 'unknown';
+    keyGenerator: (ctx) => {
+        return ctx.headers.get('X-Forwarded-For') || 'unknown';
     }
 });
 ```
@@ -249,8 +250,8 @@ const loginLimiter = rateLimit({
 const rateLimiter = rateLimit({
     windowMs: 60000,
     maxRequests: 100, // Default for free users
-    keyGenerator: (req) => {
-        const apiKey = req.headers.get('X-API-Key');
+    keyGenerator: (ctx) => {
+        const apiKey = ctx.headers.get('X-API-Key');
         return apiKey || 'anonymous';
     }
 });
@@ -262,8 +263,8 @@ function dynamicRateLimit() {
     return rateLimit({
         windowMs: 60000,
         maxRequests: 1000, // This could be dynamically set
-        keyGenerator: (req) => {
-            const apiKey = req.headers.get('X-API-Key') || 'anonymous';
+        keyGenerator: (ctx) => {
+            const apiKey = ctx.headers.get('X-API-Key') || 'anonymous';
             // You could query a database here to check user tier
             return apiKey;
         }
@@ -277,17 +278,17 @@ function dynamicRateLimit() {
 const authenticatedRateLimit = rateLimit({
     windowMs: 60000,
     maxRequests: 200,
-    keyGenerator: (req) => {
-        // Assuming you have JWT middleware that adds user to request
-        const userId = (req as any).user?.id;
-        return userId || req.headers.get('X-Forwarded-For') || 'anonymous';
+    keyGenerator: (ctx) => {
+        // Assuming you have an auth plugin that adds user to the context
+        const userId = (ctx as { user?: { id?: string } }).user?.id;
+        return userId || ctx.headers.get('X-Forwarded-For') || 'anonymous';
     }
 });
 ```
 
 ## How It Works
 
-1. **Key Generation**: When a request arrives, the middleware generates a unique key for the client (default: IP address).
+1. **Key Generation**: When a request arrives, the hook generates a unique key for the client (default: IP address).
 
 2. **Record Lookup**: It looks up the request count for that key in the in-memory store.
 
@@ -365,15 +366,15 @@ Each server instance maintains its own in-memory store. To share rate limits acr
 
 ### Memory Usage Growing
 
-The middleware automatically cleans up old records every minute. If you're still seeing issues, consider implementing a custom store with TTL support.
+The hook automatically cleans up old records every minute. If you're still seeing issues, consider implementing a custom store with TTL support.
 
 ## 🐰 Bun.js Optimization
 
-This middleware leverages **Bun-specific APIs** for enhanced performance when running on Bun.js v1.3.1+:
+This hook leverages **Bun-specific APIs** for enhanced performance when running on Bun.js v1.3.1+:
 
 ### Ultra-Fast Hashing with `Bun.CryptoHasher`
 
-The middleware hashes IP addresses for privacy and efficient storage. On Bun.js, it uses the optimized `Bun.CryptoHasher`:
+The hook hashes IP addresses for privacy and efficient storage. On Bun.js, it uses the optimized `Bun.CryptoHasher`:
 
 ```typescript
 // Bun's CryptoHasher (synchronous, native, super fast):
@@ -407,7 +408,7 @@ Rate limiting is typically applied to *every* request. A 10x improvement in key 
 
 ### Implementation Details
 
-The middleware automatically detects the runtime and chooses the best hashing method:
+The hook automatically detects the runtime and chooses the best hashing method:
 
 1. **Bun.js**: Uses `Bun.CryptoHasher` (fast + secure)
 2. **Other runtimes**: Uses simple hash (fast, good enough for rate limiting)

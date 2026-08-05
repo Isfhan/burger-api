@@ -193,14 +193,14 @@ The CLI uses **automated GitHub Actions** to build and release executables for a
 cd packages/cli
 
 # Update version (choose appropriate bump)
-npm version patch # 0.6.4 -> 0.6.5 (bug fixes)
-npm version minor # 0.6.4 -> 0.7.0 (new features)
-npm version major # 0.6.4 -> 1.0.0 (breaking changes)
+npm version patch # 1.0.0 -> 1.0.1 (bug fixes)
+npm version minor # 1.0.0 -> 1.1.0 (new features)
+npm version major # 1.0.0 -> 2.0.0 (breaking changes)
 
 # This automatically:
 # - Updates package.json version
 # - Creates a git commit
-# - Creates a git tag (cli/v0.6.5)
+# - Creates a git tag (cli/v1.0.1)
 ```
 
 ### Step 2: Update CHANGELOG.md
@@ -208,7 +208,7 @@ npm version major # 0.6.4 -> 1.0.0 (breaking changes)
 Edit `packages/cli/CHANGELOG.md` and add a new version entry:
 
 ```markdown
-## Version 0.6.5 - (December 20, 2025)
+## Version 1.0.1 - (Release Date)
 
 ### Fixed
 - Fixed bug in create command
@@ -224,11 +224,11 @@ Edit `packages/cli/CHANGELOG.md` and add a new version entry:
 # If you used npm version, the version commit is already created
 # Just commit the CHANGELOG update
 git add packages/cli/CHANGELOG.md
-git commit -m "chore(cli): update changelog for v0.6.5"
+git commit -m "chore(cli): update changelog for v1.0.1"
 
 # Or if you did manual version update:
 git add packages/cli/package.json packages/cli/CHANGELOG.md
-git commit -m "chore(cli): bump version to 0.6.5"
+git commit -m "chore(cli): bump version to 1.0.1"
 ```
 
 ### Step 4: Push to Main
@@ -259,14 +259,14 @@ The easiest way is to use the release script:
 
 **Example output:**
 ```
-📦 Releasing CLI version: 0.6.5
+📦 Releasing CLI version: 1.0.1
 Enumerating objects: 1, done.
 Counting objects: 100% (1/1), done.
 Writing objects: 100% (1/1), 173 bytes | 173.00 KiB/s, done.
 Total 1 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
 To https://github.com/Isfhan/burger-api.git
- * [new tag] cli/v0.6.5 -> cli/v0.6.5
-✅ Tag cli/v0.6.5 created and pushed
+ * [new tag] cli/v1.0.1 -> cli/v1.0.1
+✅ Tag cli/v1.0.1 created and pushed
 ```
 
 #### Method 2: Manual Tag Creation
@@ -289,7 +289,7 @@ git push origin "cli/v${VERSION}"
 1. Go to GitHub Actions tab
 2. Select "Release CLI Executables" workflow
 3. Click "Run workflow"
-4. Enter version (e.g., `v0.6.5`)
+4. Enter version (e.g., `v1.0.1`)
 5. Click "Run workflow"
 
 ### What Happens During Release
@@ -317,8 +317,8 @@ git push origin "cli/v${VERSION}"
 The CLI follows [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** (1.0.0): Breaking changes, major overhauls
-- **MINOR** (0.7.0): New features, new commands (backward compatible)
-- **PATCH** (0.6.5): Bug fixes, small improvements (backward compatible)
+- **MINOR** (1.1.0): New features, new commands (backward compatible)
+- **PATCH** (1.0.1): Bug fixes, small improvements (backward compatible)
 
 ### Updating Version
 
@@ -326,22 +326,22 @@ The CLI follows [Semantic Versioning](https://semver.org/):
 # Navigate to CLI directory
 cd packages/cli
 
-# Patch version (0.6.4 -> 0.6.5)
+# Patch version (1.0.0 -> 1.0.1)
 # Use for: Bug fixes, documentation updates
 npm version patch
 
-# Minor version (0.6.4 -> 0.7.0)
+# Minor version (1.0.0 -> 1.1.0)
 # Use for: New features, non-breaking changes
 npm version minor
 
-# Major version (0.6.4 -> 1.0.0)
+# Major version (1.0.0 -> 2.0.0)
 # Use for: Breaking changes, major overhauls
 npm version major
 
 # This automatically:
 # 1. Updates package.json version
 # 2. Creates a git commit
-# 3. Creates a git tag (cli/v0.6.5, cli/v0.7.0, etc.)
+# 3. Creates a git tag (cli/v1.0.1, cli/v1.1.0, etc.)
 ```
 
 ### Manual Version Update
@@ -350,17 +350,17 @@ If you prefer to update manually:
 
 ```bash
 # Edit package.json
-# Change "version": "0.6.4" to "0.6.5"
+# Change "version": "1.0.0" to "1.0.1"
 
 # Update CHANGELOG.md
 # Add new version entry with date
 
 # Commit changes
 git add packages/cli/package.json packages/cli/CHANGELOG.md
-git commit -m "chore(cli): bump version to 0.6.5"
+git commit -m "chore(cli): bump version to 1.0.1"
 
 # Tag the release (use cli/ prefix)
-git tag -a cli/v0.6.5 -m "Release CLI v0.6.5"
+git tag -a cli/v1.0.1 -m "Release CLI v1.0.1"
 git push --follow-tags
 ```
 
@@ -455,20 +455,20 @@ bun --version
 
 **Symptoms:**
 ```
-error: tag 'cli/v0.6.5' already exists
+error: tag 'cli/v1.0.1' already exists
 ```
 
 **Solution:**
 ```bash
 # Delete local tag
-git tag -d cli/v0.6.5
+git tag -d cli/v1.0.1
 
 # Delete remote tag
-git push origin --delete cli/v0.6.5
+git push origin --delete cli/v1.0.1
 
 # Create new tag
-git tag -a cli/v0.6.5 -m "Release CLI v0.6.5"
-git push origin cli/v0.6.5
+git tag -a cli/v1.0.1 -m "Release CLI v1.0.1"
+git push origin cli/v1.0.1
 ```
 
 ### Issue: Version mismatch
@@ -482,7 +482,7 @@ git push origin cli/v0.6.5
 cat packages/cli/package.json | grep version
 
 # Ensure tag matches (use cli/ prefix)
-git tag -a cli/v0.6.5 -m "Release CLI v0.6.5" # Use same version
+git tag -a cli/v1.0.1 -m "Release CLI v1.0.1" # Use same version
 ```
 
 ---
@@ -555,14 +555,14 @@ bun run build:linux
 ./dist/burger-api-linux --version
 
 # 3. Update version
-npm version patch # 0.6.4 -> 0.6.5
+npm version patch # 1.0.0 -> 1.0.1
 
 # 4. Update CHANGELOG.md
 # Edit CHANGELOG.md with new version entry
 
 # 5. Commit and push
 git add packages/cli/CHANGELOG.md
-git commit -m "chore(cli): update changelog for v0.6.5"
+git commit -m "chore(cli): update changelog for v1.0.1"
 git push origin main
 
 # 6. Create and push tag (using release script)
@@ -723,6 +723,6 @@ Excluded from npm package:
 
 ---
 
-**Last Updated:** December 2025 
-**Current Version:** 0.6.5
+**Last Updated:** August 2, 2026 
+**Current Version:** 1.0.0
 

@@ -196,7 +196,7 @@ export function dim(message: string): void {
  *
  * @param message - The message to display
  * @example
- * bullet('CORS middleware')
+ * bullet('CORS hook')
  */
 export function bullet(message: string): void {
     console.log(` ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
@@ -232,7 +232,7 @@ export function separator(): void {
  *
  * @param title - The header title
  * @example
- * header('Available Middleware')
+ * header('Available Hooks and Plugins')
  */
 export function header(title: string): void {
     newline();

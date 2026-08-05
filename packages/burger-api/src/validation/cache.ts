@@ -1,16 +1,15 @@
 /**
  * The validator cache — process-lifetime memoization of compiled validators
- * keyed by schema identity (§13.2, §5).
+ * keyed by schema identity.
  *
  * Responsibilities:
  * - Lookup a `CompiledValidator` by identity.
  * - Insert on miss.
  * - Clear on dev hot reload (mirrors RouterCompiler wholesale replace).
  *
- * This module must NOT retain future-phase serialization artifacts at
- * runtime , and must NOT mutate the cache during a production
- * request (§18 R11). The concrete storage mechanism
- * (`Map`) is an implementation detail.
+ * This module must NOT retain build-time serialization artifacts at runtime
+ * and must NOT mutate the cache during a production request. The concrete
+ * storage mechanism (`Map`) is an implementation detail.
  */
 
 import type { CompiledValidator } from './types';
@@ -35,7 +34,7 @@ export class ValidatorCache {
 
     /**
      * Clears all cached validators. Called on dev hot reload; the next
-     * `compile()` pass repopulates it wholesale ().
+     * `compile()` pass repopulates it wholesale.
      */
     clear(): void {
         this.store.clear();

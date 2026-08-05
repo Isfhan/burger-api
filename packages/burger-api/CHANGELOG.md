@@ -1,5 +1,43 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 1.0.0 (Stable — Vision-Locked API)
+
+Released 2026-08-02. First stable release. All legacy API names removed; the
+public surface is exactly the vision API.
+
+**Removed (breaking from 0.x)**
+- `BurgerRequest` type — replaced by `BurgerContext`.
+- Legacy hook names `beforeHandle`, `afterHandle`, `onResponse`, `provide` —
+  use `beforeRoute`, `afterRoute`, `mapResponse`, `transform` (plus
+  `onRequest` / `onError`).
+- The middleware system and `Middleware` type — replaced by hooks + plugins.
+- `Burger.use` — replaced by `burger.usePlugin()`.
+- CLI `serve` command — use `burger-api dev`.
+- `burger.config.ts` — renamed `burger.build.ts` (build-time only).
+- `use.ts` / `webhook.ts` route convention files — use `config.ts`.
+- Auth factories under `ecosystem/hooks/` — now `ecosystem/plugins/` (api-key,
+  basic-auth, jwt-auth, session, oidc, env).
+
+**Full JavaScript support**
+- Same conventions in `.ts` / `.js` / `.mjs` (route, schema, hooks, openapi,
+  config + app-level files). Scanner throws on conflicting extensions
+  (e.g. `route.ts` + `route.js`).
+- `create --lang js` scaffolds a `jsconfig.json` (`checkJs: true`) project
+  with JSDoc-typed `.js` files.
+- `generate route|hook|plugin|ws` follows the project language (`--lang` or
+  `jsconfig.json` detection); `generate ws` honors `config.wsDir`.
+
+**WinterCG deploy surface**
+- `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+.
+- AOT `apiRoutes` required on non-Bun runtimes (no filesystem); core package
+  no longer imports `bun` in shared types (`BunAdapterStartOptions` lives in
+  the Bun adapter).
+
+**Ecosystem**
+- Official hooks (cors, logger, rate-limiter, cache, compression,
+  security-headers, timeout, body-size-limiter) and plugins (api-key,
+  basic-auth, env, jwt-auth, oidc, session), installed via `burger-api add`.
+
 ### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
 
 Released 2026-07-24.
@@ -12,9 +50,10 @@ Released 2026-07-24.
 
 **Hook name aliases**
 - Vision names work: `beforeRoute`, `afterRoute`, `mapResponse`, `transform`.
-- Legacy names still work: `beforeHandle`, `afterHandle`, `onResponse`, `provide`.
+- Legacy names worked: `beforeHandle`, `afterHandle`, `onResponse`,
+  `provide` — **removed in 1.0.0**.
 - Normalizer applied at compile time; vision names take precedence when legacy
- names are absent.
+  names are absent.
 
 **Self-contained routes (enforced)**
 - Group/folder inheritance removed. Groups only strip URL path.

@@ -27,19 +27,21 @@ export interface CreateOptions {
     pagePrefix?: string;
     /** Whether to add AI agent skills */
     addSkills?: boolean;
+    /** Project language — `ts` (default) or `js` (JavaScript with JSDoc) */
+    lang?: 'ts' | 'js';
 }
 
 /**
- * Information about a middleware/feature from GitHub
+ * Information about an ecosystem component (hook or plugin) from GitHub
  */
-export interface MiddlewareInfo {
-    /** Name of the middleware (e.g., 'cors') */
+export interface EcosystemComponentInfo {
+    /** Name of the component (e.g., 'cors') */
     name: string;
     /** Short description of what it does */
     description: string;
     /** Path in the GitHub repo */
     path: string;
-    /** Files that are part of this middleware */
+    /** Files that are part of this component */
     files: string[];
 }
 

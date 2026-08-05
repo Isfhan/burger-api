@@ -76,11 +76,11 @@ describe('BurgerContext (prototype-based request)', () => {
         expect(typeof ctx2.clone).toBe('function');
     });
 
-    it('preserves middleware instance state on validated / set', () => {
+    it('preserves hook instance state on validated / set', () => {
         const ctx = BurgerContext.create(new Request('http://h/'), {
             route: { path: '/', pattern: '/' },
         });
-        // Starts undefined so the validation middleware runs.
+        // Starts undefined so the validation hook runs.
         expect(ctx.validated).toBeUndefined();
         ctx.validated = { params: { id: '1' } };
         expect(ctx.validated).toEqual({ params: { id: '1' } });
@@ -90,7 +90,7 @@ describe('BurgerContext (prototype-based request)', () => {
         expect(ctx.set.headers).toEqual({ 'x-custom': 'v' });
     });
 
-    it('creates exactly one instance per request (no wrapper per middleware)', () => {
+    it('creates exactly one instance per request (no wrapper per hook)', () => {
         const raw = new Request('http://h/');
         const ctx = BurgerContext.create(raw, {
             route: { path: '/', pattern: '/' },

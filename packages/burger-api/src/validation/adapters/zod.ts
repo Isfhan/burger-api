@@ -1,5 +1,5 @@
 /**
- * The Zod adapter — the default schema provider for BurgerAPI ().
+ * The Zod adapter — the default schema provider for BurgerAPI.
  *
  * Responsibilities:
  * - Compute a stable identity for a Zod schema.

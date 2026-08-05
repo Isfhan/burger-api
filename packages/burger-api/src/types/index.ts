@@ -1,26 +1,25 @@
-import type { Server } from 'bun';
-import type { serve } from 'bun';
 import type { BurgerContext } from '../context/context';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
 import type { RouteHooks, TransformMap } from '../lifecycle/types';
 export type { RouteHooks, TransformMap } from '../lifecycle/types';
 import type { OpenAPIConfig } from './openapi-config';
+import type { RuntimeAdapter } from '../adapter/types';
 
-/** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
-type BunServerOptions = Parameters<typeof serve>[0];
-import { z } from 'zod';
+/**
+ * Minimal structural view of the running server exposed to `fetch` handlers.
+ * The web-standard surface: upgrade a WebSocket upgrade request (Bun) or stop
+ * the server. Never references Bun types.
+ */
+export interface ServerInfo {
+    upgrade(request: Request, options?: Record<string, unknown>): boolean;
+    stop(): void;
+}
 
-export interface ServerOptions extends Omit<
-    BunServerOptions,
-    | 'fetch'
-    | 'port'
-    | 'reusePort'
-    | 'ipv6Only'
-    | 'unix'
-    | 'error'
-    | 'id'
-    | 'development'
-> {
+/**
+ * Framework-level server options. Deliberately Web-Standard: no Bun types.
+ * Bun-specific tuning lives on the adapter (`BunAdapterStartOptions`).
+ */
+export interface ServerOptions {
     /**
      * The title of the API. This is an optional property that can be used
      * to specify a custom title for the API documentation.
@@ -92,13 +91,13 @@ export interface ServerOptions extends Omit<
     /**
      * Reusable named schemas ("models") referenced by string from any route's
      * `schema`. Resolved at compile time; fail-fast on missing refs.
-     * Seeded from `burger.build.ts` models by the CLI (D10).
+     * Seeded from `burger.build.ts` models by the CLI.
      */
     models?: Record<string, SchemaInput>;
 
     /**
-     * Validation 2.0 configuration: coercion, response-validation
-     * mode, and error rendering ().
+     * Validation configuration: coercion, response-validation mode, and error
+     * rendering.
      */
     validation?: ValidatorConfig;
 
@@ -130,6 +129,19 @@ export interface ServerOptions extends Omit<
      * In dev mode, `src/providers.ts` is auto-discovered and this field is ignored.
      */
     providersModule?: Record<string, unknown>;
+
+    /**
+     * Optional hostname to bind for `serve()`. Web-standard; forwarded to the
+     * adapter.
+     */
+    hostname?: string;
+
+    /**
+     * Optional runtime adapter override (test/embed seam). Defaults to the Bun
+     * adapter, loaded lazily on first `serve()` so non-Bun bundles never
+     * import it.
+     */
+    adapter?: RuntimeAdapter;
 }
 
 /**
@@ -154,10 +166,13 @@ export type RequestHandler = (
  * A fetch handler function that can be used to handle a request.
  * This can be a function that returns a Promise of a Response,
  * or a function that returns a Response.
+ *
+ * `server` is an optional structural view of the running server (upgrade/stop)
+ * — Web-Standard, never Bun-specific.
  */
 export type FetchHandler = (
     request: Request,
-    server?: Server<{}>
+    server?: ServerInfo
 ) => Promise<Response> | Response;
 
 export interface RouteDefinition {
@@ -175,7 +190,7 @@ export interface RouteDefinition {
      * Lifecycle hooks declared in `hooks.ts`. Carried raw from the
      * compiler and compiled into a frozen `HookPlan` by RouterCompiler. Mapped
      * onto the single pipeline: `beforeRoute` (global → route) runs before
-     * the handler; `afterRoute` / `mapResponse` are response phases.
+     * the handler; `afterRoute` / `mapResponse` are response hooks.
      * `route.ts` contains handlers only — there is no
      * per-route `hooks` export.
      */
@@ -227,7 +242,7 @@ export type RouteSchema = {
         headers?: SchemaInput | string;
         cookies?: SchemaInput | string;
         body?: SchemaInput | string;
-        /** Per-route opt-in override for coercion (§11). */
+        /** Per-route opt-in override for coercion. */
         coerce?: boolean;
         /** Per-status-code response schemas, validated after the handler. */
         response?: Record<string, SchemaInput>;

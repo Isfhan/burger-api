@@ -45,7 +45,7 @@ export interface ContextSet {
 /**
  * The immutable information produced by `RouteAccessAnalyzer` describing which
  * request fields and lifecycle hooks a route uses. It is an optimization hint
- * only — the framework never reads it at runtime .
+ * only — the framework never reads it at runtime.
  */
 export interface RouteAccessInfo {
     /** The set of fields the analyzer determined the route reads. */

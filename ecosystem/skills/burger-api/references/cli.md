@@ -25,9 +25,9 @@ burger-api create my-api
 
 Prompts for: API routes (y/n), API directory name, API prefix, debug mode, page routes (y/n), page directory name, page prefix, AI skills (y/n).
 
-### `add <middleware...>`
+### `add <names...>`
 
-Download middleware from the ecosystem into the project:
+Download hooks and plugins from the ecosystem into the project:
 
 ```bash
 burger-api add cors logger rate-limiter
@@ -69,20 +69,20 @@ skill's `SKILL.md`. Install one with `burger-api skills install <name>`.
 
 ### `list`
 
-List available middleware from the ecosystem:
+List available hooks and plugins from the ecosystem:
 
 ```bash
 burger-api list
 ```
 
-### `serve`
+### `dev`
 
 Start a development server with hot reload:
 
 ```bash
-burger-api serve
-burger-api serve --port 4000
-burger-api serve --file src/index.ts
+burger-api dev
+burger-api dev --port 4000
+burger-api dev --file src/index.ts
 ```
 
 ### `build <file>`

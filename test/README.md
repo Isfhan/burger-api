@@ -8,7 +8,7 @@ packages or the public contract, rather than framework-internal units.
 
 | File                 | Purpose                                                                 |
 | -------------------- | ----------------------------------------------------------------------- |
-| `router.test.ts`     | Hybrid Router dispatch (static / `:param` / `*`, precedence, auto-HEAD, loose slash, 405 + `Allow`, middleware delegation, `AllowCache`, compile-time duplicate/ambiguous guards). |
+| `router.test.ts`     | Hybrid Router dispatch (static / `:param` / `*`, precedence, auto-HEAD, loose slash, 405 + `Allow`, hook delegation, `AllowCache`, compile-time duplicate/ambiguous guards). |
 | `route-sync.test.ts` | CLI ↔ framework **path-conversion parity**: verifies that the CLI's
                       route-path generation and the framework's runtime path
                       conversion agree (e.g. `[id]` ⇄ `:id`, `[...]` ⇄ `*`). Cross-package by nature, so it stays at the root. |

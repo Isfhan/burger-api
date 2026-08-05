@@ -1,18 +1,17 @@
 /**
- * The validator coordinator — the evolution of
- * `createValidationMiddleware` (§13.6).
+ * The validation coordinator — builds the framework's validation hook from
+ * precompiled route validators.
  *
  * It consumes the prepared `CompiledRouteValidators` produced by the schema
  * preparation component. When a request comes in it runs `cv.validate(value)`
  * once per slot — no walk over the raw schema, no adapter (connector)
- * selection, no preparing at request time (). It does NOT redesign
+ * selection, no preparing at request time. It does NOT redesign
  * the hook pipeline.
  *
- * Behavior mirrors the legacy lifecycle so existing applications behave
- * identically:
- * - skips work when `req.validated` is already set,
- * - validates params/query/body with the same checks,
- * - returns 422 with RFC 9457 problem details on failure.
+ * Behavior:
+ * - skips work when `ctx.validated` is already set,
+ * - validates params/query/headers/cookies/body with the same checks,
+ * - throws a `ValidationError` (422, RFC 9457 problem details) on failure.
  */
 
 import type { BurgerContext, BurgerValidated } from '../context/context';
@@ -85,7 +84,7 @@ export function parseCookies(
             out[key] = decodeURIComponent(rawValue);
         } catch {
             // Malformed percent-encoding (e.g. "%ZZ") — keep the raw value
-            // rather than throwing inside the middleware.
+            // rather than throwing inside the validator.
             out[key] = rawValue;
         }
     }
@@ -103,7 +102,7 @@ export function parseCookies(
  * @param _config - reserved for future use (error format / renderer).
  * @param _isDev - reserved for future use (dev diagnostics).
  */
-export function createValidatorMiddleware(
+export function createValidationHook(
     validators: CompiledRouteValidators,
     config: ValidatorConfig = {},
     isDev = false

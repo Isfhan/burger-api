@@ -8,7 +8,7 @@ import type { RouteModule } from './route-module';
  * application shape predictably.
  *
  * Built once after the Module Loader produces the `RouteModule[]`; frozen for
- * the lifetime of the server (`ROADMAP.md` §4.3 — no per-request allocation).
+ * the lifetime of the server (no per-request allocation).
  */
 export class RouteTree {
     private byPath = new Map<string, RouteModule>();

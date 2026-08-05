@@ -12,7 +12,7 @@ This example includes:
 -   **Query parameter validation** for GET requests
 -   **Request body validation** for POST requests
 -   **Parameter validation** for dynamic routes
--   **Route-specific middleware** for logging (middleware is code that runs
+-   **Route-specific hooks** for logging (hooks are code that runs
     around your handler)
 
 ## Validation 2.0
@@ -233,15 +233,19 @@ The test suite includes **18 tests** covering:
 ```
 zod-based-schema-validation/
 ├── README.md              # This file
-├── index.ts              # Server entry point
 ├── api.test.ts           # Test suite
-├── api/                  # API routes
-│   └── products/
-│       ├── route.ts      # GET/POST /api/products
-│       └── [id]/
-│           └── route.ts  # GET /api/products/:id
-└── middleware/
-    └── index.ts         # Global middleware
+└── src/
+    ├── index.ts          # Server entry point
+    ├── hooks.ts          # Global hooks
+    └── api/              # API routes
+        └── products/
+            ├── route.ts  # GET/POST /api/products
+            ├── schema.ts # GET/POST request schemas
+            ├── hooks.ts  # Route-specific hooks
+            └── [id]/
+                ├── route.ts  # GET /api/products/:id
+                ├── schema.ts # Params schema
+                └── hooks.ts  # Route-specific hooks
 ```
 
 ## Key Concepts

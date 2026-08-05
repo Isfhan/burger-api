@@ -1,22 +1,25 @@
 import { serve } from 'bun';
 import { renderHTTPError } from '../../errors/http-error';
 import type {
-    AdapterStartOptions,
     RuntimeAdapter,
     ServerHandle,
 } from '../types';
+import type { BunAdapterStartOptions } from './types';
 
 /**
  * The primary, optimized runtime adapter. Wraps `Bun.serve` + Bun's native
  * `routes` map for static dispatch, with `Router.fetch` as the fallback for
- * dynamic/wildcard routes (per `ROADMAP.md` §4.2 / hybrid router).
+ * dynamic/wildcard routes (hybrid router).
  *
  * This is the ONLY place in the framework that touches a Bun-specific server
  * bootstrap. The framework body (router, compiler, context) remains
  * Web-Standard so additional adapters can be added later without changes.
+ *
+ * Loaded lazily by `Server` (dynamic import on first `serve()`), so
+ * non-Bun bundles never import this module.
  */
 export class BunAdapter implements RuntimeAdapter {
-    start(opts: AdapterStartOptions): ServerHandle {
+    start(opts: BunAdapterStartOptions): ServerHandle {
         const serverOptions: any = {
             hostname: opts.hostname,
             routes: opts.staticRoutes,

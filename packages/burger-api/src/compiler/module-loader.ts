@@ -67,7 +67,7 @@ function normalizeOpenapi(raw: Record<string, unknown>): openapi {
 }
 
 /**
- * The second stage of the compiler pipeline (`ROADMAP.md` §2.1 step 2).
+ * The second stage of the compiler pipeline.
  *
  * Consumes the pure inventory produced by {@link DirectoryScanner} and, for
  * each route directory, `import()`s its convention files and assembles one
@@ -76,11 +76,11 @@ function normalizeOpenapi(raw: Record<string, unknown>): openapi {
  * Each route directory is **self-contained** — no group inheritance merging.
  * Only the route's own files are loaded.
  *
- * keeps convention data raw — `hooks` are carried through verbatim
- * and compiled . `config` is attached for runtime use.
+ * Keeps convention data raw — `hooks` are carried through verbatim and
+ * compiled downstream. `config` is attached for runtime use.
  *
  * The loader fails fast on duplicate resolved route paths, matching the
- * compiler's "loud and early" contract (`ROADMAP.md` §6.3).
+ * compiler's "loud and early" contract.
  */
 export class ModuleLoader {
     /**

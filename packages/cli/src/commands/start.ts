@@ -52,7 +52,7 @@ export const startCommand = new Command('start')
     .option('-p, --port <port>', 'Port to run the server on', '4000')
     .option('-f, --file <file>', 'Production entry file')
     .action(async (options: StartCommandOptions) => {
-        const file = resolveEntryFile(options.file);
+        const file = resolveEntryFile(options.file ?? 'src/index.ts');
         const port = options.port;
 
         if (!existsSync(file)) {

@@ -15,14 +15,14 @@ HTTP compression hook factory for burger-api framework. Hook factories are code 
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add compression
 ```
 
 ## Usage
@@ -30,10 +30,10 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
+// src/hooks.ts — global hooks, applies to every request
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress() // Compress all responses with defaults
 ];
 
@@ -41,7 +41,7 @@ export const beforeHandle = [
 import { Burger } from 'burger-api';
 
 const app = new Burger({
-    apiDir: './api',
+    apiDir: './src/api',
 });
 
 app.serve(4000);
@@ -50,10 +50,10 @@ app.serve(4000);
 ### Custom Threshold
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         threshold: 2048 // Only compress responses larger than 2KB
     })
@@ -65,10 +65,10 @@ export const beforeHandle = [
 **Important**: Bun's `CompressionStream` currently supports `gzip` and `deflate` only. Brotli (`br`) is not yet supported and will be skipped if specified.
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         encodings: ['gzip', 'deflate'] // Bun supports these
     })
@@ -78,10 +78,10 @@ export const beforeHandle = [
 ### Compress Specific Content Types
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         contentTypes: [
             'text/html',
@@ -99,10 +99,10 @@ export const beforeHandle = [
 ### Use Regex for Content Types
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         contentTypes: /^(text\/|application\/(json|javascript|xml))/
     })
@@ -112,10 +112,10 @@ export const beforeHandle = [
 ### Custom Exclusions
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         excludeContentTypes: [
             'image/',
@@ -148,7 +148,7 @@ Minimum response size in bytes to compress. Responses smaller than this will not
 - **Type**: `('gzip' | 'deflate' | 'br')[]`
 - **Default**: `['gzip', 'deflate']`
 
-Compression algorithms to support, in order of preference. The middleware will use the first encoding that the client supports.
+Compression algorithms to support, in order of preference. The hook will use the first encoding that the client supports.
 
 **Encoding comparison:**
 - **gzip**: Best compatibility, good compression ✅ Supported in Bun
@@ -210,10 +210,10 @@ Content types to exclude from compression. By default, excludes media types that
 ### Production Configuration
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         threshold: 1024,
         encodings: ['br', 'gzip', 'deflate'],
@@ -234,10 +234,10 @@ export const beforeHandle = [
 ### API-Only Compression
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         contentTypes: ['application/json'],
         threshold: 512 // Compress smaller JSON responses
@@ -248,11 +248,11 @@ export const beforeHandle = [
 ### Route-Specific Compression
 
 ```typescript
-// api/large-data/hooks.ts
+// src/api/large-data/hooks.ts
 import { compress } from '../../ecosystem/hooks/compression/compression';
 
 // Aggressive compression for large data endpoints
-export const beforeHandle = [
+export const beforeRoute = [
     compress({
         threshold: 0, // Compress everything
         encodings: ['br', 'gzip'] // Prefer maximum compression
@@ -263,10 +263,10 @@ export const beforeHandle = [
 ### Conditional Compression
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeHandle = process.env.NODE_ENV === 'production'
+export const beforeRoute = process.env.NODE_ENV === 'production'
     ? [compress()]
     : [];
 ```
@@ -371,9 +371,9 @@ compress({
 
 ### Double Compression
 
-If you see garbled output, you might be compressing twice (e.g., CDN + middleware).
+If you see garbled output, you might be compressing twice (e.g., CDN + this hook).
 
-**Solution:** Disable middleware compression and let CDN handle it, or vice versa.
+**Solution:** Disable this hook's compression and let the CDN handle it, or vice versa.
 
 ### Images Still Being Compressed
 
@@ -404,7 +404,7 @@ curl http://localhost:4000/api/data -v
 
 - ✅ Compression is safe for most content
 - ⚠️ Be aware of BREACH attack for sensitive data (use CSRF tokens)
-- ✅ The middleware only compresses, never decompresses requests
+- ✅ The hook only compresses, never decompresses requests
 - ✅ Content-Type is preserved
 
 ## References

@@ -7,7 +7,7 @@ import type { Hook } from '../lifecycle/types';
  *
  * `RouteModule` is the canonical intermediate produced by the Module Loader and
  * consumed by the Compiler. Users never see it; it exists so the compiler has a
- * single object to discover, validate, optimize, and emit (`ROADMAP.md` §2.1).
+ * single object to discover, validate, optimize, and emit.
  *
  * Each route directory is **self-contained** — no parent/group inheritance.
  * Convention data is loaded from the route's own files only.

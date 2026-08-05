@@ -5,12 +5,16 @@
  * No extra packages needed - we use the native fetch API that comes with Bun!
  *
  * This module handles all communication with GitHub to:
- * - Get lists of available middleware
+ * - Get lists of available hooks and plugins
  * - Download template files
- * - Download middleware code
+ * - Download ecosystem component code
  */
 
-import type { GitHubFile, MiddlewareInfo, SkillInfo } from '../types/index';
+import type {
+    GitHubFile,
+    EcosystemComponentInfo,
+    SkillInfo,
+} from '../types/index';
 import { unlinkSync } from 'fs';
 
 /**
@@ -58,16 +62,18 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 }
 
 /**
- * Get list of available middleware from GitHub
- * This scans the ecosystem/hooks folder and returns what's available
+ * Get the list of available ecosystem components from GitHub.
+ * This scans the ecosystem/hooks and ecosystem/plugins folders.
  *
- * @returns Promise with array of middleware names
+ * @returns Promise with array of `{ name, kind }` entries
  * @throws Error if GitHub is unreachable or request fails
  * @example
- * const middleware = await getMiddlewareList();
- * // ['cors', 'logger', 'rate-limiter', ...]
+ * const components = await getComponentList();
+ * // [{ name: 'cors', kind: 'hook' }, { name: 'jwt-auth', kind: 'plugin' }, ...]
  */
-export async function getMiddlewareList(): Promise<string[]> {
+export async function getComponentList(): Promise<
+    Array<{ name: string; kind: 'hook' | 'plugin' }>
+> {
     try {
         // Fetch both hooks and plugins from ecosystem
         const [hooksRes, pluginsRes] = await Promise.all([
@@ -88,48 +94,52 @@ export async function getMiddlewareList(): Promise<string[]> {
         const hooks = hooksRes.ok
             ? ((await hooksRes.json()) as GitHubFile[])
                   .filter((f) => f.type === 'dir')
-                  .map((f) => f.name)
+                  .map((f) => ({ name: f.name, kind: 'hook' as const }))
             : [];
         const plugins = pluginsRes.ok
             ? ((await pluginsRes.json()) as GitHubFile[])
                   .filter((f) => f.type === 'dir')
-                  .map((f) => f.name)
+                  .map((f) => ({ name: f.name, kind: 'plugin' as const }))
             : [];
 
-        return [...hooks, ...plugins].sort();
+        return [...hooks, ...plugins].sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
     } catch (err) {
         throw wrapFetchError(
             err,
-            'Could not get middleware list from GitHub. Please check your internet connection.'
+            'Could not get the ecosystem list from GitHub. Please check your internet connection.'
         );
     }
 }
 
 /**
- * Get detailed information about a specific middleware
- * This reads the README file to get the description
+ * Get detailed information about a specific ecosystem component.
+ * This reads the README file to get the description.
  *
- * @param name - Name of the middleware (e.g., 'cors')
- * @returns Promise with middleware information
+ * @param name - Name of the component (e.g., 'cors')
+ * @param kind - Whether the component is a hook or a plugin
+ * @returns Promise with component information
  * @example
- * const info = await getMiddlewareInfo('cors');
+ * const info = await getComponentInfo('cors', 'hook');
  * console.log(info.description);
  */
-export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
+export async function getComponentInfo(
+    name: string,
+    kind: 'hook' | 'plugin'
+): Promise<EcosystemComponentInfo> {
+    const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
     try {
-        // Get list of files in the middleware directory
-        const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/hooks/${name}`,
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
+        // Get list of files in the component directory
+        const response = await fetchWithTimeout(`${API_URL}/contents/${dir}/${name}`, {
+            headers: {
+                Accept: 'application/vnd.github.v3+json',
+                'User-Agent': 'burger-api-cli',
+            },
+        });
 
         if (!response.ok) {
-            throw new Error(`Middleware "${name}" not found`);
+            throw new Error(`Component "${name}" not found`);
         }
 
         const files = (await response.json()) as GitHubFile[];
@@ -164,13 +174,13 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
         return {
             name,
             description,
-            path: `ecosystem/hooks/${name}`,
+            path: `${dir}/${name}`,
             files: files.map((f) => f.name),
         };
     } catch (err) {
         throw wrapFetchError(
             err,
-            `Could not get info for middleware "${name}"`
+            `Could not get info for component "${name}"`
         );
     }
 }
@@ -183,7 +193,7 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
  * @returns Promise that resolves when download is complete
  * @throws Error if download fails
  * @example
- * await downloadFile('ecosystem/hooks/cors/cors.ts', './middleware/cors.ts');
+ * await downloadFile('ecosystem/hooks/cors/cors.ts', './ecosystem/hooks/cors/cors.ts');
  */
 export async function downloadFile(
     path: string,
@@ -216,22 +226,24 @@ export async function downloadFile(
 }
 
 /**
- * Download all files for a specific middleware
+ * Download all files for a specific ecosystem component
  *
- * @param middlewareName - Name of the middleware to download
+ * @param componentName - Name of the component to download
  * @param targetDir - Directory to save files in
+ * @param kind - Whether the component is a hook or a plugin
  * @returns Promise with number of files downloaded
  * @example
- * const count = await downloadMiddleware('cors', './middleware');
+ * const count = await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
  * console.log(`Downloaded ${count} files`);
  */
-export async function downloadMiddleware(
-    middlewareName: string,
-    targetDir: string
+export async function downloadComponent(
+    componentName: string,
+    targetDir: string,
+    kind: 'hook' | 'plugin'
 ): Promise<number> {
     try {
-        // Get information about the middleware
-        const info = await getMiddlewareInfo(middlewareName);
+        // Get information about the component
+        const info = await getComponentInfo(componentName, kind);
 
         // Create target directory if it doesn't exist
         await Bun.write(`${targetDir}/.gitkeep`, ''); // Creates dir
@@ -262,7 +274,7 @@ export async function downloadMiddleware(
         return filesDownloaded;
     } catch (err) {
         throw new Error(
-            `Failed to download middleware "${middlewareName}": ${
+            `Failed to download component "${componentName}": ${
                 err instanceof Error ? err.message : 'Unknown error'
             }`
         );
@@ -270,17 +282,17 @@ export async function downloadMiddleware(
 }
 
 /**
- * Check if a middleware exists on GitHub
+ * Check if a hook exists on GitHub under ecosystem/hooks/.
  * This is useful before trying to download something
  *
- * @param name - Name of the middleware to check
+ * @param name - Name of the hook to check
  * @returns Promise with true if it exists, false otherwise
  * @example
- * if (await middlewareExists('cors')) {
- * await downloadMiddleware('cors', './middleware');
+ * if (await hookExists('cors')) {
+ * await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
  * }
  */
-export async function middlewareExists(name: string): Promise<boolean> {
+export async function hookExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
             `${API_URL}/contents/ecosystem/hooks/${name}`,
@@ -326,7 +338,7 @@ export async function pluginExists(name: string): Promise<boolean> {
 export async function detectEcosystemType(
     name: string
 ): Promise<'hook' | 'plugin' | null> {
-    if (await middlewareExists(name)) return 'hook';
+    if (await hookExists(name)) return 'hook';
     if (await pluginExists(name)) return 'plugin';
     return null;
 }

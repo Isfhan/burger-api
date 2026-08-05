@@ -27,11 +27,12 @@ bun run test:examples
 
 ## Examples
 
-### Core (7)
+### Core (8)
 
 | Name | Feature |
 |------|---------|
 | `basic` | Minimal app — single route |
+| `basic-js` | Minimal JavaScript app — `.js` routes with JSDoc |
 | `routing` | File-based routing, dynamic params, groups |
 | `nested-dynamic-routes` | Deeply nested `[userId]/[postId]` params |
 | `wildcard-routes` | `[...]` catch-all routes, priority rules |
@@ -88,6 +89,14 @@ bun run test:examples
 | Name | Feature |
 |------|---------|
 | `websocket-chat` | WebSocket with hooks, services, config |
+
+### Deploy (3)
+
+| Name | Feature |
+|------|---------|
+| `deploy-cloudflare` | Cloudflare Workers — `wrangler.toml` + fetch export |
+| `deploy-vercel` | Vercel Functions — `vercel.json` + fetch export |
+| `deploy-deno` | Deno — `deno serve` fetch export |
 
 ## Conventions
 

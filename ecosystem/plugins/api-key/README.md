@@ -20,52 +20,59 @@ Or manually copy to `ecosystem/plugins/api-key/`.
 
 ## Usage
 
-### Static list
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { apiKey } from "./ecosystem/plugins/api-key/api-key";
+import type { Burger } from "burger-api";
+import { apiKey } from "../ecosystem/plugins/api-key/api-key";
 
-const burger = new Burger();
-
-burger.usePlugin(apiKey({
-  keys: ["key1", "key2", "key3"],
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(apiKey({
+    keys: ["key1", "key2", "key3"],
+  }));
+}
 ```
 
 ### Dynamic validation
 
 ```typescript
-burger.usePlugin(apiKey({
-  validate: async (key) => {
-    // Check against database
-    const dbKey = await db.apiKeys.findByKey(key);
-    return dbKey !== null;
-  },
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(apiKey({
+    validate: async (key) => {
+      // Check against database
+      const dbKey = await db.apiKeys.findByKey(key);
+      return dbKey !== null;
+    },
+  }));
+}
 ```
 
 ### Custom header
 
 ```typescript
-burger.usePlugin(apiKey({
-  header: "Authorization",
-  keys: ["key1", "key2"],
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(apiKey({
+    header: "Authorization",
+    keys: ["key1", "key2"],
+  }));
+}
 ```
 
 ### Custom extraction
 
 ```typescript
-burger.usePlugin(apiKey({
-  extract: (ctx) => {
-    // Extract from query string
-    const url = new URL(ctx.url);
-    return url.searchParams.get("api_key");
-  },
-  keys: ["key1", "key2"],
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(apiKey({
+    extract: (ctx) => {
+      // Extract from query string
+      const url = new URL(ctx.url);
+      return url.searchParams.get("api_key");
+    },
+    keys: ["key1", "key2"],
+  }));
+}
 ```
 
 ## Configuration options
@@ -83,7 +90,7 @@ burger.usePlugin(apiKey({
 ### Disable auth for public routes
 
 ```typescript
-// api/public/config.ts
+// src/api/public/config.ts
 export default {
   auth: false,
 };
@@ -92,7 +99,7 @@ export default {
 ### Require API key
 
 ```typescript
-// api/private/config.ts
+// src/api/private/config.ts
 export default {
   auth: {
     required: true,

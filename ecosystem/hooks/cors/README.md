@@ -25,15 +25,15 @@ features.
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem
+Copy this hook factory into your project following the standardized ecosystem
 structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add cors
 ```
 
 ## Usage
@@ -41,18 +41,15 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Recommended: Global Hooks Approach
 
 For better organization, we recommend using a centralized hooks configuration in
-`api/hooks.ts`:
+`src/hooks.ts`:
 
 ```typescript
-// api/hooks.ts — applies to every route under api/
+// src/hooks.ts — global hooks, applies to every request
 import { cors } from '../ecosystem/hooks/cors/cors';
-import { logger } from '../../ecosystem/hooks/logger/logger';
+import { logger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeHandle = [
-    logger({
-        level: 'info',
-        format: 'combined',
-    }),
+export const onRequest = [
+    logger(),
     cors({
         origin:
             process.env.NODE_ENV === 'production'
@@ -67,19 +64,22 @@ export const beforeHandle = [
 import { Burger } from 'burger-api';
 
 const app = new Burger({
-    apiDir: './api',
+    apiDir: './src/api',
 });
 
 app.serve(4000);
 ```
 
+> CORS belongs in `onRequest` — it runs pre-routing so it can answer `OPTIONS`
+> preflight requests before route matching.
+
 ### Basic Usage (Allow All Origins)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors(), // Allows all origins with default settings
 ];
 
@@ -87,7 +87,7 @@ export const beforeHandle = [
 import { Burger } from 'burger-api';
 
 const app = new Burger({
-    apiDir: './api',
+    apiDir: './src/api',
 });
 
 app.serve(4000);
@@ -96,10 +96,10 @@ app.serve(4000);
 ### Allow Specific Origin
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin: 'https://example.com',
         credentials: true,
@@ -110,10 +110,10 @@ export const beforeHandle = [
 ### Allow Multiple Origins
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin: [
             'https://example.com',
@@ -128,10 +128,10 @@ export const beforeHandle = [
 ### Custom Origin Validation
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         // Allow all subdomains of example.com
         origin: (origin) => origin.endsWith('.example.com'),
@@ -143,10 +143,10 @@ export const beforeHandle = [
 ### Production Configuration with Security Features
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin:
             process.env.NODE_ENV === 'production'
@@ -166,10 +166,10 @@ export const beforeHandle = [
 ### Route-Specific Hooks
 
 ```typescript
-// api/products/hooks.ts
+// src/api/products/hooks.ts
 import { cors } from '../../ecosystem/hooks/cors/cors';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin: 'https://shop.example.com',
         methods: ['GET', 'POST'],
@@ -209,7 +209,7 @@ type-safe `HttpMethod` type.
 -   **Default**:
     `['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-API-Key']`
 
-Specifies which headers can be used during the actual request. The middleware
+Specifies which headers can be used during the actual request. The hook
 automatically filters requested headers against this whitelist for security.
 
 ### `exposedHeaders`
@@ -284,12 +284,12 @@ cors({
 ### Development vs Production Configuration
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { cors } from '../ecosystem/hooks/cors/cors';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-export const beforeHandle = [
+export const onRequest = [
     cors({
         origin: isProduction
             ? ['https://example.com', 'https://app.example.com']
@@ -357,13 +357,13 @@ cors({
 
 ### 1. **Configuration Validation**
 
-The middleware validates configuration at creation time:
+The hook factory validates configuration at creation time:
 
 -   Prevents `credentials: true` with `origin: '*'`
 -   Validates `maxAge` is positive
 -   Warns about excessive `maxAge` values
 
-### 2. **Pre-computation Phase**
+### 2. **Pre-computation**
 
 All expensive operations are pre-computed:
 
@@ -404,13 +404,16 @@ For each request:
 Recommended order:
 
 ```ts
-// api/hooks.ts
-import { cors } from '../../ecosystem/hooks/cors/cors';
-import { otherMiddleware } from '../../ecosystem/hooks/other-middleware/';
+// src/hooks.ts
+import { cors } from '../ecosystem/hooks/cors/cors';
+import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
 
-export const beforeHandle = [
+export const onRequest = [
     cors(), // Put CORS first
-    otherMiddleware(), // Put other hooks after CORS
+];
+
+export const beforeRoute = [
+    securityHeaders(), // Put other hooks in beforeRoute
 ];
 ```
 
@@ -422,11 +425,11 @@ handler.
 
 ### Strict Origin Validation
 
-Unlike traditional CORS implementations, this middleware uses strict validation:
+Unlike traditional CORS implementations, this hook uses strict validation:
 
 ```typescript
 // Traditional: Falls back to first origin or wildcard
-// This middleware: Explicitly rejects invalid origins with 403
+// This hook: Explicitly rejects invalid origins with 403
 
 cors({
     origin: ['https://example.com', 'https://app.example.com'],
@@ -438,7 +441,7 @@ cors({
 
 ### Header Whitelist Filtering
 
-The middleware automatically filters requested headers:
+The hook automatically filters requested headers:
 
 ```typescript
 cors({
@@ -446,7 +449,7 @@ cors({
 });
 
 // Client requests: ['Content-Type', 'Authorization', 'X-Malicious-Header']
-// Middleware allows: ['Content-Type', 'Authorization']
+// Hook allows: ['Content-Type', 'Authorization']
 // X-Malicious-Header is filtered out
 ```
 
@@ -466,9 +469,9 @@ cors({
 
 ## Performance Notes
 
-This middleware is optimized for high-performance applications:
+This hook is optimized for high-performance applications:
 
--   **Pre-computation**: All expensive operations happen once at middleware
+-   **Pre-computation**: All expensive operations happen once at hook
     creation
 -   **Fast-path branching**: Common cases (wildcard, no origin) are handled
     immediately
@@ -477,7 +480,7 @@ This middleware is optimized for high-performance applications:
 -   **String optimization**: Pre-joined strings avoid repeated operations
 -   **Regex caching**: HTTPS enforcement uses cached regex patterns
 
-Expected performance improvements over standard CORS middleware:
+Expected performance improvements over standard CORS hooks:
 
 -   60% faster origin validation
 -   40% faster header processing
@@ -574,7 +577,7 @@ cors({
 
 ### CORS Error: "Origin not allowed"
 
-The middleware now uses strict validation. Make sure the requesting origin is
+The hook now uses strict validation. Make sure the requesting origin is
 included in your `origin` configuration:
 
 ```typescript

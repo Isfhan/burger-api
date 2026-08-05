@@ -1,23 +1,25 @@
 import type { CompiledHandler } from '../router/types';
 import type { FetchHandler, RequestHandler } from '../types/index';
-import type { HTMLBundle } from 'bun';
 
 /**
  * Options the runtime passes to an adapter to boot the server.
  *
  * The framework body speaks Web Standard `Request`/`Response`; an adapter only
  * translates how a `Request` enters and a `Response` leaves. This keeps the
- * router and compiler runtime-agnostic (per `ROADMAP.md` §4.2). Bun is the
- * primary, optimized surface; other runtimes (Node, Deno, Workers, Edge) are
- * reached through additional adapters in a later phase — the contract here is
- * identical for all of them.
+ * router and compiler runtime-agnostic. Bun is the primary, optimized surface;
+ * other runtimes (Node 24+, Cloudflare Workers, Vercel, Deno Deploy) use the
+ * `toFetchHandler` web-standard entry instead of an adapter.
+ *
+ * This is the shared, WinterCG-safe contract: no Bun types are referenced.
+ * Bun-only options (native `HTMLBundle` static routes, WebSocket handlers)
+ * live on `BunAdapterStartOptions` (see `adapter/bun/types.ts`).
  */
 export interface AdapterStartOptions {
     /**
      * Static routes fed to the runtime's native dispatch (Bun's `routes` map).
-     * Built by `Router.staticRoutes()`; page routes may also be `HTMLBundle`s.
+     * Built by `Router.staticRoutes()`.
      */
-    staticRoutes: Record<string, CompiledHandler | HTMLBundle | RequestHandler>;
+    staticRoutes: Record<string, CompiledHandler | RequestHandler>;
     /** The `fetch` fallback for dynamic/wildcard routes (Router.fetch). */
     fetch: FetchHandler;
     /** The port to listen on. */
@@ -28,8 +30,6 @@ export interface AdapterStartOptions {
     debug?: boolean;
     /** Optional callback invoked once the server is listening. */
     onListen?: () => void;
-    /** Optional WebSocket handlers (Bun-specific). */
-    websocket?: any;
 }
 
 /**
@@ -44,6 +44,10 @@ export interface ServerHandle {
  * The runtime adapter seam. A concrete adapter wraps one runtime's server
  * bootstrap (`Bun.serve`, `Deno.serve`, `node:http`, etc.). Only this surface
  * touches runtime-specific APIs; everything else stays Web-Standard.
+ *
+ * Adapters are for long-lived servers. Deploy targets that only export a
+ * `fetch` handler (Cloudflare Workers, Vercel, Deno Deploy, Node 24+) use
+ * `toFetchHandler()` instead — no adapter is involved.
  */
 export interface RuntimeAdapter {
     start(opts: AdapterStartOptions): ServerHandle;

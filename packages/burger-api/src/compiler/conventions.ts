@@ -12,7 +12,7 @@
  * - `config.ts` provides per-route options (auth, cache, timeout, …).
  */
 
-/** The convention files the scanner recognizes (without the `.ts` extension). */
+/** The convention files the scanner recognizes (without the extension). */
 export const CONVENTION_FILES = [
     'route',
     'schema',
@@ -21,15 +21,34 @@ export const CONVENTION_FILES = [
     'config',
 ] as const;
 
-/** A recognized convention file stem (the part before `.ts`). */
+/** A recognized convention file stem (the part before the extension). */
 export type ConventionFile = (typeof CONVENTION_FILES)[number];
 
+/** File extensions accepted for convention files (vision: `.ts` / `.js` / `.mjs`). */
+export const CONVENTION_EXTENSIONS = ['.ts', '.js', '.mjs'] as const;
+
 /**
- * Forbidden files. The v2 architecture removes the separate middleware
- * concept entirely — lifecycle is expressed only through hooks. Discovery of
- * these files is a compile-time error (fail fast, per `ROADMAP.md` §6.3).
+ * Forbidden files. BurgerAPI has no separate middleware concept — the
+ * lifecycle is expressed only through hooks. Discovery of these files is a
+ * compile-time error (fail fast).
  */
 export const FORBIDDEN_FILES = ['middleware', 'use', 'webhook'] as const;
+
+/**
+ * Returns `{ stem, ext }` when `filename` is a recognized convention file
+ * (`route.ts`, `schema.js`, `hooks.mjs`, …), or `undefined` otherwise.
+ */
+export function splitConventionName(
+    filename: string
+): { stem: string; ext: string } | undefined {
+    const dot = filename.lastIndexOf('.');
+    if (dot <= 0) return undefined;
+    const ext = filename.slice(dot);
+    if (!(CONVENTION_EXTENSIONS as readonly string[]).includes(ext)) {
+        return undefined;
+    }
+    return { stem: filename.slice(0, dot), ext };
+}
 
 /**
  * Returns true if `name` (a file stem, no extension) is a recognized
@@ -46,9 +65,9 @@ export function isConventionFile(stem: string): stem is ConventionFile {
 export function assertConventionFile(stem: string): void {
     if ((FORBIDDEN_FILES as readonly string[]).includes(stem)) {
         throw new Error(
-            `Forbidden file "${stem}.ts" discovered. ` +
-                `BurgerAPI has no middleware/webhook concept — express infrastructure ` +
-                `as hooks in "hooks.ts" (see ROADMAP.md §3.4).`
+            `Forbidden convention file "${stem}" discovered (any of .ts/.js/.mjs). ` +
+                `BurgerAPI has no middleware or webhook concept — write ` +
+                `infrastructure code as hooks in "hooks.ts" instead.`
         );
     }
 }

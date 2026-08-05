@@ -1,13 +1,13 @@
 /**
  * The validation error system — structured `ValidationError` + mode-gated
- * renderers (§10).
+ * renderers.
  *
  * Responsibilities:
  * - `ValidationError` extends `HTTPError` (status 422).
  * - Carries structured `ValidationIssue[]` per slot.
  * - Renders RFC 9457 Problem Details by default.
  * - Mode-gate: dev shows full issues; production strips internals.
- * - Honor a custom `errorRenderer` override ().
+ * - Honor a custom `errorRenderer` override.
  *
  * Production bodies never leak stacks/source/schema internals (R7).
  */

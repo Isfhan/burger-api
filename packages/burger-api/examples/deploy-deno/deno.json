@@ -1,0 +1,5 @@
+{
+    "imports": {
+        "burger-api": "npm:burger-api"
+    }
+}

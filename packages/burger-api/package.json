@@ -1,6 +1,6 @@
 {
   "name": "burger-api",
-  "version": "0.15.0",
+  "version": "1.0.0",
   "author": "Isfhan Ahmed",
   "type": "module",
   "module": "dist/src/index.js",
@@ -9,6 +9,18 @@
     ".": {
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
+    },
+    "./adapter": {
+      "import": "./dist/src/adapter/index.js",
+      "types": "./dist/src/adapter/index.d.ts"
+    },
+    "./adapter/web-standard": {
+      "import": "./dist/src/adapter/web-standard/index.js",
+      "types": "./dist/src/adapter/web-standard/index.d.ts"
+    },
+    "./adapter/bun": {
+      "import": "./dist/src/adapter/bun/index.js",
+      "types": "./dist/src/adapter/bun/index.d.ts"
     }
   },
   "files": [
@@ -20,7 +32,7 @@
     "prepare": "bun run build",
     "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:validation && bun run test:compiler && bun run test:adapter && bun run test:provider && bun run test:smoke && bun run test:ws",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
-    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
+    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-smoke.test.ts",
     "test:lifecycle": "bun test --timeout 30000 test/lifecycle/**/*.test.ts",
     "test:context": "bun test --timeout 30000 test/context/**/*.test.ts",
     "test:chain": "bun test --timeout 30000 test/chain/**/*.test.ts",

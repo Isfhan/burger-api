@@ -2,7 +2,7 @@ import type { RouteDefinition, RequestHandler } from '../types/index';
 import type { RouteModule } from '../compiler/route-module';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
 import { compileRouteSchema } from '../validation/compiler';
-import { createValidatorMiddleware } from '../validation/validator';
+import { createValidationHook } from '../validation/validator';
 import {
     methodNotAllowed,
     autoOptionsHandler,
@@ -89,8 +89,8 @@ export class RouterCompiler {
 
             // Compose the frozen `HookPlan` once at compile time.
             // The HookChain collects ChainNodes tagged with scope + owner; the
-            // flattener produces the per-phase arrays with correct ordering
-            // (global → local for forward phases, local → global for onError).
+            // flattener produces the per-hook-point arrays with correct ordering
+            // (global → local for forward hooks, local → global for onError).
             // Validation is added as global scope so it pins at index 0.
             const routeHooks = def.hooks as RouteHooks | undefined;
             const chain = new HookChain();
@@ -98,7 +98,7 @@ export class RouterCompiler {
                 const validators = compileRouteSchema(def.schema!, this.config);
                 chain.add({
                     stage: 'validation',
-                    fn: createValidatorMiddleware(
+                    fn: createValidationHook(
                         validators,
                         this.config,
                         this.debug === true
@@ -163,7 +163,7 @@ export class RouterCompiler {
             plan.validatorConfig = this.config;
 
             // Optional, compile-time-only route field analysis. The result is
-            // baked into `meta` but is unused at runtime , so it can
+            // baked into `meta` but is unused at runtime, so it can
             // never affect request correctness.
             const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
 
@@ -404,15 +404,19 @@ function registerNativeOptions(
         return;
     }
     // Optional optimization: `Bun.nativeStaticResponse` may not exist in all
-    // Bun versions. Detect it at runtime; the pipeline works without it.
+    // Bun versions, and `Bun` is undefined on non-Bun runtimes (WinterCG
+    // targets). Detect both at runtime; the pipeline works without it.
     type NativeStaticResponse = (
         method: string,
         path: string,
         response: Response
     ) => void;
     const nativeStaticResponse = (
-        Bun as { nativeStaticResponse?: NativeStaticResponse }
-    ).nativeStaticResponse;
+        typeof Bun === 'undefined'
+            ? undefined
+            : (Bun as { nativeStaticResponse?: NativeStaticResponse })
+                  .nativeStaticResponse
+    );
     if (typeof nativeStaticResponse !== 'function') {
         return;
     }

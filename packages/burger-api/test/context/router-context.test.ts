@@ -51,7 +51,7 @@ describe('Router integration: BurgerContext threading', () => {
         expect(await res.json()).toEqual({ wild: ['a', 'b', 'c'] });
     });
 
-    it('runs the validation middleware and populates req.validated', async () => {
+    it('runs the validation hook and populates req.validated', async () => {
         const { z } = await import('zod');
         const defs: RouteDefinition[] = [
             {

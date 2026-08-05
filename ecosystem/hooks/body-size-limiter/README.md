@@ -14,14 +14,14 @@ Request body size limiting hook factory for burger-api framework. Hooks are code
 
 ## Installation
 
-Copy this middleware into your project following the standardized ecosystem structure:
+Copy this hook factory into your project following the standardized ecosystem structure:
 
 ```bash
 # Copy the entire ecosystem folder to your project
 cp -r burger-api/ecosystem ./
 
-# Create the recommended middleware folder structure
-mkdir -p middleware/{global,route-specific,custom}
+# Or install via the CLI
+burger-api add body-size-limiter
 ```
 
 ## Usage
@@ -29,21 +29,21 @@ mkdir -p middleware/{global,route-specific,custom}
 ### Basic Usage (1MB limit)
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [bodySizeLimiter()];
+export const beforeRoute = [bodySizeLimiter()];
 
 // index.ts
 import { Burger } from 'burger-api';
-new Burger({ apiDir: './api' }).serve(4000);
+new Burger({ apiDir: './src/api' }).serve(4000);
 ```
 
 ### Custom Size Limit
 
 ```typescript
-// api/hooks.ts
+// src/hooks.ts
 import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [bodySizeLimiter({
+export const beforeRoute = [bodySizeLimiter({
     maxSize: 10 * 1024 * 1024 // 10MB limit
 })];
 ```
@@ -51,51 +51,52 @@ export const beforeHandle = [bodySizeLimiter({
 ### Using Presets
 
 ```typescript
+// src/hooks.ts
 import {
     smallPayloadLimit,
     mediumPayloadLimit,
     largePayloadLimit,
     extraLargePayloadLimit
-} from './ecosystem/hooks/body-size-limiter/body-size-limiter';
-
-// api/hooks.ts
-import { smallPayloadLimit, mediumPayloadLimit, largePayloadLimit, extraLargePayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+} from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
 // Choose one:
-export const beforeHandle = [smallPayloadLimit()]; // 100KB - for text-based APIs
-// export const beforeHandle = [mediumPayloadLimit()]; // 1MB - default
-// export const beforeHandle = [largePayloadLimit()]; // 10MB - for file uploads
-// export const beforeHandle = [extraLargePayloadLimit()]; // 50MB - for large uploads
+export const beforeRoute = [smallPayloadLimit()]; // 100KB - for text-based APIs
+// export const beforeRoute = [mediumPayloadLimit()]; // 1MB - default
+// export const beforeRoute = [largePayloadLimit()]; // 10MB - for file uploads
+// export const beforeRoute = [extraLargePayloadLimit()]; // 50MB - for large uploads
 ```
 
 ### Custom Error Response
 
 ```typescript
-import { bodySizeLimiter, formatBytes } from './ecosystem/hooks/body-size-limiter/body-size-limiter';
+// src/hooks.ts
+import { bodySizeLimiter, formatBytes } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-const limiter = bodySizeLimiter({
-    maxSize: 5 * 1024 * 1024,
-    onError: (size, max) => {
-        return Response.json(
-            {
-                error: 'File too large',
-                message: `Your upload of ${formatBytes(size)} exceeds the ${formatBytes(max)} limit`,
-                suggestion: 'Please compress your file or split it into smaller parts'
-            },
-            { status: 413 }
-        );
-    }
-});
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 5 * 1024 * 1024,
+        onError: (size, max) => {
+            return Response.json(
+                {
+                    error: 'File too large',
+                    message: `Your upload of ${formatBytes(size)} exceeds the ${formatBytes(max)} limit`,
+                    suggestion: 'Please compress your file or split it into smaller parts'
+                },
+                { status: 413 }
+            );
+        }
+    })
+];
 ```
 
 ### Route-Specific Limits
 
 ```typescript
-// api/upload/hooks.ts
+// src/api/upload/hooks.ts
 import { bodySizeLimiter } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
 // Higher limit for file upload endpoint
-export const beforeHandle = [bodySizeLimiter({
+export const beforeRoute = [bodySizeLimiter({
     maxSize: 50 * 1024 * 1024 // 50MB
 })];
 ```
@@ -182,97 +183,102 @@ extraLargePayloadLimit()
 ### Different Limits per Route
 
 ```typescript
-// api/hooks.ts (global)
+// src/hooks.ts (global)
 import { smallPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [smallPayloadLimit()];
+export const beforeRoute = [smallPayloadLimit()];
 
-// api/upload/hooks.ts (route-specific override)
+// src/api/upload/hooks.ts (route-specific override)
 import { largePayloadLimit } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [largePayloadLimit()]; // Override with larger limit
+export const beforeRoute = [largePayloadLimit()]; // Override with larger limit
 ```
 
 ### Conditional Limits Based on User
 
 ```typescript
-import { bodySizeLimiter } from './ecosystem/hooks/body-size-limiter/body-size-limiter';
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-function userBasedLimit(): Middleware {
-    return async (req: BurgerRequest): Promise<BurgerNext> => {
-        // Get user from JWT/session
-        const user = (req as any).user;
-        
+function userBasedLimit() {
+    return (ctx: BurgerContext) => {
+        // Get user from JWT/session plugin
+        const user = (ctx as { user?: { tier?: string } }).user;
+
         // Different limits based on user tier
         let maxSize: number;
-        if (user.tier === 'premium') {
+        if (user?.tier === 'premium') {
             maxSize = 50 * 1024 * 1024; // 50MB
-        } else if (user.tier === 'pro') {
+        } else if (user?.tier === 'pro') {
             maxSize = 10 * 1024 * 1024; // 10MB
         } else {
             maxSize = 1 * 1024 * 1024; // 1MB
         }
-        
-        return bodySizeLimiter({ maxSize })(req);
+
+        return bodySizeLimiter({ maxSize })(ctx);
     };
 }
+
+export const beforeRoute = [userBasedLimit()];
 ```
 
 ### With File Type Validation
 
 ```typescript
-import { bodySizeLimiter } from './ecosystem/hooks/body-size-limiter/body-size-limiter';
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-const uploadLimit = bodySizeLimiter({
-    maxSize: 10 * 1024 * 1024,
-    onError: (size, max) => {
-        // Also check file type in your handler
-        return Response.json({
-            error: 'Upload rejected',
-            size: `${(size / 1024 / 1024).toFixed(2)}MB`,
-            limit: `${(max / 1024 / 1024).toFixed(2)}MB`
-        }, { status: 413 });
-    }
-});
-
-// Then in handler
-handlers: {
-    POST: async (req) => {
-        const contentType = req.headers.get('Content-Type');
-        
-        // Check file type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-        if (!allowedTypes.includes(contentType)) {
-            return Response.json(
-                { error: 'Invalid file type' },
-                { status: 415 }
-            );
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 10 * 1024 * 1024,
+        onError: (size, max) => {
+            return Response.json({
+                error: 'Upload rejected',
+                size: `${(size / 1024 / 1024).toFixed(2)}MB`,
+                limit: `${(max / 1024 / 1024).toFixed(2)}MB`
+            }, { status: 413 });
         }
-        
-        // Process upload...
+    })
+];
+
+// Then in route.ts
+export async function POST(ctx: BurgerContext) {
+    const contentType = ctx.headers.get('Content-Type');
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(contentType)) {
+        return Response.json(
+            { error: 'Invalid file type' },
+            { status: 415 }
+        );
     }
+
+    // Process upload...
 }
 ```
 
 ### Logging Rejected Requests
 
 ```typescript
-import { bodySizeLimiter } from './ecosystem/hooks/body-size-limiter/body-size-limiter';
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
-const limiter = bodySizeLimiter({
-    maxSize: 5 * 1024 * 1024,
-    onError: (size, max) => {
-        // Log rejected upload
-        console.warn('Rejected oversized request:', {
-            size: `${(size / 1024 / 1024).toFixed(2)}MB`,
-            limit: `${(max / 1024 / 1024).toFixed(2)}MB`,
-            timestamp: new Date().toISOString(),
-            url: req.url
-        });
-        
-        return Response.json({
-            error: 'Payload too large'
-        }, { status: 413 });
-    }
-});
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 5 * 1024 * 1024,
+        onError: (size, max) => {
+            // Log rejected upload
+            console.warn('Rejected oversized request:', {
+                size: `${(size / 1024 / 1024).toFixed(2)}MB`,
+                limit: `${(max / 1024 / 1024).toFixed(2)}MB`,
+                timestamp: new Date().toISOString()
+            });
+
+            return Response.json({
+                error: 'Payload too large'
+            }, { status: 413 });
+        }
+    })
+];
 ```
 
 ## Modes Comparison
@@ -312,28 +318,28 @@ bodySizeLimiter({
 ### 1. Set Global Limits
 
 ```typescript
-// api/hooks.ts — start with a safe global limit
+// src/hooks.ts — start with a safe global limit
 import { mediumPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [mediumPayloadLimit()];
+export const beforeRoute = [mediumPayloadLimit()];
 ```
 
 ### 2. Override for Specific Routes
 
 ```typescript
-// api/upload/hooks.ts — higher limit for upload endpoints
+// src/api/upload/hooks.ts — higher limit for upload endpoints
 import { largePayloadLimit } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeHandle = [largePayloadLimit()];
+export const beforeRoute = [largePayloadLimit()];
 ```
 
 ### 3. Combine with Rate Limiting
 
 ```typescript
-// api/hooks.ts
-import { rateLimit } from '../rate-limiter/rate-limiter';
-import { bodySizeLimiter } from '../body-size-limiter/body-size-limiter';
+// src/hooks.ts
+import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 
 // Prevent abuse with both limits
-export const beforeHandle = [
+export const beforeRoute = [
     rateLimit({ windowMs: 60000, maxRequests: 100 }),
     bodySizeLimiter({ maxSize: 1024 * 1024 })
 ];
@@ -453,11 +459,11 @@ bodySizeLimiter({
 ### 3. Combine with Other Security
 
 ```typescript
-// api/hooks.ts
-export const beforeHandle = [
+// src/hooks.ts
+export const beforeRoute = [
     rateLimit(), // Prevent rapid requests
     bodySizeLimiter(), // Limit size
-    timeout({ ms: 30000 }) // Prevent slow uploads
+    requestTimeout({ ms: 30000 }) // Prevent slow uploads
 ];
 ```
 

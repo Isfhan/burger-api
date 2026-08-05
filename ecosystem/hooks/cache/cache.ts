@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the cache control middleware.
+ * Configuration options for the cache control hook.
  */
 export interface CacheControlOptions {
     /**
@@ -71,13 +71,13 @@ export interface CacheControlOptions {
 }
 
 /**
- * Creates a cache control middleware for HTTP caching.
+ * Creates a cache control hook for HTTP caching.
  *
- * This middleware sets Cache-Control and related headers to control how responses
+ * This hook sets Cache-Control and related headers to control how responses
  * are cached by browsers, CDNs, and proxy servers.
  *
  * @param options - Configuration options for cache control
- * @returns A middleware function that adds cache headers to responses
+ * @returns A hook function that adds cache headers to responses
  *
  * @example
  * ```typescript

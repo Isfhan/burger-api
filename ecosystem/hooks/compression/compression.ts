@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the compression middleware.
+ * Configuration options for the compression hook.
  */
 export interface CompressionOptions {
     /**
@@ -36,16 +36,16 @@ export interface CompressionOptions {
 }
 
 /**
- * Creates a compression middleware for compressing HTTP responses.
+ * Creates a compression hook for compressing HTTP responses.
  *
- * This middleware compresses response bodies using gzip, deflate, or brotli compression
+ * This hook compresses response bodies using gzip, deflate, or brotli compression
  * based on the client's Accept-Encoding header. It automatically skips compression for:
  * - Small responses (below threshold)
  * - Already compressed content (images, videos, etc.)
  * - Content without a body
  *
  * @param options - Configuration options for compression behavior
- * @returns A middleware function that compresses responses
+ * @returns A hook function that compresses responses
  *
  * @example
  * ```typescript

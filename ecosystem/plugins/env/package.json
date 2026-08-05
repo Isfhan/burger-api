@@ -5,10 +5,10 @@
   "main": "env.ts",
   "type": "module",
   "peerDependencies": {
-    "burger-api": ">=0.15.0"
+    "burger-api": ">=1.0.0"
   },
   "devDependencies": {
-    "burger-api": "0.15.0"
+    "burger-api": "1.0.0"
   },
   "keywords": [
     "burger-api",

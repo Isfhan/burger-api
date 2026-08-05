@@ -33,6 +33,19 @@ import {
     header,
 } from '../utils/logger';
 
+/**
+ * Resolve the project language: explicit `--lang` flag wins, otherwise a
+ * `jsconfig.json` in the project root marks a JavaScript project.
+ */
+function resolveLang(flag: string | undefined): 'ts' | 'js' {
+    const lang = flag ?? (existsSync('jsconfig.json') ? 'js' : 'ts');
+    if (lang !== 'ts' && lang !== 'js') {
+        logError(`--lang must be "ts" or "js" (got "${lang}")`);
+        process.exit(1);
+    }
+    return lang;
+}
+
 // ─────────────────────────────────────────────────────
 // `generate route <name>`
 // ─────────────────────────────────────────────────────
@@ -40,17 +53,19 @@ import {
 const routeCommand = new Command('route')
     .description('Scaffold a route directory with convention files')
     .argument('<path>', 'Route path (e.g. users, products/[id])')
+    .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
     .option('--no-schema', 'Skip schema.ts')
     .option('--no-openapi', 'Skip openapi.ts')
     .option('--no-hooks', 'Skip hooks.ts')
     .option('--no-config', 'Skip config.ts')
-    .action(async (routePath: string, options: GenerateRouteOptions) => {
+    .action(async (routePath: string, options: GenerateRouteOptions & { lang?: string }) => {
         if (!existsSync('package.json')) {
             logError('Not in a BurgerAPI project directory.');
             info('Run this from your project root.');
             process.exit(1);
         }
 
+        const lang = resolveLang(options.lang);
         const config = await resolveBuildConfig(process.cwd());
         const targetDir = join(process.cwd(), config.apiDir, routePath);
 
@@ -60,12 +75,16 @@ const routeCommand = new Command('route')
             process.exit(1);
         }
 
-        const files = generateRouteFiles(routePath, {
-            schema: options.schema,
-            openapi: options.openapi,
-            hooks: options.hooks,
-            config: options.config,
-        });
+        const files = generateRouteFiles(
+            routePath,
+            {
+                schema: options.schema,
+                openapi: options.openapi,
+                hooks: options.hooks,
+                config: options.config,
+            },
+            lang
+        );
 
         await mkdir(targetDir, { recursive: true });
 
@@ -81,9 +100,9 @@ const routeCommand = new Command('route')
             bullet(filename);
         }
         newline();
-        info('Edit route.ts to add your handlers.');
-        if (files['schema.ts']) {
-            info('Define validation schemas in schema.ts.');
+        info(`Edit route.${lang === 'js' ? 'js' : 'ts'} to add your handlers.`);
+        if (files[`schema.${lang === 'js' ? 'js' : 'ts'}`]) {
+            info('Define validation schemas in the schema file.');
         }
         newline();
     });
@@ -95,12 +114,15 @@ const routeCommand = new Command('route')
 const hookCommand = new Command('hook')
     .description('Scaffold a hook factory in the ecosystem')
     .argument('<name>', 'Hook name')
-    .action(async (name: string) => {
+    .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
+    .action(async (name: string, options: { lang?: string }) => {
         if (!existsSync('package.json')) {
             logError('Not in a BurgerAPI project directory.');
             process.exit(1);
         }
 
+        const lang = resolveLang(options.lang);
+        const ext = lang === 'js' ? 'js' : 'ts';
         const targetDir = join(process.cwd(), 'ecosystem', 'hooks', name);
         if (existsSync(targetDir)) {
             logError(`Hook "${name}" already exists at ${targetDir}`);
@@ -108,16 +130,16 @@ const hookCommand = new Command('hook')
         }
 
         await mkdir(targetDir, { recursive: true });
-        const content = generateHookTemplate(name);
-        await writeFile(join(targetDir, `${name}.ts`), content);
+        const content = generateHookTemplate(name, lang);
+        await writeFile(join(targetDir, `${name}.${ext}`), content);
 
         newline();
         success(`Hook "${name}" created at ${targetDir}`);
         newline();
         header('How to use');
-        code(`import { ${name} } from "./ecosystem/hooks/${name}/${name}";`);
+        code(`import { ${name} } from "./ecosystem/hooks/${name}/${name}.${ext}";`);
         code('');
-        code('// src/hooks.ts');
+        code(`// src/hooks.${ext}`);
         code('export const onRequest = [');
         code(` ${name}(),`);
         code('];');
@@ -131,12 +153,15 @@ const hookCommand = new Command('hook')
 const pluginCommand = new Command('plugin')
     .description('Scaffold a plugin in the ecosystem')
     .argument('<name>', 'Plugin name')
-    .action(async (name: string) => {
+    .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
+    .action(async (name: string, options: { lang?: string }) => {
         if (!existsSync('package.json')) {
             logError('Not in a BurgerAPI project directory.');
             process.exit(1);
         }
 
+        const lang = resolveLang(options.lang);
+        const ext = lang === 'js' ? 'js' : 'ts';
         const targetDir = join(process.cwd(), 'ecosystem', 'plugins', name);
         if (existsSync(targetDir)) {
             logError(`Plugin "${name}" already exists at ${targetDir}`);
@@ -144,19 +169,19 @@ const pluginCommand = new Command('plugin')
         }
 
         await mkdir(targetDir, { recursive: true });
-        const content = generatePluginTemplate(name);
+        const content = generatePluginTemplate(name, lang);
         const className = name.charAt(0).toUpperCase() + name.slice(1);
-        await writeFile(join(targetDir, `${name}.ts`), content);
+        await writeFile(join(targetDir, `${name}.${ext}`), content);
 
         newline();
         success(`Plugin "${className}" created at ${targetDir}`);
         newline();
         header('How to use');
         code(
-            `import { ${className} } from "./ecosystem/plugins/${name}/${name}";`
+            `import { ${className} } from "./ecosystem/plugins/${name}/${name}.${ext}";`
         );
         code('');
-        code('// src/plugins.ts');
+        code(`// src/plugins.${ext}`);
         code('burger.usePlugin(');
         code(` ${className},`);
         code(');');
@@ -170,17 +195,21 @@ const pluginCommand = new Command('plugin')
 const wsCommand = new Command('ws')
     .description('Scaffold a WebSocket handler directory with convention files')
     .argument('<path>', 'WebSocket path (e.g. chat, notifications/[room])')
+    .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
     .option('--no-hooks', 'Skip hooks.ts')
     .option('--no-config', 'Skip config.ts')
-    .action(async (routePath: string, options: GenerateWsOptions) => {
+    .action(async (routePath: string, options: GenerateWsOptions & { lang?: string }) => {
         if (!existsSync('package.json')) {
             logError('Not in a BurgerAPI project directory.');
             info('Run this from your project root.');
             process.exit(1);
         }
 
+        const lang = resolveLang(options.lang);
+        const ext = lang === 'js' ? 'js' : 'ts';
         const config = await resolveBuildConfig(process.cwd());
-        const wsDir = join(process.cwd(), 'src', 'websocket', routePath);
+        const wsRoot = (config.wsDir || 'src/websocket').replace(/\\/g, '/');
+        const wsDir = join(process.cwd(), wsRoot, routePath);
 
         if (existsSync(wsDir)) {
             logError(`WebSocket directory already exists: ${wsDir}`);
@@ -188,10 +217,14 @@ const wsCommand = new Command('ws')
             process.exit(1);
         }
 
-        const files = generateWsFiles(routePath, {
-            hooks: options.hooks,
-            config: options.config,
-        });
+        const files = generateWsFiles(
+            routePath,
+            {
+                hooks: options.hooks,
+                config: options.config,
+            },
+            lang
+        );
 
         await mkdir(wsDir, { recursive: true });
 
@@ -208,15 +241,15 @@ const wsCommand = new Command('ws')
         }
         newline();
         header('How to use');
-        code(`// In your server entry point (e.g. src/index.ts):`);
+        code(`// In your server entry point (e.g. src/index.${ext}):`);
         code(`const burger = new Burger({`);
-        code(` wsDir: "./src/websocket",`);
+        code(` wsDir: "./${wsRoot.replace(/^\.\//, '')}",`);
         code(` // ... other options`);
         code(`});`);
         newline();
-        info('Edit ws.ts to add your open/message/close handlers.');
-        if (files['hooks.ts']) {
-            info('Define route-level hooks in hooks.ts.');
+        info(`Edit ws.${ext} to add your open/message/close handlers.`);
+        if (files[`hooks.${ext}`]) {
+            info('Define route-level hooks in the hooks file.');
         }
         newline();
     });

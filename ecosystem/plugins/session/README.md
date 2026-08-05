@@ -20,26 +20,29 @@ Or manually copy to `ecosystem/plugins/session/`.
 
 ## Usage
 
+Register the plugin in `src/plugins.ts`. The module exports a default function
+that receives the `Burger` instance:
+
 ### Basic usage (in-memory store)
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { session } from "./ecosystem/plugins/session/session";
+import type { Burger } from "burger-api";
+import { session } from "../ecosystem/plugins/session/session";
 
-const burger = new Burger();
-
-burger.usePlugin(session({
-  secret: process.env.SESSION_SECRET,
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(session({
+    secret: process.env.SESSION_SECRET,
+  }));
+}
 ```
 
 ### With custom store
 
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
-import { session } from "./ecosystem/plugins/session/session";
+import type { Burger } from "burger-api";
+import { session } from "../ecosystem/plugins/session/session";
 
 // Implement your own store
 const redisStore = {
@@ -55,11 +58,13 @@ const redisStore = {
   },
 };
 
-burger.usePlugin(session({
-  secret: process.env.SESSION_SECRET,
-  store: redisStore,
-  maxAge: 86400, // 24 hours
-}));
+export default function (burger: Burger) {
+  burger.usePlugin(session({
+    secret: process.env.SESSION_SECRET,
+    store: redisStore,
+    maxAge: 86400, // 24 hours
+  }));
+}
 ```
 
 ## Configuration options
@@ -91,7 +96,7 @@ interface SessionStore {
 ### Disable session for public routes
 
 ```typescript
-// api/public/config.ts
+// src/api/public/config.ts
 export default {
   auth: false,
 };
@@ -100,7 +105,7 @@ export default {
 ### Require session
 
 ```typescript
-// api/profile/config.ts
+// src/api/profile/config.ts
 export default {
   auth: {
     required: true,

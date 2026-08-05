@@ -5,14 +5,14 @@ import { filePathToApiRoutePath } from '../utils/pathConversion';
 import {
     assertConventionFile,
     isConventionFile,
+    splitConventionName,
     type ConventionFile,
 } from './conventions';
 import type { ScannedRoute, ScanResult } from './route-module';
 
 /**
  * Walks a route directory tree and produces a pure inventory of route
- * directories — the first stage of the compiler pipeline
- * (`ROADMAP.md` §2.1 step 1).
+ * directories — the first stage of the compiler pipeline.
  *
  * The scanner only enumerates files and computes route paths. It performs
  * **no `import()`** of any module; loading module code is the exclusive
@@ -56,44 +56,42 @@ export class DirectoryScanner {
         let openAPIConfigPath: string | undefined;
         let pluginsPath: string | undefined;
         let providersPath: string | undefined;
+        const parentDir = path.dirname(this.routesDir);
+        let rootEntries: { name: string; isFile: () => boolean }[] = [];
         try {
-            const parentDir = path.dirname(this.routesDir);
-            const rootEntries = await readdir(parentDir, {
+            rootEntries = await readdir(parentDir, {
                 withFileTypes: true,
             });
-            for (const entry of rootEntries) {
-                if (!entry.isFile()) continue;
-                if (entry.name === 'hooks.ts') {
-                    globalHooks = path.resolve(
-                        path.join(parentDir, entry.name)
-                    );
-                }
-                if (entry.name === 'openapi.config.ts') {
-                    openAPIConfigPath = path.resolve(
-                        path.join(parentDir, entry.name)
-                    );
-                }
-                if (entry.name === 'plugins.ts') {
-                    pluginsPath = path.resolve(
-                        path.join(parentDir, entry.name)
-                    );
-                }
-                if (entry.name === 'providers.ts') {
-                    providersPath = path.resolve(
-                        path.join(parentDir, entry.name)
-                    );
-                }
-                if (
-                    globalHooks &&
-                    openAPIConfigPath &&
-                    pluginsPath &&
-                    providersPath
-                )
-                    break;
-            }
         } catch {
             // Parent directory may not exist — ignore.
         }
+        const rootFiles: Record<string, string> = {};
+        for (const entry of rootEntries) {
+            if (!entry.isFile()) continue;
+            const split = splitConventionName(entry.name);
+            if (!split) continue;
+            const stem = split.stem;
+            if (
+                stem !== 'hooks' &&
+                stem !== 'openapi.config' &&
+                stem !== 'plugins' &&
+                stem !== 'providers'
+            ) {
+                continue;
+            }
+            const existing = rootFiles[stem];
+            if (existing) {
+                throw new Error(
+                    `Conflicting app-level convention files "${existing}" and "${path.join(parentDir, entry.name)}" — ` +
+                        `use only one of .ts/.js/.mjs per convention file.`
+                );
+            }
+            rootFiles[stem] = path.resolve(path.join(parentDir, entry.name));
+        }
+        globalHooks = rootFiles['hooks'];
+        openAPIConfigPath = rootFiles['openapi.config'];
+        pluginsPath = rootFiles['plugins'];
+        providersPath = rootFiles['providers'];
 
         return {
             routes,
@@ -119,20 +117,32 @@ export class DirectoryScanner {
         // conflicts before recursing.
         const subDirs: string[] = [];
 
+        // Collect convention files per stem (`route`, `schema`, …) across
+        // all accepted extensions (.ts/.js/.mjs).
+        const conventionByStem: Map<string, string> = new Map();
+
         for (const entry of entries) {
             if (entry.isDirectory()) {
                 subDirs.push(entry.name);
                 continue;
             }
             if (!entry.isFile()) continue;
-            if (!entry.name.endsWith('.ts')) continue;
-
-            const stem = entry.name.replace(/\.ts$/, '');
+            const split = splitConventionName(entry.name);
+            if (!split) continue;
             // Reject forbidden files (e.g. `middleware.ts`) regardless of
             // whether they are a recognized convention file.
-            assertConventionFile(stem);
-            // Non-convention `.ts` files (helpers, fixtures) are ignored.
-            if (!isConventionFile(stem)) continue;
+            assertConventionFile(split.stem);
+            // Non-convention files (helpers, fixtures) are ignored.
+            if (!isConventionFile(split.stem)) continue;
+            const abs = path.resolve(path.join(dir, entry.name));
+            const existing = conventionByStem.get(split.stem);
+            if (existing) {
+                throw new Error(
+                    `Conflicting convention files "${existing}" and "${abs}" in "${dir}" — ` +
+                        `a route directory must not contain both ${split.stem}.ts and ${split.stem}.js (or .mjs).`
+                );
+            }
+            conventionByStem.set(split.stem, abs);
         }
 
         // Validate folder-level conflicts (ported from core/api-router.ts).
@@ -175,12 +185,8 @@ export class DirectoryScanner {
         const localFiles: Partial<Record<ConventionFile, string>> = {};
         let hasRoute = false;
 
-        for (const entry of entries) {
-            if (!entry.isFile()) continue;
-            const stem = entry.name.replace(/\.ts$/, '');
-            if (!isConventionFile(stem)) continue;
-            const abs = path.resolve(path.join(dir, entry.name));
-            localFiles[stem] = abs;
+        for (const [stem, abs] of conventionByStem) {
+            localFiles[stem as ConventionFile] = abs;
             if (stem === 'route') hasRoute = true;
         }
 

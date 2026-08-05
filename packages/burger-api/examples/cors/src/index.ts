@@ -2,7 +2,7 @@ import { Burger, setDir } from 'burger-api';
 
 const burger = new Burger({
     title: 'CORS App',
-    description: 'CORS middleware in the Burger API framework.',
+    description: 'CORS hook in the Burger API framework.',
     apiDir: setDir(__dirname, 'api'),
     version: '1.0.0',
     debug: true,

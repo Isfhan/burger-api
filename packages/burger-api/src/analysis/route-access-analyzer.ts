@@ -6,13 +6,13 @@ import { freezeRouteAccessInfo } from '../context/route-access';
  * `RouteAccessAnalyzer` — an optional, compile-time-only, self-contained
  * static analyzer.
  *
- * It inspects a route's handler + middleware *source* (via
+ * It inspects a route's handler + hook *source* (via
  * `Function.prototype.toString()`) to produce a frozen `RouteAccessInfo` hint
  * describing which `BurgerContext` fields each route touches. Nothing here is
- * read at runtime , so any failure degrades to a safe default and can
+ * read at runtime, so any failure degrades to a safe default and can
  * never affect request correctness.
  *
- * Design constraints ():
+ * Design constraints:
  * - Self-contained: no import from `@burger-api/cli`, no `node:fs`.
  * - Reuses the discipline of `cli/src/utils/route-methods.ts`, not its code.
  * - `debug: true` → skip analysis entirely (return the safe empty default).
@@ -121,9 +121,8 @@ export function analyzeRouteAccess(
 
     try {
         // Concatenate the source of every handler and every lifecycle hook
-        // (ROADMAP.md §3.4 — lifecycle lives in `hooks.ts`, not a `middleware`
-        // export). Keeps field-access detection accurate for routes that read
-        // context fields inside hooks.
+        // (the lifecycle lives in `hooks.ts`). Keeps field-access detection
+        // accurate for routes that read context fields inside hooks.
         let source = '';
         const handlers = def.handlers ?? {};
         for (const key of Object.keys(handlers)) {

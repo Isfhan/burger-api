@@ -80,28 +80,28 @@ export interface CorsOptions {
 }
 
 /**
- * Creates a CORS (Cross-Origin Resource Sharing) middleware for handling cross-origin requests.
+ * Creates a CORS (Cross-Origin Resource Sharing) hook for handling cross-origin requests.
  *
- * This middleware enables your API to be accessible from different origins by setting
+ * This hook enables your API to be accessible from different origins by setting
  * appropriate CORS headers. It handles preflight OPTIONS requests automatically.
  *
  * @param options - Configuration options for CORS behavior
- * @returns A middleware function that adds CORS headers to responses
+ * @returns A hook function that adds CORS headers to responses
  *
  * @example
  * ```typescript
  * // Allow all origins (default)
- * const corsMiddleware = cors();
+ * const corsHook = cors();
  *
  * // Allow specific origin with debugging
- * const corsMiddleware = cors({
+ * const corsHook = cors({
  *   origin: 'https://example.com',
  *   credentials: true,
  *   debug: true
  * });
  *
  * // Production configuration with HTTPS enforcement
- * const corsMiddleware = cors({
+ * const corsHook = cors({
  *   origin: ['https://example.com', 'https://app.example.com'],
  *   credentials: true,
  *   enforceHttps: true,

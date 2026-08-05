@@ -261,7 +261,7 @@ export function session(options: SessionOptions = {}): Plugin {
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
-        if (config?.auth === false) {
+        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 
@@ -273,70 +273,75 @@ export function session(options: SessionOptions = {}): Plugin {
         }
       },
 
-      mapResponse: async (ctx: BurgerContext, response: Response): Promise<Response> => {
-        // Get session ID
-        const sessionId = (ctx as { _sessionId?: string })._sessionId;
+      mapResponse: (ctx: BurgerContext): ((response: Response) => Promise<Response>) => {
+        // 1.0 contract: response hooks return a transform function;
+        // the framework applies it to the response. (Legacy two-arg form is
+        // not supported by the pipeline.)
+        return async (response: Response): Promise<Response> => {
+          // Get session ID
+          const sessionId = (ctx as { _sessionId?: string })._sessionId;
 
-        // Create new session if none exists
-        if (!sessionId) {
-          const newSessionId = generateSessionId();
-          const signedId = secret
-            ? await signSessionId(newSessionId, secret)
-            : newSessionId;
+          // Create new session if none exists
+          if (!sessionId) {
+            const newSessionId = generateSessionId();
+            const signedId = secret
+              ? await signSessionId(newSessionId, secret)
+              : newSessionId;
 
-          // Set cookie
-          const cookieHeader = [
-            `${cookie}=${signedId}`,
-            `Path=${path}`,
-            `Max-Age=${maxAge}`,
-            `SameSite=${sameSite}`,
-            secure ? "Secure" : "",
-            domain ? `Domain=${domain}` : "",
-          ]
-            .filter(Boolean)
-            .join("; ");
+            // Set cookie
+            const cookieHeader = [
+              `${cookie}=${signedId}`,
+              `Path=${path}`,
+              `Max-Age=${maxAge}`,
+              `SameSite=${sameSite}`,
+              secure ? "Secure" : "",
+              domain ? `Domain=${domain}` : "",
+            ]
+              .filter(Boolean)
+              .join("; ");
 
-          // Clone response and set cookie
-          const newResponse = new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
-          newResponse.headers.append("Set-Cookie", cookieHeader);
+            // Clone response and set cookie
+            const newResponse = new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            });
+            newResponse.headers.append("Set-Cookie", cookieHeader);
 
-          return newResponse;
-        }
+            return newResponse;
+          }
 
-        // Regenerate session ID if enabled and session exists
-        if (regenerateOnAuth) {
-          const newSessionId = generateSessionId();
-          const signedId = secret
-            ? await signSessionId(newSessionId, secret)
-            : newSessionId;
+          // Regenerate session ID if enabled and session exists
+          if (regenerateOnAuth) {
+            const newSessionId = generateSessionId();
+            const signedId = secret
+              ? await signSessionId(newSessionId, secret)
+              : newSessionId;
 
-          // Set cookie with new ID
-          const cookieHeader = [
-            `${cookie}=${signedId}`,
-            `Path=${path}`,
-            `Max-Age=${maxAge}`,
-            `SameSite=${sameSite}`,
-            secure ? "Secure" : "",
-            domain ? `Domain=${domain}` : "",
-          ]
-            .filter(Boolean)
-            .join("; ");
+            // Set cookie with new ID
+            const cookieHeader = [
+              `${cookie}=${signedId}`,
+              `Path=${path}`,
+              `Max-Age=${maxAge}`,
+              `SameSite=${sameSite}`,
+              secure ? "Secure" : "",
+              domain ? `Domain=${domain}` : "",
+            ]
+              .filter(Boolean)
+              .join("; ");
 
-          const newResponse = new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
-          newResponse.headers.append("Set-Cookie", cookieHeader);
+            const newResponse = new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            });
+            newResponse.headers.append("Set-Cookie", cookieHeader);
 
-          return newResponse;
-        }
+            return newResponse;
+          }
 
-        return response;
+          return response;
+        };
       },
     },
   };

@@ -62,16 +62,22 @@ Create a new Burger API project with interactive prompts.
 - Page route prefix (default: /)
 - Add AI agent skills? (recommended for agentic IDEs, default: yes)
 
-After answering, your project will be created with all files and dependencies
-installed!
+Skip all prompts with default answers:
+
+```bash
+burger-api create my-api --defaults
+
+# Choose the language up front (default: ts)
+burger-api create my-api --lang js
+```
 
 **What you get:**
 
-- ✅ Full project structure
-- ✅ TypeScript configured
+- ✅ Full project structure (`src/index.ts`, `src/api/`, convention files)
+- ✅ TypeScript configured (`jsconfig.json` with `checkJs` when `--lang js`)
 - ✅ Dependencies installed
 - ✅ `burger.build.ts` generated from your answers (build-time only)
-- ✅ Example routes
+- ✅ Example routes with schema + openapi files
 - ✅ Ready to run!
 - ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
 - ✅ When page routes are enabled, the sample `index.html` matches your choices
@@ -90,14 +96,15 @@ export default {
 ```
 
 Edit `burger.build.ts` anytime to change routes, prefixes, or debug mode.
-Runtime options belong in `new Burger({...})`, `src/plugins.ts`, and route `config.ts`.
+Runtime options belong in `new Burger({...})`, `src/plugins.ts`, and route
+`config.ts`.
 
 ---
 
 ### `burger-api list`
 
-Show official ecosystem packages you can add (hooks under `ecosystem/hooks/`,
-plugins under `ecosystem/plugins/` when available).
+Show official ecosystem packages you can add — hooks under
+`ecosystem/hooks/`, plugins under `ecosystem/plugins/`.
 
 **Hooks** control the request lifecycle. **Plugins** extend the application.
 They are separate concepts.
@@ -117,7 +124,7 @@ burger-api ls
 **Output:**
 
 ```
-Available Middleware
+Available Hooks & Plugins
 ────────────────────────────────
 
 Name Description
@@ -126,49 +133,59 @@ cors Cross-Origin Resource Sharing
 logger Request/response logging
 rate-limiter Request rate limiting
 jwt-auth JWT authentication
-api-key-auth API key authentication
-compression Response compression
+session Session management
 ...
 ```
 
 ---
 
-### `burger-api add <middleware...>`
+### `burger-api add <name>`
 
-Add one or more middleware to your project.
+Add one or more official hooks or plugins to your project. The CLI figures out
+whether each name is a hook or a plugin.
 
 **Examples:**
 
 ```bash
-# Add a single middleware
+# Add a single hook
 burger-api add cors
 
-# Add multiple middleware at once
+# Add multiple hooks at once
 burger-api add cors logger rate-limiter
 
-# Add authentication
-burger-api add jwt-auth api-key-auth
+# Add plugins (authentication, sessions, ...)
+burger-api add jwt-auth session
 ```
 
 **What it does:**
 
-1. Downloads middleware code from GitHub
-2. Copies files to your `middleware/` folder
-3. Shows you example code to use it
+1. Downloads the hook/plugin code from GitHub
+2. Copies it into your `ecosystem/hooks/` or `ecosystem/plugins/` folder
+3. Shows you example code to wire it in
 4. You can modify the code to fit your needs!
 
-**After adding:** The CLI shows you exactly how to use the middleware in your
-project:
+**After adding:** the CLI shows you exactly how to use it in your project.
+Hooks go into your lifecycle arrays:
 
 ```typescript
-import { Burger } from 'burger-api';
-import { cors } from './middleware/cors/cors';
-import { logger } from './middleware/logger/logger';
+// src/hooks.ts
+import { logger } from '../ecosystem/hooks/logger';
+import { cors } from '../ecosystem/hooks/cors';
 
-const app = new Burger({
- apiDir: './api',
- globalMiddleware: [logger(), cors()],
-});
+export const onRequest = [cors()];
+export const beforeRoute = [logger()];
+```
+
+Plugins register on the app:
+
+```typescript
+// src/plugins.ts
+import type { Burger } from 'burger-api';
+import { jwtAuth } from '../ecosystem/plugins/jwt-auth';
+
+export default function (burger: Burger) {
+    burger.usePlugin(jwtAuth({ secret: process.env.JWT_SECRET! }));
+}
 ```
 
 ---
@@ -207,7 +224,7 @@ burger-api skills available
 └── references/ # Reference documentation
  ├── routing.md
  ├── validation.md
- ├── middleware.md
+ ├── hooks.md
  ├── cli.md
  └── openapi.md
 ```
@@ -228,16 +245,16 @@ The CLI scans routes first, generates a virtual entry file, then runs Bun build.
 
 ```bash
 # Basic build
-burger-api build index.ts
+burger-api build src/index.ts
 
 # Build with minification
-burger-api build index.ts --minify
+burger-api build src/index.ts --minify
 
 # Custom output location
-burger-api build index.ts --outfile dist/app.js
+burger-api build src/index.ts --outfile dist/app.js
 
 # With sourcemaps
-burger-api build index.ts --sourcemap linked
+burger-api build src/index.ts --sourcemap linked
 ```
 
 **Options:**
@@ -247,7 +264,7 @@ burger-api build index.ts --sourcemap linked
 - `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
 - `--target <target>` - Target environment (e.g., bun, node)
 
-Build config is loaded from `burger.config.ts` or `burger.config.js` when
+Build config is loaded from `burger.build.ts` or `burger.build.js` when
 present. If no config exists, the CLI uses defaults:
 `apiDir=./src/api`, `pageDir=./src/pages`, `apiPrefix=/api`, `pagePrefix=/`.
 
@@ -272,19 +289,19 @@ Compile your project to a standalone executable that runs without Bun installed!
 
 ```bash
 # Build for current platform
-burger-api build:exec index.ts
+burger-api build:exec src/index.ts
 
 # Build for Windows
-burger-api build:exec index.ts --target bun-windows-x64
+burger-api build:exec src/index.ts --target bun-windows-x64
 
 # Build for Linux
-burger-api build:exec index.ts --target bun-linux-x64
+burger-api build:exec src/index.ts --target bun-linux-x64
 
 # Build for Mac (ARM)
-burger-api build:exec index.ts --target bun-darwin-arm64
+burger-api build:exec src/index.ts --target bun-darwin-arm64
 
 # Custom output name
-burger-api build:exec index.ts --outfile my-server.exe
+burger-api build:exec src/index.ts --outfile my-server.exe
 ```
 
 **Options:**
@@ -318,30 +335,30 @@ installing Bun or Node.js!
 
 ---
 
-### `burger-api serve`
+### `burger-api dev`
 
 Start a development server with hot reload (auto-restart on file changes).
 
 **Example:**
 
 ```bash
-# Default (port 4000, index.ts)
-burger-api serve
+# Default (port 4000, src/index.ts)
+burger-api dev
 
 # Custom port
-burger-api serve --port 4000
+burger-api dev --port 4000
 
 # Custom entry file
-burger-api serve --file server.ts
+burger-api dev --file server.ts
 
 # Both
-burger-api serve --port 8080 --file app.ts
+burger-api dev --port 8080 --file app.ts
 ```
 
 **Options:**
 
 - `-p, --port <port>` - Port to run on (default: 4000)
-- `-f, --file <file>` - Entry file (default: index.ts)
+- `-f, --file <file>` - Entry file (default: `src/index.ts`)
 
 **What you'll see:**
 
@@ -358,49 +375,114 @@ need to manually restart.
 
 ---
 
+### `burger-api start`
+
+Run the production build (AOT routes, no filesystem scanning at runtime).
+
+**Example:**
+
+```bash
+# Default (port 4000, src/index.ts)
+burger-api start
+
+# Custom port
+burger-api start --port 8080
+```
+
+**Options:**
+
+- `-p, --port <port>` - Port to run on (default: 4000)
+- `-f, --file <file>` - Production entry file (default: `src/index.ts`)
+
+Run `burger-api build` first, or let `start` build the bundle for you.
+
+---
+
+### `burger-api generate` (alias `g`)
+
+Scaffold routes, hooks, and plugins into your project:
+
+```bash
+# Scaffold a complete route directory
+burger-api generate route users
+
+# Route, hook, plugin, or websocket — language follows the project
+# (or --lang js/ts)
+burger-api generate hook custom-log
+burger-api generate plugin stripe
+burger-api generate ws chat
+```
+
+---
+
+### `burger-api inspect`
+
+Display discovered routes, hooks, plugins, and providers:
+
+```bash
+burger-api inspect
+```
+
+---
+
+### `burger-api doctor`
+
+Validate your project structure and detect issues:
+
+```bash
+burger-api doctor
+```
+
+---
+
 ## Project Structure
 
 When you create a project, this is what you get:
 
 ```
-my-awesome-api/
-├── api/ # Your API routes
-│ └── route.ts # Example route
-├── pages/ # Your HTML pages (optional)
-│ └── index.html # Example page
-├── middleware/ # Middleware folder
-│ └── index.ts # Export middleware here
+my-api/
+├── burger.build.ts # Build-time config (dirs, prefixes, debug)
+├── tsconfig.json # TypeScript config (jsconfig.json for --lang js)
+├── ecosystem/
+│ └── hooks/
+│     └── index.ts # Installed hooks/plugins land here
+├── src/
+│ ├── index.ts # Burger instance + serve() ONLY
+│ ├── hooks.ts # Global lifecycle hooks
+│ ├── plugins.ts # burger.usePlugin(...)
+│ ├── providers.ts # burger.provide(name, service)
+│ ├── openapi.config.ts # OpenAPI metadata + docs UI
+│ └── api/
+│     ├── route.ts # Example route handler
+│     ├── schema.ts # Per-method Zod schemas
+│     └── openapi.ts # Per-method OpenAPI metadata
 ├── .agents/ # AI agent skills (optional)
-│ └── skills/
-│ └── burger-api/ # BurgerAPI skill for agentic IDEs
-│ ├── SKILL.md
-│ └── references/
-├── index.ts # Main server file
-├── package.json # Dependencies
-├── tsconfig.json # TypeScript config
-├── .gitignore # Git ignore rules
-└── .prettierrc # Code formatting
+├── .gitignore
+└── .prettierrc
 ```
+
+With `--lang js`, every `*.ts` file becomes `*.js` and `tsconfig.json` becomes
+`jsconfig.json` (`checkJs: true`).
 
 ### Adding Routes
 
-Create a new file in the `api/` folder:
+Create a new file in the `src/api/` folder:
 
 ```typescript
-// api/users/route.ts
+// src/api/users/route.ts
 import type { BurgerContext } from 'burger-api';
 
 export async function GET(ctx: BurgerContext) {
  return Response.json({
- users: ['Alice', 'Bob', 'Charlie'],
+  users: ['Alice', 'Bob', 'Charlie'],
  });
 }
 
 export async function POST(ctx: BurgerContext) {
  const body = await ctx.request.json();
  return Response.json({
- message: 'User created',
- data: body,
+  message: 'User created',
+  data: body,
  });
 }
 ```
@@ -433,18 +515,19 @@ That's it! The page is automatically available at `/about`
 burger-api create my-api-v2
 ```
 
-### "Could not get middleware list from GitHub"
+### "Could not get hooks/plugins list from GitHub"
 
 **Solution:** Check your internet connection. The CLI needs internet to download
-middleware from GitHub.
+the ecosystem list from GitHub.
 
 ### "Entry file not found: index.ts"
 
-**Solution:** Make sure you're in the project directory:
+**Solution:** Make sure you're in the project directory and the entry lives at
+`src/index.ts`:
 
 ```bash
 cd my-project
-burger-api serve
+burger-api dev
 ```
 
 ### Build fails with errors
@@ -458,8 +541,8 @@ burger-api serve
 
 Run `bun run dev` first to see any errors.
 
-If you use custom folders or prefixes, verify your `burger.config.ts` /
-`burger.config.js` values.
+If you use custom folders or prefixes, verify your `burger.build.ts` /
+`burger.build.js` values.
 
 ### Cross-compilation fails from Windows (D:\ drive)
 
@@ -506,9 +589,9 @@ burger-api create --help # Command-specific help
 
 ### Migration from `.llm-context`
 
-Projects created with CLI version **0.9.8 and earlier** may have an
-`ecosystem/.llm-context/` folder. Starting with 0.9.9, the CLI no longer
-auto-installs this folder. To adopt the new skills format:
+Projects created with older CLI versions may have an `ecosystem/.llm-context/`
+folder. Modern versions of the CLI no longer auto-install this folder. To adopt
+the new skills format:
 
 ```bash
 cd my-project
@@ -649,7 +732,7 @@ BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
  - `bun run test:build`
 - CLI: commands that should return to the shell when finished must not leave
  stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
- in `src/utils/github.ts` for outbound requests. `serve` is meant to stay
+ in `src/utils/github.ts` for outbound requests. `dev` is meant to stay
  running until you stop it.
 
 ### Design Principles

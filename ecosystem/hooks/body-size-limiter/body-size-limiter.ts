@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the body size limiter middleware.
+ * Configuration options for the body size limiter hook.
  */
 export interface BodySizeLimiterOptions {
     /**
@@ -35,14 +35,14 @@ export interface BodySizeLimiterOptions {
 }
 
 /**
- * Creates a body size limiter middleware to prevent large payload attacks.
+ * Creates a body size limiter hook to prevent large payload attacks.
  *
- * This middleware checks the size of incoming request bodies and rejects
+ * This hook checks the size of incoming request bodies and rejects
  * requests that exceed the specified limit. It helps prevent DoS attacks
  * and protects server resources.
  *
  * @param options - Configuration options for body size limiting
- * @returns A middleware function that enforces body size limits
+ * @returns A hook function that enforces body size limits
  *
  * @example
  * ```typescript

@@ -1,6 +1,6 @@
 /**
  * The coercer — builds and applies precomputed value-conversion plans
- * (§7). "Coercion" here means automatic type conversion:
+ *. "Coercion" here means automatic type conversion:
  * turning a string like `"42"` into the number `42`, or `"true"` into the
  * boolean `true`.
  *
@@ -57,7 +57,7 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
             // A failed conversion (e.g. "abc") yields NaN. Keep the original
             // raw string instead so the downstream validator reports the
             // actual bad input ("received 'abc'") rather than a confusing
-            // "received nan" ().
+            // "received nan".
             return Number.isNaN(n) ? raw : n;
         }
         case 'boolean': {

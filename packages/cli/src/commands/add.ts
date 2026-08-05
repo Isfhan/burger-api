@@ -9,13 +9,8 @@ import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
-import { generateMiddlewareIndex } from '../utils/templates';
-import {
-    middlewareExists,
-    pluginExists,
-    detectEcosystemType,
-    downloadMiddleware,
-} from '../utils/github';
+import { generateHooksIndex } from '../utils/templates';
+import { detectEcosystemType, downloadComponent } from '../utils/github';
 import {
     spinner,
     success,
@@ -30,7 +25,7 @@ import {
 
 /**
  * Create the "add" command
- * Downloads middleware from GitHub and copies to project
+ * Downloads ecosystem components (hooks/plugins) from GitHub into the project
  */
 export const addCommand = new Command('add')
     .description('Add a hook or plugin from the ecosystem')
@@ -53,10 +48,7 @@ export const addCommand = new Command('add')
         const hooksDir = join(ecosystemDir, 'hooks');
         const pluginsDir = join(ecosystemDir, 'plugins');
         if (!existsSync(hooksDir)) {
-            await Bun.write(
-                join(hooksDir, 'index.ts'),
-                generateMiddlewareIndex()
-            );
+            await Bun.write(join(hooksDir, 'index.ts'), generateHooksIndex());
             info('Created ecosystem/hooks/ directory');
             newline();
         }
@@ -113,9 +105,10 @@ export const addCommand = new Command('add')
                 }
 
                 try {
-                    const filesDownloaded = await downloadMiddleware(
+                    const filesDownloaded = await downloadComponent(
                         name,
-                        targetDir
+                        targetDir,
+                        ecosystemType
                     );
                     spin.stop(`Added ${name} (${filesDownloaded} files)`);
                     results.success.push(name);
@@ -209,23 +202,23 @@ export const addCommand = new Command('add')
         }
 
         if (results.failed.length > 0) {
-            warning(`Failed to add ${results.failed.length} middleware:`);
+            warning(`Failed to add ${results.failed.length} package(s):`);
             results.failed.forEach((name) => bullet(name));
             newline();
-            info('Run "burger-api list" to see available middleware.');
+            info('Run "burger-api list" to see available hooks and plugins.');
             newline();
         }
 
         if (results.skipped.length > 0) {
-            info(`Skipped ${results.skipped.length} middleware:`);
+            info(`Skipped ${results.skipped.length} package(s):`);
             results.skipped.forEach((name) => bullet(name));
             newline();
         }
 
         if (results.success.length > 0) {
-            clack.outro('Middleware added successfully!');
+            clack.outro('Packages added successfully!');
         } else {
-            clack.outro('No middleware were added');
+            clack.outro('No packages were added');
             process.exit(1);
         }
     });

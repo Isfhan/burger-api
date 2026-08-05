@@ -57,10 +57,11 @@ ls -la dist/src
 
 # Should contain:
 # - index.js & index.d.ts
-# - core/ (server, api-router, page-router, openapi, swagger-ui)
+# - core/ (server, openapi, ...)
 # - types/ (index.d.ts)
 # - utils/ (index, routing, error, response)
-# - middleware/ (validator)
+# - compiler/ (scanner, module-loader, conventions)
+# - adapter/ (bun, web-standard)
 ```
 
 ### Clean Build
@@ -86,7 +87,7 @@ This method creates a tarball exactly like npm publish would, giving you the mos
 bun run build
 npm pack
 
-# This creates: burger-api-0.5.0.tgz
+# This creates: burger-api-1.0.0.tgz
 
 # Create a test project
 cd ..
@@ -95,7 +96,7 @@ cd burger-api-test
 bun init -y
 
 # Install from the tarball
-bun add ../burger-api/burger-api-0.5.0.tgz
+bun add ../burger-api/burger-api-1.0.0.tgz
 
 # Verify installation
 ls -la node_modules/burger-api
@@ -124,42 +125,36 @@ mkdir -p api/products
 
 # Create a test route
 cat > api/products/route.ts << 'EOF'
-import { z } from 'zod';
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export const schema = {
- get: {
- query: z.object({
- search: z.string().optional(),
- }),
- },
-};
-
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
  return Response.json({
- message: 'Products endpoint working!',
- query: req.validated.query,
- timestamp: new Date().toISOString(),
+  message: 'Products endpoint working!',
+  query: ctx.validated.query,
+  timestamp: new Date().toISOString(),
  });
 }
+EOF
+
+# Per-method schema (query, params, headers, cookies, body)
+cat > api/products/schema.ts << 'EOF'
+import { z } from 'zod';
+
+export const GET = {
+ query: z.object({
+  search: z.string().optional(),
+ }),
+};
 EOF
 
 # Create main server file
 cat > index.ts << 'EOF'
 import { Burger, setDir } from 'burger-api';
-import type { BurgerRequest, Middleware } from 'burger-api';
-
-// Test middleware
-const logger: Middleware = (req: BurgerRequest) => {
- console.log(`[${req.method}] ${req.url}`);
- return undefined;
-};
 
 const burger = new Burger({
  title: 'Test API',
  description: 'Testing local burger-api build',
- apiDir: setDir(__dirname, 'api'),
- globalMiddleware: [logger],
+ apiDir: setDir(import.meta.dir, 'api'),
  debug: true,
 });
 
@@ -198,16 +193,16 @@ The most important test - make sure IntelliSense and autocomplete work:
 ```typescript
 // In your test project's index.ts
 import { Burger } from 'burger-api';
-import type { BurgerRequest, Middleware, ServerOptions } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-// Type should autocomplete when you type "req."
-const middleware: Middleware = (req) => {
- req. // <-- Autocomplete should show: url, method, params, validated, etc.
- return undefined;
+// Type should autocomplete when you type "ctx."
+const handler = async (ctx: BurgerContext) => {
+ ctx. // <-- Autocomplete should show: request, params, query, validated, etc.
+ return new Response('ok');
 };
 
-// ServerOptions should show all available options
-const options: ServerOptions = {
+// Burger options should show all available options
+const options: BurgerOptions = {
  title: '', // <-- Autocomplete should work here
  // ... hovering over properties should show documentation
 };
@@ -265,7 +260,7 @@ bun run typecheck
 
 ```bash
 # This is CRITICAL - path aliases break types for users
-grep -r "@burgerTypes\|@core\|@utils\|@middleware\|@src" dist/src --include="*.d.ts"
+grep -r "@burgerTypes\|@core\|@utils\|@src" dist/src --include="*.d.ts"
 
 # Should output nothing (or "No matches found")
 ```
@@ -350,7 +345,27 @@ npm whoami
 # Should output your npm username
 ```
 
-### Publishing
+### Publishing (CI via GitHub Actions)
+
+Since 1.0.0, publishing runs through the `release-burger-api-npm.yml` GitHub
+Actions workflow, triggered by a `burger-api/v*` tag. The workflow verifies the
+package version matches the tag, builds, typechecks, runs tests, and publishes
+to npm with the `NPM_TOKEN` secret.
+
+```bash
+# Bump the version (package.json) + update CHANGELOG.md, then:
+git add package.json CHANGELOG.md
+git commit -m "chore(burger-api): release 1.0.1"
+
+# Tag the release — this triggers the publish workflow
+git tag -a burger-api/v1.0.1 -m "Release 1.0.1"
+git push origin burger-api/v1.0.1
+
+# Or push all tags
+git push --follow-tags
+```
+
+Manual publish (fallback, requires npm credentials):
 
 ```bash
 # Make sure you're in the burger-api directory
@@ -362,9 +377,6 @@ bun run typecheck
 
 # Publish to npm registry
 npm publish
-
-# For scoped packages (if needed)
-# npm publish --access public
 ```
 
 ### What Happens During Publish
@@ -373,17 +385,6 @@ npm publish
 2. npm packs files listed in `"files": ["dist"]`
 3. npm uploads the tarball to the registry
 4. Package becomes available at: `https://www.npmjs.com/package/burger-api`
-
-### After Publishing
-
-```bash
-# Tag the release in git
-git tag -a v0.5.0 -m "Release v0.5.0"
-git push origin v0.5.0
-
-# Or push all tags
-git push --follow-tags
-```
 
 ---
 
@@ -394,28 +395,28 @@ git push --follow-tags
 burger-api follows [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** (1.0.0): Breaking changes
-- **MINOR** (0.5.0): New features (backward compatible)
-- **PATCH** (0.5.1): Bug fixes (backward compatible)
+- **MINOR** (1.1.0): New features (backward compatible)
+- **PATCH** (1.0.1): Bug fixes (backward compatible)
 
 ### Updating Version
 
 ```bash
-# Patch version (0.5.0 -> 0.5.1)
+# Patch version (1.0.0 -> 1.0.1)
 # Use for: Bug fixes, documentation updates
 npm version patch
 
-# Minor version (0.5.0 -> 0.6.0)
+# Minor version (1.0.0 -> 1.1.0)
 # Use for: New features, non-breaking changes
 npm version minor
 
-# Major version (0.5.0 -> 1.0.0)
+# Major version (1.0.0 -> 2.0.0)
 # Use for: Breaking changes, major overhauls
 npm version major
 
 # This automatically:
 # 1. Updates package.json version
 # 2. Creates a git commit
-# 3. Creates a git tag (v0.5.1, v0.6.0, etc.)
+# 3. Creates a git tag (v1.0.1, v1.1.0, etc.)
 ```
 
 ### Manual Version Update
@@ -424,7 +425,7 @@ If you prefer to update manually:
 
 ```bash
 # Edit package.json
-# Change "version": "0.6.4" to "0.6.6"
+# Change "version": "1.0.0" to "1.0.1"
 
 # Update CHANGELOG.md
 # Add new version entry with date
@@ -434,10 +435,10 @@ If you prefer to update manually:
 
 # Commit changes
 git add .
-git commit -m "chore: bump version to 0.5.1"
+git commit -m "chore: bump version to 1.0.1"
 
 # Tag the release
-git tag -a v0.5.1 -m "Release v0.5.1"
+git tag -a v1.0.1 -m "Release v1.0.1"
 git push --follow-tags
 ```
 
@@ -446,7 +447,7 @@ git push --follow-tags
 For testing before official release:
 
 ```bash
-# Create beta version (0.5.0-beta.0)
+# Create beta version (1.1.0-beta.0)
 npm version prerelease --preid=beta
 
 # Publish as beta
@@ -483,26 +484,23 @@ cat node_modules/burger-api/package.json | grep version
 # Create test file
 cat > test.ts << 'EOF'
 import { Burger, setDir } from 'burger-api';
-import type { 
- BurgerRequest, 
- BurgerNext, 
- Middleware, 
- ServerOptions,
- RequestHandler 
+import type {
+ BurgerContext,
+ BurgerOptions
 } from 'burger-api';
 
 // Test 1: Types autocomplete
-const options: ServerOptions = {
+const options: BurgerOptions = {
  title: 'Test',
  apiDir: './api',
  // Typing here should show all available options with docs
 };
 
-// Test 2: Request type works
-const middleware: Middleware = (req: BurgerRequest) => {
- // req. should show: url, method, params, validated, etc.
- console.log(req.url);
- return undefined;
+// Test 2: Context type works
+const handler = async (ctx: BurgerContext) => {
+ // ctx. should show: request, params, query, validated, services, etc.
+ console.log(ctx.request.url);
+ return new Response('ok');
 };
 
 // Test 3: Generic types work
@@ -511,9 +509,9 @@ type MyValidated = {
  query: { search: string };
 };
 
-const handler: RequestHandler = (req: BurgerRequest<MyValidated>) => {
- // req.validated should be properly typed
- const id = req.validated.params?.id;
+const handler2 = async (ctx: BurgerContext<{ GET: { query: MyValidated['query'] } }>) => {
+ // ctx.validated should be properly typed
+ const id = ctx.validated?.query?.search;
  return Response.json({ id });
 };
 
@@ -530,12 +528,12 @@ bun run test.ts
 # Create minimal API
 mkdir -p api
 cat > api/route.ts << 'EOF'
-import type { BurgerRequest } from 'burger-api';
+import type { BurgerContext } from 'burger-api';
 
-export async function GET(req: BurgerRequest) {
+export async function GET(ctx: BurgerContext) {
  return Response.json({ 
  message: 'Published version works!',
- version: '0.5.0'
+ version: '1.0.0'
  });
 }
 EOF
@@ -544,7 +542,7 @@ cat > index.ts << 'EOF'
 import { Burger, setDir } from 'burger-api';
 
 const burger = new Burger({
- apiDir: setDir(__dirname, 'api'),
+ apiDir: setDir(import.meta.dir, 'api'),
 });
 
 burger.serve(4000);
@@ -679,7 +677,7 @@ bun run build
 
 **Symptoms:**
 ```
-npm notice 📦 burger-api@0.5.0
+npm notice 📦 burger-api@1.0.0
 npm notice === Tarball Contents ===
 npm notice 2.0MB dist/
 ```
@@ -716,7 +714,7 @@ bun run typecheck # Check types
 
 ```bash
 npm pack # Create tarball
-bun add ./burger-api-0.5.0.tgz # Install tarball
+bun add ./burger-api-1.0.0.tgz # Install tarball
 bun link # Create global link
 ```
 
@@ -811,6 +809,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Last Updated:** November 1, 2025 
-**Package Version:** 0.5.0
+**Last Updated:** August 2, 2026 
+**Package Version:** 1.0.0
 

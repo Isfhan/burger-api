@@ -5,7 +5,7 @@ import {
     validatorCache,
     clearValidatorCache,
 } from '../../src/validation/compiler';
-import { createValidatorMiddleware } from '../../src/validation/validator';
+import { createValidationHook } from '../../src/validation/validator';
 import { ValidationError } from '../../src/validation/error';
 import type { BurgerContext } from '../../src/context/context';
 
@@ -40,9 +40,9 @@ describe('headers/cookie slots + response', () => {
             get: { headers: z.object({ 'x-api-key': z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { headers: { 'x-api-key': 'abc' } });
-        await mw(ctx);
+        await hook(ctx);
         expect((ctx.validated as any).headers).toEqual({ 'x-api-key': 'abc' });
     });
 
@@ -51,10 +51,10 @@ describe('headers/cookie slots + response', () => {
             get: { headers: z.object({ 'x-api-key': z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', {});
         try {
-            await mw(ctx);
+            await hook(ctx);
             expect(true).toBe(false); // should not reach
         } catch (e) {
             expect(e).toBeInstanceOf(ValidationError);
@@ -67,9 +67,9 @@ describe('headers/cookie slots + response', () => {
             get: { cookies: z.object({ sid: z.string() }) },
         };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { cookie: 'sid=xyz' });
-        await mw(ctx);
+        await hook(ctx);
         expect((ctx.validated as any).cookies).toEqual({ sid: 'xyz' });
     });
 
@@ -83,11 +83,11 @@ describe('headers/cookie slots + response', () => {
             },
         };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', {
             cookie: 'session="a;b=c"; csrftoken=token',
         });
-        await mw(ctx);
+        await hook(ctx);
         expect((ctx.validated as any).cookies).toEqual({
             session: 'a;b=c',
             csrftoken: 'token',
@@ -97,9 +97,9 @@ describe('headers/cookie slots + response', () => {
     it('apps with no headers/cookie schema are unaffected', async () => {
         const schema = { get: { query: z.object({ q: z.string() }) } };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { query: { q: 'hi' } });
-        await mw(ctx);
+        await hook(ctx);
         expect((ctx.validated as any).query).toEqual({ q: 'hi' });
         expect((ctx.validated as any).headers).toBeUndefined();
     });
@@ -112,14 +112,14 @@ describe('headers/cookie slots + response', () => {
             },
         };
         const validators = compileRouteSchema(schema, {});
-        const mw = createValidatorMiddleware(validators);
+        const hook = createValidationHook(validators);
         // Both params and query fail (strings instead of numbers).
         const ctx = fakeCtx('get', {
             params: { id: 'abc' },
             query: { n: 'xyz' },
         });
         try {
-            await mw(ctx);
+            await hook(ctx);
             expect(true).toBe(false); // should not reach
         } catch (e) {
             expect(e).toBeInstanceOf(ValidationError);

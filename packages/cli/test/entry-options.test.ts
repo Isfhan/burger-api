@@ -31,7 +31,7 @@ describe('prepareEntryOptionsModule', () => {
             entryPath,
             `
 import { Burger } from 'burger-api';
-import { hostname } from './middleware';
+import { hostname } from './settings';
 
 const title = 'My API';
 
@@ -59,7 +59,7 @@ app.serve(4000);
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain("import { Burger } from 'burger-api';");
         expect(tempSource).toContain(
-            "import { hostname } from './middleware';"
+            "import { hostname } from './settings';"
         );
         expect(tempSource).toContain("const title = 'My API';");
         expect(tempSource).toContain('export const burgerOptions = {');

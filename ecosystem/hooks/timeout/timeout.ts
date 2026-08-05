@@ -1,7 +1,7 @@
 import type { BurgerContext, BurgerNext } from 'burger-api';
 
 /**
- * Configuration options for the timeout middleware.
+ * Configuration options for the timeout hook.
  */
 export interface TimeoutOptions {
     /**
@@ -26,9 +26,9 @@ export interface TimeoutOptions {
 }
 
 /**
- * Creates a timeout middleware that detects slow requests.
+ * Creates a timeout hook that detects slow requests.
  *
- * This middleware measures how long the handler takes to complete.
+ * This hook measures how long the handler takes to complete.
  * If it takes longer than the timeout, it returns a 408 response.
  *
  * Note: This detects timeouts AFTER the handler completes.
@@ -37,7 +37,7 @@ export interface TimeoutOptions {
  * implement timeout logic inside your handlers using AbortSignal.
  *
  * @param options - Configuration options for timeout behavior
- * @returns A middleware function that detects slow requests
+ * @returns A hook function that detects slow requests
  *
  * @example
  * ```typescript
@@ -65,7 +65,7 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
     } = options;
 
     return (ctx: BurgerContext): BurgerNext => {
-        // Start timer when middleware runs
+        // Start timer when the hook runs
         const startTime = Date.now();
 
         // Return function to check timeout after handler completes
