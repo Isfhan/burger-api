@@ -28,9 +28,6 @@ framework with file-based routing, a **hook-based** request lifecycle, Standard
 Schema validation (Zod default), plugins/providers, and OpenAPI. TypeScript and
 JavaScript are both first-class.
 
-**Architecture source of truth:** [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md)  
-When docs or code disagree with the vision, **the vision wins**.
-
 **Hooks** control the request lifecycle. **Plugins** extend the application.
 They are separate concepts.
 

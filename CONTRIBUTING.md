@@ -91,18 +91,10 @@ bun run typecheck
 - Bun-native APIs (`Bun.serve`, `Bun.write`, `Bun.file`) over Node.js
   alternatives.
 
-## Architecture source of truth
 
-All product and architecture decisions are defined in:
-
-**`../BURGERAPI_VISION.md`**
-
-When docs, code comments, or PRs conflict with the vision, **the vision wins**.  
-Do not redesign architecture in a PR without an explicit decision. Prefer ecosystem hooks/plugins over growing the core.
 
 ## Documentation
 
-- Vision: [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md)
 - Framework: `packages/burger-api/README.md`
 - CLI: `packages/cli/README.md`
 - Website: [burger-api.com](https://burger-api.com)

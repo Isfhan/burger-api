@@ -5,8 +5,7 @@ description: Build APIs with BurgerAPI — Bun-first, file-based routing, Standa
 
 # BurgerAPI Development Skill
 
-**Source of truth:** [`../../../BURGERAPI_VISION.md`](../../../BURGERAPI_VISION.md) (vision wins on conflict).
-Docs: [burger-api.com/docs](https://burger-api.com/docs)
+**Source of truth:** Docs: [burger-api.com/docs](https://burger-api.com/docs)
 
 ## Overview
 
@@ -245,10 +244,9 @@ ecosystem/plugins/   # jwt, session, env, ...
 ecosystem/skills/
 ```
 
-## Planned / not planned
+## Supported
 
-- **Planned:** file-based WebSocket router (`src/websocket/**/ws.ts`)
-- **Not planned:** dedicated webhook router (use HTTP routes), ORM, group inheritance
+- **WebSocket:** file-based router under `src/ws/` (`wsDir`, `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`
 
 ## Legacy names (avoid in new code)
 
@@ -258,5 +256,4 @@ Prefer: `BurgerContext`, vision hook names, `burger.build.ts`, `config.ts`, uppe
 
 ## References
 
-- Vision: `BURGERAPI_VISION.md`
-- `references/routing.md`, `validation.md`, `openapi.md`, `cli.md` (update if they lag vision)
+- `references/routing.md`, `validation.md`, `openapi.md`, `cli.md` (update if they lag the docs)

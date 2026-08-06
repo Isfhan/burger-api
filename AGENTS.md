@@ -3,16 +3,7 @@
 These rules apply to every task in this project unless explicitly overridden.
 Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
 
-## Source of truth
 
-**Architecture and product decisions live in:**
-
-[`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md) at the workspace root (parent of this repo when using the BurgerAPI-work layout).
-
-When code, docs, or this file disagree with the vision, **the vision wins**. Do
-not invent architecture. If unclear, stop and ask.
-
----
 
 ## Project Overview
 
@@ -92,8 +83,7 @@ ecosystem/skills/ # AI skills
 **Auth:** ecosystem plugins under `ecosystem/plugins/` **only** (auth hooks were
 removed in 1.0), integrating with hooks + `config.ts`. Core is auth-agnostic.
 
-**Not planned:** group/folder inheritance, route `use.ts` / `webhook.ts`, ORM,
-dedicated webhook router. **WebSocket:** file-based router under `src/ws/` (and
+**WebSocket:** file-based router under `src/ws/` (and
 `wsDir`); programmatic `burger.websocket()`. **Macros:** `burger.macro()` for
 reusable hook factories (public API).
 
@@ -142,8 +132,6 @@ bun test
 - **`burger-api-website`** — docs site
 - **`burger-api-benchmarks`** — **only** place for benchmarks (never add
   `bench/` here)
-
-Product vision: [`../BURGERAPI_VISION.md`](../BURGERAPI_VISION.md) at the workspace root.
 
 ## Rule 1 — Think Before Coding
 

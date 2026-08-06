@@ -14,9 +14,6 @@ file-based routing, a hook-based request lifecycle, Standard Schema validation
 Bun in development and production, and deploys to any WinterCG runtime
 (Cloudflare Workers, Vercel, Deno Deploy, Node 24+) through `toFetchHandler`.
 
-**Architecture source of truth:** [`../../../BURGERAPI_VISION.md`](../../../BURGERAPI_VISION.md)
-When this README and the vision disagree, **the vision wins**.
-
 **Hooks** control the request lifecycle. **Plugins** extend the application.
 They are separate concepts.
 

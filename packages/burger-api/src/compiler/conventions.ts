@@ -5,7 +5,7 @@
  * Directory Scanner recognizes inside a route directory, and which names
  * are explicitly forbidden.
  *
- * Vision (`BURGERAPI_VISION.md` §7):
+ * Locked architecture:
  * - A route directory is self-contained; sibling files are discovered by convention.
  * - There is **no `middleware.ts`**. Infrastructure is written as hooks.
  * - There is **no `use.ts`** or **`webhook.ts`**. Use ecosystem plugins instead.

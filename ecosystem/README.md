@@ -67,8 +67,7 @@ import { logger } from "../ecosystem/hooks/logger/logger";
 export const onRequest = [logger(), cors({ origin: "*" })];
 ```
 
-Target hook names (vision): `onRequest`, `transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`.  
-Legacy code may still use older names until the core migrates.
+Target hook names: `onRequest`, `transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`.
 
 ---
 
@@ -92,6 +91,5 @@ export default { auth: false };
 
 ## See also
 
-- Vision: [`../../BURGERAPI_VISION.md`](../../BURGERAPI_VISION.md)
 - Individual packages under `hooks/*` and `plugins/*`
 - Skills: `skills/burger-api/`
