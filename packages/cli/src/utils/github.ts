@@ -29,6 +29,11 @@ const BRANCH = process.env.BURGER_API_BRANCH ?? 'main';
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 
+// Contents API needs an explicit ref; the default branch is stale until
+// feat/burger-api-v1 merges, so list/add/skills would return empty results.
+const contentsUrl = (path: string): string =>
+    `${API_URL}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`;
+
 const FETCH_TIMEOUT_MS = 20_000;
 
 /**
@@ -77,13 +82,13 @@ export async function getComponentList(): Promise<
     try {
         // Fetch both hooks and plugins from ecosystem
         const [hooksRes, pluginsRes] = await Promise.all([
-            fetchWithTimeout(`${API_URL}/contents/ecosystem/hooks`, {
+            fetchWithTimeout(contentsUrl('ecosystem/hooks'), {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
                     'User-Agent': 'burger-api-cli',
                 },
             }),
-            fetchWithTimeout(`${API_URL}/contents/ecosystem/plugins`, {
+            fetchWithTimeout(contentsUrl('ecosystem/plugins'), {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
                     'User-Agent': 'burger-api-cli',
@@ -131,12 +136,15 @@ export async function getComponentInfo(
     const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
     try {
         // Get list of files in the component directory
-        const response = await fetchWithTimeout(`${API_URL}/contents/${dir}/${name}`, {
-            headers: {
-                Accept: 'application/vnd.github.v3+json',
-                'User-Agent': 'burger-api-cli',
-            },
-        });
+        const response = await fetchWithTimeout(
+            contentsUrl(`${dir}/${name}`),
+            {
+                headers: {
+                    Accept: 'application/vnd.github.v3+json',
+                    'User-Agent': 'burger-api-cli',
+                },
+            }
+        );
 
         if (!response.ok) {
             throw new Error(`Component "${name}" not found`);
@@ -295,7 +303,7 @@ export async function downloadComponent(
 export async function hookExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/hooks/${name}`,
+            contentsUrl(`ecosystem/hooks/${name}`),
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -316,7 +324,7 @@ export async function hookExists(name: string): Promise<boolean> {
 export async function pluginExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/plugins/${name}`,
+            contentsUrl(`ecosystem/plugins/${name}`),
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -353,7 +361,7 @@ export async function detectEcosystemType(
 export async function getSkillList(): Promise<string[]> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills`,
+            contentsUrl('ecosystem/skills'),
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -387,7 +395,7 @@ export async function flattenSkillFiles(
     basePath: string,
     prefix: string = ''
 ): Promise<string[]> {
-    const response = await fetchWithTimeout(`${API_URL}/contents/${basePath}`, {
+    const response = await fetchWithTimeout(contentsUrl(basePath), {
         headers: {
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'burger-api-cli',
@@ -449,7 +457,7 @@ export function parseSkillDescription(raw: string): {
 export async function skillExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills/${name}`,
+            contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
@@ -473,7 +481,7 @@ export async function skillExists(name: string): Promise<boolean> {
 export async function getSkillInfo(name: string): Promise<SkillInfo> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills/${name}`,
+            contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
