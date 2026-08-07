@@ -21,6 +21,8 @@ export interface StandardSchemaV1 {
         readonly validate: (
             value: unknown
         ) => StandardSchemaV1Result | Promise<StandardSchemaV1Result>;
+        /** True when the schema transforms (coerces) its input during validate. */
+        readonly coercible?: boolean;
         readonly types?: {
             readonly input?: unknown;
             readonly output?: unknown;
@@ -80,6 +82,13 @@ export interface CompiledValidator {
     slot: ValidationSlot;
     identity: string;
     validate: (value: unknown) => ValidationResult;
+    /**
+     * True when the schema transforms (coerces) its own input during
+     * `validate` (e.g. Zod `z.coerce.*`, Valibot `v.coerce`, or a
+     * `~standard.coercible` schema). Framework coercion must be skipped for
+     * such schemas — pre-coercing a self-coercing schema would double-apply
+     * type conversion. False for strict schemas (framework coercion applies).
+     */
     coercible: boolean;
     /** Present when this validator was produced from a model ref. */
     modelRef?: string;

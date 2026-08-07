@@ -42,6 +42,8 @@ export class Router {
     private trie = new Trie();
     private allowCache = new AllowCache();
     private compiler: RouterCompiler;
+    /** Dev mode: controls error-rendering detail (stack/cause in problem bodies). */
+    private debug: boolean;
     /** Native dispatch table for `:param` / `*` routes (Bun `routes` map keys). */
     private nativeRoutesMap = new Map<string, CompiledHandler>();
     /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
@@ -52,6 +54,7 @@ export class Router {
     private onRequestHooks: Hook[] = [];
 
     constructor(config: RouterConfig = {}) {
+        this.debug = config.debug ?? false;
         this.compiler = new RouterCompiler(
             config.debug ?? false,
             config.validation ?? {}
@@ -150,7 +153,7 @@ export class Router {
                     ? this.applyMappers(result, outcome.mappers)
                     : result;
             } catch (error) {
-                return renderHTTPError(error, false);
+                return renderHTTPError(error, this.debug);
             }
         };
     }
@@ -190,7 +193,7 @@ export class Router {
                     );
                 }
             } catch (error) {
-                outcome.shortCircuit = renderHTTPError(error, false);
+                outcome.shortCircuit = renderHTTPError(error, this.debug);
                 return outcome;
             }
         }

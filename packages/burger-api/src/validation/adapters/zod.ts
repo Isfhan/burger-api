@@ -18,7 +18,7 @@ import type {
     ValidationResult,
     ValidationIssue,
 } from '../types';
-import { __setZodAdapter, type ValidatorAdapter } from '../adapter';
+import type { ValidatorAdapter } from '../adapter';
 
 /** Maps a Zod issue path to the normalized `(string | number)[]`. */
 function normalizePath(path: (string | number)[]): (string | number)[] {
@@ -57,6 +57,12 @@ export const ZodAdapter: ValidatorAdapter = {
     compile(schema: SchemaInput, slot: ValidationSlot): CompiledValidator {
         const zodSchema = schema as z.ZodTypeAny;
         const identity = this.identity(schema);
+        // Zod 4 marks self-coercing schemas (`z.coerce.*`) with
+        // `_zod.def.coerce === true`. Such schemas transform their input
+        // during validate, so framework coercion must not run on them.
+        const coercible =
+            (zodSchema as unknown as { _zod?: { def?: { coerce?: boolean } } })
+                ?._zod?.def?.coerce === true;
         const validate = (value: unknown): ValidationResult => {
             const result = zodSchema.safeParse(value);
             if (result.success) {
@@ -69,13 +75,7 @@ export const ZodAdapter: ValidatorAdapter = {
             slot,
             identity,
             validate,
-            // Coercion intent is adapter-provided; Zod itself is strict, so
-            // the base adapter reports non-coercible. The coercer inspects
-            // the shape directly.
-            coercible: false,
+            coercible,
         };
     },
 };
-
-// Register with the adapter seam so detection can find Zod first.
-__setZodAdapter(ZodAdapter);

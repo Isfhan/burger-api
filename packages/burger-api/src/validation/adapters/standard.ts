@@ -9,11 +9,11 @@
  * `ValidationResult` shape.
  *
  * This adapter must NOT assume a specific library — it depends only on the
- * `~standard` contract. It registers itself with the detection
- * seam on load.
+ * `~standard` contract. It is registered with the detection seam by the
+ * validation compiler (explicit registration survives tree-shaking).
  */
 
-import { __setStandardAdapter, type ValidatorAdapter } from '../adapter';
+import type { ValidatorAdapter } from '../adapter';
 import type {
     SchemaInput,
     StandardSchemaV1,
@@ -124,11 +124,10 @@ export const StandardAdapter: ValidatorAdapter = {
             slot,
             identity,
             validate,
-            coercible: false,
+            // Per the Standard Schema spec, `~standard.coercible` marks
+            // schemas that transform their input during validate (e.g.
+            // Valibot `v.coerce`). Framework coercion must not run on them.
+            coercible: std['~standard'].coercible === true,
         };
     },
 };
-
-// Register with the detection seam so Zod-first detection can fall through
-// to this adapter.
-__setStandardAdapter(StandardAdapter);

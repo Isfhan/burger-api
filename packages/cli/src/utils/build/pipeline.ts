@@ -1,5 +1,5 @@
 import { resolveBuildConfig } from '../config';
-import { scanApiRoutes, scanPageRoutes } from '../scanner';
+import { scanApiRoutes, scanPageRoutes, scanWebSocketRoutes } from '../scanner';
 import {
     generateVirtualEntrySource,
     type AppConventionPaths,
@@ -62,15 +62,21 @@ export async function runVirtualEntryBuild(options: {
         entryFile: options.entryFile,
     });
 
-    const [apiEntries, pageEntries] = await Promise.all([
+    const [apiEntries, pageEntries, wsEntries] = await Promise.all([
         scanApiRoutes(options.cwd, config.apiDir, config.apiPrefix),
         scanPageRoutes(options.cwd, config.pageDir, config.pagePrefix),
+        scanWebSocketRoutes(options.cwd, config.wsDir ?? ''),
     ]);
 
-    if (apiEntries.length === 0 && pageEntries.length === 0) {
+    if (
+        apiEntries.length === 0 &&
+        pageEntries.length === 0 &&
+        wsEntries.length === 0
+    ) {
         throw new Error(
-            `No routes found. Ensure ${config.apiDir} or ${config.pageDir} ` +
-                `exist and contain route.ts files or page files.`
+            `No routes found. Ensure ${config.apiDir}, ${config.pageDir} ` +
+                `or ${config.wsDir} exist and contain route.ts files, ` +
+                `page files, or ws.ts files.`
         );
     }
 
@@ -81,7 +87,8 @@ export async function runVirtualEntryBuild(options: {
         apiEntries,
         pageEntries,
         entryOptions.importPath,
-        appConventions
+        appConventions,
+        wsEntries
     );
     const hasPages = pageEntries.length > 0;
     const { outDir, virtualPath, virtualSourcePath } = prepareVirtualEntry({

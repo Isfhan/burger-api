@@ -4,6 +4,7 @@ import type { RouteHooks, TransformMap } from '../lifecycle/types';
 export type { RouteHooks, TransformMap } from '../lifecycle/types';
 import type { OpenAPIConfig } from './openapi-config';
 import type { RuntimeAdapter } from '../adapter/types';
+import type { WebSocketRouteDefinition } from '../ws/types';
 
 /**
  * Minimal structural view of the running server exposed to `fetch` handlers.
@@ -87,6 +88,13 @@ export interface ServerOptions {
      * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
      */
     pageRoutes?: PageDefinition[];
+
+    /**
+     * Pre-built WebSocket routes (e.g. from CLI build). When provided, wsDir is
+     * ignored and no runtime filesystem scanning is performed. Bun-only — wired
+     * through `serve()` via the Bun adapter. Used for bundled/executable builds.
+     */
+    wsRoutes?: WebSocketRouteDefinition[];
 
     /**
      * Reusable named schemas ("models") referenced by string from any route's

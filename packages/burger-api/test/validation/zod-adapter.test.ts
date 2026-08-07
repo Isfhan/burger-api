@@ -58,4 +58,16 @@ describe('ZodAdapter', () => {
             expect(issue.path).toEqual(['outer', 'inner']);
         }
     });
+
+    it('reports coercible:false for strict schemas', () => {
+        expect(
+            ZodAdapter.compile(z.number(), 'query').coercible
+        ).toBe(false);
+    });
+
+    it('reports coercible:true for z.coerce.* schemas', () => {
+        expect(
+            ZodAdapter.compile(z.coerce.number(), 'query').coercible
+        ).toBe(true);
+    });
 });

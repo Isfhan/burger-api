@@ -7,11 +7,15 @@ import type {
 } from '../../src/validation/types';
 
 /** A hand-built `~standard` stub (no Valibot dependency needed). */
-function makeStub(ok: boolean): StandardSchemaV1 {
+function makeStub(
+    ok: boolean,
+    opts?: { coercible?: boolean }
+): StandardSchemaV1 {
     return {
         '~standard': {
             version: 1,
             vendor: 'stub',
+            coercible: opts?.coercible,
             validate: (value: unknown) => {
                 if (ok && typeof value === 'object' && value !== null) {
                     return { value };
@@ -56,5 +60,16 @@ describe('StandardAdapter', () => {
         const a = makeStub(true);
         expect(StandardAdapter.identity(a)).toBe(StandardAdapter.identity(a));
         expect(StandardAdapter.identity(a)).toMatch(/^standard:stub:/);
+    });
+
+    it('reports coercible from the ~standard.coercible flag', () => {
+        expect(StandardAdapter.compile(makeStub(true), 'query').coercible)
+            .toBe(false);
+        expect(
+            StandardAdapter.compile(
+                makeStub(true, { coercible: true }),
+                'query'
+            ).coercible
+        ).toBe(true);
     });
 });

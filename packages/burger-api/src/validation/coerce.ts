@@ -40,6 +40,9 @@ function unwrap(def: unknown): unknown {
 
 /** Returns the coercion op for a Zod field def, or 'none'. */
 function opForZodField(def: unknown): CoercionOp {
+    // Self-coercing fields (`z.coerce.*`, marked `_zod.def.coerce: true`)
+    // transform their input during validate — never pre-coerce them.
+    if ((def as any)?._zod?.def?.coerce === true) return 'none';
     const name = (def as any)?.constructor?.name;
     if (name === 'ZodNumber') return 'number';
     if (name === 'ZodBoolean') return 'boolean';

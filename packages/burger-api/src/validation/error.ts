@@ -12,7 +12,7 @@
  * Production bodies never leak stacks/source/schema internals (R7).
  */
 
-import { HTTPError } from '../errors/http-error';
+import { HTTPError, renderHTTPError } from '../errors/http-error';
 import type {
     ValidationIssue,
     ValidationResult,
@@ -29,7 +29,7 @@ import type {
  */
 export class ValidationError extends HTTPError {
     override readonly name = 'ValidationError';
-    override readonly status = 422 as const;
+    override readonly status: number;
 
     /** The primary request slot that failed validation. */
     readonly slot: ValidationSlot | 'response';
@@ -45,13 +45,17 @@ export class ValidationError extends HTTPError {
         issues: ValidationIssue[],
         options?: ErrorOptions & {
             errorsBySlot?: Record<string, ValidationIssue[]>;
+            /** Custom status code; defaults to 422 (ValidatorConfig.status). */
+            status?: number;
         }
     ) {
         const summary =
             issues.length === 1
                 ? issues[0].message
                 : `${issues.length} validation errors`;
-        super(422, `${slot}: ${summary}`, options);
+        const status = options?.status ?? 422;
+        super(status, `${slot}: ${summary}`, options);
+        this.status = status;
         this.slot = slot;
         this.issues = issues;
         this.errorsBySlot = options?.errorsBySlot;
@@ -79,7 +83,7 @@ export class ValidationError extends HTTPError {
         if (config.errorRenderer) {
             return config.errorRenderer(
                 { success: false, issues: this.issues },
-                { slot: this.slot as ValidationSlot, status: 422 }
+                { slot: this.slot as ValidationSlot, status: this.status }
             );
         }
 
@@ -89,18 +93,13 @@ export class ValidationError extends HTTPError {
         const grouped = this.errorsBySlot ?? { [this.slot]: this.issues };
 
         if (format === 'problem+json') {
-            return new Response(
-                JSON.stringify({
-                    type: 'about:blank',
-                    title: 'Validation Error',
-                    status: 422,
-                    errors: grouped,
-                }),
-                {
-                    status: 422,
-                    headers: { 'content-type': 'application/problem+json' },
-                }
-            );
+            // Delegate to the single RFC 9457 renderer so ValidationError and
+            // HTTPError share one body shape (this adds the standard `detail`
+            // member alongside the per-slot `errors` grouping).
+            return renderHTTPError(this, isDev, {
+                title: 'Validation Error',
+                errors: grouped,
+            });
         }
 
         // Plain format fallback.
@@ -109,7 +108,7 @@ export class ValidationError extends HTTPError {
             (body as any).dev = true;
         }
         return new Response(JSON.stringify(body), {
-            status: 422,
+            status: this.status,
             headers: { 'content-type': 'application/json' },
         });
     }

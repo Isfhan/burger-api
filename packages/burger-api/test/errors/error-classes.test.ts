@@ -265,6 +265,18 @@ describe('ValidationError', () => {
         expect(body.errors.query).toBeDefined();
         expect(body.errors.body).toBeDefined();
     });
+
+    it('honors a custom status from options', async () => {
+        const issues = [
+            { path: ['n'], message: 'invalid', code: 'invalid_type' },
+        ];
+        const err = new ValidationError('query', issues, { status: 400 });
+        expect(err.status).toBe(400);
+        const res = err.toResponse(false);
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.status).toBe(400);
+    });
 });
 
 // ─────────────────────────────────────────────────────

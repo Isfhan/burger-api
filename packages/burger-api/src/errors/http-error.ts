@@ -30,8 +30,15 @@ export class HTTPError extends Error {
  *
  * @param error The error to render.
  * @param isDev Whether to include dev diagnostics (stack, cause).
+ * @param extras Optional extra members merged into the problem body (e.g.
+ * `{ errors }` for validation failures). Spread after the defaults, so they
+ * can override `title`/`detail`.
  */
-export function renderHTTPError(error: unknown, isDev: boolean): Response {
+export function renderHTTPError(
+    error: unknown,
+    isDev: boolean,
+    extras?: Record<string, unknown>
+): Response {
     const httpError =
         error instanceof HTTPError ||
         (error !== null &&
@@ -50,6 +57,7 @@ export function renderHTTPError(error: unknown, isDev: boolean): Response {
         title: httpError.name,
         status: httpError.status,
         detail: httpError.message,
+        ...extras,
     };
 
     if (isDev) {

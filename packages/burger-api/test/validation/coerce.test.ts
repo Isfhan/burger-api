@@ -28,6 +28,25 @@ describe('Coercer', () => {
         expect(buildPlan(onlyString, 'query')).toBeUndefined();
     });
 
+    it('buildPlan skips self-coercing fields (z.coerce.*)', () => {
+        const schema = z.object({
+            n: z.coerce.number(),
+            plain: z.number(),
+        });
+        const plan = buildPlan(schema, 'query');
+        expect(plan).toBeDefined();
+        // z.coerce.number() transforms its own input — the framework must not
+        // pre-coerce it (would double-apply conversion).
+        expect(plan!.fields).toEqual({ plain: 'number' });
+    });
+
+    it('buildPlan skips self-coercing fields nested in optional', () => {
+        const schema = z.object({
+            maybe: z.coerce.number().optional(),
+        });
+        expect(buildPlan(schema, 'query')).toBeUndefined();
+    });
+
     it('apply transforms listed fields and passes through the rest', () => {
         const plan = buildPlan(schema, 'query')!;
         const out = apply(plan, {

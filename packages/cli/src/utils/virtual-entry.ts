@@ -7,7 +7,11 @@
  */
 
 import type { BuildConfig } from '../types/index';
-import type { ApiRouteScanEntry, PageRouteScanEntry } from './scanner';
+import type {
+    ApiRouteScanEntry,
+    PageRouteScanEntry,
+    WebSocketRouteScanEntry,
+} from './scanner';
 
 /** Paths to app-level convention files for production builds. */
 export interface AppConventionPaths {
@@ -53,7 +57,8 @@ export function generateVirtualEntrySource(
     apiEntries: ApiRouteScanEntry[],
     pageEntries: PageRouteScanEntry[],
     optionsImportPath?: string,
-    appConventions?: AppConventionPaths
+    appConventions?: AppConventionPaths,
+    wsEntries: WebSocketRouteScanEntry[] = []
 ): string {
     const lines: string[] = [];
 
@@ -73,6 +78,22 @@ export function generateVirtualEntrySource(
     if (pageEntries.length) {
         lines.push('');
         pushImportLines(lines, pageEntries, 'p');
+    }
+
+    // Import WebSocket route modules and their sibling convention files.
+    // Without this, file-based ws.ts routes are silently dropped from
+    // production builds (they exist only in the dev filesystem scan).
+    if (wsEntries.length) {
+        lines.push('');
+        wsEntries.forEach((w, i) => {
+            lines.push(`import * as _w${i} from '${w.importPath}';`);
+            if (w.hooksPath) {
+                lines.push(`import * as _wh${i} from '${w.hooksPath}';`);
+            }
+            if (w.configPath) {
+                lines.push(`import * as _wc${i} from '${w.configPath}';`);
+            }
+        });
     }
 
     // Import a sibling `hooks.ts` for any route that declares lifecycle hooks
@@ -178,6 +199,35 @@ export function generateVirtualEntrySource(
     lines.push('];');
     lines.push('');
 
+    if (wsEntries.length) {
+        lines.push('const wsRoutes = [');
+        wsEntries.forEach((w, i) => {
+            lines.push(' {');
+            lines.push(` path: ${JSON.stringify(w.routePath)},`);
+            lines.push(' handlers: {');
+            lines.push(`  open: _w${i}.open,`);
+            lines.push(`  message: _w${i}.message,`);
+            lines.push(`  close: _w${i}.close,`);
+            lines.push(`  drain: _w${i}.drain,`);
+            lines.push(`  ping: _w${i}.ping,`);
+            lines.push(`  pong: _w${i}.pong,`);
+            lines.push(' },');
+            if (w.hooksPath) {
+                lines.push(' hooks: {');
+                lines.push(`  onOpen: _wh${i}.onOpen,`);
+                lines.push(`  onMessage: _wh${i}.onMessage,`);
+                lines.push(`  onClose: _wh${i}.onClose,`);
+                lines.push(' },');
+            }
+            if (w.configPath) {
+                lines.push(` config: _wc${i}.default ?? _wc${i},`);
+            }
+            lines.push(' },');
+        });
+        lines.push('];');
+        lines.push('');
+    }
+
     lines.push('const app = new Burger({');
     if (optionsImportPath) {
         lines.push(' ...__burgerOptions,');
@@ -198,6 +248,9 @@ export function generateVirtualEntrySource(
     }
     lines.push(' apiRoutes,');
     lines.push(' pageRoutes,');
+    if (wsEntries.length) {
+        lines.push(' wsRoutes,');
+    }
     lines.push('});');
     lines.push('');
     lines.push('const port = Number(process.env.PORT) || 4000;');

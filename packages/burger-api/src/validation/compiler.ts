@@ -16,12 +16,19 @@
  */
 
 import type { RouteSchema } from '../types/index';
-import { detectAdapter } from './adapter';
 import { ValidatorCache } from './cache';
 import { schemaRegistry, SchemaRegistry } from './registry';
-// Side-effect imports: register the Zod + Standard Schema adapters.
-import './adapters/zod';
-import './adapters/standard';
+import {
+    detectAdapter,
+    __setZodAdapter,
+    __setStandardAdapter,
+} from './adapter';
+// Explicit adapter registration — value imports (not side-effect imports) so
+// registration survives tree-shaking under `sideEffects: false`.
+import { ZodAdapter } from './adapters/zod';
+import { StandardAdapter } from './adapters/standard';
+__setZodAdapter(ZodAdapter);
+__setStandardAdapter(StandardAdapter);
 import type {
     CompiledRouteValidators,
     CompiledValidator,
@@ -126,6 +133,9 @@ export function compileRouteSchema(
                 )[slot];
                 if (raw === undefined) continue;
                 const slotSchema = resolveModelRef(raw, method, slot, registry);
+                // Self-coercing schemas (e.g. z.coerce.* / ~standard.coercible)
+                // transform their own input — framework coercion must not run.
+                if (compiledMethod[slot]?.coercible) continue;
                 const plan: CoercionPlan | undefined = buildCoercionPlan(
                     slotSchema,
                     slot

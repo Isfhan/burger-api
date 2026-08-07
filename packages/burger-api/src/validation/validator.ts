@@ -94,13 +94,13 @@ export function parseCookies(
 /**
  * Builds the validation hook from precompiled route validators.
  *
- * On failure, throws a `ValidationError` (status 422) into the `onError`
- * pipeline. The framework's default onError handler renders the RFC 9457
- * response.
+ * On failure, throws a `ValidationError` (status 422, or
+ * `ValidatorConfig.status` when set) into the `onError` pipeline. The
+ * framework's default onError handler renders the RFC 9457 response.
  *
  * @param validators - the compiled validators for this route (may be empty).
- * @param _config - reserved for future use (error format / renderer).
- * @param _isDev - reserved for future use (dev diagnostics).
+ * @param config - validation configuration (custom status, error format).
+ * @param isDev - reserved for future use (dev diagnostics).
  */
 export function createValidationHook(
     validators: CompiledRouteValidators,
@@ -224,6 +224,7 @@ export function createValidationHook(
             const firstSlot = Object.keys(errorsBySlot)[0] as ValidationSlot;
             throw new ValidationError(firstSlot, allIssues, {
                 errorsBySlot,
+                status: config.status,
             });
         }
 

@@ -1,17 +1,9 @@
 // Import stuff from core
 import { Server } from './core/server';
-import { PageRouter } from './core/page-router';
-import { generateOpenAPIDocument } from './core/openapi';
-import { scalarDocs } from './core/docs-providers';
 import { timingSafeEqual } from './utils/timing-safe';
 
 // Import router
 import { Router } from './router';
-
-// Import compiler pipeline
-import { DirectoryScanner } from './compiler/scanner';
-import { ModuleLoader } from './compiler/module-loader';
-import { RouteTree } from './compiler/route-tree';
 
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index';
@@ -26,9 +18,8 @@ import { MacroRegistry } from './plugin/macro';
 import type { Plugin, MacroFn } from './plugin/types';
 import type { Scope } from './chain/node';
 
-// Import WebSocket modules
-import { WebSocketScanner } from './ws/scanner';
-import { WebSocketCompiler } from './ws/compiler';
+// Import WebSocket modules (scanner/compiler are loaded lazily on the dev
+// filesystem path only — production AOT builds never evaluate them)
 import { WebSocketRouter } from './ws/router';
 import { WebSocketAdapter } from './ws/adapter';
 
@@ -62,9 +53,21 @@ export class Burger {
     private apiPrefix: string = 'api';
 
     /**
-     * The page router instance
+     * The page router instance (dev path only — created lazily on first
+     * page-routes scan, so production AOT bundles never load it).
      */
-    private pageRouter?: PageRouter;
+    private pageRouter?: import('./core/page-router').PageRouter;
+
+    /**
+     * The page directory (dev path) — retained so the page router can be
+     * created lazily in `processPageRoutes()`.
+     */
+    private pageDir?: string;
+
+    /**
+     * The page path prefix (dev path).
+     */
+    private pagePrefix = '';
 
     /**
      * The compiled API router.
@@ -171,16 +174,15 @@ export class Burger {
         this.server = new Server(options, options.adapter);
 
         // Fast initialization for routers with nullish coalescing
-        const { apiDir, pageDir, apiPrefix, pagePrefix, wsDir } = options;
+        const { apiDir, apiPrefix, wsDir } = options;
 
         this.apiDir = apiDir;
         this.apiPrefix = apiPrefix || 'api';
 
-        // Initialize page router only when using runtime scanning (no prebuilt pageRoutes)
-        this.pageRouter =
-            pageDir && !Array.isArray(options.pageRoutes)
-                ? new PageRouter(pageDir, pagePrefix || '')
-                : undefined;
+        // Pages are resolved lazily on the dev scan path (PageRouter is
+        // loaded on demand so production AOT bundles stay small).
+        this.pageDir = options.pageDir;
+        this.pagePrefix = options.pagePrefix ?? '';
 
         // Initialize WebSocket directory
         this.wsDir = wsDir;
@@ -282,12 +284,18 @@ export class Burger {
         }
 
         // Dev path: load from filesystem via PageRouter
-        if (!this.pageRouter) return false;
+        if (!this.pageDir) return false;
+
+        // Lazy-load the page router (dev-only; never evaluated in production
+        // AOT bundles that ship prebuilt pageRoutes).
+        const { PageRouter } = await import('./core/page-router');
+        const pageRouter = new PageRouter(this.pageDir, this.pagePrefix);
+        this.pageRouter = pageRouter;
 
         // Load pages routes
-        await this.pageRouter.loadPages();
+        await pageRouter.loadPages();
         // If there are any page routes, add them to the routes object
-        const pages = this.pageRouter.pages;
+        const pages = pageRouter.pages;
         // Get the length of the pages routes
         const pageCount = pages.length;
         // If no pages, return false
@@ -361,7 +369,11 @@ export class Burger {
         } else {
             // Dev path: Route Module pipeline
             // (Directory Scanner → Module Loader → RouteModule → Compiler).
+            // Loaded lazily: production AOT builds ship prebuilt apiRoutes
+            // and never evaluate these filesystem modules.
             if (!this.apiDir) return false;
+            const { DirectoryScanner } = await import('./compiler/scanner');
+            const { ModuleLoader } = await import('./compiler/module-loader');
             const scanned = await new DirectoryScanner(
                 this.apiDir,
                 this.apiPrefix
@@ -386,6 +398,7 @@ export class Burger {
             }
 
             // Retained for introspection (deterministic ordering, no dispatch).
+            const { RouteTree } = await import('./compiler/route-tree');
             this.routeTree = new RouteTree(modules);
             apiRoutes = modules.map((m) => ({
                 path: m.path,
@@ -401,12 +414,19 @@ export class Burger {
         // If there are no API routes, return false
         if (apiRoutes.length === 0) return false;
 
-        // Generate OpenAPI document and cache it
-        this.openApiDoc = generateOpenAPIDocument(
-            apiRoutes,
-            this.options,
-            this.openAPIConfig
-        );
+        const config = this.openAPIConfig;
+        const openapiEnabled = config?.enabled !== false;
+
+        // Generate the OpenAPI document only when docs are enabled, and load
+        // the generator lazily (it pulls Zod's JSON Schema machinery).
+        if (openapiEnabled) {
+            const { generateOpenAPIDocument } = await import('./core/openapi');
+            this.openApiDoc = generateOpenAPIDocument(
+                apiRoutes,
+                this.options,
+                this.openAPIConfig
+            );
+        }
 
         // Compile routes into the Hybrid Router.
         const router = new Router({
@@ -448,9 +468,6 @@ export class Burger {
         Object.assign(this.routes, router.nativeRoutes());
 
         // Register OpenAPI and docs routes based on config
-        const config = this.openAPIConfig;
-        const openapiEnabled = config?.enabled !== false;
-
         if (openapiEnabled) {
             const specPath = config?.path ?? '/openapi.json';
             const docsPath = config?.docsPath ?? '/docs';
@@ -460,7 +477,9 @@ export class Burger {
                     ? Response.json(this.openApiDoc)
                     : this.OPENAPI_ERROR;
 
-            // Docs UI: use configured provider or default to Scalar
+            // Docs UI: use configured provider or default to Scalar (loaded
+            // lazily — only needed when the docs route is registered).
+            const { scalarDocs } = await import('./core/docs-providers');
             const provider: DocsProvider = config?.provider ?? scalarDocs();
             const expectedAuth = config?.docsAuth
                 ? 'Basic ' +
@@ -544,12 +563,30 @@ export class Burger {
             });
         }
 
+        // Production path: use pre-built WebSocket routes (no filesystem scan)
+        const prebuiltWsRoutes = this.options.wsRoutes;
+        if (Array.isArray(prebuiltWsRoutes)) {
+            for (const route of prebuiltWsRoutes) {
+                this.wsRouter.addRoute({
+                    path: route.path,
+                    handlers: route.handlers,
+                    hooks: route.hooks,
+                    config: { ...this.wsConfigOptions, ...route.config },
+                });
+            }
+            return this.wsRouter.getRouteCount() > 0;
+        }
+
         // Scan file-based routes if wsDir is provided
         if (this.wsDir) {
+            // Dev path — the scanner/compiler are loaded lazily so production
+            // AOT builds (prebuilt wsRoutes) never evaluate them.
+            const { WebSocketScanner } = await import('./ws/scanner');
             const scanner = new WebSocketScanner(this.wsDir);
             const scanResult = await scanner.scan();
 
             if (scanResult.routes.length > 0) {
+                const { WebSocketCompiler } = await import('./ws/compiler');
                 const compiler = new WebSocketCompiler();
 
                 // Set global hooks if found

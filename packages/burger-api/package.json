@@ -3,12 +3,29 @@
   "version": "1.0.0",
   "author": "Isfhan Ahmed",
   "type": "module",
+  "sideEffects": false,
   "module": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
+    },
+    "./validation": {
+      "import": "./dist/src/validation/index.js",
+      "types": "./dist/src/validation/index.d.ts"
+    },
+    "./compiler": {
+      "import": "./dist/src/compiler/index.js",
+      "types": "./dist/src/compiler/index.d.ts"
+    },
+    "./openapi": {
+      "import": "./dist/src/core/openapi.js",
+      "types": "./dist/src/core/openapi.d.ts"
+    },
+    "./ws": {
+      "import": "./dist/src/ws/index.js",
+      "types": "./dist/src/ws/index.d.ts"
     },
     "./adapter": {
       "import": "./dist/src/adapter/index.js",
