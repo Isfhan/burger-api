@@ -6,11 +6,37 @@
  *
  */
 
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
 import { downloadSkill } from './github';
+
+/**
+ * Resolve a local burger-api source override from the BURGER_API_SOURCE env
+ * var (pre-release testing aid):
+ * - unset  → null — generatePackageJson keeps the npm range (default)
+ * - "link" → "link:burger-api" — resolves via the global bun link store
+ * - <path> → "file:<absolute path>" — resolves from a local checkout
+ */
+export function burgerApiSourceOverride(): {
+    specifier: string;
+    label: string;
+} | null {
+    const value = process.env.BURGER_API_SOURCE?.trim();
+    if (!value) return null;
+    if (value.toLowerCase() === 'link') {
+        return {
+            specifier: 'link:burger-api',
+            label: 'link:burger-api (BURGER_API_SOURCE=link)',
+        };
+    }
+    const abs = resolve(value);
+    return {
+        specifier: `file:${abs}`,
+        label: `${abs} (BURGER_API_SOURCE)`,
+    };
+}
 
 /**
  * Generate package.json content for a new project
@@ -24,6 +50,8 @@ export function generatePackageJson(
     lang: 'ts' | 'js' = 'ts'
 ): string {
     const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
+    const burgerApiSpecifier =
+        burgerApiSourceOverride()?.specifier ?? '^1.0.0';
     const packageJson = {
         name: projectName,
         version: '0.1.0',
@@ -37,7 +65,7 @@ export function generatePackageJson(
             build: `burger-api build ${entry}`,
         },
         dependencies: {
-            'burger-api': '^1.0.0',
+            'burger-api': burgerApiSpecifier,
             zod: '^4.0.17',
         },
         devDependencies: {

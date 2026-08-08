@@ -12,7 +12,7 @@ import * as clack from '@clack/prompts';
 import { existsSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import type { CreateOptions } from '../types/index';
-import { createProject, installDependencies } from '../utils/templates';
+import { createProject, installDependencies, burgerApiSourceOverride } from '../utils/templates';
 import {
     success,
     error as logError,
@@ -163,6 +163,13 @@ export const createCommand = new Command('create')
                 console.log(` AI Agent Skills: burger-api`);
             }
             newline();
+
+            //  Resolve burger-api from a local source
+            const sourceOverride = burgerApiSourceOverride();
+            if (sourceOverride) {
+                info(`Using local burger-api: ${sourceOverride.label}`);
+                newline();
+            }
 
             // Create the project
             await createProject(targetDir, optionsWithLang);

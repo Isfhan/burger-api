@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { afterEach, describe, it, expect } from 'bun:test';
 import {
     generateBurgerConfig,
     generateJsConfig,
@@ -79,6 +79,41 @@ describe('generatePackageJson', () => {
         expect(pkg.scripts.dev).toBe('burger-api dev -f src/index.js');
         expect(pkg.scripts.start).toBe('burger-api start -f src/index.js');
         expect(pkg.scripts.build).toBe('burger-api build src/index.js');
+    });
+});
+
+describe('generatePackageJson BURGER_API_SOURCE', () => {
+    const original = process.env.BURGER_API_SOURCE;
+
+    afterEach(() => {
+        if (original === undefined) delete process.env.BURGER_API_SOURCE;
+        else process.env.BURGER_API_SOURCE = original;
+    });
+
+    it('keeps the npm range when the env var is unset', () => {
+        delete process.env.BURGER_API_SOURCE;
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('^1.0.0');
+    });
+
+    it('emits link:burger-api when set to "link"', () => {
+        process.env.BURGER_API_SOURCE = 'link';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
+    });
+
+    it('emits link:burger-api when set to "LINK" (case-insensitive)', () => {
+        process.env.BURGER_API_SOURCE = 'LINK';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
+    });
+
+    it('emits a file: specifier with an absolute path when set to a path', () => {
+        process.env.BURGER_API_SOURCE = 'C:\\repos\\burger-api';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe(
+            'file:C:\\repos\\burger-api'
+        );
     });
 });
 
