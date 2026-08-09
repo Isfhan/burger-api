@@ -23,7 +23,7 @@ export default {
 } satisfies import("burger-api").OpenAPIConfig;
 ```
 
-When `openapi.config.ts` does not exist, defaults apply: minimal metadata, `/openapi.json` and `/docs` endpoints, Scalar docs UI, no docs protection.
+When `openapi.config.ts` does not exist, defaults apply: minimal metadata, `/openapi.json` and `/docs` endpoints, Swagger UI docs, no docs protection.
 
 ## Endpoints
 
@@ -36,7 +36,7 @@ Paths are configurable via `openapi.config.ts`. Either endpoint can be disabled 
 
 ## Docs UI
 
-Default: **Scalar** via CDN — modern UI, dark mode, built-in API client, code snippets.
+Default: **Swagger UI** via CDN — classic, widely familiar, searchable endpoints.
 
 Built-in alternatives:
 
@@ -44,8 +44,8 @@ Built-in alternatives:
 import { scalarDocs, swaggerDocs, redocDocs } from "burger-api";
 
 export default {
-  provider: scalarDocs(),    // default — modern, beautiful
-  // provider: swaggerDocs(), // classic Swagger UI
+  provider: swaggerDocs(),    // default — classic Swagger UI
+  // provider: scalarDocs(),  // modern Scalar UI with dark mode
   // provider: redocDocs(),   // clean three-panel docs
 };
 ```

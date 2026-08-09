@@ -1,7 +1,7 @@
 import type { OpenAPIObject, DocsProvider } from '../types/openapi-config';
 
 /**
- * Scalar API Reference — default docs UI.
+ * Scalar API Reference — alternative docs UI.
  * Loads Scalar via CDN and embeds the spec inline for zero-config usage.
  */
 export function scalarDocs(): DocsProvider {
@@ -20,7 +20,7 @@ export function scalarDocs(): DocsProvider {
 }
 
 /**
- * Swagger UI — alternative docs UI.
+ * Swagger UI — default docs UI.
  * Loads Swagger UI via CDN.
  */
 export function swaggerDocs(): DocsProvider {

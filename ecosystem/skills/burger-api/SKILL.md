@@ -216,7 +216,7 @@ ecosystem/plugins/<name>/
 ## OpenAPI
 
 - `openapi.config.ts` — auto-discovered convention file (metadata, endpoints, docs UI, docs auth)
-- Scalar is the default docs UI (CDN-based, no npm dependency)
+- Swagger UI is the default docs UI (CDN-based, no npm dependency)
 - Built-in docs protection via `docsAuth: { username, password }`
 - Per-route `openapi.ts` with per-method exports (override auto-generated responses)
 - `mapJsonSchema` — validator-agnostic schema conversion (Zod, Valibot, ArkType)

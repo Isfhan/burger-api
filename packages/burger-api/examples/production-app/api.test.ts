@@ -143,12 +143,12 @@ describe('Production App', () => {
         });
 
         describe('GET /docs', () => {
-            it('should return docs UI HTML (Scalar)', async () => {
+            it('should return docs UI HTML (Swagger UI default)', async () => {
                 const response = await fetchAPI('/docs');
                 expect(response.status).toBe(200);
                 expect(response.headers.get('Content-Type')).toContain('text/html');
                 const html = await response.text();
-                expect(html).toContain('api-reference');
+                expect(html).toContain('swagger-ui');
                 expect(html).toContain('openapi.json');
             });
         });

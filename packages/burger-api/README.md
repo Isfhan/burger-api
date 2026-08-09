@@ -62,7 +62,7 @@ burger-api is built to offer a robust developer experience through:
  Zod schemas.
 
 - 🔍 **Docs UI Integration:**
- Out-of-the-box interactive API documentation (Scalar default, Swagger UI and
+ Out-of-the-box interactive API documentation (Swagger UI default, Scalar and
  Redoc built in, or any custom `DocsProvider`).
 
 - 🌍 **WinterCG Deploy Surface:**

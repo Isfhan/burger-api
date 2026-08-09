@@ -53,7 +53,7 @@ bun run test:examples
 
 | Name | Feature |
 |------|---------|
-| `openapi` | OpenAPI spec + Scalar docs UI |
+| `openapi` | OpenAPI spec + Swagger UI docs |
 | `openapi-config` | `openapi.config.ts` convention, docs auth, custom metadata |
 
 ### Plugins & Providers (2)

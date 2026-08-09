@@ -477,10 +477,10 @@ export class Burger {
                     ? Response.json(this.openApiDoc)
                     : this.OPENAPI_ERROR;
 
-            // Docs UI: use configured provider or default to Scalar (loaded
+            // Docs UI: use configured provider or default to Swagger UI (loaded
             // lazily — only needed when the docs route is registered).
-            const { scalarDocs } = await import('./core/docs-providers');
-            const provider: DocsProvider = config?.provider ?? scalarDocs();
+            const { swaggerDocs } = await import('./core/docs-providers');
+            const provider: DocsProvider = config?.provider ?? swaggerDocs();
             const expectedAuth = config?.docsAuth
                 ? 'Basic ' +
                   btoa(

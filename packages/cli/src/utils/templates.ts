@@ -847,9 +847,9 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     lines.push(' // Uncomment to protect docs with basic auth:');
     lines.push(' // docsAuth: { username: "admin", password: "changeme" },');
     lines.push('');
-    lines.push(' // Uncomment to use Swagger UI instead of Scalar:');
-    lines.push(" // import { swaggerDocs } from 'burger-api';");
-    lines.push(' // provider: swaggerDocs(),');
+    lines.push(' // Uncomment to use Scalar instead of Swagger UI:');
+    lines.push(" // import { scalarDocs } from 'burger-api';");
+    lines.push(' // provider: scalarDocs(),');
     lines.push('');
     lines.push(
         ' // Uncomment to add JSON Schema conversion for custom validation libraries:'

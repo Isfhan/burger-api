@@ -147,8 +147,8 @@ export interface OpenAPIConfig {
 
     /**
      * Documentation UI provider function.
-     * Defaults to Scalar via CDN.
-     * Built-in alternatives: `swaggerDocs()`, `redocDocs()`.
+     * Defaults to Swagger UI via CDN.
+     * Built-in alternatives: `scalarDocs()`, `redocDocs()`.
      */
     provider?: DocsProvider;
 

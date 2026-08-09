@@ -165,6 +165,33 @@ describe('toFetchHandler — OpenAPI and docs', () => {
     });
 });
 
+describe('toFetchHandler — default docs provider', () => {
+    it('serves Swagger UI when no provider is configured', async () => {
+        const burger = new Burger({
+            apiRoutes: routeDefinitions,
+            openapi: { enabled: true, title: 'Default provider' },
+        });
+        const h = toFetchHandler(burger);
+        const res = await h(req('/docs'));
+        expect(res.status).toBe(200);
+        const html = await res.text();
+        expect(html).toContain('swagger-ui');
+        expect(html).toContain('SwaggerUIBundle');
+    });
+
+    it('still serves the raw spec alongside the default UI', async () => {
+        const burger = new Burger({
+            apiRoutes: routeDefinitions,
+            openapi: { enabled: true, title: 'Default provider' },
+        });
+        const h = toFetchHandler(burger);
+        const res = await h(req('/openapi.json'));
+        expect(res.status).toBe(200);
+        const spec = await res.json();
+        expect(spec.paths['/api/products']).toBeDefined();
+    });
+});
+
 describe('toFetchHandler — runtime independence', () => {
     it('never scans the filesystem (AOT routes only)', async () => {
         const burger = new Burger({ apiRoutes: routeDefinitions });
