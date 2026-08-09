@@ -6,15 +6,15 @@ export default {
  version: '1.0.0',
 
  servers: [
- { url: "http://localhost:3000", description: "Development" },
+ { url: "http://localhost:4000", description: "Development" },
  ],
 
  // Uncomment to protect docs with basic auth:
  // docsAuth: { username: "admin", password: "changeme" },
 
- // Uncomment to use Swagger UI instead of Scalar:
- // import { swaggerDocs } from 'burger-api';
- // provider: swaggerDocs(),
+ // Uncomment to use Scalar instead of Swagger UI:
+ // import { scalarDocs } from 'burger-api';
+ // provider: scalarDocs(),
 
  // Uncomment to add JSON Schema conversion for custom validation libraries:
  // mapJsonSchema: { date: (schema) => ({ type: "string", format: "date-time" }) },

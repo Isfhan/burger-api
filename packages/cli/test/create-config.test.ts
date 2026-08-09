@@ -177,6 +177,13 @@ describe('JS scaffold (--lang js)', () => {
         expect(ts).toContain('satisfies OpenAPIConfig;');
     });
 
+    it('generateOpenAPIConfig points the dev server at localhost:4000', () => {
+        const config = generateOpenAPIConfig(jsOptions);
+
+        expect(config).toContain('http://localhost:4000');
+        expect(config).not.toContain('localhost:3000');
+    });
+
     it('generatePluginsFile/generateProvidersFile are type-free for JS', () => {
         expect(generatePluginsFile('js')).not.toContain('import type');
         expect(generatePluginsFile('js')).toContain('export default (burger) =>');

@@ -840,7 +840,7 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     lines.push('');
     lines.push(' servers: [');
     lines.push(
-        ' { url: "http://localhost:3000", description: "Development" },'
+        ' { url: "http://localhost:4000", description: "Development" },'
     );
     lines.push(' ],');
     lines.push('');
