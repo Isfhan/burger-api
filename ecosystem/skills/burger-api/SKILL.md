@@ -25,8 +25,8 @@ BurgerAPI is a Bun-first, WinterCG-compatible TypeScript framework:
 burger.build.ts              # build-time only
 src/
   index.ts
-  plugins.ts                 # burger.usePlugin(...)
-  providers.ts               # burger.provide(...) → ctx.services
+  plugins.ts                 # register plugins
+  providers.ts               # declare shared services → ctx.services
   hooks.ts                   # global hooks
   api/<path>/
     route.ts
@@ -191,13 +191,15 @@ export function myPlugin(options?: MyPluginOptions): Plugin {
 
 ### Registering plugins
 
+Register plugins in `src/plugins.ts`:
+
 ```typescript
 // src/plugins.ts
-import { Burger } from "burger-api";
 import { myPlugin } from "./ecosystem/plugins/my-plugin/my-plugin";
 
-const burger = new Burger();
-burger.usePlugin(myPlugin({ /* options */ }));
+export default (burger) => {
+  burger.usePlugin(myPlugin({ /* options */ }));
+};
 ```
 
 ### Plugin structure
