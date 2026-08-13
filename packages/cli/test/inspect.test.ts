@@ -1,9 +1,15 @@
 /**
  * inspect command — route scanning and convention detection.
  */
-import { describe, it, expect } from 'bun:test';
+import { afterEach, describe, it, expect } from 'bun:test';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
+import { tmpdir } from 'os';
+import {
+    scanApiRoutes,
+    scanPageRoutes,
+    ensureAppDirEnv,
+} from '../src/utils/scanner';
 import { detectExportedHookNames } from '../src/utils/route-methods';
 
 const simpleFixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
@@ -18,7 +24,11 @@ describe('inspect uses existing scanner', () => {
     });
 
     it('scanPageRoutes returns empty for fixtures without pages', async () => {
-        const entries = await scanPageRoutes(simpleFixturesDir, './pages', '/');
+        const entries = await scanPageRoutes(
+            simpleFixturesDir,
+            './src/pages',
+            '/'
+        );
         expect(entries).toEqual([]);
     });
 
@@ -27,6 +37,77 @@ describe('inspect uses existing scanner', () => {
         const paths = entries.map((e) => e.routePath).sort();
         expect(paths.some((p) => p.includes(':id'))).toBe(true);
         expect(paths.some((p) => p.includes('groups'))).toBe(true);
+    });
+});
+
+describe('scan dir resolution (entry-relative fallback + fail-loud)', () => {
+    const originalAppDir = process.env.BURGER_API_APP_DIR;
+
+    afterEach(() => {
+        if (originalAppDir === undefined) delete process.env.BURGER_API_APP_DIR;
+        else process.env.BURGER_API_APP_DIR = originalAppDir;
+    });
+
+    it('resolves a bare apiDir under BURGER_API_APP_DIR (src/ layout)', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        try {
+            mkdirSync(join(root, 'src', 'api', 'users'), { recursive: true });
+            writeFileSync(
+                join(root, 'src', 'api', 'users', 'route.ts'),
+                'export {};'
+            );
+            process.env.BURGER_API_APP_DIR = join(root, 'src');
+            const entries = await scanApiRoutes(root, 'api', '/api');
+            expect(entries.map((e) => e.routePath)).toEqual(['/api/users']);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('stays silent for convention-default dirs that are missing (pages-only app)', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        try {
+            delete process.env.BURGER_API_APP_DIR;
+            const entries = await scanPageRoutes(root, './src/pages', '/');
+            expect(entries).toEqual([]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('fails loud for a custom apiDir that cannot be resolved', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        try {
+            delete process.env.BURGER_API_APP_DIR;
+            await expect(
+                scanApiRoutes(root, 'backend', '/api')
+            ).rejects.toThrow(
+                'Routes directory "backend" does not exist. Tried "./backend" (project root) and "./src/backend" (src/)'
+            );
+            await expect(
+                scanApiRoutes(root, 'backend', '/api')
+            ).rejects.toThrow('Check the apiDir option in burger.build.ts');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('ensureAppDirEnv derives the src/ dir from the entry file', () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        const originalCwd = process.cwd();
+        try {
+            mkdirSync(join(root, 'src'), { recursive: true });
+            writeFileSync(join(root, 'src', 'index.ts'), '');
+            process.chdir(root);
+            delete process.env.BURGER_API_APP_DIR;
+            ensureAppDirEnv('src/index.ts');
+            // Read through a cast: TS narrows process.env after `delete`.
+            const appDir = process.env.BURGER_API_APP_DIR as string | undefined;
+            expect(appDir).toBe(join(root, 'src'));
+        } finally {
+            process.chdir(originalCwd);
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });
 

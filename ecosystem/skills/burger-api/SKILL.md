@@ -113,6 +113,12 @@ export const onRequest = [/* ... */];
 export const onError = (err, ctx) => { /* ... */ };
 ```
 
+Hook return contracts are enforced at compile time: `ForwardHook`
+(`onRequest` / `beforeRoute`) returns `Response` (short-circuit) or
+`undefined` (continue); `ResponseHook` (`afterRoute` / `mapResponse`) may
+also return `(res) => Response` to transform the response; `ErrorHook`
+(`onError`) returns `Response` or `undefined`. Anything else fails to typecheck.
+
 ## Plugins vs hooks
 
 - Hooks: when code runs on a request  

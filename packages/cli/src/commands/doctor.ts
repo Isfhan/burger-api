@@ -10,7 +10,7 @@ import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { resolveBuildConfig } from '../utils/config';
-import { scanApiRoutes } from '../utils/scanner';
+import { scanApiRoutes, ensureAppDirEnv } from '../utils/scanner';
 import {
     success,
     error as logError,
@@ -99,11 +99,17 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
     // 6. Route files
     if (hasApiDir) {
         const config = await resolveBuildConfig(cwd);
-        const routes = await scanApiRoutes(
-            cwd,
-            config.apiDir,
-            config.apiPrefix
-        );
+        ensureAppDirEnv();
+        let routes: Awaited<ReturnType<typeof scanApiRoutes>> = [];
+        try {
+            routes = await scanApiRoutes(
+                cwd,
+                config.apiDir,
+                config.apiPrefix
+            );
+        } catch {
+            // Unresolvable custom apiDir — report as a failed check, not a crash.
+        }
         results.push(
             check(
                 'route.ts files',

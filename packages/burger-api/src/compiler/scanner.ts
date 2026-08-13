@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ROUTE_CONSTANTS } from '../utils/routing';
 import { filePathToApiRoutePath } from '../utils/pathConversion';
+import { resolveScanDir } from '../utils/fs';
 import {
     assertConventionFile,
     isConventionFile,
@@ -36,6 +37,7 @@ export class DirectoryScanner {
         if (!routesDir) {
             throw new Error('Routes directory path is required');
         }
+        this.routesDir = resolveScanDir(routesDir, 'Routes', 'apiDir');
     }
 
     /**

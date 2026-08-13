@@ -61,7 +61,8 @@ describe('BurgerContext (prototype-based request)', () => {
         const ctx = BurgerContext.create(raw, {
             route: { path: '/', pattern: '/' },
         });
-        expect(await ctx.json()).toEqual({ ok: true });
+        // The generic json<T> lets callers type the parsed body.
+        expect(await ctx.json<{ ok: boolean }>()).toEqual({ ok: true });
         const raw2 = new Request('http://h/', {
             method: 'POST',
             body: 'plain',

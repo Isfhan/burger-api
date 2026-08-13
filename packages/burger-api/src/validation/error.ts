@@ -128,7 +128,7 @@ export interface RenderContext {
     /** Whether to include dev diagnostics (stack/path detail). */
     isDev: boolean;
     /** The slot that produced the error (request) or 'response' (enforce). */
-    slot?: string;
+    slot?: ValidationSlot | 'response';
     /** Per-slot issues for request validation (all failing slots). When
      * present, the plain renderer emits one key per slot instead of
      * collapsing every issue under a single slot name. */
@@ -159,7 +159,7 @@ export function renderValidationError(
 
     if (ctx.config.errorRenderer) {
         return ctx.config.errorRenderer(result, {
-            slot: ctx.slot as any,
+            slot: ctx.slot,
             status: ctx.status,
         });
     }

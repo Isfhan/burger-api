@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'bun:test';
 import { BurgerContext } from '../../src/context/context';
 
+// Services used by these tests, typed via the documented augmentation pattern.
+declare module '../../src/context/context' {
+    interface BurgerServices {
+        db: { query: () => string; count?: number };
+        logger: { info: () => void };
+        mailer: { send: () => void };
+        cache: { get: () => string };
+    }
+}
+
 describe('Provider system (burger.provide)', () => {
     it('services is empty by default', () => {
         const ctx = BurgerContext.create(new Request('http://localhost/'));
-        expect(ctx.services).toEqual({});
+        expect(Object.keys(ctx.services)).toEqual([]);
     });
 
     it('populates ctx.services from providers map', () => {
@@ -63,7 +73,7 @@ describe('Provider system (burger.provide)', () => {
             undefined,
             providers
         );
-        expect(ctx.services).toEqual({});
+        expect(Object.keys(ctx.services)).toEqual([]);
     });
 });
 

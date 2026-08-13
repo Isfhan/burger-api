@@ -11,6 +11,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { resolveBuildConfig } from '../utils/config';
 import {
+    ensureAppDirEnv,
     scanApiRoutes,
     scanPageRoutes,
     scanWebSocketRoutes,
@@ -71,6 +72,7 @@ export const inspectCommand = new Command('inspect')
         }
 
         const cwd = process.cwd();
+        ensureAppDirEnv();
         const config = await resolveBuildConfig(cwd);
 
         // Config summary

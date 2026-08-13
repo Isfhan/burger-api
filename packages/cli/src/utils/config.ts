@@ -11,7 +11,7 @@ import { pathToFileURL } from 'url';
 import type { BuildConfig } from '../types/index';
 import { warning } from './logger';
 
-const CONVENTION_DEFAULTS: BuildConfig = {
+export const CONVENTION_DEFAULTS: BuildConfig = {
     apiDir: './src/api',
     pageDir: './src/pages',
     apiPrefix: '/api',

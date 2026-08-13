@@ -9,6 +9,17 @@ describe('HookChain', () => {
         expect(chain.getNodes()).toHaveLength(0);
     });
 
+    it('rejects hooks on the wrong stage at compile time', () => {
+        const chain = new HookChain();
+        const onError: ErrorHook = () => undefined;
+        // @ts-expect-error ErrorHook is not a ForwardHook — onError hooks
+        // only belong on the 'onError' stage
+        chain.addStage('beforeRoute', [onError], 'local', '/r');
+        // The compile error is the contract; the call itself still executes
+        // at runtime (types do not affect behavior).
+        expect(chain.getNodes()).toHaveLength(1);
+    });
+
     it('adds a single node', () => {
         const chain = new HookChain();
         const fn = () => undefined;
@@ -396,8 +407,8 @@ describe('Flattener', () => {
 
     it('pins global-scope validation at beforeRoute[0]', () => {
         const chain = new HookChain();
-        const routeHook = () => 'route';
-        const validationHook = () => 'validation';
+        const routeHook: () => Response | void | undefined = () => undefined;
+        const validationHook: () => Response | void | undefined = () => undefined;
 
         chain.add({
             stage: 'beforeRoute',

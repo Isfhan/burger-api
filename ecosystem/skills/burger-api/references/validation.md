@@ -40,18 +40,29 @@ Schemas are optional. A route without a `schema.ts` skips validation entirely.
 
 ## Accessing Validated Data
 
-Validated data is available on `ctx.validated`:
+Validated data is available on `ctx.validated`, fully typed from the route's
+`schema.ts` via `BurgerContext<typeof GET>` (the `InferValidated` type helper):
 
 ```typescript
-export async function POST(ctx: BurgerContext) {
-    const params = ctx.validated.params;  // { id: string }
-    const body = ctx.validated.body;       // { name: string, email: string }
+// route.ts
+import type { BurgerContext } from 'burger-api';
+import type { GET, POST } from './schema';
+
+export async function POST(ctx: BurgerContext<typeof POST>) {
+    const body = ctx.validated.body;  // { name: string, email: string }
     return Response.json(body, { status: 201 });
+}
+
+export async function GET(ctx: BurgerContext<typeof GET>) {
+    // ctx.validated.params is the typed params channel (schema-typed path
+    // parameters); raw ctx.params stays a runtime string record.
+    const page = ctx.validated.query?.page;
+    return Response.json({ page });
 }
 ```
 
-`ctx.validated` is fully typed from the route's `schema.ts` via
-`BurgerContext<typeof GET>` (the `InferValidated` type helper).
+Invalid slots (e.g. `ctx.validated.unknown`) fail at compile time; slots
+without a schema are `unknown`.
 
 ## Model Registry
 

@@ -14,9 +14,9 @@
  * - throws a `ValidationError` (422, RFC 9457 problem details) on failure.
  */
 
-import type { BurgerContext, BurgerValidated } from '../context/context';
-import type { BurgerNext } from '../types/index';
-import type { Hook } from '../lifecycle/types';
+import type { BurgerContext } from '../context/context';
+import type { LowercaseHTTPMethod } from '../utils/routing';
+import type { ForwardHook } from '../lifecycle/types';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
@@ -106,20 +106,26 @@ export function createValidationHook(
     validators: CompiledRouteValidators,
     config: ValidatorConfig = {},
     isDev = false
-): Hook {
-    return async (ctx: BurgerContext): Promise<BurgerNext> => {
+): ForwardHook {
+    return async (ctx: BurgerContext): Promise<Response | void | undefined> => {
         // If the request has already been validated, continue.
         if (ctx.validated) {
             return undefined;
         }
 
         const method = (ctx.method || 'get').toLowerCase();
-        const methodValidators = validators.methods[method];
+        // Runtime method strings are lowercased before lookup; only methods in
+        // the union can be keys of the compiled map, so widening is safe.
+        const methodValidators = (
+            validators.methods as Record<string, (typeof validators.methods)[LowercaseHTTPMethod] | undefined>
+        )[method];
         if (!methodValidators) {
             return undefined;
         }
 
-        const validated: Record<string, unknown> = {};
+        // The validated bag mirrors the `BurgerValidated` slots exactly, so it
+        // is assignable to `ctx.validated` without an assertion.
+        const validated: Partial<Record<ValidationSlot, unknown>> = {};
 
         // Track errors per slot — only populated on failure.
         let errorsBySlot: Record<string, ValidationIssue[]> | null = null;
@@ -129,11 +135,11 @@ export function createValidationHook(
         // Params
         if (methodValidators.params && ctx.params) {
             const input = coercion?.params
-                ? applyCoercion(coercion.params, ctx.params as any)
+                ? applyCoercion(coercion.params, ctx.params)
                 : ctx.params;
             const result = methodValidators.params.validate(input);
             if (result.success) {
-                (validated as any).params = result.data;
+                validated.params = result.data;
             } else {
                 if (!errorsBySlot) errorsBySlot = {};
                 errorsBySlot.params = result.issues;
@@ -151,7 +157,7 @@ export function createValidationHook(
                 : queryParams;
             const result = methodValidators.query.validate(input);
             if (result.success) {
-                (validated as any).query = result.data;
+                validated.query = result.data;
             } else {
                 if (!errorsBySlot) errorsBySlot = {};
                 errorsBySlot.query = result.issues;
@@ -169,7 +175,7 @@ export function createValidationHook(
                 : headerRecord;
             const result = methodValidators.headers.validate(input);
             if (result.success) {
-                (validated as any).headers = result.data;
+                validated.headers = result.data;
             } else {
                 if (!errorsBySlot) errorsBySlot = {};
                 errorsBySlot.headers = result.issues;
@@ -185,7 +191,7 @@ export function createValidationHook(
                 : cookieRecord;
             const result = methodValidators.cookies.validate(input);
             if (result.success) {
-                (validated as any).cookies = result.data;
+                validated.cookies = result.data;
             } else {
                 if (!errorsBySlot) errorsBySlot = {};
                 errorsBySlot.cookies = result.issues;
@@ -203,7 +209,7 @@ export function createValidationHook(
                     const bodyData = await ctx.json();
                     const result = methodValidators.body.validate(bodyData);
                     if (result.success) {
-                        (validated as any).body = result.data;
+                        validated.body = result.data;
                     } else {
                         if (!errorsBySlot) errorsBySlot = {};
                         errorsBySlot.body = result.issues;
@@ -228,7 +234,7 @@ export function createValidationHook(
             });
         }
 
-        ctx.validated = validated as BurgerValidated;
+        ctx.validated = validated;
         return undefined;
     };
 }

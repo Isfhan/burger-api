@@ -13,8 +13,9 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join, dirname, resolve as resolvePath } from 'path';
 import { resolveBuildConfig } from '../utils/config';
+import { ensureAppDirEnv } from '../utils/scanner';
 import {
     generateRouteFiles,
     generateHookTemplate,
@@ -67,7 +68,17 @@ const routeCommand = new Command('route')
 
         const lang = resolveLang(options.lang);
         const config = await resolveBuildConfig(process.cwd());
-        const targetDir = join(process.cwd(), config.apiDir, routePath);
+        ensureAppDirEnv();
+        // Resolve apiDir the same way scans do (project root, then src/)
+        // so `generate route x` lands in src/api/x even with `apiDir: 'api'`.
+        const appDir = process.env.BURGER_API_APP_DIR;
+        const cwdApiRoot = resolvePath(process.cwd(), config.apiDir);
+        const apiRoot = existsSync(cwdApiRoot)
+            ? cwdApiRoot
+            : appDir
+              ? resolvePath(appDir, config.apiDir)
+              : cwdApiRoot;
+        const targetDir = join(apiRoot, routePath);
 
         if (existsSync(targetDir)) {
             logError(`Route directory already exists: ${targetDir}`);
@@ -208,8 +219,17 @@ const wsCommand = new Command('ws')
         const lang = resolveLang(options.lang);
         const ext = lang === 'js' ? 'js' : 'ts';
         const config = await resolveBuildConfig(process.cwd());
+        ensureAppDirEnv();
+        // Resolve wsDir the same way scans do (project root, then src/).
+        const appDir = process.env.BURGER_API_APP_DIR;
         const wsRoot = (config.wsDir || 'src/websocket').replace(/\\/g, '/');
-        const wsDir = join(process.cwd(), wsRoot, routePath);
+        const cwdWsRoot = resolvePath(process.cwd(), wsRoot);
+        const resolvedWsRoot = existsSync(cwdWsRoot)
+            ? cwdWsRoot
+            : appDir
+              ? resolvePath(appDir, wsRoot)
+              : cwdWsRoot;
+        const wsDir = join(resolvedWsRoot, routePath);
 
         if (existsSync(wsDir)) {
             logError(`WebSocket directory already exists: ${wsDir}`);

@@ -26,6 +26,7 @@ import {
     type VirtualBuildResult,
 } from '../utils/build/pipeline';
 import { getProjectName } from '../utils/build/project';
+import { ensureAppDirEnv } from '../utils/scanner';
 
 function ensureEntryFileExists(cwd: string, file: string): void {
     const entryPath = resolve(cwd, file);
@@ -34,6 +35,9 @@ function ensureEntryFileExists(cwd: string, file: string): void {
         info('Make sure you are in the project directory.');
         process.exit(1);
     }
+    // Entry-relative path fallback for scan dirs (apiDir/pageDir/wsDir),
+    // matching what `burger-api dev` provides at runtime.
+    ensureAppDirEnv(file);
 }
 
 async function runBuildWithSpinner(params: {

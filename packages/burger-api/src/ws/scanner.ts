@@ -5,6 +5,7 @@
 
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
+import { resolveScanDir } from '../utils/fs';
 import {
     splitConventionName,
     type ConventionFile,
@@ -84,6 +85,7 @@ export class WebSocketScanner {
         if (!wsDir) {
             throw new Error('WebSocket directory path is required');
         }
+        this.wsDir = resolveScanDir(wsDir, 'WebSocket', 'wsDir');
     }
 
     /**

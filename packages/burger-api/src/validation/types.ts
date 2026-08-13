@@ -6,6 +6,7 @@
  */
 
 import type { z } from 'zod';
+import type { LowercaseHTTPMethod } from '../utils/routing';
 
 /**
  * Minimal structural type for a Standard Schema V1 validator — the common
@@ -131,7 +132,7 @@ export interface ValidatorConfig {
     errorRenderer?: (
         result: ValidationResult,
         ctx: {
-            slot?: ValidationSlot;
+            slot?: ValidationSlot | 'response';
             status: number;
         }
     ) => Response;
@@ -140,24 +141,30 @@ export interface ValidatorConfig {
 /**
  * The per-route bundle of prepared slot validators + conversion plans +
  * response validators, attached to the route when it is prepared.
+ * Method keys are lowercase (the form the compiler emits and the validator
+ * looks up at request time).
  */
 export interface CompiledRouteValidators {
-    methods: Record<
-        string,
-        {
-            params?: CompiledValidator;
-            query?: CompiledValidator;
-            headers?: CompiledValidator;
-            cookies?: CompiledValidator;
-            body?: CompiledValidator;
-            coercion?: {
-                query?: CoercionPlan;
-                params?: CoercionPlan;
-                headers?: CoercionPlan;
-                cookies?: CoercionPlan;
-            };
-        }
+    methods: Partial<
+        Record<
+            LowercaseHTTPMethod,
+            {
+                params?: CompiledValidator;
+                query?: CompiledValidator;
+                headers?: CompiledValidator;
+                cookies?: CompiledValidator;
+                body?: CompiledValidator;
+                coercion?: {
+                    query?: CoercionPlan;
+                    params?: CoercionPlan;
+                    headers?: CoercionPlan;
+                    cookies?: CoercionPlan;
+                };
+            }
+        >
     >;
     /** Per-method, per-status-code map of response validators. */
-    response?: Record<string, Record<string, CompiledValidator>>;
+    response?: Partial<
+        Record<LowercaseHTTPMethod, Record<string, CompiledValidator>>
+    >;
 }

@@ -71,7 +71,7 @@ describe('BurgerWSContext', () => {
 
     describe('services in handlers', () => {
         it('should have services available in open handler', () => {
-            let capturedServices: Record<string, unknown> | null = null;
+            let capturedServices: import('../../src/context/context').BurgerServices | null = null;
             const providers = new Map<string, unknown>([
                 ['db', { query: () => 'result' }],
             ]);
@@ -86,7 +86,7 @@ describe('BurgerWSContext', () => {
         });
 
         it('should have services available in message handler', () => {
-            let capturedServices: Record<string, unknown> | null = null;
+            let capturedServices: import('../../src/context/context').BurgerServices | null = null;
             const providers = new Map<string, unknown>([
                 ['cache', { get: () => 'cached' }],
             ]);
@@ -101,7 +101,7 @@ describe('BurgerWSContext', () => {
         });
 
         it('should have services available in close handler', () => {
-            let capturedServices: Record<string, unknown> | null = null;
+            let capturedServices: import('../../src/context/context').BurgerServices | null = null;
             const providers = new Map<string, unknown>([
                 ['logger', { warn: () => {} }],
             ]);

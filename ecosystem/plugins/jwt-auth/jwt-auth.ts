@@ -122,7 +122,7 @@ function getAlgorithmName(algorithm: string): AlgorithmIdentifier | RsaHashedImp
 /**
  * Base64 URL decode
  */
-function base64UrlDecode(str: string): Uint8Array {
+function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   // Add padding if needed
   const padded = str.replace(/-/g, "+").replace(/_/g, "/");
   const padding = padded.length % 4;

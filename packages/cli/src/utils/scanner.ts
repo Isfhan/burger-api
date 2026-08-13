@@ -18,6 +18,65 @@ import {
     filePathToApiRoutePath,
     filePathToPageRoutePath,
 } from './route-conventions';
+import { CONVENTION_DEFAULTS } from './config';
+
+/**
+ * Ensure BURGER_API_APP_DIR is set for in-process CLI scanning: from the
+ * entry file when given (dirname of `src/index.ts` = `src/`), else `<cwd>/src`
+ * when a `src/index.*` exists. This powers the entry-relative fallback so
+ * `apiDir: 'api'` in burger.build.ts resolves to `src/api`, matching dev.
+ */
+export function ensureAppDirEnv(entryFile?: string): void {
+    if (process.env.BURGER_API_APP_DIR) return;
+    if (entryFile) {
+        process.env.BURGER_API_APP_DIR = path.dirname(path.resolve(entryFile));
+        return;
+    }
+    if (existsSync('src/index.ts') || existsSync('src/index.js')) {
+        process.env.BURGER_API_APP_DIR = path.resolve('src');
+    }
+}
+
+/**
+ * Resolve a scan dir for CLI scans: project root first, then the entry
+ * file's directory (BURGER_API_APP_DIR). Mirrors the framework's
+ * `resolveScanDir`. Returns undefined when neither candidate exists.
+ */
+function resolveScanDir(cwd: string, dir: string): string | undefined {
+    const cwdAbs = path.resolve(cwd, dir);
+    if (existsSync(cwdAbs)) return cwdAbs;
+    const appDir = process.env.BURGER_API_APP_DIR;
+    if (appDir) {
+        const srcAbs = path.resolve(appDir, dir);
+        if (existsSync(srcAbs)) return srcAbs;
+    }
+    return undefined;
+}
+
+/**
+ * Resolve a scan dir with a dynamic missing-dir error. Convention-default
+ * paths stay silent when missing (e.g. a pages-only app has no `./src/api`);
+ * custom paths fail loud so a typo'd apiDir never silently drops routes.
+ */
+function resolveScanDirOrThrow(
+    cwd: string,
+    dir: string,
+    label: string,
+    option: string,
+    fallbackDefault: string
+): string | undefined {
+    const resolved = resolveScanDir(cwd, dir);
+    if (resolved || dir === fallbackDefault) return resolved;
+    const appDir = process.env.BURGER_API_APP_DIR;
+    const shown = dir.replace(/^\.\//, '');
+    const srcShown = appDir
+        ? `"./${path.relative(cwd, path.resolve(appDir, dir)).split(path.sep).join('/')}"`
+        : `"./src/${shown}"`;
+    throw new Error(
+        `${label} directory "${dir}" does not exist. Tried "./${shown}" (project root) and ${srcShown} (src/). ` +
+            `Check the ${option} option in burger.build.ts.`
+    );
+}
 
 /**
  * Returns the first existing convention file for `stem` in `dir`
@@ -79,8 +138,14 @@ export async function scanApiRoutes(
     apiDir: string,
     apiPrefix: string
 ): Promise<ApiRouteScanEntry[]> {
-    const absoluteApiDir = path.resolve(cwd, apiDir);
-    if (!existsSync(absoluteApiDir)) {
+    const absoluteApiDir = resolveScanDirOrThrow(
+        cwd,
+        apiDir,
+        'Routes',
+        'apiDir',
+        CONVENTION_DEFAULTS.apiDir
+    );
+    if (!absoluteApiDir) {
         return [];
     }
 
@@ -203,8 +268,14 @@ export async function scanPageRoutes(
     pageDir: string,
     pagePrefix: string
 ): Promise<PageRouteScanEntry[]> {
-    const absolutePageDir = path.resolve(cwd, pageDir);
-    if (!existsSync(absolutePageDir)) {
+    const absolutePageDir = resolveScanDirOrThrow(
+        cwd,
+        pageDir,
+        'Pages',
+        'pageDir',
+        CONVENTION_DEFAULTS.pageDir
+    );
+    if (!absolutePageDir) {
         return [];
     }
 
@@ -279,8 +350,14 @@ export async function scanWebSocketRoutes(
     cwd: string,
     wsDir: string
 ): Promise<WebSocketRouteScanEntry[]> {
-    const absoluteWsDir = path.resolve(cwd, wsDir);
-    if (!existsSync(absoluteWsDir)) {
+    const absoluteWsDir = resolveScanDirOrThrow(
+        cwd,
+        wsDir,
+        'WebSocket',
+        'wsDir',
+        CONVENTION_DEFAULTS.wsDir ?? ''
+    );
+    if (!absoluteWsDir) {
         return [];
     }
 

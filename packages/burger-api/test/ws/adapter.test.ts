@@ -190,8 +190,8 @@ describe('WebSocketAdapter', () => {
     });
 
     it('should call close handler when connection closes', () => {
-        let closeCode: number | null = null;
-        let closeReason: string | null = null;
+        let closeCode: any = null;
+        let closeReason: any = null;
         const route = createRoute('/chat', {
             handlers: {
                 close: (ws, code, reason) => {

@@ -264,7 +264,16 @@ export class BurgerContext<TRoute = unknown> {
 
     // --- Delegated standard `Request` methods (forward to `_raw`) ---
 
-    json(): Promise<any> {
+    /**
+     * Parses the request body as JSON. Mirrors the platform `Request.json()`
+     * semantics: the default type is `any` because the shape of arbitrary JSON
+     * is unknown; callers can supply the expected shape explicitly:
+     *
+     * ```ts
+     * const body = await ctx.json<{ id: number }>();
+     * ```
+     */
+    json<T = any>(): Promise<T> {
         return this._raw.json();
     }
 

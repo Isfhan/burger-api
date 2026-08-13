@@ -15,6 +15,7 @@ import {
     compareRoutes,
     ROUTE_CONSTANTS,
 } from '../utils/index';
+import { resolveScanDir } from '../utils/fs';
 import { filePathToPageRoutePath } from '../utils/pathConversion';
 
 // Import types
@@ -43,7 +44,7 @@ export class PageRouter {
         }
 
         // Normalize the pagesDir path
-        this.pagesDir = path.normalize(pagesDir);
+        this.pagesDir = path.normalize(resolveScanDir(pagesDir, 'Pages', 'pageDir'));
 
         // Normalize the prefix if provided
         if (prefix) {

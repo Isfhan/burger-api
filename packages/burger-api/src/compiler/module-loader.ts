@@ -1,4 +1,5 @@
 import { HTTP_METHODS } from '../utils/routing';
+import type { HTTPMethod } from '../utils/routing';
 import { autoOptionsHandler } from '../utils/response';
 import type {
     openapi,
@@ -6,11 +7,12 @@ import type {
     RequestHandler,
     RouteSchema,
 } from '../types/index';
+import type { RouteHooks } from '../lifecycle/types';
 import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
 import type { Hook } from '../lifecycle/types';
 
 /** Uppercase HTTP method names for schema export detection. */
-const HTTP_METHOD_SET = new Set(HTTP_METHODS);
+const HTTP_METHOD_SET: ReadonlySet<string> = new Set(HTTP_METHODS);
 
 /**
  * Detects uppercase method exports in a schema module and normalizes them
@@ -160,7 +162,6 @@ export class ModuleLoader {
             hooks,
             routeMod.hooks as Record<string, unknown> | undefined
         );
-
         // 4. Merge global hooks with route-specific hooks.
         // Global hooks run first, then route hooks (execution priority).
         const finalHooks = this.mergeHookObjects(globalHooks, routeHooks);
@@ -184,17 +185,17 @@ export class ModuleLoader {
      * minimal `OPTIONS` handler for preflight-triggering methods when the
      * module does not define one (ported from core/api-router.ts).
      */
-    private extractHandlers(mod: Record<string, unknown>): {
-        [method: string]: RequestHandler;
-    } {
-        const handlers: { [method: string]: RequestHandler } = {};
+    private extractHandlers(mod: Record<string, unknown>): Partial<
+        Record<HTTPMethod, RequestHandler>
+    > {
+        const handlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
         for (const method of HTTP_METHODS) {
             if (typeof mod[method] === 'function') {
                 handlers[method] = mod[method] as RequestHandler;
             }
         }
 
-        const PREFLIGHT = ['POST', 'PUT', 'DELETE', 'PATCH'];
+        const PREFLIGHT: HTTPMethod[] = ['POST', 'PUT', 'DELETE', 'PATCH'];
         const hasPreflight = PREFLIGHT.some((m) => handlers[m]);
         if (hasPreflight && typeof handlers.OPTIONS !== 'function') {
             handlers.OPTIONS = autoOptionsHandler;
@@ -260,11 +261,15 @@ export class ModuleLoader {
      * concatenated (base first, then override); scalar/object values are
      * overridden by `override`. The `transform` key is deep-merged (base then
      * override). Returns undefined when both are empty.
+     *
+     * The single cast here is the dynamic-module boundary: convention files
+     * are imported as `Record<string, unknown>` and only this merge narrows
+     * the shape to `RouteHooks` (the downstream hook compiler trusts it).
      */
     private mergeHookObjects(
-        base: Record<string, unknown> | undefined,
-        override: Record<string, unknown> | undefined
-    ): Record<string, unknown> | undefined {
+        base: Record<string, unknown> | RouteHooks | undefined,
+        override: Record<string, unknown> | RouteHooks | undefined
+    ): RouteHooks | undefined {
         const result: Record<string, unknown> = { ...(base ?? {}) };
         for (const key of Object.keys(override ?? {})) {
             const b = result[key];
@@ -286,6 +291,8 @@ export class ModuleLoader {
                 result[key] = o;
             }
         }
-        return Object.keys(result).length > 0 ? result : undefined;
+        return Object.keys(result).length > 0
+            ? (result as RouteHooks)
+            : undefined;
     }
 }

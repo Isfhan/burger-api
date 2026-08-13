@@ -16,7 +16,7 @@ describe('MacroRegistry', () => {
     it('expands a registered macro into RouteHooks', () => {
         const reg = new MacroRegistry();
         reg.register('auth', () => ({
-            beforeRoute: [() => 'auth-check'],
+            beforeRoute: [() => undefined],
         }));
         const hooks = reg.expand('auth');
         expect(hooks).toBeDefined();
@@ -30,8 +30,8 @@ describe('MacroRegistry', () => {
 
     it('expandAll returns ResolvedPlugin entries with plugin scope', () => {
         const reg = new MacroRegistry();
-        reg.register('a', () => ({ beforeRoute: [() => 'a'] }));
-        reg.register('b', () => ({ beforeRoute: [() => 'b'] }));
+        reg.register('a', () => ({ beforeRoute: [() => undefined] }));
+        reg.register('b', () => ({ beforeRoute: [() => undefined] }));
         const result = reg.expandAll();
         expect(result).toHaveLength(2);
         for (const entry of result) {

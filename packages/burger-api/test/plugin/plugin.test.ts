@@ -4,7 +4,7 @@ import { composePluginHooks } from '../../src/plugin/composer';
 import { HookChain } from '../../src/chain/chain';
 import { flatten } from '../../src/chain/flattener';
 import type { Plugin, ResolvedPlugin } from '../../src/plugin/types';
-import type { RouteHooks } from '../../src/lifecycle/types';
+import type { RouteHooks, Hook, ErrorHook } from '../../src/lifecycle/types';
 
 describe('PluginRegistry', () => {
     it('registers a plugin and resolves it', async () => {
@@ -75,7 +75,7 @@ describe('Plugin composition', () => {
         const chain = new HookChain();
         const plugins = [
             makePlugin('auth', {
-                beforeRoute: [() => 'auth-check'],
+                beforeRoute: [() => undefined],
             }),
         ];
         composePluginHooks(chain, plugins, '/test');
@@ -130,9 +130,9 @@ describe('Plugin composition', () => {
         const chain = new HookChain();
         const plugins = [
             makePlugin('audit', {
-                afterRoute: [() => 'after'],
-                mapResponse: [() => 'resp'],
-                onError: [() => undefined] as unknown as RouteHooks['onError'],
+                afterRoute: [() => undefined],
+                mapResponse: [() => undefined],
+                onError: [() => undefined] as unknown as ErrorHook[],
             }),
         ];
         composePluginHooks(chain, plugins, '/r');
@@ -154,7 +154,7 @@ describe('Plugin composition', () => {
                     order.push('local');
                     return undefined;
                 },
-            ] as RouteHooks['onError'],
+            ] as unknown as ErrorHook[],
             'local',
             '/r'
         );
@@ -166,7 +166,7 @@ describe('Plugin composition', () => {
                         order.push('plugin');
                         return undefined;
                     },
-                ] as unknown as RouteHooks['onError'],
+                ] as unknown as ErrorHook[],
             }),
         ];
         composePluginHooks(chain, plugins, '/r');
@@ -178,7 +178,7 @@ describe('Plugin composition', () => {
                     order.push('global');
                     return undefined;
                 },
-            ] as RouteHooks['onError'],
+            ] as unknown as ErrorHook[],
             'global',
             'app'
         );

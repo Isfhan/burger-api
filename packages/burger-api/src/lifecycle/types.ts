@@ -16,15 +16,45 @@ export type HookStage =
     'validation' | 'beforeRoute' | 'afterRoute' | 'mapResponse';
 
 /**
- * A lifecycle hook function.
- *
- * Uses the 3-return-type contract:
- * - `beforeRoute` — `Response` short-circuits the pipeline; `undefined`
- * continues.
- * - `afterRoute` / `mapResponse` — `Response` replaces the response;
- * `(res) => Response` transforms it; `undefined` / `void` continues.
+ * The return contract of a forward (pre-handler) hook:
+ * `Response` short-circuits the pipeline; `undefined` / `void` continues.
+ * The `Promise` variants cover async hooks.
  */
-export type Hook = (ctx: BurgerContext) => unknown;
+export type ForwardHookResult = Response | void | undefined;
+
+/**
+ * The return contract of a response hook (`afterRoute` / `mapResponse`):
+ * `Response` replaces the response; `(response) => Response` transforms it;
+ * `undefined` / `void` continues. The `Promise` variants cover async hooks.
+ */
+export type ResponseHookResult =
+    | Response
+    | ((response: Response) => Response | Promise<Response>)
+    | void
+    | undefined;
+
+/**
+ * A forward (pre-handler) lifecycle hook — `onRequest`, `validation`,
+ * `beforeRoute`. Transform functions are NOT part of the forward contract —
+ * they belong on the response hook points.
+ */
+export type ForwardHook = (
+    ctx: BurgerContext
+) => ForwardHookResult | Promise<ForwardHookResult>;
+
+/**
+ * A response lifecycle hook — `afterRoute`, `mapResponse`.
+ */
+export type ResponseHook = (
+    ctx: BurgerContext
+) => ResponseHookResult | Promise<ResponseHookResult>;
+
+/**
+ * A lifecycle hook function — the union of the stage-precise contracts.
+ * Kept for backward compatibility; prefer `ForwardHook` / `ResponseHook`
+ * when a stage is known.
+ */
+export type Hook = ForwardHook | ResponseHook;
 
 /**
  * An error-path interceptor hook. Runs when the pipeline throws (beforeRoute,
@@ -53,13 +83,13 @@ export type ErrorHook = (
  */
 export interface HookPlan {
     /** Framework-owned validation stage; runs after transform, before beforeRoute. */
-    validation?: Hook;
+    validation?: ForwardHook;
     /** Runs global → route. */
-    beforeRoute: Hook[];
+    beforeRoute: ForwardHook[];
     /** Response-transform hooks; run route → global. */
-    afterRoute: Hook[];
+    afterRoute: ResponseHook[];
     /** Final response hooks; may touch `ctx.set`; run route → global. */
-    mapResponse: Hook[];
+    mapResponse: ResponseHook[];
     /** Error interceptor; runs nearest-first (route → global). */
     onError: ErrorHook[];
     /**
@@ -97,10 +127,10 @@ export type TransformMap = Record<string, (ctx: BurgerContext) => unknown>;
  */
 export interface RouteHooks {
     /** Pre-routing hook — runs before the route is matched. App-level only. */
-    onRequest?: Hook | Hook[];
-    beforeRoute?: Hook | Hook[];
-    afterRoute?: Hook | Hook[];
-    mapResponse?: Hook | Hook[];
+    onRequest?: ForwardHook | ForwardHook[];
+    beforeRoute?: ForwardHook | ForwardHook[];
+    afterRoute?: ResponseHook | ResponseHook[];
+    mapResponse?: ResponseHook | ResponseHook[];
     onError?: ErrorHook | ErrorHook[];
     transform?: TransformMap;
 }

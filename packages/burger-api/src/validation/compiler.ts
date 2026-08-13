@@ -15,7 +15,8 @@
  * schemas (by reference or model ref) share one cached validator.
  */
 
-import type { RouteSchema } from '../types/index';
+import type { RouteSchema, RouteMethodValidation } from '../types/index';
+import type { LowercaseHTTPMethod } from '../utils/routing';
 import { ValidatorCache } from './cache';
 import { schemaRegistry, SchemaRegistry } from './registry';
 import {
@@ -94,19 +95,22 @@ export function compileRouteSchema(
 
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
-        const m = schema[rawMethod] || {};
-        const compiledMethod: CompiledRouteValidators['methods'][string] = {};
+        // Schema keys are typed as the method union; a module export is still
+        // a runtime string, so index via the widened record.
+        const m =
+            (schema as Record<string, RouteMethodValidation | undefined>)[
+                rawMethod
+            ] ?? {};
+        const compiledMethod: CompiledRouteValidators['methods'][LowercaseHTTPMethod] =
+            {};
 
         // Coercion is opt-in: app-level config.coerce OR per-route
         // schema[method].coerce override.
         const coerceEnabled =
-            config.coerce === true ||
-            (m as Record<string, unknown>).coerce === true;
+            config.coerce === true || m.coerce === true;
 
         for (const slot of REQUEST_SLOTS) {
-            const raw = (m as Record<string, SchemaInput | string | undefined>)[
-                slot
-            ];
+            const raw = m[slot];
             if (raw === undefined) continue;
             const slotSchema = resolveModelRef(raw, method, slot, registry);
             compiledMethod[slot] = compileSlot(
@@ -120,17 +124,15 @@ export function compileRouteSchema(
         // Build coercion plans only when coercion is enabled.
         if (coerceEnabled) {
             const coercion: NonNullable<
-                CompiledRouteValidators['methods'][string]['coercion']
-            > = {};
+                CompiledRouteValidators['methods'][LowercaseHTTPMethod]
+            >['coercion'] = {};
             for (const slot of [
                 'query',
                 'params',
                 'headers',
                 'cookies',
             ] as const) {
-                const raw = (
-                    m as Record<string, SchemaInput | string | undefined>
-                )[slot];
+                const raw = m[slot];
                 if (raw === undefined) continue;
                 const slotSchema = resolveModelRef(raw, method, slot, registry);
                 // Self-coercing schemas (e.g. z.coerce.* / ~standard.coercible)
@@ -147,7 +149,10 @@ export function compileRouteSchema(
             }
         }
 
-        methods[method] = compiledMethod;
+        // Method keys are lowercased at runtime before storage; the compiled
+        // map is union-keyed, so write via the widened record.
+        (methods as Record<string, typeof compiledMethod>)[method] =
+            compiledMethod;
     }
 
     // Compile response schemas (per-status) when present.
@@ -171,13 +176,11 @@ function compileResponseSchemas(
     let any = false;
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
-        const m = schema[rawMethod] || {};
-        const responseSchemas = (
-            m as Record<
-                string,
-                Record<string, SchemaInput | string> | undefined
-            >
-        ).response;
+        const m =
+            (schema as Record<string, RouteMethodValidation | undefined>)[
+                rawMethod
+            ] ?? {};
+        const responseSchemas = m.response;
         if (!responseSchemas) continue;
         const byStatus: Record<string, CompiledValidator> = {};
         for (const statusKey of Object.keys(responseSchemas)) {

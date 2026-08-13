@@ -21,6 +21,26 @@ describe('WebSocketScanner', () => {
         );
     });
 
+    it('throws a dynamic error at construction for a missing wsDir', () => {
+        const originalAppDir = process.env.BURGER_API_APP_DIR;
+        try {
+            delete process.env.BURGER_API_APP_DIR;
+            const missing = join(tempDir, 'websocket');
+            expect(() => new WebSocketScanner(missing)).toThrow(
+                `WebSocket directory "${missing}" does not exist`
+            );
+            expect(
+                () => new WebSocketScanner(missing)
+            ).toThrow('Check the wsDir option in src/index.ts');
+        } finally {
+            if (originalAppDir === undefined) {
+                delete process.env.BURGER_API_APP_DIR;
+            } else {
+                process.env.BURGER_API_APP_DIR = originalAppDir;
+            }
+        }
+    });
+
     it('should return empty routes for empty directory', async () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();

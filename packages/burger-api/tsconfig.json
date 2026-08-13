@@ -33,6 +33,6 @@
             "burger-api": ["src/index.ts"]
         }
     },
-    "include": ["src/**/*", "tests/**/*", "examples/**/*"],
+    "include": ["src/**/*", "test/**/*", "examples/**/*"],
     "exclude": ["node_modules", "dist"]
 }

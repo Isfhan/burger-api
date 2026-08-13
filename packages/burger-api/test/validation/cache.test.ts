@@ -5,7 +5,7 @@ import { ValidatorCache } from '../../src/validation/cache';
 describe('ValidatorCache', () => {
     it('stores and retrieves a validator by identity', () => {
         const cache = new ValidatorCache();
-        const fake = {
+        const fake: any = {
             kind: 'zod',
             slot: 'query',
             identity: 'zod:abc',
@@ -13,7 +13,7 @@ describe('ValidatorCache', () => {
             coercible: false,
         };
         expect(cache.get('zod:abc')).toBeUndefined();
-        cache.set('zod:abc', fake as any);
+        cache.set('zod:abc', fake);
         expect(cache.get('zod:abc')).toBe(fake);
         expect(cache.has('zod:abc')).toBe(true);
     });

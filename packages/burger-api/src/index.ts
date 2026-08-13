@@ -487,7 +487,7 @@ export class Burger {
                       `${config.docsAuth.username}:${config.docsAuth.password}`
                   )
                 : null;
-            this.routes[docsPath] = (ctx: any) => {
+            this.routes[docsPath] = (ctx) => {
                 // Basic auth protection (timing-safe comparison)
                 if (expectedAuth !== null) {
                     const authHeader =
@@ -774,7 +774,13 @@ export type {
     ServerOptions,
     RequestHandler,
     BurgerNext,
+    RouteDefinition,
+    RouteSchema,
+    RouteMethodValidation,
+    FetchHandler,
+    PageDefinition,
     openapi,
+    OpenAPIMethodMeta,
     RouteHooks,
     TransformMap,
     ContextSet,
@@ -785,8 +791,22 @@ export type {
     OpenAPIObject,
 } from './types/index';
 
+// The Server class returned by `getServer()` — exported as a type so callers
+// can name it.
+export type { Server } from './core/server';
+
+// Export HTTP method unions (used by typed route definition keys)
+export type { HTTPMethod, LowercaseHTTPMethod } from './utils/routing';
+
 // Export lifecycle types
-export type { Hook, ErrorHook } from './lifecycle/types';
+export type {
+    Hook,
+    ForwardHook,
+    ForwardHookResult,
+    ResponseHook,
+    ResponseHookResult,
+    ErrorHook,
+} from './lifecycle/types';
 
 // Export validation types
 export type { ValidationIssue } from './validation/types';

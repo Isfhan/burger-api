@@ -1,6 +1,10 @@
 import type { BurgerContext } from '../context/context';
 import type { RequestHandler } from '../types/index';
-import type { HookPlan, Hook, ErrorHook } from './types';
+import type {
+    HookPlan,
+    ResponseHook,
+    ErrorHook,
+} from './types';
 import { runHooks } from './hook-runner';
 import { methodNotAllowed } from '../utils/response';
 import { applyTransform } from './transform';
@@ -48,11 +52,7 @@ export async function executeHookPlan(
         }
 
         // 3. beforeRoute → handler.
-        let response = await runHooks(
-            ctx,
-            plan.beforeRoute as unknown as Hook[],
-            handler
-        );
+        let response = await runHooks(ctx, plan.beforeRoute, handler);
 
         // 4. Response validation — post-handler, pre-afterRoute.
         // Validates the handler's return against declared response schemas.
@@ -145,7 +145,7 @@ async function dispatchOnError(
  * (transform), or `undefined` / `void` (continue).
  */
 async function runResponseHooks(
-    hooks: Hook[],
+    hooks: ResponseHook[],
     ctx: BurgerContext,
     response: Response
 ): Promise<Response> {
@@ -157,7 +157,7 @@ async function runResponseHooks(
             continue;
         }
         if (typeof result === 'function') {
-            res = await (result as (r: Response) => Promise<Response>)(res);
+            res = await result(res);
             continue;
         }
         // undefined / void → continue

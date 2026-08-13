@@ -124,7 +124,9 @@ export function analyzeRouteAccess(
         // (the lifecycle lives in `hooks.ts`). Keeps field-access detection
         // accurate for routes that read context fields inside hooks.
         let source = '';
-        const handlers = def.handlers ?? {};
+        // Handler keys are a runtime string (module exports); the map type is
+        // union-keyed, so widen for iteration.
+        const handlers = (def.handlers ?? {}) as Record<string, unknown>;
         for (const key of Object.keys(handlers)) {
             source += '\n' + safeToString(handlers[key]);
         }

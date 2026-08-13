@@ -38,7 +38,6 @@ async function run(plugin: Plugin, path: string, init?: RequestInit): Promise<Re
     burger.usePlugin(plugin);
     const handler = await burger.fetchHandler();
     return handler(new Request(`http://localhost${path}`, init));
-    return res;
 }
 
 describe('config.auth === false bypass (ecosystem auth plugins)', () => {
@@ -60,7 +59,7 @@ describe('config.auth === false bypass (ecosystem auth plugins)', () => {
         const plugin = basicAuth({
             validate: async (username, password) =>
                 username === 'admin' && password === 'secret'
-                    ? { id: 1, username: 'admin' }
+                    ? { id: '1', username: 'admin' }
                     : null,
         });
         expect((await run(plugin, '/api/guarded')).status).toBe(401);

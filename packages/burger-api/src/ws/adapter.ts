@@ -228,6 +228,10 @@ export class WebSocketAdapter {
 
         return async (
             request: Request,
+            // Platform boundary: the upgrade `server` handle is Bun's
+            // `Server` (Bun.serve return). Core stays WinterCG-pure, so the
+            // type is intentionally opaque here and only used structurally
+            // (calls `server.upgrade(...)`) by the Bun adapter at runtime.
             server: any
         ): Promise<Response | undefined> => {
             // Check if this is a WebSocket upgrade request

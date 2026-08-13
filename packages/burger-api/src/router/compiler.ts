@@ -1,4 +1,5 @@
 import type { RouteDefinition, RequestHandler } from '../types/index';
+import type { HTTPMethod } from '../utils/routing';
 import type { RouteModule } from '../compiler/route-module';
 import type { ContextInit, RouteAccessInfo } from '../context/types';
 import { compileRouteSchema } from '../validation/compiler';
@@ -92,7 +93,7 @@ export class RouterCompiler {
             // flattener produces the per-hook-point arrays with correct ordering
             // (global → local for forward hooks, local → global for onError).
             // Validation is added as global scope so it pins at index 0.
-            const routeHooks = def.hooks as RouteHooks | undefined;
+            const routeHooks = def.hooks;
             const chain = new HookChain();
             if (hasSchema) {
                 const validators = compileRouteSchema(def.schema!, this.config);
@@ -267,7 +268,7 @@ function toRouteDefinition(mod: RouteModule): RouteDefinition {
         handlers: mod.handlers,
         schema: mod.schema,
         openapi: mod.openapi,
-        hooks: mod.hooks as RouteHooks | undefined,
+        hooks: mod.hooks,
         isWildcard: mod.isWildcard,
         config: mod.config,
     };
@@ -288,7 +289,7 @@ function toHookArray<T>(h: T | T[] | undefined): T[] {
  * pipeline, and merges `ctx.set` into the response via `applySet`.
  */
 function buildCompiledHandler(
-    handlers: { [method: string]: RequestHandler },
+    handlers: Partial<Record<HTTPMethod, RequestHandler>>,
     plan: HookPlan,
     allow: string,
     meta: RouteAccessInfo,
@@ -302,7 +303,12 @@ function buildCompiledHandler(
         ctxInit?: ContextInit
     ): Promise<Response> => {
         const method = request.method;
-        let handler = handlers[method];
+        // `request.method` is a runtime string; the handler map only accepts
+        // the HTTPMethod union. Any non-union method cannot be a defined
+        // handler key, so indexing is safe.
+        let handler = (handlers as Record<string, RequestHandler | undefined>)[
+            method
+        ];
 
         // When dispatched natively (Bun's `routes` map), no `ctxInit` is
         // provided, so derive params / wildcardParams / route from the URL.

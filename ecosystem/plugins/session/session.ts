@@ -226,7 +226,7 @@ export function session(options: SessionOptions = {}): Plugin {
       transform: {
         session: async (ctx: BurgerContext): Promise<Record<string, unknown> | undefined> => {
           // Get session ID from cookie
-          let sessionId = ctx.cookies[cookie];
+          let sessionId: string | undefined = ctx.cookies[cookie];
 
           // Verify signature if secret provided
           if (secret && sessionId) {

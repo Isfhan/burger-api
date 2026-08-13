@@ -188,9 +188,18 @@ export interface CompiledWebSocketRoute {
  */
 export interface BurgerWS {
     /**
-     * Per-connection data
+     * Per-connection data. Typed via module augmentation of `WebSocketData`:
+     *
+     * ```typescript
+     * declare module "burger-api" {
+     * interface WebSocketData {
+     * userId: string;
+     * username: string;
+     * }
+     * }
+     * ```
      */
-    data: Record<string, unknown>;
+    data: WebSocketData;
 
     /**
      * Injected application services (same as `ctx.services` in HTTP handlers).
@@ -369,25 +378,33 @@ export interface WebSocketConfigModule extends WebSocketConfig {}
  * BurgerWS implementation that wraps Bun's ServerWebSocket
  */
 export class BurgerWSContext implements BurgerWS {
+    // Platform boundary: wraps Bun's `ServerWebSocket`. Core stays
+    // WinterCG-pure, so the raw socket is intentionally opaque here and is
+    // only used structurally (send/subscribe/...) by the Bun adapter.
     private _raw: any;
-    private _data: Record<string, unknown> = {};
-    private _services: Record<string, unknown> = {};
+    private _data: WebSocketData = {};
+    private _services: BurgerServices = Object.create(null) as BurgerServices;
 
+    // The raw socket is Bun's `ServerWebSocket` (see `_raw` above); the
+    // provider map mirrors `BurgerContext.create`'s providers parameter.
     constructor(rawWebSocket: any, providers?: Map<string, unknown>) {
         this._raw = rawWebSocket;
-        // Copy data from raw WebSocket
+        // Copy data from raw WebSocket (typed via the WebSocketData
+        // augmentation interface users extend).
         if (rawWebSocket.data) {
-            this._data = { ...rawWebSocket.data };
+            this._data = { ...rawWebSocket.data } as WebSocketData;
         }
         // Inject providers as services
-        this._services = providers ? Object.fromEntries(providers) : {};
+        this._services = providers
+            ? (Object.fromEntries(providers) as unknown as BurgerServices)
+            : (Object.create(null) as BurgerServices);
     }
 
-    get data(): Record<string, unknown> {
+    get data(): WebSocketData {
         return this._data;
     }
 
-    set data(value: Record<string, unknown>) {
+    set data(value: WebSocketData) {
         this._data = value;
         // Sync back to raw WebSocket
         if (this._raw) {
@@ -395,12 +412,14 @@ export class BurgerWSContext implements BurgerWS {
         }
     }
 
-    get services(): Record<string, unknown> {
+    get services(): BurgerServices {
         return this._services;
     }
 
     get user(): unknown {
-        return this._data.user;
+        // `user` is not declared on WebSocketData (auth plugins seed it);
+        // access through the widened record.
+        return (this._data as Record<string, unknown>).user;
     }
 
     send(message: string | Buffer): void {

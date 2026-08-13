@@ -1,4 +1,4 @@
-import type { Hook, ErrorHook, HookStage } from '../lifecycle/types';
+import type { ForwardHook, ResponseHook, ErrorHook } from '../lifecycle/types';
 import type { ChainNode, Scope } from './node';
 
 export class HookChain {
@@ -8,14 +8,37 @@ export class HookChain {
         this.nodes.push(node);
     }
 
+    /**
+     * Stage hooks with their function types checked against the stage:
+     * forward stages take `ForwardHook`s, response stages take
+     * `ResponseHook`s, the error stage takes `ErrorHook`s.
+     */
     addStage(
-        stage: HookStage | 'onError',
-        fns: (Hook | ErrorHook)[],
+        stage: 'validation' | 'beforeRoute',
+        fns: ForwardHook[],
+        scope: Scope,
+        owner: string
+    ): void;
+    addStage(
+        stage: 'afterRoute' | 'mapResponse',
+        fns: ResponseHook[],
+        scope: Scope,
+        owner: string
+    ): void;
+    addStage(
+        stage: 'onError',
+        fns: ErrorHook[],
+        scope: Scope,
+        owner: string
+    ): void;
+    addStage(
+        stage: ChainNode['stage'],
+        fns: ForwardHook[] | ResponseHook[] | ErrorHook[],
         scope: Scope,
         owner: string
     ): void {
         for (const fn of fns) {
-            this.nodes.push({ stage, fn, scope, owner });
+            this.nodes.push({ stage, fn, scope, owner } as ChainNode);
         }
     }
 

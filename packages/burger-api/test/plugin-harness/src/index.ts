@@ -1,5 +1,6 @@
 import { Burger, setDir } from '../../../src/index';
-import type { Plugin, RouteHooks } from '../../../src/plugin/types';
+import type { Plugin } from '../../../src/plugin/types';
+import type { RouteHooks } from '../../../src/lifecycle/types';
 import { join } from 'path';
 
 const port = Number(process.env.PORT) || 4000;
@@ -8,7 +9,7 @@ const testPlugin: Plugin = {
     name: 'test-plugin',
     hooks: {
         beforeRoute: [
-            (req) => {
+            (req: any) => {
                 (req as any)._pluginRan = true;
             },
         ],
@@ -21,7 +22,7 @@ const testPlugin: Plugin = {
 
 const testMacro: RouteHooks = {
     beforeRoute: [
-        (req) => {
+        (req: any) => {
             (req as any)._macroRan = true;
         },
     ],

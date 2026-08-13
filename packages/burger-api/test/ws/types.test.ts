@@ -79,7 +79,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy subscribe method', () => {
-        let subscribedTopic: string | null = null;
+        let subscribedTopic: any = null;
         const mockWs = createMockWs({
             subscribe: (topic: string) => {
                 subscribedTopic = topic;
@@ -93,7 +93,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy unsubscribe method', () => {
-        let unsubscribedTopic: string | null = null;
+        let unsubscribedTopic: any = null;
         const mockWs = createMockWs({
             unsubscribe: (topic: string) => {
                 unsubscribedTopic = topic;
@@ -107,7 +107,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy publish method', () => {
-        let published: { topic: string; message: any } | null = null;
+        let published: any = null;
         const mockWs = createMockWs({
             publishText: (topic: string, msg: any) => {
                 published = { topic, message: msg };
@@ -122,7 +122,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy publishText method', () => {
-        let published: { topic: string; message: any } | null = null;
+        let published: any = null;
         const mockWs = createMockWs({
             publishText: (topic: string, msg: any) => {
                 published = { topic, message: msg };
@@ -137,7 +137,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy publishBinary method', () => {
-        let published: { topic: string; message: any } | null = null;
+        let published: any = null;
         const mockWs = createMockWs({
             publishBinary: (topic: string, msg: any) => {
                 published = { topic, message: msg };
@@ -153,7 +153,7 @@ describe('BurgerWSContext', () => {
     });
 
     it('should proxy close method', () => {
-        let closeCall: { code?: number; reason?: string } | null = null;
+        let closeCall: any = null;
         const mockWs = createMockWs({
             close: (code?: number, reason?: string) => {
                 closeCall = { code, reason };
@@ -188,7 +188,9 @@ describe('BurgerWSContext', () => {
 
         const ctx = new BurgerWSContext(mockWs);
 
-        expect(ctx.data.userId).toBe('123');
+        // `data` is typed via WebSocketData augmentation; `userId` is not
+        // declared here, so read through the widened record.
+        expect((ctx.data as Record<string, unknown>).userId).toBe('123');
     });
 
     it('should have correct readyState', () => {

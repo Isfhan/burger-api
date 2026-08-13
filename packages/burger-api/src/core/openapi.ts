@@ -14,6 +14,9 @@ import {
 import type {
     ServerOptions,
     RouteDefinition,
+    RouteMethodValidation,
+    OpenAPIMethodMeta,
+    RequestHandler,
     OpenAPIConfig,
     OpenAPIObject,
     JsonSchemaConverter,
@@ -235,18 +238,30 @@ export function generateOpenAPIDocument(
         doc.paths[openApiPath] = doc.paths[openApiPath] || {};
 
         for (const method in route.handlers) {
-            if (typeof route.handlers[method] !== 'function') continue;
+            // Handler/schema/openapi maps are union-keyed at the type level;
+            // runtime keys come from module exports, so widen per map.
+            const handlers = route.handlers as Record<string, RequestHandler>;
+            const openapiMeta = (route.openapi ?? {}) as Record<
+                string,
+                OpenAPIMethodMeta
+            >;
+            const schema = (route.schema ?? {}) as Record<
+                string,
+                RouteMethodValidation
+            >;
+
+            if (typeof handlers[method] !== 'function') continue;
             const lowerMethod = method.toLowerCase();
 
-            const methodMeta = route.openapi?.[lowerMethod] || {};
+            const methodMeta = openapiMeta[lowerMethod] || {};
 
             const operationId =
                 methodMeta.operationId ||
                 `${lowerMethod}_${route.path.replace(/[\/:]/g, '_')}`;
 
             let parameters: any[] = [];
-            if (route.schema && route.schema[lowerMethod]) {
-                const schemaDef = route.schema[lowerMethod];
+            if (schema[lowerMethod]) {
+                const schemaDef = schema[lowerMethod];
                 parameters = [
                     ...buildParameters(schemaDef.params, 'path'),
                     ...buildParameters(schemaDef.query, 'query'),
@@ -256,17 +271,16 @@ export function generateOpenAPIDocument(
             }
 
             let requestBody = undefined;
-            if (route.schema && route.schema[lowerMethod]?.body) {
+            if (schema[lowerMethod]?.body) {
                 requestBody = buildRequestBody(
-                    route.schema[lowerMethod].body,
+                    schema[lowerMethod].body,
                     config?.mapJsonSchema
                 );
             }
 
             // Auto-generate response schemas from schema.response
             const responses = buildResponses(
-                route.schema?.[lowerMethod]?.response as
-                    Record<string, SchemaInput> | undefined,
+                schema[lowerMethod]?.response,
                 methodMeta.responses,
                 config?.mapJsonSchema
             );

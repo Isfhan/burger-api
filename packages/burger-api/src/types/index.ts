@@ -5,6 +5,7 @@ export type { RouteHooks, TransformMap } from '../lifecycle/types';
 import type { OpenAPIConfig } from './openapi-config';
 import type { RuntimeAdapter } from '../adapter/types';
 import type { WebSocketRouteDefinition } from '../ws/types';
+import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing';
 
 /**
  * Minimal structural view of the running server exposed to `fetch` handlers.
@@ -190,10 +191,12 @@ export interface RouteDefinition {
     path: string;
     /**
      * An object containing the request handlers for each HTTP method.
-     * The keys are the HTTP method names (e.g. "GET", "POST", etc.).
+     * The keys are the HTTP method names (e.g. "GET", "POST", etc.);
+     * only the methods in the {@link HTTPMethod} union are accepted —
+     * anything else fails at compile time and would 405 at runtime.
      * The values are the request handlers for that method.
      */
-    handlers: { [method: string]: RequestHandler };
+    handlers: Partial<Record<HTTPMethod, RequestHandler>>;
     /**
      * Lifecycle hooks declared in `hooks.ts`. Carried raw from the
      * compiler and compiled into a frozen `HookPlan` by RouterCompiler. Mapped
@@ -237,51 +240,63 @@ export interface RouteDefinition {
 }
 
 /**
- * Define a type for the route schema.
- * For each HTTP method (in lowercase), you can optionally define:
+ * The per-method body of a route schema. For each HTTP method you can
+ * optionally define:
  * - params: for URL parameters,
  * - query: for query string parameters,
- * - body: for the request body.
+ * - headers / cookies / body: for the corresponding request data,
+ * - response: per-status response schemas validated after the handler.
  */
-export type RouteSchema = {
-    [method: string]: {
-        params?: SchemaInput | string;
-        query?: SchemaInput | string;
-        headers?: SchemaInput | string;
-        cookies?: SchemaInput | string;
-        body?: SchemaInput | string;
-        /** Per-route opt-in override for coercion. */
-        coerce?: boolean;
-        /** Per-status-code response schemas, validated after the handler. */
-        response?: Record<string, SchemaInput>;
+export interface RouteMethodValidation {
+    params?: SchemaInput | string;
+    query?: SchemaInput | string;
+    headers?: SchemaInput | string;
+    cookies?: SchemaInput | string;
+    body?: SchemaInput | string;
+    /** Per-route opt-in override for coercion. */
+    coerce?: boolean;
+    /** Per-status-code response schemas, validated after the handler. */
+    response?: Record<string, SchemaInput>;
+}
+
+/**
+ * Define a type for the route schema.
+ *
+ * Keys are HTTP method names; both lowercase (canonical, matching the
+ * compiled form) and uppercase (accepted by the compiler for programmatic
+ * routes) are legal at runtime, so both are accepted here. Anything else
+ * fails at compile time.
+ */
+export type RouteSchema = Partial<
+    Record<LowercaseHTTPMethod | HTTPMethod, RouteMethodValidation>
+>;
+
+/**
+ * Per-method OpenAPI metadata. Each key is an HTTP method name in lowercase
+ * (the compiled form the OpenAPI generator reads); uppercase keys are a
+ * silent no-op at runtime, so they are rejected at compile time.
+ */
+export interface OpenAPIMethodMeta {
+    summary?: string;
+    description?: string;
+    tags?: string[];
+    operationId?: string;
+    deprecated?: boolean;
+    responses?: Record<string, Record<string, unknown>>;
+    externalDocs?: {
+        description?: string;
+        url?: string;
     };
-};
+}
 
 /**
  * Optional OpenAPI metadata to generate documentation for the route.
- * Each key is an HTTP method name (in lowercase) and the value is an object
- * containing the OpenAPI metadata for that method.
+ * Keyed by lowercase HTTP method; see {@link OpenAPIMethodMeta}.
  *
  * If the `openapi` property is not defined, the route will not be included in
  * the generated OpenAPI documentation.
- *
- * See the OpenAPI specification for the possible properties and their
- * descriptions.
  */
-export type openapi = {
-    [method: string]: {
-        summary?: string;
-        description?: string;
-        tags?: string[];
-        operationId?: string;
-        deprecated?: boolean;
-        responses?: Record<string, any>;
-        externalDocs?: {
-            description?: string;
-            url?: string;
-        };
-    };
-};
+export type openapi = Partial<Record<LowercaseHTTPMethod, OpenAPIMethodMeta>>;
 
 export interface PageDefinition {
     path: string;

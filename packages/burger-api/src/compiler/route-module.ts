@@ -1,4 +1,6 @@
 import type { RequestHandler, RouteSchema, openapi } from '../types/index';
+import type { HTTPMethod } from '../utils/routing';
+import type { RouteHooks } from '../lifecycle/types';
 import type { ConventionFile } from './conventions';
 import type { Hook } from '../lifecycle/types';
 
@@ -27,7 +29,7 @@ export interface RouteModule {
     /**
      * HTTP method handlers from `route.ts` (GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS).
      */
-    handlers: { [method: string]: RequestHandler };
+    handlers: Partial<Record<HTTPMethod, RequestHandler>>;
 
     /**
      * Validation definitions from `schema.ts` (compiled at route build time).
@@ -38,7 +40,7 @@ export interface RouteModule {
      * Lifecycle hooks from `hooks.ts` (compiled into a frozen hook plan).
      * Stored raw so the later hook compiler owns the typing.
      */
-    hooks?: Record<string, unknown>;
+    hooks?: RouteHooks;
 
     /**
      * OpenAPI metadata from `openapi.ts` (merged at compile time).

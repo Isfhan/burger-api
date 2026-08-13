@@ -1,4 +1,9 @@
-import type { Hook, ErrorHook, HookPlan } from '../lifecycle/types';
+import type {
+    ForwardHook,
+    ResponseHook,
+    ErrorHook,
+    HookPlan,
+} from '../lifecycle/types';
 import type { HookChain } from './chain';
 import type { ChainNode } from './node';
 
@@ -32,26 +37,26 @@ function pushByScope(
 export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
     const nodes = chain.getNodes();
 
-    let validation: Hook | undefined;
-    const beforeRoute: Hook[] = [];
-    const afterRoute: Hook[] = [];
-    const mapResponse: Hook[] = [];
+    let validation: ForwardHook | undefined;
+    const beforeRoute: ForwardHook[] = [];
+    const afterRoute: ResponseHook[] = [];
+    const mapResponse: ResponseHook[] = [];
     const onError: ErrorHook[] = [];
 
-    const frameworkBefore: Hook[] = [];
-    const globalBefore: Hook[] = [];
-    const pluginBefore: Hook[] = [];
-    const localBefore: Hook[] = [];
+    const frameworkBefore: ForwardHook[] = [];
+    const globalBefore: ForwardHook[] = [];
+    const pluginBefore: ForwardHook[] = [];
+    const localBefore: ForwardHook[] = [];
 
-    const localAfter: Hook[] = [];
-    const globalAfter: Hook[] = [];
-    const pluginAfter: Hook[] = [];
-    const frameworkAfter: Hook[] = [];
+    const localAfter: ResponseHook[] = [];
+    const globalAfter: ResponseHook[] = [];
+    const pluginAfter: ResponseHook[] = [];
+    const frameworkAfter: ResponseHook[] = [];
 
-    const localResp: Hook[] = [];
-    const globalResp: Hook[] = [];
-    const pluginResp: Hook[] = [];
-    const frameworkResp: Hook[] = [];
+    const localResp: ResponseHook[] = [];
+    const globalResp: ResponseHook[] = [];
+    const pluginResp: ResponseHook[] = [];
+    const frameworkResp: ResponseHook[] = [];
 
     const localError: ErrorHook[] = [];
     const globalError: ErrorHook[] = [];
@@ -59,13 +64,15 @@ export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
     const frameworkError: ErrorHook[] = [];
 
     for (const node of nodes) {
+        // The ChainNode is discriminated on `stage`, so `fn` narrows to the
+        // stage's precise hook type without assertions.
         switch (node.stage) {
             case 'validation': {
-                validation = node.fn as Hook;
+                validation = node.fn;
                 break;
             }
             case 'beforeRoute': {
-                const fn = node.fn as Hook;
+                const fn = node.fn;
                 if (node.scope === 'framework') frameworkBefore.push(fn);
                 else if (node.scope === 'global') globalBefore.push(fn);
                 else if (node.scope === 'plugin') pluginBefore.push(fn);
@@ -73,7 +80,7 @@ export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
                 break;
             }
             case 'afterRoute': {
-                const fn = node.fn as Hook;
+                const fn = node.fn;
                 if (node.scope === 'framework') frameworkAfter.push(fn);
                 else if (node.scope === 'global') globalAfter.push(fn);
                 else if (node.scope === 'plugin') pluginAfter.push(fn);
@@ -81,7 +88,7 @@ export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
                 break;
             }
             case 'mapResponse': {
-                const fn = node.fn as Hook;
+                const fn = node.fn;
                 if (node.scope === 'framework') frameworkResp.push(fn);
                 else if (node.scope === 'global') globalResp.push(fn);
                 else if (node.scope === 'plugin') pluginResp.push(fn);
@@ -89,7 +96,7 @@ export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
                 break;
             }
             case 'onError': {
-                const fn = node.fn as ErrorHook;
+                const fn = node.fn;
                 if (node.scope === 'local') localError.push(fn);
                 else if (node.scope === 'global') globalError.push(fn);
                 else if (node.scope === 'plugin') pluginError.push(fn);

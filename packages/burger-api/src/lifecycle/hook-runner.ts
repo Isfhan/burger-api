@@ -1,6 +1,14 @@
 import type { BurgerContext } from '../context/context';
-import type { BurgerNext, RequestHandler } from '../types/index';
-import type { Hook } from './types';
+import type { RequestHandler } from '../types/index';
+import type { ForwardHook, ResponseHook } from './types';
+
+/**
+ * A forward hook that may also return a transform function at runtime.
+ * The shared runner accepts the full 3-return contract even from forward
+ * hooks (permissive runtime); the public `ForwardHook` type only promises
+ * the documented `Response | void | undefined` contract.
+ */
+type RunnerHook = ForwardHook | ResponseHook;
 
 /**
  * Runs a single hook followed by the handler.
@@ -9,10 +17,10 @@ import type { Hook } from './types';
  */
 async function runSingleHook(
     ctx: BurgerContext,
-    hook: Hook,
+    hook: RunnerHook,
     handler: RequestHandler
 ): Promise<Response> {
-    const result = (await hook(ctx)) as BurgerNext;
+    const result = await hook(ctx);
 
     // Short-circuit with Response
     if (result instanceof Response) {
@@ -41,7 +49,7 @@ async function runSingleHook(
  */
 async function runHookChain(
     ctx: BurgerContext,
-    hooks: Hook[],
+    hooks: RunnerHook[],
     handler: RequestHandler
 ): Promise<Response> {
     const len = hooks.length;
@@ -49,13 +57,13 @@ async function runHookChain(
     // Fast path: two hooks (common: CORS + logger, or auth + logger)
     if (len === 2) {
         // First hook
-        const result1 = (await hooks[0](ctx)) as BurgerNext;
+        const result1 = await hooks[0](ctx);
         if (result1 instanceof Response) {
             return result1;
         }
 
         // Second hook
-        const result2 = (await hooks[1](ctx)) as BurgerNext;
+        const result2 = await hooks[1](ctx);
         if (result2 instanceof Response) {
             // Apply first hook's after function if exists
             if (typeof result1 === 'function') {
@@ -80,12 +88,13 @@ async function runHookChain(
 
     // General path: 3+ hooks (less common)
     // Pre-allocate array with exact size to avoid dynamic resizing
-    const afterStack = new Array(len);
+    const afterStack: ((r: Response) => Response | Promise<Response>)[] =
+        new Array(len);
     let afterCount = 0;
 
     // Run each hook
     for (let i = 0; i < len; i++) {
-        const result = (await hooks[i](ctx)) as BurgerNext;
+        const result = await hooks[i](ctx);
 
         // Short-circuit with Response (check first - most common early exit)
         if (result instanceof Response) {
@@ -135,7 +144,7 @@ async function runHookChain(
  */
 export function runHooks(
     ctx: BurgerContext,
-    hooks: Hook[],
+    hooks: RunnerHook[],
     handler: RequestHandler
 ): Promise<Response> {
     if (hooks.length === 0) return Promise.resolve(handler(ctx));

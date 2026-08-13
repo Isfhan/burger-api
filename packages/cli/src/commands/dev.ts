@@ -10,6 +10,7 @@
 
 import { Command } from 'commander';
 import { existsSync } from 'fs';
+import { dirname, resolve } from 'path';
 import {
     success,
     error as logError,
@@ -60,6 +61,10 @@ export const devCommand = new Command('dev')
                 env: {
                     ...process.env,
                     PORT: port,
+                    // Entry-relative path fallback for the framework scanners
+                    // (apiDir/pageDir/wsDir resolve under this dir when they
+                    // don't exist relative to the project root).
+                    BURGER_API_APP_DIR: dirname(resolve(file)),
                 },
             });
 

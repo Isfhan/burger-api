@@ -75,3 +75,13 @@ const app = new Burger({
     // ... rest of config
 });
 ```
+
+## Directory Path Resolution
+
+`apiDir`, `pageDir`, and `wsDir` resolve in this order until one exists:
+
+1. Absolute path, used as-is.
+2. Relative to the project root (e.g. `./src/api`).
+3. Relative to the entry file's directory when run via `burger-api dev`/`build` — for the default entry `src/index.ts` that is `src/`, so `apiDir: 'api'` finds `src/api`.
+
+The project root wins when both exist. Bare `bun src/index.ts` (no CLI) skips the entry fallback. Unresolvable dirs fail with an error naming the exact paths tried (e.g. `Routes directory "backend" does not exist. Tried "./backend" (project root) and "./src/backend" (src/).`).

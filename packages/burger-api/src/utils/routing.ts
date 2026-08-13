@@ -22,7 +22,8 @@ export const ROUTE_CONSTANTS = {
 };
 
 /**
- * Supported HTTP methods
+ * Supported HTTP methods, as a literal tuple so the method names can be
+ * reused as a type union (`HTTPMethod`) across the public API.
  */
 export const HTTP_METHODS = [
     'GET',
@@ -32,7 +33,19 @@ export const HTTP_METHODS = [
     'PATCH',
     'HEAD',
     'OPTIONS',
-];
+] as const;
+
+/**
+ * The closed set of HTTP methods a route can handle, in the uppercase form
+ * used by `RouteDefinition.handlers` keys and `request.method` at runtime.
+ */
+export type HTTPMethod = (typeof HTTP_METHODS)[number];
+
+/**
+ * Lowercase form of `HTTPMethod`, used by the lowercase-keyed maps
+ * (`RouteSchema`, `openapi`, compiled validators) at runtime.
+ */
+export type LowercaseHTTPMethod = Lowercase<HTTPMethod>;
 
 /**
  * Calculates the specificity of a route path based on the number of static segments.

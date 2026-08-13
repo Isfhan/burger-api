@@ -49,7 +49,7 @@ describe('ResponseValidator', () => {
             response: { get: { '2xx': stubAlwaysFail() } },
         };
         // status 201 matches class 2xx
-        expect(v.response!.get['2xx']).toBeDefined();
+        expect(v.response?.get?.['2xx']).toBeDefined();
     });
 
     it('dev mode: mismatch logs + passes through (ok)', () => {
@@ -120,7 +120,7 @@ describe('ResponseValidator', () => {
     });
 });
 
-function stubAlwaysFail() {
+function stubAlwaysFail(): any {
     return {
         kind: 'zod' as const,
         slot: 'body' as const,

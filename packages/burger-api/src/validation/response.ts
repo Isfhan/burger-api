@@ -14,6 +14,7 @@
 
 import type {
     CompiledRouteValidators,
+    CompiledValidator,
     ValidationResult,
     ValidatorConfig,
 } from './types';
@@ -25,7 +26,13 @@ function selectResponseValidator(
     method: string,
     status: number
 ) {
-    const methodResponses = validators.response?.[method];
+    // The response map only has lowercase-method keys; the caller's runtime
+    // method string may be any case, so index via the widened record.
+    const methodResponses = (
+        validators.response as
+            | Record<string, Record<string, CompiledValidator> | undefined>
+            | undefined
+    )?.[method];
     if (!methodResponses) return undefined;
     if (methodResponses[String(status)]) return methodResponses[String(status)];
     const cls = `${Math.floor(status / 100)}xx`;

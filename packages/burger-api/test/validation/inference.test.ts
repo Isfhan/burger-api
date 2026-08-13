@@ -92,8 +92,9 @@ describe('InferValidated', () => {
     it('types ctx.validated via the generic context', () => {
         type Ctx = BurgerContext<typeof schema>;
         type V2 = NonNullable<Ctx['validated']>;
-        type E = Expect<Equal<V2['body'], { name: string; age: number }>>;
-        type E = Expect<Equal<V2['body'], { name: string; age: number }>>;
+        type E = Expect<
+            Equal<V2['body'], { name: string; age: number } | undefined>
+        >;
         const e: E = true;
         expect(e).toBe(true);
     });

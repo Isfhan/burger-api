@@ -115,7 +115,7 @@ describe('WebSocket integration', () => {
     it('programmatic route: close event', async () => {
         port = await getAvailablePort();
 
-        let closedCode: number | null = null;
+        let closedCode: any = null;
 
         server = new Burger({ debug: true });
         server.websocket('/close-test', {

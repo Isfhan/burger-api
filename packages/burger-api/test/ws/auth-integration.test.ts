@@ -282,7 +282,7 @@ describe('WebSocket Auth Integration', () => {
         });
 
         it('should make services available in handlers', async () => {
-            let capturedServices: Record<string, unknown> | null = null;
+            let capturedServices: import('../../src/context/context').BurgerServices | null = null;
             const route = createRoute('/chat', {
                 handlers: {
                     open: (ws) => {
@@ -320,7 +320,10 @@ describe('WebSocket Auth Integration', () => {
             wsOption.open(mockWs);
 
             expect(capturedServices).toBeDefined();
-            expect(capturedServices?.logger).toBeDefined();
+            expect(
+                (capturedServices as import('../../src/context/context').BurgerServices | null)
+                    ?.logger
+            ).toBeDefined();
         });
     });
 });

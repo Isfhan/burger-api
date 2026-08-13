@@ -38,13 +38,15 @@ describe('scanApiRoutes', () => {
         expect(dynamic?.isWildcard).toBe(false);
     });
 
-    it('returns empty array when apiDir does not exist', async () => {
-        const entries = await scanApiRoutes(
-            fixturesDir,
-            './nonexistent',
-            '/api'
+    it('fails loud when a custom apiDir does not exist', async () => {
+        await expect(
+            scanApiRoutes(fixturesDir, './nonexistent', '/api')
+        ).rejects.toThrow(
+            'Routes directory "./nonexistent" does not exist'
         );
-        expect(entries).toEqual([]);
+        await expect(
+            scanApiRoutes(fixturesDir, './nonexistent', '/api')
+        ).rejects.toThrow('Check the apiDir option in burger.build.ts');
     });
 
     it('normalizes prefix and supports grouping + wildcard segments', async () => {
@@ -156,9 +158,19 @@ describe('scanApiRoutes — JavaScript (.js / .mjs)', () => {
 });
 
 describe('scanPageRoutes', () => {
-    it('returns empty array when pageDir does not exist', async () => {
-        const entries = await scanPageRoutes(fixturesDir, './pages', '/');
+    it('stays silent for the default pageDir when missing (no pages app)', async () => {
+        const entries = await scanPageRoutes(
+            fixturesDir,
+            './src/pages',
+            '/'
+        );
         expect(entries).toEqual([]);
+    });
+
+    it('fails loud for a custom pageDir that does not exist', async () => {
+        await expect(
+            scanPageRoutes(fixturesDir, './pages', '/')
+        ).rejects.toThrow('Pages directory "./pages" does not exist');
     });
 
     it('converts page paths for index, dynamic, extension stripping, and grouping', async () => {

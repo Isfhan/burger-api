@@ -91,6 +91,88 @@ describe('DirectoryScanner — inventory', () => {
     });
 });
 
+describe('DirectoryScanner — missing directory', () => {
+    const originalAppDir = process.env.BURGER_API_APP_DIR;
+    afterEach(() => {
+        if (originalAppDir === undefined) delete process.env.BURGER_API_APP_DIR;
+        else process.env.BURGER_API_APP_DIR = originalAppDir;
+    });
+
+    it('throws a dynamic error naming the actual dir at construction', () => {
+        delete process.env.BURGER_API_APP_DIR;
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            const missing = path.join(root, 'backend');
+            expect(() => new DirectoryScanner(missing, 'api')).toThrow(
+                `Routes directory "${missing}" does not exist`
+            );
+            expect(() => new DirectoryScanner(missing, 'api')).toThrow(
+                'Check the apiDir option in src/index.ts'
+            );
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('lists the project-root and src/ candidates in the error', () => {
+        delete process.env.BURGER_API_APP_DIR;
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            const scanner = () => new DirectoryScanner('backend', 'api');
+            expect(scanner).toThrow(
+                'Tried "./backend" (project root) and "./src/backend" (src/)'
+            );
+            expect(scanner).toThrow(
+                'Run via "burger-api dev" to enable the src/ fallback'
+            );
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves relative dirs under BURGER_API_APP_DIR (entry-relative fallback)', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        try {
+            mkdirSync(path.join(root, 'src', 'backend', 'users'), {
+                recursive: true,
+            });
+            writeFileSync(
+                path.join(root, 'src', 'backend', 'users', 'route.ts'),
+                'export {};'
+            );
+            process.env.BURGER_API_APP_DIR = path.join(root, 'src');
+            const result = await new DirectoryScanner('backend', 'api').scan();
+            expect(result.routes.map((r) => r.routePath)).toEqual([
+                '/api/users',
+            ]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('prefers the project-root path when both exist (CWD wins)', async () => {
+        const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
+        const originalCwd = process.cwd();
+        try {
+            // Only the project-root dir has a route; the src/ candidate is empty.
+            mkdirSync(path.join(root, 'backend'), { recursive: true });
+            writeFileSync(
+                path.join(root, 'backend', 'route.ts'),
+                'export {};'
+            );
+            mkdirSync(path.join(root, 'src', 'backend'), { recursive: true });
+            process.env.BURGER_API_APP_DIR = path.join(root, 'src');
+            process.chdir(root);
+            const result = await new DirectoryScanner('backend', 'api').scan();
+            // 1 route proves CWD won — the src/ fallback would have found 0.
+            expect(result.routes).toHaveLength(1);
+        } finally {
+            process.chdir(originalCwd);
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
+
 describe('DirectoryScanner — convention validation', () => {
     it('rejects middleware.ts (forbidden file)', async () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
@@ -246,7 +328,7 @@ describe('DirectoryScanner — JavaScript (.js / .mjs)', () => {
 
 describe('DirectoryScanner — recognized conventions', () => {
     it('exposes the canonical convention file list (vision-aligned)', () => {
-        expect([...CONVENTION_FILES].sort()).toEqual(
+        expect(([...CONVENTION_FILES] as string[]).sort()).toEqual(
             ['config', 'hooks', 'openapi', 'route', 'schema'].sort()
         );
     });
