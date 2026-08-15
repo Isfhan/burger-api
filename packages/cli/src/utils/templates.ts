@@ -63,6 +63,12 @@ export function generatePackageJson(
                     ? 'burger-api start -f src/index.js'
                     : 'burger-api start',
             build: `burger-api build ${entry}`,
+            // tsc reads tsconfig.json for TS projects; JS projects use
+            // jsconfig.json (plain `tsc` would print help instead of checking).
+            typecheck:
+                lang === 'js'
+                    ? 'tsc -p jsconfig.json --noEmit'
+                    : 'tsc --noEmit',
         },
         dependencies: {
             'burger-api': burgerApiSpecifier,
@@ -749,6 +755,7 @@ export function generatePluginsFile(lang: 'ts' | 'js' = 'ts'): string {
         return `// Register plugins here — apply to every request.
 // burger.usePlugin(myPlugin);
 
+/** @param {import('burger-api').Burger} burger */
 export default (burger) => {
  // burger.usePlugin(myPlugin);
 };
@@ -767,6 +774,7 @@ export function generateProvidersFile(lang: 'ts' | 'js' = 'ts'): string {
         return `// Register services here — injected into ctx.services.
 // burger.provide('db', myDatabase);
 
+/** @param {import('burger-api').Burger} burger */
 export default (burger) => {
  // burger.provide('db', myDatabase);
 };
