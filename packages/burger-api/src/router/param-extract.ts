@@ -58,7 +58,7 @@ export function extractCtxInit(
     let wildcardParams: string[] | undefined;
 
     for (let i = 0; i < patternSegs.length; i++) {
-        const ps = patternSegs[i];
+        const ps = patternSegs[i]!;
         if (ps === ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX) {
             wildcardParams = pathSegs.slice(i);
             break;

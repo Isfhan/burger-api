@@ -105,7 +105,7 @@ export function analyzeRouteAccess(
     const hooks = def.hooks;
     if (hooks) {
         for (let i = 0; i < HOOK_STAGES.length; i++) {
-            const stage = HOOK_STAGES[i];
+            const stage = HOOK_STAGES[i]!;
             const val = (hooks as Record<string, unknown>)[stage];
             if (val !== undefined) {
                 usedHooks.push(stage);
@@ -155,7 +155,7 @@ export function analyzeRouteAccess(
 
         const accessed: ContextField[] = [];
         for (let i = 0; i < FIELD_KEYS.length; i++) {
-            const field = FIELD_KEYS[i];
+            const field = FIELD_KEYS[i]!;
             if (referencesField(source, field)) {
                 accessed.push(field);
             }

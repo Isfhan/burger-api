@@ -55,7 +55,7 @@ function buildParameters(
         > = zodSchema.shape;
 
         for (const key in shape) {
-            const fieldDef = shape[key];
+            const fieldDef = shape[key]!;
             const isOptional = fieldDef instanceof ZodOptional;
             const type = mapZodTypeToOpenAPIType(fieldDef) as
                 'string' | 'number' | 'boolean' | 'array' | 'object';

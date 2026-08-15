@@ -151,7 +151,7 @@ export class Trie {
             return null;
         }
 
-        const segment = segments[i];
+        const segment = segments[i]!;
 
         // Priority 1: exact static segment (try first; backtrack if it dead-ends).
         const child = node.children.get(segment);

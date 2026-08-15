@@ -151,7 +151,7 @@ async function runResponseHooks(
 ): Promise<Response> {
     let res = response;
     for (let i = 0; i < hooks.length; i++) {
-        const result = await hooks[i](ctx);
+        const result = await hooks[i]!(ctx);
         if (result instanceof Response) {
             res = result;
             continue;

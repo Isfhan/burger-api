@@ -376,7 +376,7 @@ function colorize(info: LogInfo, message: string): string {
     const colorizedParts: string[] = [];
 
     for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
+        const part = parts[i]!;
         
         // Timestamp (gray)
         if (part.startsWith('[') && part.endsWith(']')) {

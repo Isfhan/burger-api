@@ -217,8 +217,8 @@ export class PageRouter {
 
         const params: Record<string, string> = {};
         for (let i = 0; i < reqSegments.length; i++) {
-            const pSegment = pageSegments[i];
-            const reqSegment = reqSegments[i];
+            const pSegment = pageSegments[i]!;
+            const reqSegment = reqSegments[i]!;
 
             if (pSegment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
                 const paramName = pSegment.slice(

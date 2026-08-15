@@ -51,7 +51,7 @@ export function parseQuery(search: string): Record<string, string | string[]> {
 
     const pairs = qs.split('&');
     for (let i = 0; i < pairs.length; i++) {
-        const pair = pairs[i];
+        const pair = pairs[i]!;
         // Skip empty segments (e.g. trailing '&' or '&&').
         if (pair === '') continue;
 

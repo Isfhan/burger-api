@@ -174,7 +174,7 @@ describe('generateOpenAPIDocument — config', () => {
         const doc = generateOpenAPIDocument([], baseOptions, config);
         expect(doc.servers).toBeDefined();
         expect(doc.servers).toHaveLength(2);
-        expect(doc.servers![0].url).toBe('https://api.example.com');
+        expect(doc.servers![0]!.url).toBe('https://api.example.com');
     });
 
     it('omits servers when config has none', () => {

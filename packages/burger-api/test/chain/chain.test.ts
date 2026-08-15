@@ -25,9 +25,9 @@ describe('HookChain', () => {
         const fn = () => undefined;
         chain.add({ stage: 'beforeRoute', fn, scope: 'local', owner: '/test' });
         expect(chain.getNodes()).toHaveLength(1);
-        expect(chain.getNodes()[0].stage).toBe('beforeRoute');
-        expect(chain.getNodes()[0].scope).toBe('local');
-        expect(chain.getNodes()[0].owner).toBe('/test');
+        expect(chain.getNodes()[0]!.stage).toBe('beforeRoute');
+        expect(chain.getNodes()[0]!.scope).toBe('local');
+        expect(chain.getNodes()[0]!.owner).toBe('/test');
     });
 
     it('adds multiple nodes via addStage', () => {
@@ -35,8 +35,8 @@ describe('HookChain', () => {
         const fns = [() => undefined, () => new Response('ok')];
         chain.addStage('afterRoute', fns, 'global', 'app');
         expect(chain.getNodes()).toHaveLength(2);
-        expect(chain.getNodes()[0].scope).toBe('global');
-        expect(chain.getNodes()[1].scope).toBe('global');
+        expect(chain.getNodes()[0]!.scope).toBe('global');
+        expect(chain.getNodes()[1]!.scope).toBe('global');
     });
 
     it('clears all nodes', () => {

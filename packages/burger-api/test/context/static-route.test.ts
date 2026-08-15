@@ -26,7 +26,7 @@ describe('Static route req.route (Bun-native dispatch)', () => {
 
         // Simulate Bun's native static dispatch: handler called with a single
         // argument (no ctxInit).
-        const handler = router.staticRoutes()['/users'];
+        const handler = router.staticRoutes()['/users']!;
         const res = await handler(new Request('http://h/users'));
         const body = await res.json();
 

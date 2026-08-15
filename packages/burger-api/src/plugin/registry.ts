@@ -53,7 +53,7 @@ export class PluginRegistry {
         const out: ResolvedPlugin[] = [];
         for (const [k] of this.entries) {
             const parts = k.split('\u0000');
-            const name = parts[0];
+            const name = parts[0]!;
             const seed = parts[1];
             const resolved = await this.resolve(name, seed);
             if (resolved) out.push(resolved);

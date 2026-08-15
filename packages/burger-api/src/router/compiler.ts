@@ -368,14 +368,14 @@ function mergeTransformRecords(
         for (const p of plugins) {
             if (p.hooks.transform) {
                 for (const k of Object.keys(p.hooks.transform)) {
-                    merged[k] = p.hooks.transform[k];
+                    merged[k] = p.hooks.transform[k]!;
                 }
             }
         }
     }
     if (routeTransform) {
         for (const k of Object.keys(routeTransform)) {
-            merged[k] = routeTransform[k];
+            merged[k] = routeTransform[k]!;
         }
     }
     return Object.keys(merged).length > 0 ? merged : undefined;

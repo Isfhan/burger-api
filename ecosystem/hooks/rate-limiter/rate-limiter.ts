@@ -243,7 +243,7 @@ function defaultKeyGenerator(ctx: BurgerContext): string {
     // Try to get real IP from common proxy headers
     const forwarded = ctx.headers.get('X-Forwarded-For');
     if (forwarded) {
-        const ip = forwarded.split(',')[0].trim();
+        const ip = forwarded.split(',')[0]!.trim();
         // Hash the IP for privacy (optional, but recommended)
         return hashKey(ip);
     }

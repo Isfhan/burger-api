@@ -51,7 +51,7 @@ export class ValidationError extends HTTPError {
     ) {
         const summary =
             issues.length === 1
-                ? issues[0].message
+                ? issues[0]!.message
                 : `${issues.length} validation errors`;
         const status = options?.status ?? 422;
         super(status, `${slot}: ${summary}`, options);

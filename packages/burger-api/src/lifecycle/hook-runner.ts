@@ -56,14 +56,18 @@ async function runHookChain(
 
     // Fast path: two hooks (common: CORS + logger, or auth + logger)
     if (len === 2) {
+        // Length guards guarantee the elements; the `!` is safe.
+        const first = hooks[0]!;
+        const second = hooks[1]!;
+
         // First hook
-        const result1 = await hooks[0](ctx);
+        const result1 = await first(ctx);
         if (result1 instanceof Response) {
             return result1;
         }
 
         // Second hook
-        const result2 = await hooks[1](ctx);
+        const result2 = await second(ctx);
         if (result2 instanceof Response) {
             // Apply first hook's after function if exists
             if (typeof result1 === 'function') {
@@ -94,18 +98,18 @@ async function runHookChain(
 
     // Run each hook
     for (let i = 0; i < len; i++) {
-        const result = await hooks[i](ctx);
+        const result = await hooks[i]!(ctx);
 
         // Short-circuit with Response (check first - most common early exit)
         if (result instanceof Response) {
             // Apply collected "after" functions in reverse
             if (afterCount === 0) return result;
-            if (afterCount === 1) return afterStack[0](result);
+            if (afterCount === 1) return afterStack[0]!(result);
 
             // Multiple after functions
             let response = result;
             for (let j = afterCount - 1; j >= 0; j--) {
-                response = await afterStack[j](response);
+                response = await afterStack[j]!(response);
             }
             return response;
         }
@@ -124,15 +128,15 @@ async function runHookChain(
     // Apply "after" functions in reverse order
     // Fast paths for common cases
     if (afterCount === 0) return response;
-    if (afterCount === 1) return afterStack[0](response);
+    if (afterCount === 1) return afterStack[0]!(response);
     if (afterCount === 2) {
-        response = await afterStack[1](response);
-        return afterStack[0](response);
+        response = await afterStack[1]!(response);
+        return afterStack[0]!(response);
     }
 
     // General case: 3+ after functions
     for (let i = afterCount - 1; i >= 0; i--) {
-        response = await afterStack[i](response);
+        response = await afterStack[i]!(response);
     }
 
     return response;
@@ -148,6 +152,6 @@ export function runHooks(
     handler: RequestHandler
 ): Promise<Response> {
     if (hooks.length === 0) return Promise.resolve(handler(ctx));
-    if (hooks.length === 1) return runSingleHook(ctx, hooks[0], handler);
+    if (hooks.length === 1) return runSingleHook(ctx, hooks[0]!, handler);
     return runHookChain(ctx, hooks, handler);
 }

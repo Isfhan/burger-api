@@ -38,7 +38,7 @@ describe('ZodAdapter', () => {
         if (!result.success) {
             expect(Array.isArray(result.issues)).toBe(true);
             expect(result.issues.length).toBeGreaterThan(0);
-            const issue = result.issues[0];
+            const issue = result.issues[0]!;
             expect(Array.isArray(issue.path)).toBe(true);
             expect(typeof issue.message).toBe('string');
             // issue carries a Zod code (normalized, not leaking internals)
@@ -54,7 +54,7 @@ describe('ZodAdapter', () => {
         }) as ValidationResult;
         expect(result.success).toBe(false);
         if (!result.success) {
-            const issue = result.issues[0];
+            const issue = result.issues[0]!;
             expect(issue.path).toEqual(['outer', 'inner']);
         }
     });

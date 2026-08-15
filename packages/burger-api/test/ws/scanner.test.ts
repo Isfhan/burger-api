@@ -56,8 +56,8 @@ describe('WebSocketScanner', () => {
         const result = await scanner.scan();
 
         expect(result.routes).toHaveLength(1);
-        expect(result.routes[0].wsFile).toContain('ws.ts');
-        expect(result.routes[0].path).toBe('/');
+        expect(result.routes[0]!.wsFile).toContain('ws.ts');
+        expect(result.routes[0]!.path).toBe('/');
     });
 
     it('should find ws.js and ws.mjs files with js conventions', async () => {
@@ -100,7 +100,7 @@ describe('WebSocketScanner', () => {
         const result = await scanner.scan();
 
         expect(result.routes).toHaveLength(1);
-        expect(result.routes[0].path).toBe('/chat');
+        expect(result.routes[0]!.path).toBe('/chat');
     });
 
     it('should find hooks.ts alongside ws.ts', async () => {
@@ -113,7 +113,7 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
-        expect(result.routes[0].hooksFile).toContain('hooks.ts');
+        expect(result.routes[0]!.hooksFile).toContain('hooks.ts');
     });
 
     it('should find config.ts alongside ws.ts', async () => {
@@ -126,7 +126,7 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
-        expect(result.routes[0].configFile).toContain('config.ts');
+        expect(result.routes[0]!.configFile).toContain('config.ts');
     });
 
     it('should detect global hooks in parent directory', async () => {
@@ -156,8 +156,8 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
-        expect(result.routes[0].path).toBe('/:room');
-        expect(result.routes[0].params).toEqual({ room: 'room' });
+        expect(result.routes[0]!.path).toBe('/:room');
+        expect(result.routes[0]!.params).toEqual({ room: 'room' });
     });
 
     it('should handle wildcard folders', async () => {
@@ -167,8 +167,8 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
-        expect(result.routes[0].path).toBe('/*');
-        expect(result.routes[0].isWildcard).toBe(true);
+        expect(result.routes[0]!.path).toBe('/*');
+        expect(result.routes[0]!.isWildcard).toBe(true);
     });
 
     it('should handle group directories', async () => {
@@ -178,10 +178,10 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir);
         const result = await scanner.scan();
 
-        expect(result.routes[0].isGroup).toBe(true);
-        expect(result.routes[0].groupName).toBe('api');
+        expect(result.routes[0]!.isGroup).toBe(true);
+        expect(result.routes[0]!.groupName).toBe('api');
         // Group directories don't affect the URL
-        expect(result.routes[0].path).toBe('/');
+        expect(result.routes[0]!.path).toBe('/');
     });
 
     it('should handle complex nested structure', async () => {
@@ -227,6 +227,6 @@ describe('WebSocketScanner', () => {
         const scanner = new WebSocketScanner(tempDir, 'ws');
         const result = await scanner.scan();
 
-        expect(result.routes[0].path).toBe('/ws/');
+        expect(result.routes[0]!.path).toBe('/ws/');
     });
 });

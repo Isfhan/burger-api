@@ -192,7 +192,7 @@ describe('WebSocketCompiler', () => {
 
         // Should only include the valid route
         expect(compiled).toHaveLength(1);
-        expect(compiled[0].path).toBe('/');
+        expect(compiled[0]!.path).toBe('/');
     });
 
     it('should preserve route params', async () => {

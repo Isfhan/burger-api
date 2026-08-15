@@ -265,7 +265,7 @@ export class Burger {
             );
 
             for (let i = 0; i < sorted.length; i++) {
-                const page = sorted[i];
+                const page = sorted[i]!;
                 this.routes[page.path] = page.handler;
             }
             return sorted.length > 0;
@@ -292,7 +292,7 @@ export class Burger {
         // Loop through the pages
         for (let i = 0; i < pageCount; i++) {
             // Get the current page
-            const page = pages[i];
+            const page = pages[i]!;
             // Add the page to the routes
             this.routes[page.path] = page.handler;
         }

@@ -105,8 +105,8 @@ export class WebSocketRouter {
         const params: Record<string, string> = {};
 
         for (let i = 0; i < patternParts.length; i++) {
-            const patternPart = patternParts[i];
-            const pathPart = pathParts[i];
+            const patternPart = patternParts[i]!;
+            const pathPart = pathParts[i]!;
 
             if (patternPart.startsWith(':')) {
                 // Parameter

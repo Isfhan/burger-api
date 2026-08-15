@@ -51,8 +51,8 @@ describe('StandardAdapter', () => {
         const r = cv.validate({}) as ValidationResult;
         expect(r.success).toBe(false);
         if (!r.success) {
-            expect(r.issues[0].path).toEqual(['field']);
-            expect(r.issues[0].message).toBe('stub failed');
+            expect(r.issues[0]!.path).toEqual(['field']);
+            expect(r.issues[0]!.message).toBe('stub failed');
         }
     });
 

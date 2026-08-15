@@ -49,7 +49,7 @@ export async function applyTransform(
             }
             continue;
         }
-        const value = await transformMap[key](ctx);
+        const value = await transformMap[key]!(ctx);
         (ctx as unknown as Record<string, unknown>)[key] = value;
     }
 }

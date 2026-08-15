@@ -148,7 +148,7 @@ function compileResponseSchemas(
         const byStatus: Record<string, CompiledValidator> = {};
         for (const statusKey of Object.keys(responseSchemas)) {
             byStatus[statusKey] = compileSlot(
-                responseSchemas[statusKey],
+                responseSchemas[statusKey]!,
                 'body',
                 cache
             );

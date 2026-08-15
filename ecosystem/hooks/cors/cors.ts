@@ -322,7 +322,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
 
                 // Manual filtering loop (faster than array methods for small arrays)
                 for (let i = 0; i < headers.length; i++) {
-                    const header = headers[i].trim();
+                    const header = headers[i]!.trim();
                     if (
                         header &&
                         allowedHeadersLower.includes(header.toLowerCase())
@@ -335,7 +335,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                 if (requestedHeaders.length === 0) {
                     requestedHeaders = [];
                     for (let i = 0; i < headers.length; i++) {
-                        const trimmed = headers[i].trim();
+                        const trimmed = headers[i]!.trim();
                         if (trimmed) requestedHeaders.push(trimmed);
                     }
                 }

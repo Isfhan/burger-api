@@ -30,7 +30,8 @@ function pushByScope(
         // Unknown scope falls through to the innermost bucket.
         // For request hooks that's 'local'; for response hooks that's 'framework'.
         const keys = Object.keys(buckets);
-        buckets[keys[keys.length - 1]].push(fn);
+        // The key comes from Object.keys, so the bucket exists.
+        buckets[keys[keys.length - 1]!]!.push(fn);
     }
 }
 

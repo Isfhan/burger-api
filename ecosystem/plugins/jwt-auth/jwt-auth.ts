@@ -92,12 +92,17 @@ export interface JwtPayload {
 }
 
 /**
- * Map algorithm string to Web Crypto algorithm name
+ * Map algorithm string to Web Crypto algorithm name. The algorithm type is
+ * derived from the platform (`crypto.subtle.importKey`) so the plugin
+ * compiles without the DOM lib (scaffold tsconfigs use `lib: ["ESNext"]`).
  */
-function getAlgorithmName(algorithm: string): AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams {
+type ImportKeyAlgorithm = NonNullable<Parameters<typeof crypto.subtle.importKey>[2]>;
+function getAlgorithmName(
+    algorithm: string
+): ImportKeyAlgorithm {
   switch (algorithm) {
     case "HS256":
-      return { name: "HMAC", hash: "SHA-256" };
+      return { name: "HMAC", hash: "SHA-256" } as ImportKeyAlgorithm;
     case "HS384":
       return { name: "HMAC", hash: "SHA-384" };
     case "HS512":
@@ -144,6 +149,9 @@ async function verifySignature(
   }
 
   const [header, payload, signature] = parts;
+  if (!header || !payload || !signature) {
+    throw new Error("Malformed JWT: expected three dot-separated parts");
+  }
   const data = new TextEncoder().encode(`${header}.${payload}`);
   const signatureBytes = base64UrlDecode(signature);
 
@@ -235,10 +243,16 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           if (headerParts.length !== 3) {
             return undefined;
           }
+          // The length-3 guard above guarantees both parts; destructure so
+          // noUncheckedIndexedAccess narrows them to strings.
+          const [encodedHeader, encodedPayload] = headerParts;
+          if (!encodedHeader || !encodedPayload) {
+            return undefined;
+          }
 
           try {
             const headerDecoded = JSON.parse(
-              new TextDecoder().decode(base64UrlDecode(headerParts[0]))
+              new TextDecoder().decode(base64UrlDecode(encodedHeader))
             );
 
             // Verify algorithm matches
@@ -249,7 +263,7 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
             // Verify signature synchronously (Web Crypto is async, but we'll handle in beforeRoute)
             // For now, decode payload without verification
             const payload = JSON.parse(
-              new TextDecoder().decode(base64UrlDecode(headerParts[1]))
+              new TextDecoder().decode(base64UrlDecode(encodedPayload))
             );
 
             return payload as JwtPayload;

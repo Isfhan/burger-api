@@ -267,7 +267,7 @@ export class WebSocketScanner {
      */
     private extractParamName(name: string): string {
         const match = name.match(/^\[([^\]]+)\]$/);
-        return match ? match[1] : name;
+        return match ? match[1]! : name;
     }
 
     /**
