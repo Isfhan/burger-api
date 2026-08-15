@@ -7,6 +7,7 @@ import type {
 import { parseQuery } from './query-parser';
 import { parseCookies } from './cookie-parser';
 import type { InferValidated } from '../types/inference';
+import type { RouteMethodSchema } from '../types/inference';
 
 /**
  * Empty interface for module augmentation. Users extend this to type
@@ -129,11 +130,24 @@ export class BurgerContext<TRoute = unknown> {
      * Validated data attached by the validation hook. Mutable instance
      * state. Starts `undefined` so the validation hook runs (it
      * short-circuits when `ctx.validated` is already truthy).
+     *
      * Typed from `schema.ts` via `BurgerContext<typeof GET>`; falls back to
      * `BurgerValidated` (augmentation) when no generic is supplied.
+     *
+     * When the route declares a schema (`TRoute extends RouteMethodSchema`),
+     * the type is **non-undefined**: handlers run after validation, so
+     * `ctx.validated.query` compiles without optional chaining — matching
+     * the runtime (a failed validation throws 422 and the handler never
+     * runs). A plain `BurgerContext` keeps `| undefined` because a route
+     * without a schema never runs the validation hook.
+     *
+     * `!` (definite assignment) replaces the initializer: `create()` sets
+     * the field to `undefined` at runtime, and the validation hook assigns
+     * it through a plain (unparametrized) context.
      */
-    validated: (InferValidated<TRoute> & BurgerValidated) | undefined =
-        undefined;
+    validated!: TRoute extends RouteMethodSchema
+        ? InferValidated<TRoute> & BurgerValidated
+        : (InferValidated<TRoute> & BurgerValidated) | undefined;
 
     /**
      * The response-mutation object exposed through `ctx.set`. Mutable instance

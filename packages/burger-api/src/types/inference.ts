@@ -61,27 +61,39 @@ export interface DefaultValidated {
 }
 
 /**
- * Map a `RouteMethodSchema` to its inferred `ctx.validated` shape. Optional
- * slots stay optional; absent slots are `unknown`.
+ * A slot that is ALWAYS populated after validation when the route declares
+ * it: `query`, `headers`, `cookies` are validated on every request (even an
+ * empty query), and `params` whenever the route has `[param]` segments. The
+ * declared slot is therefore non-optional — `ctx.validated.query.q` compiles
+ * without optional chaining. Undeclared slots stay optional (`unknown`):
+ * at runtime they are never set.
+ */
+type AlwaysSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
+    ? { [P in K]: TRoute[K] extends SchemaInput ? InferSchemaOutput<TRoute[K]> : unknown }
+    : { [P in K]?: unknown };
+
+/**
+ * A slot that may be absent even when declared: `body` is only validated for
+ * JSON requests (`content-type: application/json`), so it stays optional.
+ */
+type MaybeSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
+    ? { [P in K]?: TRoute[K] extends SchemaInput ? InferSchemaOutput<TRoute[K]> : unknown }
+    : { [P in K]?: unknown };
+
+/**
+ * Map a `RouteMethodSchema` to its inferred `ctx.validated` shape.
+ *
+ * Declared `params`/`query`/`headers`/`cookies` slots are non-optional
+ * (always populated after validation); `body` stays optional (JSON-only
+ * gate); undeclared slots are optional `unknown`; model-string refs resolve
+ * at runtime and are typed `unknown`.
  */
 export type InferValidated<TRoute> = TRoute extends object
     ? TRoute extends RouteMethodSchema
-        ? {
-              params?: TRoute['params'] extends SchemaInput
-                  ? InferSchemaOutput<TRoute['params']>
-                  : unknown;
-              query?: TRoute['query'] extends SchemaInput
-                  ? InferSchemaOutput<TRoute['query']>
-                  : unknown;
-              headers?: TRoute['headers'] extends SchemaInput
-                  ? InferSchemaOutput<TRoute['headers']>
-                  : unknown;
-              cookies?: TRoute['cookies'] extends SchemaInput
-                  ? InferSchemaOutput<TRoute['cookies']>
-                  : unknown;
-              body?: TRoute['body'] extends SchemaInput
-                  ? InferSchemaOutput<TRoute['body']>
-                  : unknown;
-          }
+        ? AlwaysSlot<TRoute, 'params'> &
+              AlwaysSlot<TRoute, 'query'> &
+              AlwaysSlot<TRoute, 'headers'> &
+              AlwaysSlot<TRoute, 'cookies'> &
+              MaybeSlot<TRoute, 'body'>
         : DefaultValidated
     : DefaultValidated;

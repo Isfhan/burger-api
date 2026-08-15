@@ -207,16 +207,6 @@ describe('stage-precise hook contracts', () => {
     });
 });
 
-describe('typed validated slots', () => {
-    it('rejects unknown slots on the validated object', () => {
-        const read = (c: BurgerContext<{ query: z.ZodObject<{ q: z.ZodString }> }>) => {
-            // @ts-expect-error validated only carries declared slots
-            void c.validated?.unknownSlot;
-        };
-        expect(typeof read).toBe('function');
-    });
-});
-
 describe('RouteDefinition with schema compiles end-to-end', () => {
     it('accepts a full definition with typed handlers and schema', () => {
         const def: RouteDefinition = {
@@ -228,5 +218,49 @@ describe('RouteDefinition with schema compiles end-to-end', () => {
             openapi: { get: { summary: 'User' } },
         };
         expect(def.path).toBe('/users/:id');
+    });
+});
+
+describe('ctx.validated definedness follows the schema generic', () => {
+    it('is non-undefined when the handler carries a schema type', () => {
+        // Handlers run after validation: with a schema, ctx.validated is
+        // set, so direct access compiles without optional chaining.
+        const read = (
+            c: BurgerContext<{ query: z.ZodObject<{ q: z.ZodString }> }>
+        ) => {
+            const q: string | undefined = c.validated.query.q;
+            return q;
+        };
+        expect(typeof read).toBe('function');
+    });
+
+    it('stays possibly-undefined on a plain BurgerContext', () => {
+        const read = (c: BurgerContext) => {
+            // @ts-expect-error no schema generic → possibly undefined
+            const q = c.validated.query;
+            return q;
+        };
+        expect(typeof read).toBe('function');
+    });
+
+    it('rejects access to a slot that was not declared', () => {
+        const read = (
+            c: BurgerContext<{ query: z.ZodObject<{ q: z.ZodString }> }>
+        ) => {
+            // @ts-expect-error validated only carries declared slots
+            void c.validated.unknownSlot;
+        };
+        expect(typeof read).toBe('function');
+    });
+
+    it('keeps body optional even when declared (JSON-only gate)', () => {
+        const read = (
+            c: BurgerContext<{ body: z.ZodObject<{ n: z.ZodNumber }> }>
+        ) => {
+            // @ts-expect-error body is validated only for JSON requests
+            const n: number = c.validated.body.n;
+            return n;
+        };
+        expect(typeof read).toBe('function');
     });
 });

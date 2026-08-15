@@ -24,18 +24,23 @@ type Equal<A, B> =
         ? true
         : false;
 
-type _check = Expect<
-    Equal<
-        V,
-        {
-            params?: { id: string };
-            query?: { q?: string };
-            headers?: { authorization: string };
-            cookies?: { session: string };
-            body?: { name: string; age: number };
-        }
-    >
->;
+// Declared params/query/headers/cookies slots are non-optional; body stays
+// optional. Asserted via mutual assignability (the Equal trick cannot see
+// through intersections of single-key mapped types with optional members).
+type _check1 = Expect<V extends {
+    params: { id: string };
+    query: { q?: string };
+    headers: { authorization: string };
+    cookies: { session: string };
+    body?: { name: string; age: number };
+} ? true : false>;
+type _check2 = Expect<{
+    params: { id: string };
+    query: { q?: string };
+    headers: { authorization: string };
+    cookies: { session: string };
+    body?: { name: string; age: number };
+} extends V ? true : false>;
 
 describe('InferValidated', () => {
     it('maps schema slots to inferred output types', () => {
@@ -53,26 +58,44 @@ describe('InferValidated', () => {
     it('falls back to unknown slots for empty routes', () => {
         type Empty = InferValidated<{}>;
         type E = Expect<
-            Equal<
-                Empty,
-                {
-                    params?: unknown;
-                    query?: unknown;
-                    headers?: unknown;
-                    cookies?: unknown;
-                    body?: unknown;
-                }
-            >
+            Empty extends {
+                params?: unknown;
+                query?: unknown;
+                headers?: unknown;
+                cookies?: unknown;
+                body?: unknown;
+            }
+                ? true
+                : false
+        >;
+        type E2 = Expect<
+            {
+                params?: unknown;
+                query?: unknown;
+                headers?: unknown;
+                cookies?: unknown;
+                body?: unknown;
+            } extends Empty
+                ? true
+                : false
         >;
         const e: E = true;
-        expect(e).toBe(true);
+        const e2: E2 = true;
+        expect([e, e2]).toEqual([true, true]);
     });
 
     it('treats model-string refs as unknown', () => {
+        // body is a MaybeSlot (JSON-only gate) → optional unknown.
         type M = InferValidated<{ body: 'user/create' }>;
-        type E = Expect<Equal<M['body'], unknown>>;
+        type E = Expect<Equal<M['body'], unknown | undefined>>;
         const e: E = true;
         expect(e).toBe(true);
+
+        // query is an AlwaysSlot → non-optional unknown.
+        type Q = InferValidated<{ query: 'Pagination' }>;
+        type E2 = Expect<Equal<Q['query'], unknown>>;
+        const e2: E2 = true;
+        expect(e2).toBe(true);
     });
 
     it('infers Standard Schema v1 output types', () => {
