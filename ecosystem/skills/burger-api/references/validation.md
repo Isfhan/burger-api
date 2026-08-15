@@ -64,32 +64,26 @@ export async function GET(ctx: BurgerContext<typeof GET>) {
 Invalid slots (e.g. `ctx.validated.unknown`) fail at compile time; slots
 without a schema are `unknown`.
 
-## Model Registry
+## Sharing Schemas Across Routes
 
-Define a shape once in `ServerOptions.models` and reference it by name from any
-route schema:
+Define a shape once in its own file and import it into route schemas. Plain
+TypeScript, fully typed, no registry:
 
 ```typescript
-// src/index.ts
-import { Burger } from 'burger-api';
+// src/schemas.ts
 import { z } from 'zod';
 
-const burger = new Burger({
-    apiDir: 'api',
-    models: {
-        Pagination: z.object({
-            page: z.number().min(1).default(1),
-            limit: z.number().min(1).max(100).default(20),
-        }),
-    },
+export const Pagination = z.object({
+    page: z.number().min(1).default(1),
+    limit: z.number().min(1).max(100).default(20),
 });
-
-burger.serve(4000);
 ```
 
 ```typescript
 // api/items/schema.ts
-export const GET = { query: 'Pagination' };
+import { Pagination } from '../../schemas';
+
+export const GET = { query: Pagination };
 ```
 
 ## Automatic Type Conversion (Coercion)

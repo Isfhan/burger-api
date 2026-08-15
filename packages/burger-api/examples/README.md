@@ -45,7 +45,7 @@ bun run test:examples
 | Name | Feature |
 |------|---------|
 | `validation` | Zod validation — query, body, params, headers, cookies |
-| `validation-advanced` | Coercion, response validation, named models |
+| `validation-advanced` | Coercion, response validation, shared schemas |
 | `error-handling` | ValidationError → 422 RFC 9457 |
 | `error-classes` | NotFoundError, UnauthorizedError, ForbiddenError |
 

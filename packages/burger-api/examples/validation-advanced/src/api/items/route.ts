@@ -1,5 +1,5 @@
 import type { BurgerContext } from 'burger-api';
-import type { POST as PostSchema } from './schema';
+import type { GET as GetSchema, POST as PostSchema } from './schema';
 
 const items = [
     { id: 1, name: 'Burger', price: 9.99 },
@@ -7,13 +7,9 @@ const items = [
     { id: 3, name: 'Shake', price: 5.99 },
 ];
 
-export async function GET(ctx: BurgerContext) {
-    // `query` is a model ref ("PaginationQuery") — inference falls back to
-    // unknown; type it locally or use the `BurgerValidated` augmentation.
-    const { page, limit } = ctx.validated?.query as {
-        page: number;
-        limit: number;
-    };
+export async function GET(ctx: BurgerContext<typeof GetSchema>) {
+    // `query` comes from the shared PaginationQuery schema — fully typed.
+    const { page, limit } = ctx.validated.query;
     const start = (page - 1) * limit;
     const paged = items.slice(start, start + limit);
 
@@ -26,9 +22,10 @@ export async function GET(ctx: BurgerContext) {
 }
 
 export async function POST(ctx: BurgerContext<typeof PostSchema>) {
-    const body: { name: string; price: number } | undefined =
-        ctx.validated?.body;
-    const item = { id: items.length + 1, ...body! };
+    // body is validated before the handler runs (422 otherwise), so the
+    // non-null assertion is safe here — the slot stays optional in the type
+    // because validation only runs for JSON requests.
+    const item = { id: items.length + 1, ...ctx.validated.body! };
     items.push(item);
 
     return Response.json(item, { status: 201 });

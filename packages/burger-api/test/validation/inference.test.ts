@@ -84,20 +84,6 @@ describe('InferValidated', () => {
         expect([e, e2]).toEqual([true, true]);
     });
 
-    it('treats model-string refs as unknown', () => {
-        // body is a MaybeSlot (JSON-only gate) → optional unknown.
-        type M = InferValidated<{ body: 'user/create' }>;
-        type E = Expect<Equal<M['body'], unknown | undefined>>;
-        const e: E = true;
-        expect(e).toBe(true);
-
-        // query is an AlwaysSlot → non-optional unknown.
-        type Q = InferValidated<{ query: 'Pagination' }>;
-        type E2 = Expect<Equal<Q['query'], unknown>>;
-        const e2: E2 = true;
-        expect(e2).toBe(true);
-    });
-
     it('infers Standard Schema v1 output types', () => {
         type Std = InferSchemaOutput<{
             '~standard': {

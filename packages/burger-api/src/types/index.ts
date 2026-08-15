@@ -98,13 +98,6 @@ export interface ServerOptions {
     wsRoutes?: WebSocketRouteDefinition[];
 
     /**
-     * Reusable named schemas ("models") referenced by string from any route's
-     * `schema`. Resolved at compile time; fail-fast on missing refs.
-     * Seeded from `burger.build.ts` models by the CLI.
-     */
-    models?: Record<string, SchemaInput>;
-
-    /**
      * Validation configuration: coercion, response-validation mode, and error
      * rendering.
      */
@@ -248,11 +241,11 @@ export interface RouteDefinition {
  * - response: per-status response schemas validated after the handler.
  */
 export interface RouteMethodValidation {
-    params?: SchemaInput | string;
-    query?: SchemaInput | string;
-    headers?: SchemaInput | string;
-    cookies?: SchemaInput | string;
-    body?: SchemaInput | string;
+    params?: SchemaInput;
+    query?: SchemaInput;
+    headers?: SchemaInput;
+    cookies?: SchemaInput;
+    body?: SchemaInput;
     /** Per-route opt-in override for coercion. */
     coerce?: boolean;
     /** Per-status-code response schemas, validated after the handler. */

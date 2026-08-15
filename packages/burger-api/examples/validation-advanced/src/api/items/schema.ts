@@ -1,16 +1,11 @@
 import { z } from 'zod';
+import { PaginationQuery, Item } from '../../schemas';
 
 export const GET = {
-    query: 'PaginationQuery',
+    query: PaginationQuery,
     response: {
         '200': z.object({
-            items: z.array(
-                z.object({
-                    id: z.number(),
-                    name: z.string(),
-                    price: z.number(),
-                })
-            ),
+            items: z.array(Item),
             page: z.number(),
             limit: z.number(),
             total: z.number(),
@@ -25,10 +20,6 @@ export const POST = {
         price: z.number().positive('Price must be positive'),
     }),
     response: {
-        '201': z.object({
-            id: z.number(),
-            name: z.string(),
-            price: z.number(),
-        }),
+        '201': Item,
     },
 };

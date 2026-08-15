@@ -23,21 +23,20 @@ import type { SchemaInput, StandardSchemaV1 } from '../validation/types';
 
 /**
  * The shape of a per-method `schema.ts` export: one optional schema per
- * request slot. Model-string references (`"users/create"`) cannot be inferred
- * statically and fall back to `unknown`.
+ * request slot.
  */
 export interface RouteMethodSchema {
-    params?: SchemaInput | string;
-    query?: SchemaInput | string;
-    headers?: SchemaInput | string;
-    cookies?: SchemaInput | string;
-    body?: SchemaInput | string;
+    params?: SchemaInput;
+    query?: SchemaInput;
+    headers?: SchemaInput;
+    cookies?: SchemaInput;
+    body?: SchemaInput;
 }
 
 /**
  * The validated output shape of a single schema. Zod infers the output type;
  * Standard Schema v1 validators use their `~standard.types.output` when
- * declared; anything else (including model refs) is `unknown`.
+ * declared; anything else is `unknown`.
  */
 export type InferSchemaOutput<T> = T extends z.ZodTypeAny
     ? z.infer<T>
@@ -61,6 +60,12 @@ export interface DefaultValidated {
 }
 
 /**
+ * The validated output of one schema slot value: an inline schema is
+ * inferred; anything else is `unknown`.
+ */
+type SlotOutput<T> = T extends SchemaInput ? InferSchemaOutput<T> : unknown;
+
+/**
  * A slot that is ALWAYS populated after validation when the route declares
  * it: `query`, `headers`, `cookies` are validated on every request (even an
  * empty query), and `params` whenever the route has `[param]` segments. The
@@ -69,7 +74,7 @@ export interface DefaultValidated {
  * at runtime they are never set.
  */
 type AlwaysSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
-    ? { [P in K]: TRoute[K] extends SchemaInput ? InferSchemaOutput<TRoute[K]> : unknown }
+    ? { [P in K]: SlotOutput<TRoute[K]> }
     : { [P in K]?: unknown };
 
 /**
@@ -77,7 +82,7 @@ type AlwaysSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRo
  * JSON requests (`content-type: application/json`), so it stays optional.
  */
 type MaybeSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
-    ? { [P in K]?: TRoute[K] extends SchemaInput ? InferSchemaOutput<TRoute[K]> : unknown }
+    ? { [P in K]?: SlotOutput<TRoute[K]> }
     : { [P in K]?: unknown };
 
 /**
@@ -85,8 +90,7 @@ type MaybeSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRou
  *
  * Declared `params`/`query`/`headers`/`cookies` slots are non-optional
  * (always populated after validation); `body` stays optional (JSON-only
- * gate); undeclared slots are optional `unknown`; model-string refs resolve
- * at runtime and are typed `unknown`.
+ * gate); undeclared slots are optional `unknown`.
  */
 export type InferValidated<TRoute> = TRoute extends object
     ? TRoute extends RouteMethodSchema

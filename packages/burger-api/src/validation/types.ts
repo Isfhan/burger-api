@@ -75,8 +75,7 @@ export interface ValidationIssue {
 /**
  * The runtime unit produced when a schema is prepared: one reusable
  * `validate` call plus metadata. Prepared once per unique identity before
- * `serve()`. The `modelRef`, when present, records the resolved model name
- * so future optimizations can reuse it.
+ * `serve()`.
  */
 export interface CompiledValidator {
     kind: ValidatorKind;
@@ -91,8 +90,6 @@ export interface CompiledValidator {
      * type conversion. False for strict schemas (framework coercion applies).
      */
     coercible: boolean;
-    /** Present when this validator was produced from a model ref. */
-    modelRef?: string;
 }
 
 /** Coercion operations supported by the coercer. */

@@ -2,7 +2,7 @@
  * Validation module for BurgerAPI — the Validation 2.0 surface.
  *
  * Precompiled request validation (identity-cached per schema), opt-in
- * coercion, model refs, and RFC 9457 error rendering.
+ * coercion, and RFC 9457 error rendering.
  */
 
 export { compileRouteSchema, validatorCache, clearValidatorCache } from './compiler';
@@ -13,7 +13,6 @@ export {
     toValidationErrors,
 } from './error';
 export type { RenderContext } from './error';
-export { schemaRegistry, SchemaRegistry } from './registry';
 export { ValidatorCache } from './cache';
 export {
     registerAdapter,

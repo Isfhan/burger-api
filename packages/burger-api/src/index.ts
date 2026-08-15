@@ -9,9 +9,6 @@ import { Router } from './router';
 import { collectRoutes, compareRoutes, setDir } from './utils/index';
 import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
 
-// Import validation
-import { schemaRegistry } from './validation/registry';
-
 // Import plugin system
 import { PluginRegistry } from './plugin/registry';
 import { MacroRegistry } from './plugin/macro';
@@ -186,15 +183,6 @@ export class Burger {
 
         // Initialize WebSocket directory
         this.wsDir = wsDir;
-
-        // seed the schema registry from ServerOptions.models so model
-        // refs in route schemas resolve at compile time.
-        // Seeded before routes compile (the registry is read-only after).
-        if (options.models) {
-            for (const name of Object.keys(options.models)) {
-                schemaRegistry.register(name, options.models[name]);
-            }
-        }
     }
 
     /**

@@ -7,18 +7,16 @@
  * - Detect the adapter (connector) per slot; compute identity; consult the
  * cache.
  * - Build coercion plans and response validators when present.
- * - Look up model refs before per-slot preparation.
  *
  * This runs ONCE per route when it is set up (before `serve()`). It never
  * executes when a request comes in and never throws on a per-request path
  *. Every schema is prepared a single time; identical
- * schemas (by reference or model ref) share one cached validator.
+ * schemas (by reference) share one cached validator.
  */
 
 import type { RouteSchema, RouteMethodValidation } from '../types/index';
 import type { LowercaseHTTPMethod } from '../utils/routing';
 import { ValidatorCache } from './cache';
-import { schemaRegistry, SchemaRegistry } from './registry';
 import {
     detectAdapter,
     __setZodAdapter,
@@ -53,43 +51,16 @@ const REQUEST_SLOTS: ValidationSlot[] = [
 ];
 
 /**
- * Resolves model-ref strings into concrete schemas before per-slot
- * compilation. A slot value that is a `string` is treated as a model name and
- * looked up in the registry. Throws (naming the method + slot + model) on a
- * missing ref so the failure is fail-fast at compile time.
- */
-function resolveModelRef(
-    value: SchemaInput | string,
-    method: string,
-    slot: ValidationSlot,
-    registry: SchemaRegistry
-): SchemaInput {
-    if (typeof value === 'string') {
-        if (!registry.has(value)) {
-            throw new Error(
-                `[burger-api] Unresolvable model ref "${value}" in ` +
-                    `schema.${method}.${slot}. Register it in ` +
-                    `ServerOptions.models.`
-            );
-        }
-        return registry.resolve(value);
-    }
-    return value;
-}
-
-/**
  * Compiles a route's `schema` into `CompiledRouteValidators`.
  *
- * @param schema - the raw route schema (model refs allowed as string).
+ * @param schema - the raw route schema.
  * @param config - the validator configuration (coercion / response flags).
  * @param cache - the validator cache (shared instance by default).
- * @param registry - the schema registry for model-ref resolution.
  */
 export function compileRouteSchema(
     schema: RouteSchema,
     config: ValidatorConfig = {},
-    cache: ValidatorCache = validatorCache,
-    registry: SchemaRegistry = schemaRegistry
+    cache: ValidatorCache = validatorCache
 ): CompiledRouteValidators {
     const methods: CompiledRouteValidators['methods'] = {};
 
@@ -112,13 +83,7 @@ export function compileRouteSchema(
         for (const slot of REQUEST_SLOTS) {
             const raw = m[slot];
             if (raw === undefined) continue;
-            const slotSchema = resolveModelRef(raw, method, slot, registry);
-            compiledMethod[slot] = compileSlot(
-                slotSchema,
-                slot,
-                cache,
-                typeof raw === 'string' ? raw : undefined
-            );
+            compiledMethod[slot] = compileSlot(raw, slot, cache);
         }
 
         // Build coercion plans only when coercion is enabled.
@@ -134,12 +99,11 @@ export function compileRouteSchema(
             ] as const) {
                 const raw = m[slot];
                 if (raw === undefined) continue;
-                const slotSchema = resolveModelRef(raw, method, slot, registry);
                 // Self-coercing schemas (e.g. z.coerce.* / ~standard.coercible)
                 // transform their own input — framework coercion must not run.
                 if (compiledMethod[slot]?.coercible) continue;
                 const plan: CoercionPlan | undefined = buildCoercionPlan(
-                    slotSchema,
+                    raw,
                     slot
                 );
                 if (plan) coercion[slot] = plan;
@@ -156,7 +120,7 @@ export function compileRouteSchema(
     }
 
     // Compile response schemas (per-status) when present.
-    const response = compileResponseSchemas(schema, cache, registry);
+    const response = compileResponseSchemas(schema, cache);
 
     const result: CompiledRouteValidators = { methods };
     if (response) result.response = response;
@@ -169,8 +133,7 @@ export function compileRouteSchema(
  */
 function compileResponseSchemas(
     schema: RouteSchema,
-    cache: ValidatorCache,
-    registry: SchemaRegistry
+    cache: ValidatorCache
 ): Record<string, Record<string, CompiledValidator>> | undefined {
     const response: Record<string, Record<string, CompiledValidator>> = {};
     let any = false;
@@ -184,14 +147,11 @@ function compileResponseSchemas(
         if (!responseSchemas) continue;
         const byStatus: Record<string, CompiledValidator> = {};
         for (const statusKey of Object.keys(responseSchemas)) {
-            const raw = responseSchemas[statusKey];
-            const slotSchema = resolveModelRef(
-                raw,
-                rawMethod,
+            byStatus[statusKey] = compileSlot(
+                responseSchemas[statusKey],
                 'body',
-                registry
+                cache
             );
-            byStatus[statusKey] = compileSlot(slotSchema, 'body', cache);
             any = true;
         }
         response[method] = byStatus;
@@ -201,24 +161,18 @@ function compileResponseSchemas(
 
 /**
  * Compiles a single slot schema into a `CompiledValidator`, consulting the
- * cache by identity first. When `modelRef` is provided, it
- * is recorded on the compiled validator for future compile-time optimization
- * (serialization reserved for a future release).
+ * cache by identity first.
  */
 function compileSlot(
     slotSchema: SchemaInput,
     slot: ValidationSlot,
-    cache: ValidatorCache,
-    modelRef?: string
+    cache: ValidatorCache
 ): CompiledValidator {
     const adapter = detectAdapter(slotSchema);
     const identity = adapter.identity(slotSchema);
     const cached = cache.get(identity);
     if (cached) return cached;
     const compiled = adapter.compile(slotSchema, slot);
-    if (modelRef !== undefined) {
-        compiled.modelRef = modelRef;
-    }
     cache.set(identity, compiled);
     return compiled;
 }
