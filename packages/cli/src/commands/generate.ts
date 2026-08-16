@@ -71,11 +71,14 @@ const routeCommand = new Command('route')
         ensureAppDirEnv();
         // Resolve apiDir the same way scans do (project root, then src/)
         // so `generate route x` lands in src/api/x even with `apiDir: 'api'`.
+        // The app-dir fallback only applies to bare paths — a config value
+        // already prefixed with `src/` resolves against the project root.
         const appDir = process.env.BURGER_API_APP_DIR;
         const cwdApiRoot = resolvePath(process.cwd(), config.apiDir);
+        const isSrcPrefixed = /^(\.\/)?src\//.test(config.apiDir);
         const apiRoot = existsSync(cwdApiRoot)
             ? cwdApiRoot
-            : appDir
+            : !isSrcPrefixed && appDir
               ? resolvePath(appDir, config.apiDir)
               : cwdApiRoot;
         const targetDir = join(apiRoot, routePath);
@@ -224,9 +227,13 @@ const wsCommand = new Command('ws')
         const appDir = process.env.BURGER_API_APP_DIR;
         const wsRoot = (config.wsDir || 'src/websocket').replace(/\\/g, '/');
         const cwdWsRoot = resolvePath(process.cwd(), wsRoot);
+        // Same rule as apiDir: the app-dir fallback only applies to bare
+        // paths; a `src/`-prefixed wsDir resolves against the project root
+        // (and is created here if it does not exist yet).
+        const isSrcPrefixed = /^(\.\/)?src\//.test(wsRoot);
         const resolvedWsRoot = existsSync(cwdWsRoot)
             ? cwdWsRoot
-            : appDir
+            : !isSrcPrefixed && appDir
               ? resolvePath(appDir, wsRoot)
               : cwdWsRoot;
         const wsDir = join(resolvedWsRoot, routePath);

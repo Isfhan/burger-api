@@ -14,6 +14,10 @@ import type {
     RouteHooks,
     RequestHandler,
     HTTPMethod,
+    BuildConfig,
+    MethodSchema,
+    OpenAPIMeta,
+    RouteConfig,
 } from '../../src/index';
 import type { BurgerWS } from '../../src/ws/types';
 
@@ -262,5 +266,56 @@ describe('ctx.validated definedness follows the schema generic', () => {
             return n;
         };
         expect(typeof read).toBe('function');
+    });
+});
+
+describe('consumer convention-file types', () => {
+    it('BuildConfig types burger.build.ts and rejects typos', () => {
+        const config: BuildConfig = {
+            apiDir: './src/api',
+            pageDir: './src/pages',
+            apiPrefix: '/api',
+            pagePrefix: '/',
+        };
+        expect(config.apiDir).toBe('./src/api');
+        const bad = {
+            apiDir: './src/api',
+            pageDir: './src/pages',
+            apiPrefix: '/api',
+            pagePrefix: '/',
+            // @ts-expect-error apiDri is a typo
+            apiDri: './src/api',
+        } satisfies BuildConfig;
+        expect(bad).toBeDefined();
+    });
+
+    it('MethodSchema types one schema.ts method export', () => {
+        const GET = {
+            query: z.object({ q: z.string().optional() }),
+            coerce: true,
+            response: { '200': z.object({ ok: z.boolean() }) },
+        } satisfies MethodSchema;
+        expect(GET.coerce).toBe(true);
+    });
+
+    it('OpenAPIMeta types one openapi.ts method export', () => {
+        const GET = {
+            summary: 'List',
+            tags: ['x'],
+        } satisfies OpenAPIMeta;
+        expect(GET.summary).toBe('List');
+    });
+
+    it('RouteConfig is augmentable and ctx.config is typed', () => {
+        // Augmented in this program by the provider test (auth/cache/timeout).
+        const config = { auth: false } satisfies RouteConfig;
+        expect(config.auth).toBe(false);
+
+        const ctx = {} as BurgerContext;
+        const auth: boolean | undefined = ctx.config?.auth;
+        expect(auth).toBeUndefined();
+        // @ts-expect-error unknown keys still fail under the augmentation
+        const bogus = ctx.config?.nope;
+        expect(bogus).toBeUndefined();
     });
 });

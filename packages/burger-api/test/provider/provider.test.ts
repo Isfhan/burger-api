@@ -11,6 +11,15 @@ declare module '../../src/context/context' {
     }
 }
 
+// Route config used by the config test, typed via the `RouteConfig` augmentation.
+declare module 'burger-api' {
+    interface RouteConfig {
+        auth?: boolean;
+        cache?: boolean;
+        timeout?: number;
+    }
+}
+
 describe('Provider system (burger.provide)', () => {
     it('services is empty by default', () => {
         const ctx = BurgerContext.create(new Request('http://localhost/'));

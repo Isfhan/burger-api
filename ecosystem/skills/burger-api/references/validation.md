@@ -41,7 +41,7 @@ Schemas are optional. A route without a `schema.ts` skips validation entirely.
 ## Accessing Validated Data
 
 Validated data is available on `ctx.validated`, fully typed from the route's
-`schema.ts` via `BurgerContext<typeof GET>` (the `InferValidated` type helper):
+`schema.ts` via `BurgerContext<typeof GET>` (inference happens automatically):
 
 ```typescript
 // route.ts

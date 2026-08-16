@@ -8,6 +8,7 @@ import { parseQuery } from './query-parser';
 import { parseCookies } from './cookie-parser';
 import type { InferValidated } from '../types/inference';
 import type { RouteMethodSchema } from '../types/inference';
+import type { RouteConfig } from '../types/index';
 
 /**
  * Empty interface for module augmentation. Users extend this to type
@@ -172,9 +173,10 @@ export class BurgerContext<TRoute = unknown> {
 
     /**
      * Route-specific configuration from `config.ts`. Read-only at runtime.
-     * Used by hooks/plugins to read route-level settings (auth, cache, timeout, …).
+     * Used by hooks/plugins to read route-level settings (auth, cache,
+     * timeout, …). Typed via module augmentation of `RouteConfig`.
      */
-    private _config?: Record<string, unknown>;
+    private _config?: RouteConfig;
 
     /**
      * The single context creation entry point. Thin static method on
@@ -190,7 +192,7 @@ export class BurgerContext<TRoute = unknown> {
         ctxInit?: ContextInit,
         _meta?: RouteAccessInfo,
         providers?: Map<string, unknown>,
-        config?: Record<string, unknown>
+        config?: RouteConfig | Record<string, unknown>
     ): BurgerContext {
         const ctx = new BurgerContext();
         ctx._raw = raw;
@@ -202,7 +204,8 @@ export class BurgerContext<TRoute = unknown> {
         ctx.services = (
             providers ? Object.fromEntries(providers) : Object.create(null)
         ) as BurgerServices;
-        ctx._config = config;
+        // Route config is opaque user data until `RouteConfig` is augmented.
+        ctx._config = config as RouteConfig;
         return ctx;
     }
 
@@ -246,7 +249,7 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     /** Route-specific configuration from `config.ts`. */
-    get config(): Record<string, unknown> | undefined {
+    get config(): RouteConfig | undefined {
         return this._config;
     }
 

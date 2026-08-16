@@ -764,11 +764,13 @@ export type {
     BurgerNext,
     RouteDefinition,
     RouteSchema,
-    RouteMethodValidation,
+    MethodSchema,
+    RouteConfig,
+    BuildConfig,
     FetchHandler,
     PageDefinition,
     openapi,
-    OpenAPIMethodMeta,
+    OpenAPIMeta,
     RouteHooks,
     TransformMap,
     ContextSet,
@@ -798,14 +800,6 @@ export type {
 
 // Export validation types
 export type { ValidationIssue } from './validation/types';
-
-// Export schema-driven validated inference types
-export type {
-    InferValidated,
-    InferSchemaOutput,
-    RouteMethodSchema,
-    DefaultValidated,
-} from './types/inference';
 
 // Export plugin types and macro types
 export type { Plugin, MacroFn } from './plugin/types';

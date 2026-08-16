@@ -14,8 +14,8 @@ import {
 import type {
     ServerOptions,
     RouteDefinition,
-    RouteMethodValidation,
-    OpenAPIMethodMeta,
+    MethodSchema,
+    OpenAPIMeta,
     RequestHandler,
     OpenAPIConfig,
     OpenAPIObject,
@@ -243,11 +243,11 @@ export function generateOpenAPIDocument(
             const handlers = route.handlers as Record<string, RequestHandler>;
             const openapiMeta = (route.openapi ?? {}) as Record<
                 string,
-                OpenAPIMethodMeta
+                OpenAPIMeta
             >;
             const schema = (route.schema ?? {}) as Record<
                 string,
-                RouteMethodValidation
+                MethodSchema
             >;
 
             if (typeof handlers[method] !== 'function') continue;

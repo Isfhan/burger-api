@@ -75,12 +75,6 @@ export interface GitHubFile {
 /**
  * Build-time configuration for Burger API (conventions or burger.build.ts).
  * Used by the CLI when generating the virtual entry and scanning routes.
+ * Single source of truth: the consumer-facing type exported from `burger-api`.
  */
-export interface BuildConfig {
-    apiDir: string;
-    pageDir: string;
-    apiPrefix: string;
-    pagePrefix: string;
-    wsDir?: string;
-    debug?: boolean;
-}
+export type { BuildConfig } from 'burger-api';

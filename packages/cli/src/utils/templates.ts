@@ -268,19 +268,39 @@ export function generateBurgerConfig(options: CreateOptions): string {
     const pagePrefix = options.pagePrefix || '/';
     const debug = Boolean(options.debug);
 
+    const body = [
+        ` apiDir: ${JSON.stringify(apiDir)}, // folder with API route files`,
+        ` pageDir: ${JSON.stringify(pageDir)}, // folder with HTML pages`,
+        ` apiPrefix: ${JSON.stringify(apiPrefix)}, // URL prefix for API routes`,
+        ` pagePrefix: ${JSON.stringify(pagePrefix)}, // URL prefix for pages`,
+        ` debug: ${debug}, // extra logging when true`,
+    ].join('\n');
+
+    if (options.lang === 'js') {
+        return [
+            '/**',
+            ' * BurgerAPI build and dev config.',
+            ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
+            ' * Edit these paths and prefixes to match your project.',
+            ' */',
+            "/** @type {import('burger-api').BuildConfig} */",
+            'export default {',
+            body,
+            '};',
+            '',
+        ].join('\n');
+    }
     return [
         '/**',
         ' * BurgerAPI build and dev config.',
         ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
         ' * Edit these paths and prefixes to match your project.',
         ' */',
+        "import type { BuildConfig } from 'burger-api';",
+        '',
         'export default {',
-        ` apiDir: ${JSON.stringify(apiDir)}, // folder with API route files`,
-        ` pageDir: ${JSON.stringify(pageDir)}, // folder with HTML pages`,
-        ` apiPrefix: ${JSON.stringify(apiPrefix)}, // URL prefix for API routes`,
-        ` pagePrefix: ${JSON.stringify(pagePrefix)}, // URL prefix for pages`,
-        ` debug: ${debug}, // extra logging when true`,
-        '};',
+        body,
+        '} satisfies BuildConfig;',
         '',
     ].join('\n');
 }
@@ -740,13 +760,25 @@ export function generateIndexPage(options: CreateOptions): string {
  *
  * @returns hooks/index.ts content as a string
  */
-export function generateHooksFile(): string {
+export function generateHooksFile(lang: 'ts' | 'js' = 'ts'): string {
+    if (lang === 'js') {
+        return `/**
+ * Global lifecycle hooks — apply to every request.
+ * Hook points: onRequest, transform, beforeRoute, afterRoute, mapResponse, onError
+ */
+
+/** @type {import('burger-api').RouteHooks['beforeRoute']} */
+export const beforeRoute = [];
+`;
+    }
     return `/**
  * Global lifecycle hooks — apply to every request.
  * Hook points: onRequest, transform, beforeRoute, afterRoute, mapResponse, onError
  */
 
-// export const beforeRoute = [];
+import type { RouteHooks } from 'burger-api';
+
+export const beforeRoute: RouteHooks['beforeRoute'] = [];
 `;
 }
 
@@ -931,7 +963,7 @@ export async function createProject(
 
         await Bun.write(
             join(targetDir, 'src', `hooks.${ext}`),
-            generateHooksFile()
+            generateHooksFile(lang)
         );
         await Bun.write(
             join(targetDir, 'src', `plugins.${ext}`),
@@ -1106,6 +1138,7 @@ export function generateRouteFiles(
             files['schema.js'] = [
                 "import { z } from 'zod/v4';",
                 '',
+                "/** @type {import('burger-api').MethodSchema} */",
                 'export const GET = {',
                 ' query: z.object({}),',
                 '};',
@@ -1114,10 +1147,11 @@ export function generateRouteFiles(
         } else {
             files['schema.ts'] = [
                 "import { z } from 'zod/v4';",
+                "import type { MethodSchema } from 'burger-api';",
                 '',
                 'export const GET = {',
                 ' query: z.object({}),',
-                '};',
+                '} satisfies MethodSchema;',
                 '',
             ].join('\n');
         }
@@ -1126,6 +1160,7 @@ export function generateRouteFiles(
     if (options.openapi !== false) {
         if (lang === 'js') {
             files['openapi.js'] = [
+                "/** @type {import('burger-api').OpenAPIMeta} */",
                 `export const GET = {`,
                 ` summary: '${routeName} endpoint',`,
                 ` tags: ['${routeName}'],`,
@@ -1134,10 +1169,12 @@ export function generateRouteFiles(
             ].join('\n');
         } else {
             files['openapi.ts'] = [
+                "import type { OpenAPIMeta } from 'burger-api';",
+                '',
                 `export const GET = {`,
                 ` summary: '${routeName} endpoint',`,
                 ` tags: ['${routeName}'],`,
-                `};`,
+                `} satisfies OpenAPIMeta;`,
                 '',
             ].join('\n');
         }
@@ -1168,12 +1205,24 @@ export function generateRouteFiles(
     }
 
     if (options.config !== false) {
-        files[`config.${ext}`] = [
-            'export default {',
-            ' auth: false,',
-            '};',
-            '',
-        ].join('\n');
+        if (lang === 'js') {
+            files['config.js'] = [
+                "/** @type {import('burger-api').RouteConfig} */",
+                'export default {',
+                ' auth: false,',
+                '};',
+                '',
+            ].join('\n');
+        } else {
+            files['config.ts'] = [
+                "import type { RouteConfig } from 'burger-api';",
+                '',
+                'export default {',
+                ' auth: false,',
+                '} satisfies RouteConfig;',
+                '',
+            ].join('\n');
+        }
     }
 
     return files;
@@ -1357,13 +1406,26 @@ export function generateWsFiles(
     }
 
     if (options.config !== false) {
-        files[`config.${ext}`] = [
-            'export default {',
-            ' maxPayloadLength: 1024 * 1024, // 1MB',
-            ' idleTimeout: 30,',
-            '};',
-            '',
-        ].join('\n');
+        if (lang === 'js') {
+            files['config.js'] = [
+                "/** @type {import('burger-api').WebSocketConfig} */",
+                'export default {',
+                ' maxPayloadLength: 1024 * 1024, // 1MB',
+                ' idleTimeout: 30,',
+                '};',
+                '',
+            ].join('\n');
+        } else {
+            files['config.ts'] = [
+                "import type { WebSocketConfig } from 'burger-api';",
+                '',
+                'export default {',
+                ' maxPayloadLength: 1024 * 1024, // 1MB',
+                ' idleTimeout: 30,',
+                '} satisfies WebSocketConfig;',
+                '',
+            ].join('\n');
+        }
     }
 
     return files;

@@ -229,6 +229,14 @@ describe('generateWsFiles', () => {
         const files = generateWsFiles('chat');
         expect(files['config.ts']).toContain('maxPayloadLength');
         expect(files['config.ts']).toContain('idleTimeout');
+        expect(files['config.ts']).toContain('} satisfies WebSocketConfig;');
+    });
+
+    it('js variant stamps JSDoc WebSocketConfig on config.js', () => {
+        const files = generateWsFiles('chat', {}, 'js');
+        expect(files['config.js']).toContain(
+            "/** @type {import('burger-api').WebSocketConfig} */"
+        );
     });
 
     it('respects --no-hooks flag', () => {

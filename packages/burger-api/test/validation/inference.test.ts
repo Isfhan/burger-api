@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
+import type { BurgerContext } from '../../src/index';
 import type {
-    BurgerContext,
     InferSchemaOutput,
     InferValidated,
-} from 'burger-api';
+} from '../../src/types/inference';
 
 const schema = {
     params: z.object({ id: z.string() }),

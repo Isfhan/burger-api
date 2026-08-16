@@ -240,7 +240,7 @@ export interface RouteDefinition {
  * - headers / cookies / body: for the corresponding request data,
  * - response: per-status response schemas validated after the handler.
  */
-export interface RouteMethodValidation {
+export interface MethodSchema {
     params?: SchemaInput;
     query?: SchemaInput;
     headers?: SchemaInput;
@@ -261,7 +261,7 @@ export interface RouteMethodValidation {
  * fails at compile time.
  */
 export type RouteSchema = Partial<
-    Record<LowercaseHTTPMethod | HTTPMethod, RouteMethodValidation>
+    Record<LowercaseHTTPMethod | HTTPMethod, MethodSchema>
 >;
 
 /**
@@ -269,7 +269,7 @@ export type RouteSchema = Partial<
  * (the compiled form the OpenAPI generator reads); uppercase keys are a
  * silent no-op at runtime, so they are rejected at compile time.
  */
-export interface OpenAPIMethodMeta {
+export interface OpenAPIMeta {
     summary?: string;
     description?: string;
     tags?: string[];
@@ -284,12 +284,51 @@ export interface OpenAPIMethodMeta {
 
 /**
  * Optional OpenAPI metadata to generate documentation for the route.
- * Keyed by lowercase HTTP method; see {@link OpenAPIMethodMeta}.
+ * Keyed by lowercase HTTP method; see {@link OpenAPIMeta}.
  *
  * If the `openapi` property is not defined, the route will not be included in
  * the generated OpenAPI documentation.
  */
-export type openapi = Partial<Record<LowercaseHTTPMethod, OpenAPIMethodMeta>>;
+export type openapi = Partial<Record<LowercaseHTTPMethod, OpenAPIMeta>>;
+
+/**
+ * The shape of a `burger.build.ts` export — build-time settings read by the
+ * CLI (dirs, prefixes, debug). The dir/prefix fields are always present in
+ * a scaffolded file (convention defaults apply otherwise). Build-time only;
+ * runtime options belong in `new Burger({...})` (`ServerOptions`).
+ */
+export interface BuildConfig {
+    /** Directory with API route files (e.g. `./src/api`). */
+    apiDir: string;
+    /** Directory with HTML page files (e.g. `./src/pages`). */
+    pageDir: string;
+    /** URL prefix for API routes (default `/api`). */
+    apiPrefix: string;
+    /** URL prefix for page routes (default `/`). */
+    pagePrefix: string;
+    /** Directory with WebSocket route files (e.g. `./src/websocket`). */
+    wsDir?: string;
+    /** Extra logging when true. */
+    debug?: boolean;
+}
+
+/**
+ * Empty interface for module augmentation. Extend this to type the route's
+ * `config.ts` options, so `ctx.config` is typed for hooks and plugins:
+ *
+ * ```ts
+ * declare module "burger-api" {
+ *     interface RouteConfig {
+ *         auth: boolean;
+ *         timeout: number;
+ *     }
+ * }
+ * ```
+ *
+ * Without augmentation, `ctx.config` is typed as the empty `RouteConfig`,
+ * so unknown keys fail at compile time. Augment to unlock them.
+ */
+export interface RouteConfig {}
 
 export interface PageDefinition {
     path: string;

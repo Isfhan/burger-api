@@ -34,6 +34,43 @@ describe('generateBurgerConfig', () => {
         expect(content).toContain('debug: false');
     });
 
+    it('types the TS config with satisfies BuildConfig', () => {
+        const content = generateBurgerConfig({
+            name: 'x',
+            useApi: true,
+            apiDir: 'api',
+            apiPrefix: '/api',
+            debug: false,
+            usePages: true,
+            pageDir: 'pages',
+            pagePrefix: '/',
+            lang: 'ts',
+        } as CreateOptions);
+
+        expect(content).toContain(
+            "import type { BuildConfig } from 'burger-api';"
+        );
+        expect(content).toContain('} satisfies BuildConfig;');
+    });
+
+    it('types the JS config with a JSDoc BuildConfig hint', () => {
+        const content = generateBurgerConfig({
+            name: 'x',
+            useApi: true,
+            apiDir: 'api',
+            apiPrefix: '/api',
+            debug: false,
+            usePages: true,
+            pageDir: 'pages',
+            pagePrefix: '/',
+            lang: 'js',
+        } as CreateOptions);
+
+        expect(content).toContain(
+            "/** @type {import('burger-api').BuildConfig} */"
+        );
+    });
+
     it('generates config with custom values from prompts', () => {
         const options: CreateOptions = {
             name: 'custom-app',
@@ -168,6 +205,37 @@ describe('JS scaffold (--lang js)', () => {
             'export async function GET(ctx: BurgerContext): Promise<Response>'
         );
         expect(files['route.js']).toBeUndefined();
+    });
+
+    it('generateRouteFiles stamps consumer types (satisfies) on TS convention files', () => {
+        const files = generateRouteFiles('hello', {}, 'ts');
+
+        expect(files['schema.ts']).toContain(
+            "import type { MethodSchema } from 'burger-api';"
+        );
+        expect(files['schema.ts']).toContain('} satisfies MethodSchema;');
+        expect(files['openapi.ts']).toContain(
+            "import type { OpenAPIMeta } from 'burger-api';"
+        );
+        expect(files['openapi.ts']).toContain('} satisfies OpenAPIMeta;');
+        expect(files['config.ts']).toContain(
+            "import type { RouteConfig } from 'burger-api';"
+        );
+        expect(files['config.ts']).toContain('} satisfies RouteConfig;');
+    });
+
+    it('generateRouteFiles adds JSDoc consumer-type hints on JS convention files', () => {
+        const files = generateRouteFiles('hello', {}, 'js');
+
+        expect(files['schema.js']).toContain(
+            "/** @type {import('burger-api').MethodSchema} */"
+        );
+        expect(files['openapi.js']).toContain(
+            "/** @type {import('burger-api').OpenAPIMeta} */"
+        );
+        expect(files['config.js']).toContain(
+            "/** @type {import('burger-api').RouteConfig} */"
+        );
     });
 
     it('generateOpenAPIConfig omits type-only imports for JS', () => {

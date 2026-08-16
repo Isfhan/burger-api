@@ -14,7 +14,7 @@
  * schemas (by reference) share one cached validator.
  */
 
-import type { RouteSchema, RouteMethodValidation } from '../types/index';
+import type { RouteSchema, MethodSchema } from '../types/index';
 import type { LowercaseHTTPMethod } from '../utils/routing';
 import { ValidatorCache } from './cache';
 import {
@@ -69,7 +69,7 @@ export function compileRouteSchema(
         // Schema keys are typed as the method union; a module export is still
         // a runtime string, so index via the widened record.
         const m =
-            (schema as Record<string, RouteMethodValidation | undefined>)[
+            (schema as Record<string, MethodSchema | undefined>)[
                 rawMethod
             ] ?? {};
         const compiledMethod: CompiledRouteValidators['methods'][LowercaseHTTPMethod] =
@@ -140,7 +140,7 @@ function compileResponseSchemas(
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
         const m =
-            (schema as Record<string, RouteMethodValidation | undefined>)[
+            (schema as Record<string, MethodSchema | undefined>)[
                 rawMethod
             ] ?? {};
         const responseSchemas = m.response;
