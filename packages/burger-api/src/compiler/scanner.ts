@@ -149,6 +149,18 @@ export class DirectoryScanner {
 
         // Validate folder-level conflicts (ported from core/api-router.ts).
         for (const name of subDirs) {
+            // Named wildcard folders (`[...slug]`) become literal path
+            // segments that can never match — fail loud instead of emitting
+            // a dead route.
+            if (
+                name.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
+                name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+            ) {
+                throw new Error(
+                    `Named wildcard folder '${name}' is not supported — ` +
+                        `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
+                );
+            }
             const isDynamic =
                 name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
                 name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&

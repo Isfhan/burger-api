@@ -194,7 +194,7 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
 
             // Strict Transport Security (HSTS)
             if (strictTransportSecurity !== false) {
-                const parts = [`max-age=${strictTransportSecurity.maxAge || 31536000}`];
+                const parts = [`max-age=${strictTransportSecurity.maxAge ?? 31536000}`];
                 if (strictTransportSecurity.includeSubDomains) {
                     parts.push('includeSubDomains');
                 }

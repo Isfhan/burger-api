@@ -48,8 +48,8 @@ describe('generateRouteFiles', () => {
 
     it('openapi.ts contains route name in summary and tags', () => {
         const files = generateRouteFiles('users');
-        expect(files['openapi.ts']).toContain("summary: 'users endpoint'");
-        expect(files['openapi.ts']).toContain("tags: ['users']");
+        expect(files['openapi.ts']).toContain('summary: "users endpoint"');
+        expect(files['openapi.ts']).toContain('tags: ["users"]');
     });
 
     it('hooks.ts contains beforeRoute hook', () => {
@@ -99,7 +99,7 @@ describe('generateRouteFiles', () => {
     it('handles nested route paths like products/[id]', () => {
         const files = generateRouteFiles('products/[id]');
         expect(files['route.ts']).toBeDefined();
-        expect(files['openapi.ts']).toContain("tags: ['products/[id]']");
+        expect(files['openapi.ts']).toContain('tags: ["products/[id]"]');
     });
 });
 
@@ -120,7 +120,7 @@ describe('generateHookTemplate', () => {
 describe('generatePluginTemplate', () => {
     it('generates a plugin with the given name', () => {
         const content = generatePluginTemplate('jwt');
-        expect(content).toContain("name: 'jwt'");
+        expect(content).toContain('name: "jwt"');
         expect(content).toContain('Plugin');
         expect(content).toContain('Import and register in src/plugins.ts');
     });

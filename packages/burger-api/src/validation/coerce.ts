@@ -56,6 +56,12 @@ function opForZodField(def: unknown): CoercionOp {
 function coerceValue(op: CoercionOp, raw: string): unknown {
     switch (op) {
         case 'number': {
+            // Strict decimal form only: no empty/whitespace, hex, exponent,
+            // Infinity or NaN. Anything else stays a string so the
+            // downstream validator reports the real input.
+            if (!/^\s*[+-]?\d+(\.\d+)?\s*$/.test(raw)) {
+                return raw;
+            }
             const n = Number(raw);
             // A failed conversion (e.g. "abc") yields NaN. Keep the original
             // raw string instead so the downstream validator reports the
@@ -70,12 +76,49 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
             return raw;
         }
         case 'date': {
-            const d = new Date(raw);
-            return isNaN(d.getTime()) ? raw : d;
+            const d = tryParseDate(raw);
+            return d ?? raw;
         }
         default:
             return raw;
     }
+}
+
+/**
+ * Strict ISO-8601 date parse.
+ *
+ * Rejects numeric strings ("42"), non-ISO formats, and impossible calendar
+ * dates ("2026-02-30" rolls over in `new Date()` unless checked). Date-only
+ * values are validated against the calendar directly; full timestamps must
+ * carry a time and a zone.
+ */
+function tryParseDate(raw: string): Date | null {
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (dateOnly) {
+        const [, y, mo, da] = dateOnly;
+        const day = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(da)));
+        if (day.toISOString().slice(0, 10) !== `${y}-${mo}-${da}`) {
+            return null;
+        }
+        return day;
+    }
+
+    if (
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(
+            raw
+        )
+    ) {
+        return null;
+    }
+
+    // Full timestamp: verify the calendar day too (the parse alone would
+    // roll "2026-02-30T10:00:00Z" forward).
+    if (tryParseDate(raw.slice(0, 10)) === null) {
+        return null;
+    }
+
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
 }
 
 /**
@@ -111,7 +154,8 @@ export function apply(
     plan: CoercionPlan,
     raw: Record<string, string | string[]>
 ): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
+    // Null prototype: input keys are attacker-controlled.
+    const out: Record<string, unknown> = Object.create(null);
     for (const key of Object.keys(raw)) {
         const op = plan.fields[key];
         const value = raw[key];

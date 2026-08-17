@@ -19,7 +19,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError } from "burger-api";
+import { UnauthorizedError, timingSafeEqual } from "burger-api";
 
 /**
  * Session store interface
@@ -167,25 +167,65 @@ async function signSessionId(sessionId: string, secret: string): Promise<string>
 
 /**
  * Verify and extract session ID from signed value
+ *
+ * The HMAC signature is compared in constant time so an attacker cannot
+ * recover it byte-by-byte via response-timing.
  */
 async function verifySessionId(
-  signed: string,
-  secret: string
+    signed: string,
+    secret: string
 ): Promise<string | null> {
-  const lastDot = signed.lastIndexOf(".");
-  if (lastDot === -1) {
-    return null;
-  }
+    const lastDot = signed.lastIndexOf(".");
+    if (lastDot === -1) {
+        return null;
+    }
 
-  const sessionId = signed.slice(0, lastDot);
-  const signature = signed.slice(lastDot + 1);
+    const sessionId = signed.slice(0, lastDot);
+    const signature = signed.slice(lastDot + 1);
 
-  const expected = await signSessionId(sessionId, secret);
-  if (expected !== signed) {
-    return null;
-  }
+    const expected = await signSessionId(sessionId, secret);
+    const expectedSignature = expected.slice(lastDot + 1);
+    if (!timingSafeEqual(expectedSignature, signature)) {
+        return null;
+    }
 
-  return sessionId;
+    return sessionId;
+}
+
+/**
+ * Build a session cookie header.
+ */
+function buildCookieHeader(
+    cookie: string,
+    signedId: string,
+    opts: {
+        path: string;
+        maxAge: number;
+        sameSite: "strict" | "lax" | "none";
+        secure: boolean;
+        domain?: string;
+    }
+): string {
+    return [
+        `${cookie}=${signedId}`,
+        `Path=${opts.path}`,
+        `Max-Age=${opts.maxAge}`,
+        `SameSite=${opts.sameSite}`,
+        opts.secure ? "Secure" : "",
+        "HttpOnly",
+        opts.domain ? `Domain=${opts.domain}` : "",
+    ]
+        .filter(Boolean)
+        .join("; ");
+}
+
+/**
+ * Deep-compare two session data records (snapshot vs. current). Both derive
+ * from the same store object, so JSON key order is stable unless a handler
+ * deleted and re-added keys — an acceptable edge for rotation detection.
+ */
+function dataChanged(a: unknown, b: unknown): boolean {
+    return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
 }
 
 /**
@@ -219,12 +259,30 @@ export function session(options: SessionOptions = {}): Plugin {
     regenerateOnAuth = true,
   } = options;
 
+  if (!secret && process.env.NODE_ENV === "production") {
+    console.warn(
+      "[burger-api/plugin-session] No `secret` configured — session IDs are unsigned and vulnerable to fixation. Set a strong secret in production."
+    );
+  }
+  if (!secure && process.env.NODE_ENV === "production") {
+    console.warn(
+      "[burger-api/plugin-session] `secure: false` in production — the session cookie will be sent over plain HTTP."
+    );
+  }
+
+  const cookieOpts = { path, maxAge, sameSite, secure, domain };
+
   return {
     name: "session",
 
     hooks: {
       transform: {
         session: async (ctx: BurgerContext): Promise<Record<string, unknown> | undefined> => {
+          const sessionCtx = ctx as unknown as {
+            _sessionId?: string;
+            _sessionSnapshot?: Record<string, unknown>;
+          };
+
           // Get session ID from cookie
           let sessionId: string | undefined = ctx.cookies[cookie];
 
@@ -249,8 +307,11 @@ export function session(options: SessionOptions = {}): Plugin {
             return undefined;
           }
 
-          // Attach session ID to context for later use
-          (ctx as { _sessionId?: string })._sessionId = sessionId;
+          // Attach session ID and a deep copy of the data snapshot to context
+          // for later use. The copy (not the reference) is what mapResponse
+          // compares against, so handler mutations are detectable.
+          sessionCtx._sessionId = sessionId;
+          sessionCtx._sessionSnapshot = structuredClone(sessionData);
 
           return sessionData;
         },
@@ -278,66 +339,63 @@ export function session(options: SessionOptions = {}): Plugin {
         // the framework applies it to the response. (Legacy two-arg form is
         // not supported by the pipeline.)
         return async (response: Response): Promise<Response> => {
-          // Get session ID
-          const sessionId = (ctx as { _sessionId?: string })._sessionId;
+          const sessionCtx = ctx as unknown as {
+            _sessionId?: string;
+            _sessionSnapshot?: Record<string, unknown>;
+            session?: Record<string, unknown>;
+          };
+          const sessionId = sessionCtx._sessionId;
 
-          // Create new session if none exists
+          // Create a new session if none exists: persist an empty session in
+          // the store so the ID is valid on the next request.
           if (!sessionId) {
             const newSessionId = generateSessionId();
             const signedId = secret
               ? await signSessionId(newSessionId, secret)
               : newSessionId;
+            await store.set(newSessionId, {}, maxAge);
 
             // Set cookie
-            const cookieHeader = [
-              `${cookie}=${signedId}`,
-              `Path=${path}`,
-              `Max-Age=${maxAge}`,
-              `SameSite=${sameSite}`,
-              secure ? "Secure" : "",
-              domain ? `Domain=${domain}` : "",
-            ]
-              .filter(Boolean)
-              .join("; ");
-
-            // Clone response and set cookie
             const newResponse = new Response(response.body, {
               status: response.status,
               statusText: response.statusText,
               headers: response.headers,
             });
-            newResponse.headers.append("Set-Cookie", cookieHeader);
+            newResponse.headers.append(
+              "Set-Cookie",
+              buildCookieHeader(cookie, signedId, cookieOpts)
+            );
 
             return newResponse;
           }
 
-          // Regenerate session ID if enabled and session exists
+          // Regenerate the session ID when the session data changed during
+          // this request (login/logout/data write), migrating the data to the
+          // new ID so the session survives. Unchanged sessions keep their ID.
           if (regenerateOnAuth) {
-            const newSessionId = generateSessionId();
-            const signedId = secret
-              ? await signSessionId(newSessionId, secret)
-              : newSessionId;
+            const current = sessionCtx.session;
+            if (dataChanged(sessionCtx._sessionSnapshot, current)) {
+              const newSessionId = generateSessionId();
+              const signedId = secret
+                ? await signSessionId(newSessionId, secret)
+                : newSessionId;
 
-            // Set cookie with new ID
-            const cookieHeader = [
-              `${cookie}=${signedId}`,
-              `Path=${path}`,
-              `Max-Age=${maxAge}`,
-              `SameSite=${sameSite}`,
-              secure ? "Secure" : "",
-              domain ? `Domain=${domain}` : "",
-            ]
-              .filter(Boolean)
-              .join("; ");
+              await store.set(newSessionId, current ?? {}, maxAge);
+              await store.destroy(sessionId);
 
-            const newResponse = new Response(response.body, {
-              status: response.status,
-              statusText: response.statusText,
-              headers: response.headers,
-            });
-            newResponse.headers.append("Set-Cookie", cookieHeader);
+              // Set cookie with new ID
+              const newResponse = new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+              });
+              newResponse.headers.append(
+                "Set-Cookie",
+                buildCookieHeader(cookie, signedId, cookieOpts)
+              );
 
-            return newResponse;
+              return newResponse;
+            }
           }
 
           return response;

@@ -77,7 +77,7 @@ describe('config.auth === false bypass (ecosystem auth plugins)', () => {
     });
 
     it('jwt-auth: 401 without token, 200 when auth disabled', async () => {
-        const plugin = jwtAuth({ secret: 'test-secret' });
+        const plugin = jwtAuth({ secret: 'test-secret-0123456789abcdef0123456789abcdef' });
         expect((await run(plugin, '/api/guarded')).status).toBe(401);
         expect((await run(plugin, '/api/open')).status).toBe(200);
         expect((await run(plugin, '/api/relaxed')).status).toBe(200);

@@ -66,7 +66,7 @@ export async function executeHookPlan(
                     const body = await clone.json();
                     const outcome = validateResponse(
                         plan.validators,
-                        method,
+                        method.toLowerCase(),
                         response.status,
                         body,
                         plan.validatorConfig ?? {},
@@ -103,6 +103,10 @@ export async function executeHookPlan(
  * throws it is silently skipped (no recursion). Returns the first `Response`
  * an `onError` returns.
  *
+ * The thrown value is passed through to hooks unchanged — objects carrying
+ * a `status` stay intact instead of being collapsed to
+ * `Error(String(value))`.
+ *
  * Default fallback: unhandled `HTTPError` renders an RFC 9457 Problem Details
  * response. `ValidationError` retains its structured error format for backward
  * compatibility. Unknown errors are wrapped in `HTTPError(500)`.
@@ -114,10 +118,11 @@ async function dispatchOnError(
     debug?: boolean,
     validatorConfig?: import('../validation/types').ValidatorConfig
 ): Promise<Response> {
-    const err = error instanceof Error ? error : new Error(String(error));
     for (const hook of onErrorHooks) {
         try {
-            const result = await hook(err, ctx);
+            // Runtime: hooks may receive any thrown value (Error, object,
+            // primitive). The `Error` type is the documented contract.
+            const result = await hook(error as Error, ctx);
             if (result instanceof Response) {
                 return result;
             }

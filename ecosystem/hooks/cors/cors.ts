@@ -189,6 +189,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         enforceHttps && process.env.NODE_ENV === 'production' ? /^http:/ : null;
 
     // Pre-compute error responses to avoid repeated JSON.stringify
+    // Rejections always carry Vary: Origin so caches key on the origin.
     const originNotAllowedError = JSON.stringify({
         success: false,
         error: 'Origin not allowed by CORS policy',
@@ -197,6 +198,10 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         success: false,
         error: 'Insecure origin not allowed',
     });
+    const forbiddenHeaders = {
+        'Content-Type': 'application/json',
+        Vary: 'Origin',
+    };
 
     return (ctx: BurgerContext): BurgerNext => {
         const requestOrigin = ctx.headers.get('Origin');
@@ -231,7 +236,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                 );
             return new Response(insecureOriginError, {
                 status: 403,
-                headers: { 'Content-Type': 'application/json' },
+                headers: forbiddenHeaders,
             });
         }
 
@@ -241,7 +246,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             if (debug) console.warn('[CORS] Rejected: empty origin header');
             return new Response(originNotAllowedError, {
                 status: 403,
-                headers: { 'Content-Type': 'application/json' },
+                headers: forbiddenHeaders,
             });
         }
 
@@ -282,7 +287,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             if (debug) console.warn(`[CORS] Rejected origin: ${trimmedOrigin}`);
             return new Response(originNotAllowedError, {
                 status: 403,
-                headers: { 'Content-Type': 'application/json' },
+                headers: forbiddenHeaders,
             });
         }
 
@@ -321,6 +326,8 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                 requestedHeaders = [];
 
                 // Manual filtering loop (faster than array methods for small arrays)
+                // Only allow headers present in the configured allowlist —
+                // never echo arbitrary requested headers back.
                 for (let i = 0; i < headers.length; i++) {
                     const header = headers[i]!.trim();
                     if (
@@ -328,15 +335,6 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                         allowedHeadersLower.includes(header.toLowerCase())
                     ) {
                         requestedHeaders.push(header);
-                    }
-                }
-
-                // Echo requested headers if none match allowed headers (Hono-style)
-                if (requestedHeaders.length === 0) {
-                    requestedHeaders = [];
-                    for (let i = 0; i < headers.length; i++) {
-                        const trimmed = headers[i]!.trim();
-                        if (trimmed) requestedHeaders.push(trimmed);
                     }
                 }
             } else {

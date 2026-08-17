@@ -15,7 +15,15 @@ export const onRequest = [
 
 export const beforeRoute = [
     logger(),
-    rateLimit({ windowMs: 60000, maxRequests: 100 }),
+    // Direct connections: provide a keyGenerator (e.g. an API key or
+    // session id). Behind a proxy that overwrites X-Forwarded-For /
+    // X-Real-IP, set trustProxy: true instead. Without either, the
+    // limiter cannot identify a client and rejects with 403.
+    rateLimit({
+        windowMs: 60000,
+        maxRequests: 100,
+        keyGenerator: () => 'example-client',
+    }),
     compress({ threshold: 512 }),
     securityHeaders(),
     requestTimeout({ ms: 10000 }),

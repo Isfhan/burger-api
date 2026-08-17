@@ -9,6 +9,7 @@ import {
     generateRouteFiles,
     generateTsConfig,
     generatePackageJson,
+    generatePluginTemplate,
 } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
 
@@ -273,6 +274,57 @@ describe('JS scaffold (--lang js)', () => {
         const config = JSON.parse(generateTsConfig());
 
         expect(config.compilerOptions.strict).toBe(true);
-        expect(config.compilerOptions.types).toEqual(['bun-types']);
+        expect(config.compilerOptions.types).toEqual(['bun']);
+    });
+});
+
+describe('Scaffold typecheck hardening (U15)', () => {
+    const transpile = async (source: string): Promise<void> => {
+        new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
+    };
+
+    it('emits types: ["bun"] (matches the installed @types/bun)', () => {
+        const config = JSON.parse(generateTsConfig());
+        expect(config.compilerOptions.types).toEqual(['bun']);
+    });
+
+    it('project name with a quote still generates parseable openapi.config.ts', async () => {
+        const content = generateOpenAPIConfig({
+            name: "Bob's API",
+            lang: 'ts',
+        } as CreateOptions);
+        expect(content).toContain('"Bob\'s API"');
+        await transpile(content);
+    });
+
+    it('openapi.config.ts without a name falls back to a safe default', async () => {
+        const content = generateOpenAPIConfig({ lang: 'ts' } as CreateOptions);
+        await transpile(content);
+        expect(content).toContain('"Burger API"');
+    });
+
+    it('route files with a quoted route name still parse', async () => {
+        const files = generateRouteFiles("Bob's", {}, 'ts');
+        await transpile(files['openapi.ts']!);
+        await transpile(files['route.ts']!);
+        expect(files['openapi.ts']).toContain('"Bob\'s"');
+    });
+
+    it('burger config with quoted prefixes still parses', async () => {
+        const content = generateBurgerConfig({
+            name: 'x',
+            useApi: true,
+            apiDir: 'api',
+            apiPrefix: "/api-'s",
+            debug: false,
+            usePages: true,
+            pageDir: 'pages',
+            pagePrefix: "/p-'s",
+        } as CreateOptions);
+        await transpile(content);
+    });
+
+    it('plugin template with a quoted name still parses', async () => {
+        await transpile(generatePluginTemplate("O'Brien's", 'ts'));
     });
 });

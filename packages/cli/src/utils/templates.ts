@@ -119,7 +119,7 @@ export function generateTsConfig(): string {
             skipLibCheck: true,
 
             // Types
-            types: ['bun-types'],
+            types: ['bun'],
         },
     };
 
@@ -227,14 +227,14 @@ export function generateIndexFile(options: CreateOptions): string {
     if (options.useApi) {
         lines.push(` apiDir: './src/${options.apiDir || 'api'}',`);
         if (options.apiPrefix && options.apiPrefix !== '/api') {
-            lines.push(` apiPrefix: '${options.apiPrefix}',`);
+            lines.push(` apiPrefix: ${JSON.stringify(options.apiPrefix)},`);
         }
     }
 
     if (options.usePages) {
         lines.push(` pageDir: './src/${options.pageDir || 'pages'}',`);
         if (options.pagePrefix && options.pagePrefix !== '/') {
-            lines.push(` pagePrefix: '${options.pagePrefix}',`);
+            lines.push(` pagePrefix: ${JSON.stringify(options.pagePrefix)},`);
         }
     }
 
@@ -872,9 +872,11 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
         lines.push('');
     }
     lines.push('export default {');
-    lines.push(` title: '${options.name || 'Burger API'}',`);
+    lines.push(` title: ${JSON.stringify(options.name || 'Burger API')},`);
     lines.push(
-        ` description: '${options.name || 'Burger API'} documentation',`
+        ` description: ${JSON.stringify(
+            `${options.name || 'Burger API'} documentation`
+        )},`
     );
     lines.push(` version: '1.0.0',`);
     lines.push('');
@@ -1162,8 +1164,8 @@ export function generateRouteFiles(
             files['openapi.js'] = [
                 "/** @type {import('burger-api').OpenAPIMeta} */",
                 `export const GET = {`,
-                ` summary: '${routeName} endpoint',`,
-                ` tags: ['${routeName}'],`,
+                ` summary: ${JSON.stringify(`${routeName} endpoint`)},`,
+                ` tags: [${JSON.stringify(routeName)}],`,
                 `};`,
                 '',
             ].join('\n');
@@ -1172,8 +1174,8 @@ export function generateRouteFiles(
                 "import type { OpenAPIMeta } from 'burger-api';",
                 '',
                 `export const GET = {`,
-                ` summary: '${routeName} endpoint',`,
-                ` tags: ['${routeName}'],`,
+                ` summary: ${JSON.stringify(`${routeName} endpoint`)},`,
+                ` tags: [${JSON.stringify(routeName)}],`,
                 `} satisfies OpenAPIMeta;`,
                 '',
             ].join('\n');
@@ -1270,7 +1272,11 @@ export function generatePluginTemplate(
     pluginName: string,
     lang: 'ts' | 'js' = 'ts'
 ): string {
-    const className = pluginName.charAt(0).toUpperCase() + pluginName.slice(1);
+    // The name doubles as a JS identifier — sanitize so arbitrary plugin
+    // names (spaces, quotes, dashes) still produce parseable code.
+    const className = (
+        pluginName.charAt(0).toUpperCase() + pluginName.slice(1)
+    ).replace(/[^a-zA-Z0-9_$]/g, '_');
     if (lang === 'js') {
         return [
             `/**`,
@@ -1279,7 +1285,7 @@ export function generatePluginTemplate(
             ` */`,
             `/** @type {import('burger-api').Plugin} */`,
             `export const ${className} = {`,
-            ` name: '${pluginName}',`,
+            ` name: ${JSON.stringify(pluginName)},`,
             ` hooks: {`,
             ` // transform, beforeRoute, afterRoute, etc.`,
             ` },`,
@@ -1295,7 +1301,7 @@ export function generatePluginTemplate(
         `import type { Plugin } from 'burger-api';`,
         ``,
         `export const ${className}: Plugin = {`,
-        ` name: '${pluginName}',`,
+        ` name: ${JSON.stringify(pluginName)},`,
         ` hooks: {`,
         ` // transform, beforeRoute, afterRoute, etc.`,
         ` },`,

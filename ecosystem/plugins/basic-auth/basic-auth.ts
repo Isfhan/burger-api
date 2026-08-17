@@ -95,11 +95,14 @@ function base64Decode(str: string): string {
  *
  * @example
  * ```typescript
- * // Basic usage
+ * // Basic usage — compare credentials with a timing-safe comparison.
+ * // Never compare passwords with `===` (timing side channel).
+ * import { timingSafeEqual } from "burger-api";
+ *
  * burger.usePlugin(basicAuth({
  *   validate: async (username, password) => {
  *     const user = await db.users.findByUsername(username);
- *     if (user && user.password === password) {
+ *     if (user && timingSafeEqual(user.password, password)) {
  *       return { id: user.id, username: user.username, roles: user.roles };
  *     }
  *     return null;
@@ -127,13 +130,13 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
             return undefined;
           }
 
-          // Check prefix
-          if (!authHeader.startsWith("Basic ")) {
+          // Check prefix (scheme is case-insensitive per RFC 7617)
+          if (!/^basic\s/i.test(authHeader)) {
             return undefined;
           }
 
           // Decode Base64 credentials
-          const encoded = authHeader.slice(6);
+          const encoded = authHeader.slice(6).trim();
           let decoded: string;
           try {
             decoded = base64Decode(encoded);

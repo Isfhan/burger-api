@@ -13,7 +13,7 @@ const name = process.env.TEST_MW ?? 'cors';
 const hooksByName: Record<string, Hook> = {
     cors: cors({ origin: '*' }),
     logger: logger(),
-    'rate-limiter': rateLimit({ windowMs: 60_000, maxRequests: 3 }),
+    'rate-limiter': rateLimit({ windowMs: 60_000, maxRequests: 3, trustProxy: true }),
     compression: compress({ threshold: 1, encodings: ['gzip', 'deflate'] }),
     'security-headers': strictSecurity(),
     timeout: requestTimeout({ ms: 100 }),

@@ -52,7 +52,8 @@ export class Trie {
 
     /**
      * Inserts a compiled route into the trie.
-     * @throws on ambiguous param folders (two different param names at the same level).
+     * @throws on ambiguous param folders (two different param names at the same level)
+     * or a wildcard segment that is not the last segment (unmatchable by design).
      */
     insert(
         path: string,
@@ -63,7 +64,8 @@ export class Trie {
         const segments = splitPath(path);
         let node = this.root;
 
-        for (const segment of segments) {
+        for (let i = 0; i < segments.length; i++) {
+            const segment = segments[i]!;
             if (segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
                 const name = segment.slice(1);
                 if (!node.paramChild) {
@@ -82,6 +84,12 @@ export class Trie {
             } else if (
                 segment.startsWith(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX)
             ) {
+                if (i < segments.length - 1) {
+                    throw new Error(
+                        `Wildcard segment "*" must be the last segment in route path "${path}" — ` +
+                            `segments after a wildcard can never be matched.`
+                    );
+                }
                 if (!node.wildcardChild) {
                     node.wildcardChild = { children: new Map() };
                 }

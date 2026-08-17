@@ -33,7 +33,10 @@ describe('PageRouter — missing directory', () => {
         const originalAppDir = process.env.BURGER_API_APP_DIR;
         try {
             mkdirSync(join(root, 'src', 'pages'), { recursive: true });
-            writeFileSync(join(root, 'src', 'pages', 'index.html'), '<h1>x</h1>');
+            writeFileSync(
+                join(root, 'src', 'pages', 'index.tsx'),
+                'export default function () { return new Response("ok"); }'
+            );
             process.env.BURGER_API_APP_DIR = join(root, 'src');
             process.chdir(root);
             const router = new PageRouter('pages', '/');

@@ -30,12 +30,17 @@ export class BunAdapter implements RuntimeAdapter {
                     // Safety net: errors that escape the pipeline.
                     // +, all HTTPError subclasses are caught
                     // within dispatchOnError; this catches edge cases.
-                    return renderHTTPError(error, opts.debug ?? false);
+                    const isDev =
+                        opts.debug ?? process.env.NODE_ENV !== 'production';
+                    return renderHTTPError(error, isDev);
                 }
             },
             error(error: Error) {
+                // Server-level fallback (never for normal request errors,
+                // which flow through `fetch`): log server-side only, and
+                // never echo `error.message` to clients.
                 console.error(error);
-                return new Response(`Internal Server Error: ${error.message}`, {
+                return new Response('Internal Server Error', {
                     status: 500,
                     headers: { 'Content-Type': 'text/plain' },
                 });

@@ -36,13 +36,16 @@ async function waitForHealth(options: {
     healthPath: string;
     acceptedStatuses: number[];
     timeoutMs?: number;
+    healthHeaders?: Record<string, string>;
 }): Promise<void> {
     const timeoutMs = options.timeoutMs ?? 15000;
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
         try {
-            const res = await fetch(`${options.baseUrl}${options.healthPath}`);
+            const res = await fetch(`${options.baseUrl}${options.healthPath}`, {
+                headers: options.healthHeaders,
+            });
             if (options.acceptedStatuses.includes(res.status)) {
                 return;
             }
@@ -67,6 +70,8 @@ export async function startExampleServer(options: {
     entry?: string;
     /** Extra environment variables for the child process (merged over `process.env`). */
     env?: Record<string, string | undefined>;
+    /** Extra headers for the health-check probe (e.g. proxy headers). */
+    healthHeaders?: Record<string, string>;
 }): Promise<RunningExampleServer> {
     const port = options.port ?? (await getAvailablePort());
     const baseUrl = `http://localhost:${port}`;
@@ -91,6 +96,7 @@ export async function startExampleServer(options: {
             healthPath: options.healthPath,
             acceptedStatuses,
             timeoutMs: options.timeoutMs,
+            healthHeaders: options.healthHeaders,
         }),
         earlyExit,
     ]);

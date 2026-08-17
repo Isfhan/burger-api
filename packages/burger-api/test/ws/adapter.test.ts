@@ -220,7 +220,7 @@ describe('WebSocketAdapter', () => {
         expect(closeReason).toBe('bye');
     });
 
-    it('should run hooks before handlers', () => {
+    it('should run hooks before handlers', async () => {
         const callOrder: string[] = [];
         const route = createRoute('/chat', {
             handlers: {
@@ -254,8 +254,10 @@ describe('WebSocketAdapter', () => {
             remoteAddress: '127.0.0.1',
         };
 
-        wsOption.open(mockWs);
-        wsOption.message(mockWs, 'hello');
+        // Handlers are now awaited; the order is preserved on the microtask
+        // queue, so the calls must be awaited before asserting.
+        await wsOption.open(mockWs);
+        await wsOption.message(mockWs, 'hello');
 
         expect(callOrder).toEqual([
             'hook.onOpen',

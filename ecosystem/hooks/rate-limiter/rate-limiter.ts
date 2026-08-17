@@ -18,12 +18,23 @@ export interface RateLimiterOptions {
 
     /**
      * Custom key generator function to identify clients.
-     * By default, uses the client's IP address.
+     * By default, uses the client's IP address — only available when
+     * `trustProxy` is enabled (the proxy is expected to overwrite, never
+     * append to, `X-Forwarded-For` / `X-Real-IP`).
      *
      * @param req - The request object
      * @returns A unique identifier for the client
      */
     keyGenerator?: (ctx: BurgerContext) => string;
+
+    /**
+     * Whether to trust `X-Forwarded-For` / `X-Real-IP` headers as the client
+     * identity. Only enable when the app is served behind a proxy that
+     * overwrites these headers on every request; otherwise a client can
+     * spoof them to bypass the limit.
+     * @default false
+     */
+    trustProxy?: boolean;
 
     /**
      * Custom handler for when rate limit is exceeded.
@@ -93,10 +104,11 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
     const {
         windowMs = 60000, // 1 minute
         maxRequests = 100,
-        keyGenerator = defaultKeyGenerator,
+        keyGenerator,
         handler = defaultHandler,
         skipFailedRequests = false,
         skipSuccessfulRequests = false,
+        trustProxy = false,
     } = options;
 
     // In-memory store for rate limit records
@@ -112,6 +124,13 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         }
     }, 60000);
 
+    // Don't keep the process alive just for cleanup
+    try {
+        cleanupInterval.unref?.();
+    } catch {
+        // Not available in every runtime
+    }
+
     // Clean up interval on process exit (for proper cleanup in tests)
     // Works in both Node.js and Bun.js
     if (typeof process !== 'undefined' && process.on) {
@@ -122,8 +141,29 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         }
     }
 
-    return (ctx: BurgerContext): BurgerNext => {
-        const key = keyGenerator(ctx);
+    return async (ctx: BurgerContext): Promise<BurgerNext> => {
+        let rawKey: string | null;
+        if (keyGenerator) {
+            rawKey = keyGenerator(ctx);
+        } else {
+            rawKey = defaultKeyGenerator(ctx, trustProxy);
+        }
+
+        // Refuse to rate-limit an unidentifiable client rather than share a
+        // single fallback bucket — an attacker would otherwise exhaust the
+        // shared bucket for every other client.
+        if (!rawKey) {
+            return Response.json(
+                {
+                    error: 'Unable to determine client identity',
+                    message:
+                        'Set trustProxy when behind a proxy that overwrites X-Forwarded-For, or provide a keyGenerator.',
+                },
+                { status: 403 }
+            );
+        }
+
+        const key = await hashKey(rawKey);
         const now = Date.now();
 
         // Get or create rate limit record
@@ -209,52 +249,63 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
 }
 
 /**
- * Hash a key using Bun's optimized CryptoHasher if available.
- * Falls back to a simple hash for other runtimes.
+ * Hash a key with SHA-256 (full 256-bit digest).
+ * Uses Bun's optimized CryptoHasher when available, falling back to
+ * WebCrypto `crypto.subtle` for other runtimes.
  */
-function hashKey(key: string): string {
+export async function hashKey(key: string): Promise<string> {
     // Use Bun's optimized CryptoHasher if available (much faster than crypto.subtle)
     if (typeof Bun !== 'undefined' && Bun.CryptoHasher) {
         try {
             const hasher = new Bun.CryptoHasher('sha256');
             hasher.update(key);
-            // Use first 16 chars for efficient storage
-            return hasher.digest('hex').slice(0, 16);
+            return hasher.digest('hex');
         } catch {
             // Fallback if CryptoHasher fails
         }
     }
-    
-    // Simple fallback hash for non-Bun runtimes or if CryptoHasher fails
-    // Note: This is not cryptographically secure, but fine for rate limiting
-    let hash = 0;
-    for (let i = 0; i < key.length; i++) {
-        const char = key.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash.toString(36);
+
+    const data = new TextEncoder().encode(key);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest), (b) =>
+        b.toString(16).padStart(2, '0')
+    ).join('');
 }
 
 /**
  * Default key generator that extracts the client's IP address.
+ * Honors `X-Forwarded-For` / `X-Real-IP` ONLY when `trustProxy` is enabled —
+ * those headers are client-controlled otherwise. Returns `null` when no
+ * trustworthy identity is available.
  */
-function defaultKeyGenerator(ctx: BurgerContext): string {
+function defaultKeyGenerator(
+    ctx: BurgerContext,
+    trustProxy: boolean
+): string | null {
+    if (!trustProxy) {
+        return null;
+    }
+
     // Try to get real IP from common proxy headers
+    // Only used when trustProxy is enabled, and the first entry is taken —
+    // the proxy must overwrite (not append to) X-Forwarded-For.
     const forwarded = ctx.headers.get('X-Forwarded-For');
     if (forwarded) {
         const ip = forwarded.split(',')[0]!.trim();
-        // Hash the IP for privacy (optional, but recommended)
-        return hashKey(ip);
+        if (ip) {
+            return ip;
+        }
     }
 
     const realIp = ctx.headers.get('X-Real-IP');
     if (realIp) {
-        return hashKey(realIp);
+        const ip = realIp.trim();
+        if (ip) {
+            return ip;
+        }
     }
 
-    // Fallback to a generic identifier
-    return 'unknown';
+    return null;
 }
 
 /**

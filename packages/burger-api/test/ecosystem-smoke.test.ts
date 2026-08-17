@@ -21,6 +21,7 @@ async function withHarness(
             exampleDir: harnessDir,
             healthPath: '/api',
             env: { ...process.env, TEST_MW: hook },
+            healthHeaders: { 'X-Forwarded-For': '203.0.113.7' },
         });
         await fn(server.baseUrl);
     } finally {
@@ -50,7 +51,9 @@ describe('ecosystem hook harness', () => {
         await withHarness('rate-limiter', async (base) => {
             const statuses: number[] = [];
             for (let i = 0; i < 4; i++) {
-                const r = await fetch(`${base}/api`);
+                const r = await fetch(`${base}/api`, {
+                    headers: { 'X-Forwarded-For': '203.0.113.7' },
+                });
                 statuses.push(r.status);
             }
             expect(statuses.some((s) => s === 429)).toBe(true);

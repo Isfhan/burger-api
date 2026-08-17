@@ -21,6 +21,10 @@ const RESERVED = new Set([
     '_ctxInit',
     '_query',
     '_cookies',
+    // Never allow prototype-corrupting keys through to the context.
+    '__proto__',
+    'constructor',
+    'prototype',
 ]);
 
 /**

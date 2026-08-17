@@ -18,7 +18,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError } from "burger-api";
+import { UnauthorizedError, timingSafeEqual } from "burger-api";
 
 /**
  * API key plugin configuration options
@@ -55,6 +55,29 @@ export interface ApiKeyOptions {
 }
 
 /**
+ * SHA-256 hex digest. Uses Bun's CryptoHasher when available, falling back
+ * to WebCrypto for other runtimes.
+ */
+async function sha256Hex(input: string): Promise<string> {
+  if (typeof Bun !== "undefined" && Bun.CryptoHasher) {
+    try {
+      const hasher = new Bun.CryptoHasher("sha256");
+      hasher.update(input);
+      return hasher.digest("hex");
+    } catch {
+      // Fallback if CryptoHasher fails
+    }
+  }
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input)
+  );
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+/**
  * Create API key authentication plugin
  *
  * @param options - Plugin configuration
@@ -85,12 +108,24 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     attachToContext = true,
   } = options;
 
+  // SHA-256 digests of the static keys, computed lazily. Comparison happens
+  // on fixed-length digests with timingSafeEqual, so neither the match
+  // position nor the key length is observable.
+  let keyDigests: string[] | null = null;
+
+  async function getKeyDigests(): Promise<string[]> {
+    if (!keyDigests) {
+      keyDigests = await Promise.all(keys.map(sha256Hex));
+    }
+    return keyDigests;
+  }
+
   return {
     name: "api-key",
 
     hooks: {
       transform: {
-        apiKey: (ctx: BurgerContext): string | undefined => {
+        apiKey: async (ctx: BurgerContext): Promise<string | undefined> => {
           // Extract API key
           let apiKey: string | null;
 
@@ -104,8 +139,16 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
             return undefined;
           }
 
-          // Validate against static list
-          if (keys.length > 0 && keys.includes(apiKey)) {
+          // Validate against the static list — compare every candidate
+          // against every stored digest (no short-circuit on position or
+          // prefix), then decide.
+          const candidateDigest = await sha256Hex(apiKey);
+          let matches = 0;
+          for (const digest of await getKeyDigests()) {
+            matches += timingSafeEqual(candidateDigest, digest) ? 1 : 0;
+          }
+
+          if (matches > 0) {
             return apiKey;
           }
 

@@ -184,8 +184,9 @@ function convertPathForOpenAPI(routePath: string): string {
     if (routePath.indexOf(':') === -1 && routePath.indexOf('*') === -1) {
         return routePath;
     }
-    let converted = routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
-    return converted;
+    return routePath
+        .replace(/:([a-zA-Z0-9_]+)/g, '{$1}')
+        .replace(/\*+/g, '{path+}');
 }
 
 /**
@@ -231,6 +232,9 @@ export function generateOpenAPIDocument(
 
     // Collect tags used across operations
     const tagSet = new Set<string>();
+    // OperationIds must be unique and sanitized for OpenAPI
+    // (`^[a-zA-Z0-9_.-]+$`); collisions get a numeric suffix.
+    const usedOperationIds = new Set<string>();
 
     // Iterate over each route
     for (const route of apiRoutes) {
@@ -255,9 +259,22 @@ export function generateOpenAPIDocument(
 
             const methodMeta = openapiMeta[lowerMethod] || {};
 
-            const operationId =
+            // Only characters matching `^[a-zA-Z0-9_.-]+$` are legal in an
+            // OpenAPI operationId; `*` and other punctuation are sanitized
+            // to `_`, and collisions are deduped with a numeric suffix.
+            let operationId =
                 methodMeta.operationId ||
-                `${lowerMethod}_${route.path.replace(/[\/:]/g, '_')}`;
+                `${lowerMethod}_${route.path.replace(/[^a-zA-Z0-9_.-]+/g, '_')}`;
+            if (usedOperationIds.has(operationId)) {
+                let suffix = 2;
+                let candidate = `${operationId}_${suffix}`;
+                while (usedOperationIds.has(candidate)) {
+                    suffix += 1;
+                    candidate = `${operationId}_${suffix}`;
+                }
+                operationId = candidate;
+            }
+            usedOperationIds.add(operationId);
 
             let parameters: any[] = [];
             if (schema[lowerMethod]) {

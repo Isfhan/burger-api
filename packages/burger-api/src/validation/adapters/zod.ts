@@ -25,6 +25,22 @@ function normalizePath(path: (string | number)[]): (string | number)[] {
     return path.map((p) => (typeof p === 'bigint' ? Number(p) : p));
 }
 
+/** Bounded deep scan for function values inside a check descriptor. */
+function hasFunctionValue(value: unknown, depth = 0): boolean {
+    if (typeof value === 'function') {
+        return true;
+    }
+    if (depth >= 4 || typeof value !== 'object' || value === null) {
+        return false;
+    }
+    for (const v of Object.values(value as Record<string, unknown>)) {
+        if (hasFunctionValue(v, depth + 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /** Normalizes Zod's `ZodError.issues` into `ValidationIssue[]`. */
 function normalizeIssues(error: z.ZodError): ValidationIssue[] {
     return error.issues.map((issue) => ({
@@ -48,6 +64,32 @@ export const ZodAdapter: ValidatorAdapter = {
             fingerprint = String(zodSchema);
         }
         return 'zod:' + fingerprint;
+    },
+
+    cacheable(schema: SchemaInput): boolean {
+        const zodSchema = schema as z.ZodTypeAny;
+        const def = (
+            zodSchema as unknown as {
+                _zod?: { def?: { coerce?: boolean; checks?: unknown[] } };
+            }
+        )._zod?.def;
+
+        // Self-coercing schemas (z.coerce.*) validate differently than their
+        // plain counterparts even though their JSON Schema fingerprints are
+        // identical — never let one route's coercion leak into another's.
+        if (def?.coerce === true) {
+            return false;
+        }
+
+        // Function-valued checks (refinements) are invisible to the JSON
+        // Schema fingerprint, so structurally identical refinements would
+        // collide in the cache. Compile them fresh instead.
+        const checks = def?.checks;
+        if (Array.isArray(checks) && checks.some((c) => hasFunctionValue(c))) {
+            return false;
+        }
+
+        return true;
     },
 
     supports(schema: SchemaInput): boolean {

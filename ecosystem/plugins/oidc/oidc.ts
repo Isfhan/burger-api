@@ -54,6 +54,16 @@ export interface OidcOptions {
    * JWKS cache TTL in seconds (default: 3600 = 1 hour)
    */
   jwksCacheTtl?: number;
+
+  /**
+   * Allowed token `alg` values (default: ["RS256", "ES256"])
+   */
+  algorithms?: string[];
+
+  /**
+   * Require an `exp` claim on every token (default: true).
+   */
+  requireExpiration?: boolean;
 }
 
 /**
@@ -75,6 +85,7 @@ interface JwksKey {
   kty: string;
   use?: string;
   kid: string;
+  alg?: string;
   n?: string;
   e?: string;
   x5c?: string[];
@@ -88,10 +99,16 @@ interface JwksResponse {
   keys: JwksKey[];
 }
 
+const DEFAULT_ALGORITHMS = ["RS256", "ES256"];
+
 /**
- * Cached JWKS
+ * Web Crypto algorithm dictionaries, derived from the platform so the plugin
+ * compiles without the DOM lib (scaffold tsconfigs use `lib: ["ESNext"]`).
  */
-let cachedJwks: { keys: JwksKey[]; expires: number } | null = null;
+type ImportKeyAlgorithm = NonNullable<
+  Parameters<typeof crypto.subtle.importKey>[2]
+>;
+type VerifyAlgorithm = NonNullable<Parameters<typeof crypto.subtle.verify>[0]>;
 
 /**
  * Fetch OIDC discovery document
@@ -110,15 +127,7 @@ async function fetchDiscovery(issuer: string): Promise<OidcDiscovery> {
 /**
  * Fetch JWKS from provider
  */
-async function fetchJwks(
-  jwksUri: string,
-  cacheTtl: number
-): Promise<JwksKey[]> {
-  // Check cache
-  if (cachedJwks && Date.now() < cachedJwks.expires) {
-    return cachedJwks.keys;
-  }
-
+async function fetchJwks(jwksUri: string): Promise<JwksKey[]> {
   const response = await fetch(jwksUri);
 
   if (!response.ok) {
@@ -126,36 +135,13 @@ async function fetchJwks(
   }
 
   const data = (await response.json()) as JwksResponse;
-
-  // Cache the keys
-  cachedJwks = {
-    keys: data.keys,
-    expires: Date.now() + cacheTtl * 1000,
-  };
-
   return data.keys;
-}
-
-/**
- * Import RSA public key from JWK
- */
-async function importRsaKey(jwk: JwksKey): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "jwk",
-    jwk,
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256",
-    },
-    false,
-    ["verify"]
-  );
 }
 
 /**
  * Base64 URL decode
  */
-function base64UrlDecode(str: string): Uint8Array {
+function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   const padded = str.replace(/-/g, "+").replace(/_/g, "/");
   const padding = padded.length % 4;
   const normalized = padding ? padded + "=".repeat(4 - padding) : padded;
@@ -164,11 +150,16 @@ function base64UrlDecode(str: string): Uint8Array {
 
 /**
  * Verify JWT signature using JWKS
+ *
+ * The token's `alg` must be allowlisted, and the selected key must match
+ * the algorithm family (`kty`) and be usable for signatures (`use`).
+ * Import/verification failures return `false` — they are authentication
+ * failures, never server errors.
  */
 async function verifyToken(
   token: string,
   keys: JwksKey[],
-  algorithm: string
+  algorithms: string[]
 ): Promise<boolean> {
   const parts = token.split(".");
   if (parts.length !== 3) {
@@ -176,31 +167,84 @@ async function verifyToken(
   }
 
   const [header, payload, signature] = parts;
-  const data = new TextEncoder().encode(`${header}.${payload}`);
-  const signatureBytes = base64UrlDecode(signature);
-
-  // Decode header to get kid
-  const headerDecoded = JSON.parse(
-    new TextDecoder().decode(base64UrlDecode(header))
-  );
-
-  const kid = headerDecoded.kid;
-  if (!kid) {
+  if (!header || !payload || !signature) {
     return false;
   }
 
-  // Find key by kid
-  const key = keys.find((k) => k.kid === kid);
+  let headerDecoded: { alg?: unknown; kid?: unknown };
+  try {
+    headerDecoded = JSON.parse(
+      new TextDecoder().decode(base64UrlDecode(header))
+    );
+  } catch {
+    return false;
+  }
+
+  const alg = headerDecoded.alg;
+  if (typeof alg !== "string" || !algorithms.includes(alg)) {
+    return false;
+  }
+
+  const kid = headerDecoded.kid;
+  if (typeof kid !== "string" || !kid) {
+    return false;
+  }
+
+  // Key must be usable for signature verification and (if declared) match
+  // the token's algorithm.
+  const key = keys.find(
+    (k) =>
+      k.kid === kid &&
+      (k.use === undefined || k.use === "sig") &&
+      (k.alg === undefined || k.alg === alg)
+  );
   if (!key) {
     return false;
   }
 
-  // Import key
-  const cryptoKey = await importRsaKey(key);
+  let importAlgorithm: ImportKeyAlgorithm;
+  let verifyAlgorithm: VerifyAlgorithm;
+  if (alg === "RS256") {
+    if (key.kty !== "RSA") {
+      return false;
+    }
+    importAlgorithm = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+    verifyAlgorithm = "RSASSA-PKCS1-v1_5";
+  } else if (alg === "ES256") {
+    if (key.kty !== "EC") {
+      return false;
+    }
+    importAlgorithm = { name: "ECDSA", namedCurve: "P-256" };
+    verifyAlgorithm = { name: "ECDSA", hash: "SHA-256" };
+  } else {
+    // Allowlisted but unsupported here
+    return false;
+  }
 
-  // Verify signature
+  const data = new TextEncoder().encode(`${header}.${payload}`);
+
+  let signatureBytes: Uint8Array<ArrayBuffer>;
+  try {
+    signatureBytes = base64UrlDecode(signature);
+  } catch {
+    return false;
+  }
+
+  let cryptoKey: CryptoKey;
+  try {
+    cryptoKey = await crypto.subtle.importKey(
+      "jwk",
+      key,
+      importAlgorithm,
+      false,
+      ["verify"]
+    );
+  } catch {
+    return false;
+  }
+
   return crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
+    verifyAlgorithm,
     cryptoKey,
     signatureBytes,
     data
@@ -236,108 +280,143 @@ export function oidc(options: OidcOptions): Plugin {
     prefix = "Bearer",
     clockTolerance = 0,
     jwksCacheTtl = 3600,
+    algorithms = DEFAULT_ALGORITHMS,
+    requireExpiration = true,
   } = options;
 
+  // Per-instance state. Never share a JWKS cache across plugin instances —
+  // instances with different issuers must verify against their own keys.
+  let discoveryPromise: Promise<OidcDiscovery> | null = null;
   let discovery: OidcDiscovery | null = null;
-  let jwks: JwksKey[] | null = null;
+  let jwksCache: {
+    keys: JwksKey[];
+    expires: number;
+    inflight: Promise<JwksKey[]> | null;
+  } | null = null;
+
+  async function refreshJwks(jwksUri: string): Promise<JwksKey[]> {
+    const keys = await fetchJwks(jwksUri);
+    jwksCache = {
+      keys,
+      expires: Date.now() + jwksCacheTtl * 1000,
+      inflight: null,
+    };
+    return keys;
+  }
+
+  async function getJwks(jwksUri: string): Promise<JwksKey[]> {
+    const cache = jwksCache;
+    if (cache && Date.now() < cache.expires) {
+      return cache.keys;
+    }
+    if (cache) {
+      // TTL expired: keep serving the stale keys while one background
+      // refresh runs; a failed refresh keeps the stale keys usable and
+      // lets the next request retry.
+      cache.inflight ??= refreshJwks(jwksUri).catch(() => {
+        cache.inflight = null;
+        return cache.keys;
+      });
+      return cache.keys;
+    }
+    return refreshJwks(jwksUri);
+  }
 
   return {
     name: "oidc",
 
     hooks: {
-      onRequest: async (): Promise<void> => {
-        // Fetch discovery document and JWKS on first request
-        if (!discovery) {
-          discovery = await fetchDiscovery(issuer);
-          jwks = await fetchJwks(discovery.jwks_uri, jwksCacheTtl);
-        }
-      },
-
-      transform: {
-        user: (ctx: BurgerContext): Record<string, unknown> | undefined => {
-          // Extract token from header
-          const authHeader = ctx.headers.get(header);
-          if (!authHeader) {
-            return undefined;
-          }
-
-          // Check prefix
-          if (!authHeader.startsWith(`${prefix} `)) {
-            return undefined;
-          }
-
-          const token = authHeader.slice(prefix.length + 1);
-
-          // Decode payload without verification (verification happens in beforeRoute)
-          const parts = token.split(".");
-          if (parts.length !== 3) {
-            return undefined;
-          }
-
-          try {
-            const payload = JSON.parse(
-              new TextDecoder().decode(base64UrlDecode(parts[1]))
-            );
-
-            return payload as Record<string, unknown>;
-          } catch {
-            return undefined;
-          }
-        },
-      },
-
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
         // Get config for this route
-        const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
+        const config = ctx.config as
+          | { auth?: boolean | { required?: boolean } }
+          | undefined;
 
-        // Skip auth check if explicitly disabled
-        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
+        // Skip auth check if explicitly disabled. The token is not parsed or
+        // attached here — unverified claims never reach auth-disabled routes.
+        if (
+          config?.auth === false ||
+          (typeof config?.auth === "object" && config.auth.required === false)
+        ) {
           return;
         }
 
-        // Get user from transform
-        const user = (ctx as { user?: Record<string, unknown> }).user;
-        if (!user) {
+        // Consistent token extraction — the prefix must match exactly.
+        const authHeader = ctx.headers.get(header);
+        if (!authHeader?.startsWith(`${prefix} `)) {
           throw new UnauthorizedError("Missing or invalid token");
         }
+        const token = authHeader.slice(prefix.length + 1);
 
-        // Get token
-        const authHeader = ctx.headers.get(header);
-        const token = authHeader?.slice(prefix.length + 1);
-
-        if (!token || !jwks) {
-          throw new UnauthorizedError("Missing token");
+        // Lazily resolve provider config and keys — only when a token must
+        // actually be verified.
+        let keys: JwksKey[];
+        try {
+          if (!discovery) {
+            try {
+              discovery = await (discoveryPromise ??= fetchDiscovery(issuer));
+            } catch (error) {
+              discoveryPromise = null;
+              throw error;
+            }
+          }
+          keys = await getJwks(discovery.jwks_uri);
+        } catch {
+          throw new UnauthorizedError("Unable to validate token");
         }
 
-        // Verify signature
-        const isValid = await verifyToken(token, jwks, "RS256");
+        const isValid = await verifyToken(token, keys, algorithms);
         if (!isValid) {
           throw new UnauthorizedError("Invalid token signature");
         }
 
+        // Only after the signature verifies may the payload be trusted.
+        let user: Record<string, unknown>;
+        try {
+          const parts = token.split(".");
+          user = JSON.parse(
+            new TextDecoder().decode(base64UrlDecode(parts[1]!))
+          ) as Record<string, unknown>;
+        } catch {
+          throw new UnauthorizedError("Malformed token");
+        }
+
         // Check expiration
-        if (user.exp !== undefined) {
-          const now = Math.floor(Date.now() / 1000);
-          if ((user.exp as number) < now - clockTolerance) {
+        const now = Math.floor(Date.now() / 1000);
+        if (user.exp === undefined) {
+          if (requireExpiration) {
+            throw new UnauthorizedError("Token has no expiration");
+          }
+        } else {
+          if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
+            throw new UnauthorizedError("Token has invalid expiration");
+          }
+          // Strict: `exp == now` is already expired.
+          if (user.exp <= now - clockTolerance) {
             throw new UnauthorizedError("Token expired");
           }
         }
 
         // Check not-before
         if (user.nbf !== undefined) {
-          const now = Math.floor(Date.now() / 1000);
-          if ((user.nbf as number) > now + clockTolerance) {
+          if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
+            throw new UnauthorizedError("Token has invalid not-before claim");
+          }
+          if (user.nbf > now + clockTolerance) {
             throw new UnauthorizedError("Token not yet valid");
           }
         }
 
-        // Check issuer
+        // Check issuer (must match the configured issuer exactly)
         if (user.iss !== issuer) {
           throw new UnauthorizedError("Invalid issuer");
         }
 
-        // Check audience
-        if (audience && user.aud) {
+        // Check audience — a configured audience must be present AND listed
+        if (audience) {
+          if (!user.aud) {
+            throw new UnauthorizedError("Invalid audience");
+          }
           const audArray = Array.isArray(user.aud)
             ? user.aud
             : [user.aud];
@@ -345,6 +424,9 @@ export function oidc(options: OidcOptions): Plugin {
             throw new UnauthorizedError("Invalid audience");
           }
         }
+
+        // Attach verified claims only.
+        (ctx as { user?: Record<string, unknown> }).user = user;
       },
     },
   };

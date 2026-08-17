@@ -90,45 +90,69 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
             // Fast mode: Check Content-Length header only
             const contentLength = ctx.headers.get('Content-Length');
 
-            if (contentLength) {
-                const size = parseInt(contentLength, 10);
-
-                if (isNaN(size)) {
+            if (contentLength !== null) {
+                if (!/^\d+$/.test(contentLength)) {
                     return Response.json(
                         { error: 'Invalid Content-Length header' },
                         { status: 400 }
                     );
                 }
 
+                const size = Number(contentLength);
+
                 if (size > maxSize) {
                     return onError(size, maxSize);
                 }
+            } else if (ctx.body !== null) {
+                // A body without a trustworthy Content-Length (e.g. chunked
+                // transfer-encoding) cannot be measured in header mode —
+                // require the header rather than letting an unbounded body
+                // through.
+                return Response.json(
+                    { error: 'Content-Length header required' },
+                    { status: 411 }
+                );
             }
-            // If no Content-Length header, we can't check in header mode
-            // In production, you might want to require Content-Length header
 
             return undefined;
         } else {
-            // Stream mode: Actually read and measure the body
-            // This is more accurate but slower and requires reading the body
+            // Stream mode: read and measure the body in bounded chunks.
+            // Never buffer more than `maxSize` bytes — an oversized body is
+            // aborted mid-stream, and an in-limit body is replayed to the
+            // handler via a reconstructed Request so handlers can still
+            // read it.
 
             if (!ctx.body) {
                 return undefined; // No body to check
             }
 
-            try {
-                // Read the body as array buffer
-                const bodyBuffer = await ctx.arrayBuffer();
-                const size = bodyBuffer.byteLength;
+            const chunks: Uint8Array[] = [];
+            let size = 0;
 
-                if (size > maxSize) {
-                    return onError(size, maxSize);
+            try {
+                const reader = ctx.body.getReader();
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        break;
+                    }
+                    if (value) {
+                        size += value.byteLength;
+                        if (size > maxSize) {
+                            await reader.cancel();
+                            return onError(size, maxSize);
+                        }
+                        chunks.push(value);
+                    }
                 }
 
-                // Recreate request with the consumed body
-                // Note: This might not work perfectly with all request types
-                // For production, consider using a streaming approach
-                (ctx as any)._bodyBuffer = bodyBuffer;
+                // Replay the buffered body so downstream validation and
+                // handlers can still read it.
+                (ctx as unknown as { _raw: Request })._raw = new Request(ctx.url, {
+                    method: ctx.method,
+                    headers: ctx.headers,
+                    body: new Blob(chunks as unknown as BlobPart[]),
+                });
 
                 return undefined;
             } catch (error) {

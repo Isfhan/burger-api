@@ -82,11 +82,25 @@ export class WebSocketCompiler {
                 ({ ...configModule } as WebSocketConfig);
         }
 
-        // Merge global and route-specific config
+        // Merge global and route-specific config. `auth` is merged deeply:
+        // a route-level `auth: { roles: [...] }` must not drop a global
+        // `auth: { required: true }`. Either side being `false` disables
+        // auth for the route.
+        const globalAuth = this.globalConfig.auth;
+        const routeAuth = routeConfig.auth;
         const mergedConfig: WebSocketConfig = {
             ...this.globalConfig,
             ...routeConfig,
         };
+        if (globalAuth !== undefined || routeAuth !== undefined) {
+            mergedConfig.auth =
+                globalAuth === false || routeAuth === false
+                    ? false
+                    : {
+                          ...(typeof globalAuth === 'object' ? globalAuth : {}),
+                          ...(typeof routeAuth === 'object' ? routeAuth : {}),
+                      };
+        }
 
         // Merge global and route-specific hooks
         const mergedHooks: WebSocketHooks | undefined = this.mergeHooks(

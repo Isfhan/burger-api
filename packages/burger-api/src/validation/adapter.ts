@@ -35,6 +35,14 @@ export interface ValidatorAdapter {
     compile(schema: SchemaInput, slot: ValidationSlot): CompiledValidator;
     /** Whether this adapter can handle the given schema. */
     supports(schema: SchemaInput): boolean;
+    /**
+     * Whether a compiled validator for this schema is safe to cache and
+     * share. Adapters return false when the structural identity cannot
+     * faithfully capture the schema's runtime semantics (e.g. refinements
+     * with function checks, self-coercing schemas) — such schemas compile
+     * fresh on every route.
+     */
+    cacheable?(schema: SchemaInput): boolean;
 }
 
 /** True when the value is a Zod schema (instance of `z.ZodType`). */

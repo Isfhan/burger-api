@@ -25,8 +25,12 @@ export class HTTPError extends Error {
  * response (`application/problem+json`).
  *
  * - In dev mode, includes `stack` and `cause` chain.
- * - In production, only `type`, `title`, `status`, `detail` are emitted.
+ * - In production, only `type`, `title`, `status`, `detail` are emitted,
+ *   and 500 responses always carry the fixed `Internal Server Error`
+ *   detail — a thrown message is never echoed to clients.
  * - Unknown (non-HTTPError) errors are wrapped in `HTTPError(500)`.
+ * - The status is clamped to the HTTP range (100-599, integer); anything
+ *   else renders as 500 instead of escaping as a `RangeError`.
  *
  * @param error The error to render.
  * @param isDev Whether to include dev diagnostics (stack, cause).
@@ -52,11 +56,23 @@ export function renderHTTPError(
                   error instanceof Error ? { cause: error } : undefined
               );
 
+    // Clamp to a valid HTTP status; garbage must render as 500, never
+    // escape as a `RangeError` from the `Response` constructor.
+    const rawStatus = httpError.status;
+    const status =
+        Number.isInteger(rawStatus) && rawStatus >= 100 && rawStatus <= 599
+            ? rawStatus
+            : 500;
+
     const problem: Record<string, unknown> = {
         type: 'about:blank',
         title: httpError.name,
-        status: httpError.status,
-        detail: httpError.message,
+        status,
+        // Server-side failures never echo the thrown message to clients.
+        detail:
+            status === 500 && !isDev
+                ? 'Internal Server Error'
+                : httpError.message,
         ...extras,
     };
 
@@ -76,7 +92,7 @@ export function renderHTTPError(
     }
 
     return new Response(JSON.stringify(problem), {
-        status: httpError.status,
+        status,
         headers: { 'Content-Type': 'application/problem+json' },
     });
 }

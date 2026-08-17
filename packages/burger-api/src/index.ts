@@ -559,7 +559,9 @@ export class Burger {
                     path: route.path,
                     handlers: route.handlers,
                     hooks: route.hooks,
-                    config: { ...this.wsConfigOptions, ...route.config },
+                    // Deep-merge `auth` so a route-level `auth.roles` does
+                    // not drop the global `auth.required`.
+                    config: mergeWsConfig(this.wsConfigOptions, route.config),
                 });
             }
             return this.wsRouter.getRouteCount() > 0;
@@ -725,6 +727,33 @@ export class Burger {
     }
 }
 
+/**
+ * Merges global and per-route WebSocket config. `auth` is merged deeply
+ * so a route-level `auth: { roles: [...] }` keeps a global
+ * `auth: { required: true }`; either side being `false` disables auth.
+ */
+function mergeWsConfig(
+    globalConfig: WebSocketConfig | undefined,
+    routeConfig: WebSocketConfig | undefined
+): WebSocketConfig {
+    const merged: WebSocketConfig = {
+        ...globalConfig,
+        ...routeConfig,
+    };
+    const globalAuth = globalConfig?.auth;
+    const routeAuth = routeConfig?.auth;
+    if (globalAuth !== undefined || routeAuth !== undefined) {
+        merged.auth =
+            globalAuth === false || routeAuth === false
+                ? false
+                : {
+                      ...(typeof globalAuth === 'object' ? globalAuth : {}),
+                      ...(typeof routeAuth === 'object' ? routeAuth : {}),
+                  };
+    }
+    return merged;
+}
+
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
 export type { BurgerServices, BurgerValidated } from './context/context';
@@ -732,6 +761,9 @@ export type { BurgerServices, BurgerValidated } from './context/context';
 // Export utils used by examples and CLI build pipeline
 export { setDir } from './utils/index';
 export { cleanPrefix, normalizePath } from './utils/index';
+
+// Export constant-time comparison (used by ecosystem auth plugins)
+export { timingSafeEqual } from './utils/timing-safe';
 
 // Export error classes
 export { HTTPError, renderHTTPError } from './errors/http-error';

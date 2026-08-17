@@ -43,7 +43,10 @@ function safeDecode(segment: string): string {
  * - Malformed percent-escapes are preserved verbatim; the parser never throws.
  */
 export function parseQuery(search: string): Record<string, string | string[]> {
-    const result: Record<string, string | string[]> = {};
+    // Null prototype: `__proto__` / `constructor` keys are attacker-
+    // controlled and must land as plain own properties, never touch the
+    // object prototype.
+    const result: Record<string, string | string[]> = Object.create(null);
 
     // Tolerate a leading '?'.
     const qs = search.startsWith('?') ? search.slice(1) : search;

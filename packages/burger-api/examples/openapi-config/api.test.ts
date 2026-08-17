@@ -11,6 +11,7 @@ beforeAll(async () => {
     server = await startExampleServer({
         exampleDir: import.meta.dir,
         healthPath: '/api/products',
+        env: { ...process.env, DOCS_USERNAME: 'admin', DOCS_PASSWORD: 'secret' },
     });
 });
 

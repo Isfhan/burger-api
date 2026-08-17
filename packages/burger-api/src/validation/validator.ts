@@ -77,7 +77,9 @@ function splitCookiePairs(header: string): Array<[string, string]> {
 export function parseCookies(
     header: string | null | undefined
 ): Record<string, string> {
-    const out: Record<string, string> = {};
+    // Null prototype: cookie names are attacker-controlled and must never
+    // touch the object prototype (`__proto__` / `constructor`).
+    const out: Record<string, string> = Object.create(null);
     if (!header) return out;
     for (const [key, rawValue] of splitCookiePairs(header)) {
         try {
@@ -166,7 +168,8 @@ export function createValidationHook(
 
         // Headers
         if (methodValidators.headers) {
-            const headerRecord: Record<string, string> = {};
+            // Null prototype: header names are attacker-controlled.
+            const headerRecord: Record<string, string> = Object.create(null);
             ctx.headers.forEach((value, key) => {
                 headerRecord[key.toLowerCase()] = value;
             });
@@ -198,13 +201,13 @@ export function createValidationHook(
             }
         }
 
-        // Body (gated on JSON content-type)
+        // Body (gated on the JSON media type — parsed from the raw header so
+        // casing (`Application/JSON`) and parameters (`; charset=utf-8`)
+        // can't bypass or confuse the gate).
         if (methodValidators.body) {
-            const contentType =
-                ctx.headers.get('content-type') ??
-                ctx.headers.get('Content-Type') ??
-                '';
-            if (contentType.includes('application/json')) {
+            const rawContentType = ctx.headers.get('content-type') ?? '';
+            const mediaType = rawContentType.split(';')[0]!.trim().toLowerCase();
+            if (mediaType === 'application/json') {
                 try {
                     const bodyData = await ctx.json();
                     const result = methodValidators.body.validate(bodyData);
@@ -220,7 +223,21 @@ export function createValidationHook(
                     if (!errorsBySlot) errorsBySlot = {};
                     errorsBySlot.body = [{ path: [], message: msg }];
                 }
+            } else if (rawContentType.trim() === '') {
+                // A body schema is declared but the client sent no
+                // Content-Type — reject rather than silently skipping
+                // validation.
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.body = [
+                    {
+                        path: [],
+                        message:
+                            'Content-Type header required for body validation',
+                    },
+                ];
             }
+            // Any other (non-JSON) media type skips body validation as
+            // before — the body is not JSON.
         }
 
         if (errorsBySlot) {

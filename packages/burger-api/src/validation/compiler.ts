@@ -169,6 +169,12 @@ function compileSlot(
     cache: ValidatorCache
 ): CompiledValidator {
     const adapter = detectAdapter(slotSchema);
+    if (adapter.cacheable?.(slotSchema) === false) {
+        // Semantics that the structural identity cannot capture (refinements,
+        // self-coercion) — compile fresh so no other route can reuse this
+        // validator's behavior.
+        return adapter.compile(slotSchema, slot);
+    }
     const identity = adapter.identity(slotSchema);
     const cached = cache.get(identity);
     if (cached) return cached;

@@ -1,6 +1,12 @@
 import type { OpenAPIConfig } from 'burger-api';
 import { scalarDocs } from 'burger-api';
 
+// Docs auth reads from the environment — never hardcode credentials.
+// Set DOCS_USERNAME / DOCS_PASSWORD to protect /docs. Without them the
+// docs UI is served unauthenticated (local development).
+const docsUsername = process.env.DOCS_USERNAME;
+const docsPassword = process.env.DOCS_PASSWORD;
+
 const config: OpenAPIConfig = {
     title: 'Product API',
     version: '1.0.0',
@@ -14,10 +20,9 @@ const config: OpenAPIConfig = {
     },
     docsPath: '/docs',
     provider: scalarDocs(),
-    docsAuth: {
-        username: 'admin',
-        password: 'secret',
-    },
+    ...(docsUsername !== undefined && docsPassword !== undefined
+        ? { docsAuth: { username: docsUsername, password: docsPassword } }
+        : {}),
 };
 
 export default config;

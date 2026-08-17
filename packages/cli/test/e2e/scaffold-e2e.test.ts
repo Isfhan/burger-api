@@ -142,6 +142,10 @@ describe('E2E scaffold — TypeScript', () => {
             );
             expect(devStatus).toBe(200);
 
+            // generated project typechecks out of the box (types: ["bun"])
+            const typecheck = await run(['bun', 'run', 'typecheck'], dir);
+            expect(typecheck.code).toBe(0);
+
             // build produces the AOT bundle
             const build = await run(['bun', 'run', 'build'], dir);
             expect(build.code).toBe(0);

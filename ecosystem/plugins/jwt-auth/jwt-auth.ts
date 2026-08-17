@@ -67,6 +67,12 @@ export interface JwtAuthOptions {
    * Clock tolerance in seconds for expiration checks (default: 0)
    */
   clockTolerance?: number;
+
+  /**
+   * Require an `exp` claim on every token (default: true).
+   * Tokens without an expiration are rejected when enabled.
+   */
+  requireExpiration?: boolean;
 }
 
 /**
@@ -210,6 +216,7 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
     issuer,
     audience,
     clockTolerance = 0,
+    requireExpiration = true,
   } = options;
 
   // Determine the verification key
@@ -219,112 +226,117 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
     throw new Error("JWT plugin requires either `secret` or `publicKey` option");
   }
 
+  // HMAC secrets shorter than 32 bytes are trivially brute-forced — fail
+  // loud at startup instead of at runtime.
+  if (
+    algorithm.startsWith("HS") &&
+    typeof secret === "string" &&
+    secret.length < 32
+  ) {
+    throw new Error(
+      `JWT plugin: HMAC secret must be at least 32 bytes long (got ${secret.length} bytes)`
+    );
+  }
+
   return {
     name: "jwt-auth",
 
     hooks: {
-      transform: {
-        user: (ctx: BurgerContext): JwtPayload | undefined => {
-          // Extract token from header
-          const authHeader = ctx.headers.get(header);
-          if (!authHeader) {
-            return undefined;
-          }
-
-          // Check prefix
-          if (!authHeader.startsWith(`${prefix} `)) {
-            return undefined;
-          }
-
-          const token = authHeader.slice(prefix.length + 1);
-
-          // Decode header to get algorithm
-          const headerParts = token.split(".");
-          if (headerParts.length !== 3) {
-            return undefined;
-          }
-          // The length-3 guard above guarantees both parts; destructure so
-          // noUncheckedIndexedAccess narrows them to strings.
-          const [encodedHeader, encodedPayload] = headerParts;
-          if (!encodedHeader || !encodedPayload) {
-            return undefined;
-          }
-
-          try {
-            const headerDecoded = JSON.parse(
-              new TextDecoder().decode(base64UrlDecode(encodedHeader))
-            );
-
-            // Verify algorithm matches
-            if (headerDecoded.alg !== algorithm) {
-              return undefined;
-            }
-
-            // Verify signature synchronously (Web Crypto is async, but we'll handle in beforeRoute)
-            // For now, decode payload without verification
-            const payload = JSON.parse(
-              new TextDecoder().decode(base64UrlDecode(encodedPayload))
-            );
-
-            return payload as JwtPayload;
-          } catch {
-            return undefined;
-          }
-        },
-      },
-
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
         // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean; roles?: string[] } } | undefined;
 
-        // Skip auth check if explicitly disabled
+        // Skip auth check if explicitly disabled.
+        // Note: the token is NOT parsed or attached to ctx.user here —
+        // unverified claims never reach auth-disabled routes.
         if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 
-        // Get user from transform
-        const user = (ctx as { user?: JwtPayload }).user;
-        if (!user) {
-          // No user attached - auth failed
+        // Consistent token extraction — the prefix must match exactly.
+        const authHeader = ctx.headers.get(header);
+        if (!authHeader?.startsWith(`${prefix} `)) {
           throw new UnauthorizedError("Missing or invalid token");
         }
+        const token = authHeader.slice(prefix.length + 1);
 
-        // Verify signature
-        const authHeader = ctx.headers.get(header);
-        const token = authHeader?.slice(prefix.length + 1);
-
-        if (!token) {
-          throw new UnauthorizedError("Missing token");
+        const parts = token.split(".");
+        if (parts.length !== 3) {
+          throw new UnauthorizedError("Malformed token");
+        }
+        // The length-3 guard above guarantees both parts; destructure so
+        // noUncheckedIndexedAccess narrows them to strings.
+        const [encodedHeader, encodedPayload, signature] = parts;
+        if (!encodedHeader || !encodedPayload || !signature) {
+          throw new UnauthorizedError("Malformed token");
         }
 
-        const isValid = await verifySignature(token, verificationKey, algorithm);
-        if (!isValid) {
-          throw new UnauthorizedError("Invalid token signature");
+        let user: JwtPayload;
+        try {
+          // Check the header's alg claim before verifying — a token that
+          // claims a different algorithm than configured must never be
+          // verified with the configured key.
+          const headerDecoded = JSON.parse(
+            new TextDecoder().decode(base64UrlDecode(encodedHeader))
+          ) as { alg?: unknown };
+
+          if (headerDecoded.alg !== algorithm) {
+            throw new UnauthorizedError("Invalid token algorithm");
+          }
+
+          const signatureValid = await verifySignature(token, verificationKey, algorithm);
+          if (!signatureValid) {
+            throw new UnauthorizedError("Invalid token signature");
+          }
+
+          // Only after the signature verifies may the payload be trusted.
+          user = JSON.parse(
+            new TextDecoder().decode(base64UrlDecode(encodedPayload))
+          ) as JwtPayload;
+        } catch (error) {
+          if (error instanceof UnauthorizedError) {
+            throw error;
+          }
+          throw new UnauthorizedError("Malformed token");
         }
 
-        // Check expiration
-        if (user.exp !== undefined) {
-          const now = Math.floor(Date.now() / 1000);
-          if (user.exp < now - clockTolerance) {
+        // Check expiration — reject early rather than risk a non-finite value
+        // passing the comparison.
+        const now = Math.floor(Date.now() / 1000);
+        if (user.exp === undefined) {
+          if (requireExpiration) {
+            throw new UnauthorizedError("Token has no expiration");
+          }
+        } else {
+          if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
+            throw new UnauthorizedError("Token has invalid expiration");
+          }
+          // Strict: `exp == now` is already expired.
+          if (user.exp <= now - clockTolerance) {
             throw new UnauthorizedError("Token expired");
           }
         }
 
         // Check not-before
         if (user.nbf !== undefined) {
-          const now = Math.floor(Date.now() / 1000);
+          if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
+            throw new UnauthorizedError("Token has invalid not-before claim");
+          }
           if (user.nbf > now + clockTolerance) {
             throw new UnauthorizedError("Token not yet valid");
           }
         }
 
-        // Check issuer
+        // Check issuer (a configured issuer must match exactly)
         if (issuer && user.iss !== issuer) {
           throw new UnauthorizedError("Invalid issuer");
         }
 
-        // Check audience
-        if (audience && user.aud) {
+        // Check audience — a configured audience must be present AND listed
+        if (audience) {
+          if (!user.aud) {
+            throw new UnauthorizedError("Invalid audience");
+          }
           const audArray = Array.isArray(user.aud) ? user.aud : [user.aud];
           if (!audArray.includes(audience)) {
             throw new UnauthorizedError("Invalid audience");
@@ -341,6 +353,10 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
             throw new ForbiddenError("Insufficient permissions");
           }
         }
+
+        // Attach verified claims only — handlers and response hooks on this
+        // route can trust ctx.user.
+        (ctx as { user?: JwtPayload }).user = user;
       },
     },
   };

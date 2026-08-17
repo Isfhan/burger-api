@@ -31,10 +31,12 @@ export interface TimeoutOptions {
  * This hook measures how long the handler takes to complete.
  * If it takes longer than the timeout, it returns a 408 response.
  *
- * Note: This detects timeouts AFTER the handler completes.
- * The handler will still run to completion even if it exceeds the timeout.
- * For true timeout enforcement that stops handlers mid-execution,
- * implement timeout logic inside your handlers using AbortSignal.
+ * Residual risk (documented, not fixed): the 408 is only sent after the
+ * handler completes — a hung handler keeps the client waiting until it
+ * resolves. Within the current hook contract the transform runs after the
+ * handler, so this guard cannot interrupt mid-flight. Full enforcement
+ * (AbortController wiring) is deferred; for true timeouts implement them
+ * inside handlers using AbortSignal.
  *
  * @param options - Configuration options for timeout behavior
  * @returns A hook function that detects slow requests
@@ -64,6 +66,22 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
         message = 'Request timeout',
     } = options;
 
+    const timeoutResponse = (): Response => {
+        if (onTimeout) {
+            return onTimeout();
+        }
+        return Response.json(
+            {
+                error: 'Request Timeout',
+                message,
+            },
+            {
+                status: 408,
+                statusText: 'Request Timeout',
+            }
+        );
+    };
+
     return (ctx: BurgerContext): BurgerNext => {
         // Start timer when the hook runs
         const startTime = Date.now();
@@ -72,22 +90,10 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
         return async (response: Response): Promise<Response> => {
             const duration = Date.now() - startTime;
 
-            // If handler took too long, return timeout response
-            if (duration > ms) {
-                if (onTimeout) {
-                    return onTimeout();
-                }
-
-                return Response.json(
-                    {
-                        error: 'Request Timeout',
-                        message,
-                    },
-                    {
-                        status: 408,
-                        statusText: 'Request Timeout',
-                    }
-                );
+            // If the handler hit or exceeded the budget, respond 408
+            // instead of the late response.
+            if (duration >= ms) {
+                return timeoutResponse();
             }
 
             // Handler completed in time, return normal response

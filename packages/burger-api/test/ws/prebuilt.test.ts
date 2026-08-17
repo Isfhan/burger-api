@@ -151,7 +151,10 @@ describe('WebSocket prebuilt routes (production path)', () => {
         const port = await getAvailablePort();
 
         let rejected = false;
-        const beforeRouteHook = () => {
+        // Hooks always run (even when a route opts out of auth) and decide
+        // for themselves — this one self-skips routes with `auth: false`.
+        const beforeRouteHook = (ctx: any) => {
+            if (ctx.config?.auth === false) return;
             rejected = true;
             return new Response('auth required', { status: 401 });
         };

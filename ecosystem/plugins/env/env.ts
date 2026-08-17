@@ -109,6 +109,11 @@ function validateValue(
 ): EnvError | null {
   // Check if required
   if (isRequired && (value === undefined || value === "")) {
+    // A required variable with a default is satisfied by the default.
+    if (schema.default !== undefined) {
+      process.env[name] = String(schema.default);
+      return null;
+    }
     return {
       name,
       message: schema.description
@@ -224,52 +229,48 @@ export function env(options: EnvOptions = {}): Plugin {
     onError,
   } = options;
 
+  // Validate at startup — fail fast at registration time instead of
+  // surprising users on the first request.
+  const errors: EnvError[] = [];
+
+  for (const [name, schema] of Object.entries(required)) {
+    const error = validateValue(name, process.env[name], schema, true);
+    if (error) {
+      errors.push(error);
+    }
+  }
+
+  for (const [name, schema] of Object.entries(optional)) {
+    const error = validateValue(name, process.env[name], schema, false);
+    if (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length > 0) {
+    if (onError) {
+      onError(errors);
+    }
+
+    if (throwOnError) {
+      const missing = errors.filter((e) => e.type === "missing");
+      const invalid = errors.filter((e) => e.type === "invalid");
+
+      let message = "Environment validation failed:\n";
+      if (missing.length > 0) {
+        message += `Missing: ${missing.map((e) => e.name).join(", ")}\n`;
+      }
+      if (invalid.length > 0) {
+        message += `Invalid: ${invalid.map((e) => `${e.name} - ${e.message}`).join(", ")}\n`;
+      }
+
+      throw new Error(message);
+    }
+  }
+
   return {
     name: "env",
 
-    hooks: {
-      onRequest: () => {
-        // Validate environment variables on first request
-        const errors: EnvError[] = [];
-
-        // Validate required variables
-        for (const [name, schema] of Object.entries(required)) {
-          const error = validateValue(name, process.env[name], schema, true);
-          if (error) {
-            errors.push(error);
-          }
-        }
-
-        // Validate optional variables
-        for (const [name, schema] of Object.entries(optional)) {
-          const error = validateValue(name, process.env[name], schema, false);
-          if (error) {
-            errors.push(error);
-          }
-        }
-
-        // Handle errors
-        if (errors.length > 0) {
-          if (onError) {
-            onError(errors);
-          }
-
-          if (throwOnError) {
-            const missing = errors.filter((e) => e.type === "missing");
-            const invalid = errors.filter((e) => e.type === "invalid");
-
-            let message = "Environment validation failed:\n";
-            if (missing.length > 0) {
-              message += `Missing: ${missing.map((e) => e.name).join(", ")}\n`;
-            }
-            if (invalid.length > 0) {
-              message += `Invalid: ${invalid.map((e) => `${e.name} - ${e.message}`).join(", ")}\n`;
-            }
-
-            throw new Error(message);
-          }
-        }
-      },
-    },
+    hooks: {},
   };
 }
