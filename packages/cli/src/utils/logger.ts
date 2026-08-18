@@ -393,7 +393,9 @@ export async function withSpinner<T>(
 ): Promise<T> {
     const spin = new Spinner(message);
     try {
-        return await fn(spin);
+        const result = await fn(spin);
+        spin.stop();
+        return result;
     } catch (err) {
         spin.stop(message.replace(/\s*\.\.\.\s*$/, '') + ' failed', true);
         throw err;
