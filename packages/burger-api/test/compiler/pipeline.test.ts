@@ -36,6 +36,16 @@ export const POST = () => new Response('created', { status: 201 });`
         'files/[...]/route.ts',
         `export const GET = (req) => Response.json({ rest: req.wildcardParams });`
     );
+    write(
+        'search/route.ts',
+        `export const GET = (ctx) =>
+    Response.json({ q: ctx.validated?.query?.q ?? null });`
+    );
+    write(
+        'search/schema.ts',
+        `import { z } from '${import.meta.resolve('zod')}';
+export const GET = { query: z.object({ q: z.string().optional() }) };`
+    );
     return root;
 }
 
@@ -97,12 +107,48 @@ describe('Pipeline — end to end (self-contained routes)', () => {
         expect(res.status).toBe(404);
     });
 
+    it('404 body survives repeated requests (no shared Response instance)', async () => {
+        // Regression: a shared `Response` constant with a body gets consumed
+        // on the first request, leaving empty bodies for every later one.
+        for (let i = 0; i < 3; i++) {
+            const res = await router.fetch(
+                new Request('http://h/api/nope')
+            );
+            expect(res.status).toBe(404);
+            expect(res.headers.get('content-type')).toContain(
+                'application/problem+json'
+            );
+            const body = await res.json();
+            expect(body.title).toBe('Not Found');
+        }
+    });
+
     it('auto-HEAD derives from GET on static routes', async () => {
         const res = await router.fetch(
             new Request('http://h/api/users', { method: 'HEAD' })
         );
         expect(res.status).toBe(200);
         expect(res.headers.get('content-length')).toBeDefined();
+    });
+
+    it('auto-HEAD runs GET validation (validated populated)', async () => {
+        // Regression: auto-HEAD reused the GET handler but skipped GET's
+        // validators, leaving `ctx.validated` undefined and crashing
+        // handlers that read it (500 instead of 200).
+        const res = await router.fetch(
+            new Request('http://h/api/search?q=x', { method: 'HEAD' })
+        );
+        expect(res.status).toBe(200);
+    });
+
+    it('auto-HEAD never applies a GET body schema (HEAD has no body)', async () => {
+        const res = await router.fetch(
+            new Request('http://h/api/search', {
+                method: 'HEAD',
+                headers: { 'content-type': 'application/json' },
+            })
+        );
+        expect(res.status).toBe(200);
     });
 });
 

@@ -25,8 +25,8 @@ import type { ScannedRoute, ScanResult } from './route-module';
  *
  * Convention rules enforced here (fail fast):
  * - Only recognized convention files are acknowledged; `middleware.ts` is forbidden.
- * - Dynamic (`[param]`) and wildcard (`[...]`) folders cannot be mixed at the
- * same directory level, and there can be at most one of each per level.
+ * - At most one dynamic (`[param]`) and one wildcard (`[...]`) folder per
+ * directory level (they may coexist — the trie orders them static > param > wildcard).
  * - Named wildcard folders (`[...slug]`) are skipped (not yet supported).
  */
 export class DirectoryScanner {
@@ -167,18 +167,8 @@ export class DirectoryScanner {
                 !name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
             const isWildcard = name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
 
-            if (isDynamic && wildcardFolderFound) {
-                throw new Error(
-                    `Cannot mix dynamic and wildcard route folders in the same directory. ` +
-                        `Found dynamic folder '${name}' but wildcard folder already exists in '${dir}'.`
-                );
-            }
-            if (isWildcard && dynamicFolderFound) {
-                throw new Error(
-                    `Cannot mix wildcard and dynamic route folders in the same directory. ` +
-                        `Found wildcard folder '${name}' but dynamic folder already exists in '${dir}'.`
-                );
-            }
+            // Dynamic + wildcard siblings are legal — the trie resolves
+            // them by priority (static > `:param` > `*`, with backtracking).
             if (isDynamic && dynamicFolderFound) {
                 throw new Error(
                     `Multiple dynamic route folders found in the same directory: ` +

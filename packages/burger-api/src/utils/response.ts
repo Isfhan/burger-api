@@ -6,18 +6,38 @@ export const METHOD_NOT_ALLOWED = new Response('Method Not Allowed', {
 });
 
 /**
- * The not found response
+ * Builds the framework's 404 response (RFC 9457 Problem Details).
+ *
+ * A factory (not a shared constant): a `Response` body is a single-use
+ * stream — reusing one instance across requests would consume it on the
+ * first hit and return an empty body for every later request.
  */
-export const NOT_FOUND = new Response('Not Found', { status: 404 });
+export const notFound = (): Response =>
+    new Response(
+        JSON.stringify({
+            type: 'about:blank',
+            title: 'Not Found',
+            status: 404,
+            detail: 'Not Found',
+        }),
+        {
+            status: 404,
+            headers: { 'Content-Type': 'application/problem+json' },
+        }
+    );
 
 /**
- * The OpenAPI error response
+ * The OpenAPI error response.
+ *
+ * A factory — see {@link notFound}: never share a `Response` instance
+ * with a body across requests.
  */
-export const OPENAPI_ERROR = Response.json({
-    error: 'API Router not configured',
-    message:
-        'Please provide an apiDir option when initializing the Burger instance to enable OpenAPI documentation.',
-});
+export const openApiError = (): Response =>
+    Response.json({
+        error: 'API Router not configured',
+        message:
+            'Please provide an apiDir option when initializing the Burger instance to enable OpenAPI documentation.',
+    });
 
 /**
  * Builds a 405 response that includes the `Allow` header listing the methods

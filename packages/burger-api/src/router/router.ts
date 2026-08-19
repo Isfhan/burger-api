@@ -1,7 +1,7 @@
 import { renderHTTPError } from '../errors/http-error';
 import type { FetchHandler } from '../types/index';
 import type { ContextInit } from '../context/types';
-import { NOT_FOUND, methodNotAllowed } from '../utils/response';
+import { notFound, methodNotAllowed } from '../utils/response';
 import { normalizePath } from '../utils/index';
 import { extractPathnameFromUrl } from '../utils/wildcard';
 import { RouterCompiler } from './compiler';
@@ -280,6 +280,6 @@ export class Router {
             }
         }
 
-        return apply(NOT_FOUND);
+        return apply(notFound());
     };
 }

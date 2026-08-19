@@ -7,7 +7,7 @@ import { Router } from './router';
 
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index';
-import { NOT_FOUND, OPENAPI_ERROR } from './utils/response';
+import { notFound, openApiError } from './utils/response';
 
 // Import plugin system
 import { PluginRegistry } from './plugin/registry';
@@ -143,12 +143,12 @@ export class Burger {
     /**
      * The not found response
      */
-    private readonly NOT_FOUND = NOT_FOUND;
+    private readonly notFound = notFound;
 
     /**
      * The OpenAPI error response
      */
-    private readonly OPENAPI_ERROR = OPENAPI_ERROR;
+    private readonly openApiError = openApiError;
 
     /**
      * Set once API routes have been compiled. Guards `processApiRoutes()` from
@@ -463,7 +463,7 @@ export class Burger {
             this.routes[specPath] = () =>
                 this.openApiDoc
                     ? Response.json(this.openApiDoc)
-                    : this.OPENAPI_ERROR;
+                    : this.openApiError();
 
             // Docs UI: use configured provider or default to Swagger UI (loaded
             // lazily — only needed when the docs route is registered).
@@ -650,7 +650,7 @@ export class Burger {
                 )(request);
             }
             if (router) return router.fetch(request);
-            return this.NOT_FOUND;
+            return this.notFound();
         };
     }
 
@@ -678,7 +678,7 @@ export class Burger {
             // Start the server
             const fetchHandler: FetchHandler = this.dynamicRouter
                 ? (request) => this.dynamicRouter!.fetch(request)
-                : () => this.NOT_FOUND;
+                : () => this.notFound();
 
             // Get WebSocket handlers and fetch handler if adapter is configured
             const wsOptions = this.wsAdapter?.createWebSocketOption();

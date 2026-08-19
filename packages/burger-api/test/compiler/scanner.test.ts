@@ -203,7 +203,7 @@ describe('DirectoryScanner — convention validation', () => {
         }
     });
 
-    it('detects mixed dynamic + wildcard folders at one level', async () => {
+    it('allows dynamic + wildcard folders at one level (trie orders them)', async () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-scan-'));
         try {
             mkdirSync(path.join(root, 'x', '[id]'), { recursive: true });
@@ -212,10 +212,16 @@ describe('DirectoryScanner — convention validation', () => {
                 path.join(root, 'x', '[id]', 'route.ts'),
                 'export {};'
             );
-            const scanner = new DirectoryScanner(root, 'api');
-            await expect(scanner.scan()).rejects.toThrow(
-                /dynamic and wildcard/
+            writeFileSync(
+                path.join(root, 'x', '[...]', 'route.ts'),
+                'export {};'
             );
+            const scanner = new DirectoryScanner(root, 'api');
+            const result = await scanner.scan();
+            expect(result.routes.map((r) => r.routePath).sort()).toEqual([
+                '/api/x/*',
+                '/api/x/:id',
+            ]);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }

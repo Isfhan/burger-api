@@ -47,6 +47,29 @@ describe('DirectoryScanner — named wildcard folders', () => {
     });
 });
 
+describe('Trie — static > dynamic > wildcard priority at one level', () => {
+    const trie = new Trie();
+    trie.insert('/x/featured', dummyHandler, new Set(['GET']), false);
+    trie.insert('/x/:id', dummyHandler, new Set(['GET']), false);
+    trie.insert('/x/*', dummyHandler, new Set(['GET']), true);
+
+    it('resolves a static segment over dynamic and wildcard siblings', () => {
+        expect(trie.match('/x/featured')?.pattern).toBe('/x/featured');
+    });
+
+    it('resolves a dynamic segment over the wildcard for a single segment', () => {
+        const match = trie.match('/x/42');
+        expect(match?.pattern).toBe('/x/:id');
+        expect(match?.params).toEqual({ id: '42' });
+    });
+
+    it('resolves the wildcard for deeper paths', () => {
+        const match = trie.match('/x/a/b');
+        expect(match?.pattern).toBe('/x/*');
+        expect(match?.wildcardParams).toEqual(['a', 'b']);
+    });
+});
+
 describe('PageRouter — static over dynamic, decoding, loud failures', () => {
     it('resolves a static page over a dynamic one at the same depth', async () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-pages-'));

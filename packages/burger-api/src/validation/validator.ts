@@ -118,9 +118,14 @@ export function createValidationHook(
         const method = (ctx.method || 'get').toLowerCase();
         // Runtime method strings are lowercased before lookup; only methods in
         // the union can be keys of the compiled map, so widening is safe.
-        const methodValidators = (
+        let methodValidators = (
             validators.methods as Record<string, (typeof validators.methods)[LowercaseHTTPMethod] | undefined>
         )[method];
+        // Auto-HEAD: a GET route implies HEAD is allowed, so HEAD reuses GET's
+        // validators (the body slot is skipped below — HEAD carries no body).
+        if (!methodValidators && method === 'head') {
+            methodValidators = validators.methods['get'];
+        }
         if (!methodValidators) {
             return undefined;
         }
@@ -203,8 +208,9 @@ export function createValidationHook(
 
         // Body (gated on the JSON media type — parsed from the raw header so
         // casing (`Application/JSON`) and parameters (`; charset=utf-8`)
-        // can't bypass or confuse the gate).
-        if (methodValidators.body) {
+        // can't bypass or confuse the gate). Skipped for HEAD: a HEAD request
+        // carries no body, so the GET body schema cannot apply.
+        if (methodValidators.body && method !== 'head') {
             const rawContentType = ctx.headers.get('content-type') ?? '';
             const mediaType = rawContentType.split(';')[0]!.trim().toLowerCase();
             if (mediaType === 'application/json') {
