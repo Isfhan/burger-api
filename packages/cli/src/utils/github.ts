@@ -57,6 +57,42 @@ async function fetchWithTimeout(
     }
 }
 
+/**
+ * Headers for GitHub API requests. Uses GITHUB_TOKEN (if set) for
+ * authenticated requests — unauthenticated requests share a low rate limit.
+ */
+function githubHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'burger-api-cli',
+    };
+    if (process.env.GITHUB_TOKEN) {
+        headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+    return headers;
+}
+
+/**
+ * Throw a descriptive error for a non-OK GitHub response (rate limit,
+ * missing branch, ...). Never swallow these — silent empty results made
+ * failures look like "not found".
+ */
+async function throwForGitHubError(response: Response): Promise<never> {
+    let detail = '';
+    try {
+        const body = (await response.json()) as { message?: string };
+        if (body?.message) detail = ` — ${body.message}`;
+    } catch {
+        // Non-JSON error body — fall back to the bare status.
+    }
+    throw new Error(
+        `GitHub request failed (HTTP ${response.status}${detail}).` +
+            (response.status === 403
+                ? ' Set GITHUB_TOKEN to raise the rate limit.'
+                : '')
+    );
+}
+
 function wrapFetchError(err: unknown, fallbackMessage: string): Error {
     if (err instanceof Error && err.name === 'AbortError') {
         return new Error(
@@ -83,29 +119,24 @@ export async function getComponentList(): Promise<
         // Fetch both hooks and plugins from ecosystem
         const [hooksRes, pluginsRes] = await Promise.all([
             fetchWithTimeout(contentsUrl('ecosystem/hooks'), {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
+                headers: githubHeaders(),
             }),
             fetchWithTimeout(contentsUrl('ecosystem/plugins'), {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
+                headers: githubHeaders(),
             }),
         ]);
 
-        const hooks = hooksRes.ok
-            ? ((await hooksRes.json()) as GitHubFile[])
-                  .filter((f) => f.type === 'dir')
-                  .map((f) => ({ name: f.name, kind: 'hook' as const }))
-            : [];
-        const plugins = pluginsRes.ok
-            ? ((await pluginsRes.json()) as GitHubFile[])
-                  .filter((f) => f.type === 'dir')
-                  .map((f) => ({ name: f.name, kind: 'plugin' as const }))
-            : [];
+        // Fail loud on HTTP errors (403 rate limit, 404 branch, ...) instead
+        // of silently rendering an empty list.
+        if (!hooksRes.ok) await throwForGitHubError(hooksRes);
+        if (!pluginsRes.ok) await throwForGitHubError(pluginsRes);
+
+        const hooks = ((await hooksRes.json()) as GitHubFile[])
+            .filter((f) => f.type === 'dir')
+            .map((f) => ({ name: f.name, kind: 'hook' as const }));
+        const plugins = ((await pluginsRes.json()) as GitHubFile[])
+            .filter((f) => f.type === 'dir')
+            .map((f) => ({ name: f.name, kind: 'plugin' as const }));
 
         return [...hooks, ...plugins].sort((a, b) =>
             a.name.localeCompare(b.name)
@@ -140,8 +171,7 @@ export async function getComponentInfo(
             contentsUrl(`${dir}/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );
@@ -301,42 +331,41 @@ export async function downloadComponent(
  * }
  */
 export async function hookExists(name: string): Promise<boolean> {
-    try {
-        const response = await fetchWithTimeout(
-            contentsUrl(`ecosystem/hooks/${name}`),
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
-
-        return response.ok;
-    } catch {
-        return false;
-    }
+    return existsInEcosystem('hooks', name);
 }
 
 /**
  * Check if a plugin exists on GitHub under ecosystem/plugins/.
  */
 export async function pluginExists(name: string): Promise<boolean> {
+    return existsInEcosystem('plugins', name);
+}
+
+/**
+ * Shared exists-check: 404 means genuinely absent; any other failure
+ * (rate limit, network) throws so callers never report a false "not found".
+ */
+async function existsInEcosystem(
+    kind: 'hooks' | 'plugins',
+    name: string
+): Promise<boolean> {
+    let response: Response;
     try {
-        const response = await fetchWithTimeout(
-            contentsUrl(`ecosystem/plugins/${name}`),
+        response = await fetchWithTimeout(
+            contentsUrl(`ecosystem/${kind}/${name}`),
             {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
+                headers: githubHeaders(),
             }
         );
-
-        return response.ok;
-    } catch {
-        return false;
+    } catch (err) {
+        throw wrapFetchError(
+            err,
+            'Could not reach GitHub. Please check your internet connection.'
+        );
     }
+    if (response.status === 404) return false;
+    if (!response.ok) await throwForGitHubError(response);
+    return true;
 }
 
 /**
@@ -359,33 +388,26 @@ export async function detectEcosystemType(
  * @throws Error if GitHub is unreachable or request fails
  */
 export async function getSkillList(): Promise<string[]> {
+    let response: Response;
     try {
-        const response = await fetchWithTimeout(
-            contentsUrl('ecosystem/skills'),
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`GitHub returned status ${response.status}`);
-        }
-
-        const files = (await response.json()) as GitHubFile[];
-
-        return files
-            .filter((f) => f.type === 'dir')
-            .map((f) => f.name)
-            .sort();
+        response = await fetchWithTimeout(contentsUrl('ecosystem/skills'), {
+            headers: githubHeaders(),
+        });
     } catch (err) {
         throw wrapFetchError(
             err,
             'Could not get skill list from GitHub. Please check your internet connection.'
         );
     }
+
+    if (!response.ok) await throwForGitHubError(response);
+
+    const files = (await response.json()) as GitHubFile[];
+
+    return files
+        .filter((f) => f.type === 'dir')
+        .map((f) => f.name)
+        .sort();
 }
 
 /**
@@ -397,8 +419,7 @@ export async function flattenSkillFiles(
 ): Promise<string[]> {
     const response = await fetchWithTimeout(contentsUrl(basePath), {
         headers: {
-            Accept: 'application/vnd.github.v3+json',
-            'User-Agent': 'burger-api-cli',
+            ...githubHeaders(),
         },
     });
 
@@ -460,8 +481,7 @@ export async function skillExists(name: string): Promise<boolean> {
             contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );
@@ -484,8 +504,7 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
             contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );

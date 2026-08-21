@@ -65,10 +65,14 @@ describe('scanApiRoutes', () => {
         ]);
     });
 
-    it('throws when dynamic and wildcard folders are mixed at same level', async () => {
-        await expect(
-            scanApiRoutes(conflictFixturesDir, './api-mixed', '/api')
-        ).rejects.toThrow('Cannot mix');
+    it('allows dynamic and wildcard folders to coexist at same level (trie priority)', async () => {
+        const entries = await scanApiRoutes(
+            conflictFixturesDir,
+            './api-mixed',
+            '/api'
+        );
+        const paths = entries.map((e) => e.routePath).sort();
+        expect(paths).toEqual(['/api/*', '/api/:id']);
     });
 
     it('throws when multiple dynamic folders exist at same level', async () => {

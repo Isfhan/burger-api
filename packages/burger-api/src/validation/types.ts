@@ -31,9 +31,17 @@ export interface StandardSchemaV1 {
     };
 }
 
-export interface StandardSchemaV1Result {
+export type StandardSchemaV1Result =
+    | StandardSchemaV1SuccessResult
+    | StandardSchemaV1FailureResult;
+
+export interface StandardSchemaV1SuccessResult {
     readonly value: unknown;
-    readonly issues?: ReadonlyArray<StandardSchemaV1Issue>;
+    readonly issues?: undefined;
+}
+
+export interface StandardSchemaV1FailureResult {
+    readonly issues: ReadonlyArray<StandardSchemaV1Issue>;
 }
 
 export interface StandardSchemaV1Issue {

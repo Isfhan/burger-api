@@ -134,7 +134,8 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "valibot": "^1.4.2"
   },
   "peerDependencies": {
     "typescript": "^5"

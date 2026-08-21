@@ -63,12 +63,33 @@ export function methodNotAllowed(allow: string): Response {
 }
 
 /**
- * The framework's auto-generated OPTIONS handler (CORS preflight, 204 No Content).
- * Exported so the router compiler can recognize it and, when safe, serve it via
- * `Bun.nativeStaticResponse`.
+ * The framework's auto-generated OPTIONS handler (CORS preflight, 204 No
+ * Content). Built per route so the response can advertise the route's
+ * supported methods via `Allow` (RFC 9110).
+ *
+ * The returned handler is tagged with `isAutoOptions` so the router compiler
+ * can recognize it (e.g. for Bun native static responses) without relying on
+ * function identity.
  */
-export const autoOptionsHandler = (): Response =>
-    new Response(null, { status: 204 });
+export interface AutoOptionsHandler {
+    (): Response;
+    isAutoOptions: true;
+    allowHeader: string;
+}
+
+export const createAutoOptionsHandler = (
+    allowMethods: string[]
+): AutoOptionsHandler => {
+    const allowHeader = allowMethods.join(', ');
+    const handler = (() =>
+        new Response(null, {
+            status: 204,
+            headers: { Allow: allowHeader },
+        })) as AutoOptionsHandler;
+    handler.isAutoOptions = true;
+    handler.allowHeader = allowHeader;
+    return handler;
+};
 
 import type { ContextSet } from '../context/types';
 

@@ -70,7 +70,9 @@ export const addCommand = new Command('add')
                 } catch (err) {
                     spin.stop('Could not connect to GitHub', true);
                     logError(
-                        'Please check your internet connection and try again.'
+                        err instanceof Error
+                            ? err.message
+                            : 'Please check your internet connection and try again.'
                     );
                     results.failed.push(name);
                     continue;

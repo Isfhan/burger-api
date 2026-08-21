@@ -6,7 +6,6 @@ import { compileRouteSchema } from '../validation/compiler';
 import { createValidationHook } from '../validation/validator';
 import {
     methodNotAllowed,
-    autoOptionsHandler,
     applySet,
 } from '../utils/response';
 import { executeHookPlan } from '../lifecycle/executor';
@@ -42,10 +41,10 @@ import type {
  * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
  */
 export class RouterCompiler {
-    private debug: boolean;
+    private debug?: boolean;
     private config: ValidatorConfig;
 
-    constructor(debug = false, config: ValidatorConfig = {}) {
+    constructor(debug?: boolean, config: ValidatorConfig = {}) {
         this.debug = debug;
         this.config = config;
     }
@@ -429,13 +428,22 @@ function registerNativeOptions(
     if (hasSchema) {
         return;
     }
-    const opt = def.handlers['OPTIONS'];
-    if (opt && opt === autoOptionsHandler) {
+    const opt = def.handlers['OPTIONS'] as
+        | (typeof def.handlers)['OPTIONS']
+        | undefined;
+    if (opt && (opt as { isAutoOptions?: boolean }).isAutoOptions === true) {
         try {
             nativeStaticResponse(
                 'OPTIONS',
                 path,
-                new Response(null, { status: 204 })
+                new Response(null, {
+                    status: 204,
+                    headers: {
+                        Allow:
+                            (opt as { allowHeader?: string }).allowHeader ??
+                            '',
+                    },
+                })
             );
         } catch {
             // Native static response not available for this path; the compiled

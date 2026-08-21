@@ -182,16 +182,9 @@ async function scanApiDir(
                 !entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
             const isWildcard = entry.name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
 
-            if (isDynamic && wildcardFolderFound) {
-                throw new Error(
-                    `Cannot mix dynamic and wildcard route folders. Found dynamic '${entry.name}' but wildcard already exists in '${dir}'.`
-                );
-            }
-            if (isWildcard && dynamicFolderFound) {
-                throw new Error(
-                    `Cannot mix wildcard and dynamic route folders. Found wildcard '${entry.name}' but dynamic already exists in '${dir}'.`
-                );
-            }
+            // Dynamic and wildcard folders may coexist at the same level —
+            // the router's trie resolves them by priority
+            // (static > `:param` > `*`), mirroring the framework scanner.
             if (isDynamic && dynamicFolderFound) {
                 throw new Error(
                     `Multiple dynamic route folders in same directory: '${entry.name}' in '${dir}'.`

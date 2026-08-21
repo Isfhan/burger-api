@@ -81,6 +81,13 @@ export function createBunBuildOptions(options: {
         target: (options.target as 'bun') || 'bun',
         minify: options.minify ?? false,
         splitting: false,
+        // Bake production mode into the artifact: dev-only diagnostics
+        // (stack traces, response-validation warnings) must never leak when
+        // the bundle is run directly (`bun .build/bundle/app.js`) without
+        // NODE_ENV exported.
+        define: {
+            'process.env.NODE_ENV': JSON.stringify('production'),
+        },
         sourcemap:
             options.sourcemap === undefined
                 ? undefined

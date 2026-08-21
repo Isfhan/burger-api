@@ -195,8 +195,12 @@ const availableCommand = new Command('available')
             list = await withSpinner('Fetching available skills...', () =>
                 getSkillList()
             );
-        } catch {
-            logError('Could not fetch skill list from GitHub.');
+        } catch (err) {
+            logError(
+                err instanceof Error
+                    ? err.message
+                    : 'Could not fetch skill list from GitHub.'
+            );
             process.exit(1);
         }
 

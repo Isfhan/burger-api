@@ -1,6 +1,6 @@
 import { HTTP_METHODS } from '../utils/routing';
 import type { HTTPMethod } from '../utils/routing';
-import { autoOptionsHandler } from '../utils/response';
+import { createAutoOptionsHandler } from '../utils/response';
 import type {
     openapi,
     OpenAPIConfig,
@@ -198,7 +198,12 @@ export class ModuleLoader {
         const PREFLIGHT: HTTPMethod[] = ['POST', 'PUT', 'DELETE', 'PATCH'];
         const hasPreflight = PREFLIGHT.some((m) => handlers[m]);
         if (hasPreflight && typeof handlers.OPTIONS !== 'function') {
-            handlers.OPTIONS = autoOptionsHandler;
+            // Advertise the route's explicitly defined methods (HEAD is
+            // derived, not advertised — mirrors the 405 Allow computation).
+            const allowMethods = Object.keys(handlers).filter(
+                (m) => m !== 'HEAD'
+            );
+            handlers.OPTIONS = createAutoOptionsHandler(allowMethods);
         }
         return handlers;
     }

@@ -56,7 +56,7 @@ export class Router {
     constructor(config: RouterConfig = {}) {
         this.debug = config.debug ?? false;
         this.compiler = new RouterCompiler(
-            config.debug ?? false,
+            config.debug,
             config.validation ?? {}
         );
     }

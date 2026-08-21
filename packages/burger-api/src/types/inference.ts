@@ -41,7 +41,7 @@ export interface RouteMethodSchema {
 export type InferSchemaOutput<T> = T extends z.ZodTypeAny
     ? z.infer<T>
     : T extends StandardSchemaV1
-      ? T['~standard']['types'] extends { output: infer O }
+      ? NonNullable<T['~standard']['types']> extends { output: infer O }
           ? O
           : unknown
       : unknown;

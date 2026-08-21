@@ -74,8 +74,15 @@ program.addCommand(generateCommand); // Scaffold routes, hooks, plugins
 program.addCommand(inspectCommand); // Display routes, config, hooks
 program.addCommand(doctorCommand); // Validate project structure
 
-// Show banner + help when no command is provided
-program.action(() => {
+// Show banner + help when no command is provided.
+// Legacy/unknown commands (e.g. removed `serve`) fail loud instead of
+// silently rendering help with exit 0.
+program.action((_args, command) => {
+    const operands: string[] = command.args ?? [];
+    if (operands.length > 0) {
+        console.error(`error: unknown command '${operands[0]}'`);
+        process.exit(2);
+    }
     showBanner(getVersion());
     program.help();
 });

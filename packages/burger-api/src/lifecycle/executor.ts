@@ -70,7 +70,7 @@ export async function executeHookPlan(
                         response.status,
                         body,
                         plan.validatorConfig ?? {},
-                        plan.debug ?? false
+                        plan.debug ?? process.env.NODE_ENV !== 'production'
                     );
                     if (!outcome.ok && outcome.errorResponse) {
                         return outcome.errorResponse;
