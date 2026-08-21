@@ -17,6 +17,13 @@ import { BurgerContext } from '../context/context';
 interface OnRequestOutcome {
     shortCircuit: Response | undefined;
     mappers: ((res: Response) => Response | Promise<Response>)[];
+    /**
+     * THE per-request context. Created here so `onRequest` hooks can seed
+     * state (request IDs, counters, …) that survives into the handler —
+     * the dispatched route binds this same instance instead of allocating
+     * a second context.
+     */
+    ctx: BurgerContext;
 }
 
 /**
@@ -52,6 +59,8 @@ export class Router {
     private cachedStaticRoutes?: Record<string, CompiledHandler>;
     /** Pre-routing hooks (Plugin + Global scope). Run before routing in `fetch()`. */
     private onRequestHooks: Hook[] = [];
+    /** App-level providers, bound onto the single per-request context. */
+    private appProviders?: Map<string, unknown>;
 
     constructor(config: RouterConfig = {}) {
         this.debug = config.debug ?? false;
@@ -85,6 +94,7 @@ export class Router {
         this.compiledRoutes = result.routes;
         this.cachedStaticRoutes = undefined;
         this.onRequestHooks = onRequestHooks ?? [];
+        this.appProviders = providers;
     }
 
     /**
@@ -137,20 +147,22 @@ export class Router {
         route: { path: string; pattern: string } | undefined
     ): CompiledHandler {
         return async (request: Request, ctxInit?: any) => {
-            let outcome: OnRequestOutcome = {
-                shortCircuit: undefined,
-                mappers: [],
-            };
+            let outcome: OnRequestOutcome | undefined;
             if (hasOnRequest) {
                 outcome = await this.runOnRequest(request);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
             }
             try {
                 const result = route
-                    ? await handler(request, { ...ctxInit, route })
+                    ? await handler(
+                          request,
+                          { ...ctxInit, route },
+                          outcome?.ctx
+                      )
                     : await handler(request);
-                return outcome.mappers.length > 0
-                    ? this.applyMappers(result, outcome.mappers)
+                const mappers = outcome?.mappers;
+                return mappers && mappers.length > 0
+                    ? this.applyMappers(result, mappers)
                     : result;
             } catch (error) {
                 return renderHTTPError(error, this.debug);
@@ -170,12 +182,21 @@ export class Router {
      * Returns a Response if any hook short-circuits, or undefined to continue.
      */
     private async runOnRequest(request: Request): Promise<OnRequestOutcome> {
+        // ONE context per request: created here (before routing) so
+        // onRequest hooks can seed state that survives into the handler.
+        // The dispatched route binds this instance to its matched route.
+        const ctx = BurgerContext.create(
+            request,
+            undefined,
+            undefined,
+            this.appProviders
+        );
         const outcome: OnRequestOutcome = {
             shortCircuit: undefined,
             mappers: [],
+            ctx,
         };
         if (this.onRequestHooks.length === 0) return outcome;
-        const ctx = BurgerContext.create(request);
         for (const hook of this.onRequestHooks) {
             try {
                 const result = await (hook as (ctx: BurgerContext) => unknown)(
@@ -226,7 +247,6 @@ export class Router {
             outcome.mappers.length > 0
                 ? (res: Response) => this.applyMappers(res, outcome.mappers)
                 : (res: Response) => res;
-
         const raw = extractPathnameFromUrl(request.url);
         // Collapse repeated slashes but PRESERVE a single trailing slash so that
         // `:param` routes can capture an empty value (e.g. `/users/` → `:id === ""`).
@@ -239,7 +259,7 @@ export class Router {
             // Every matched route gets a `ctxInit` with `route`; static routes
             // have no params/wildcardParams.
             const ctxInit: ContextInit = { route: { path, pattern: path } };
-            return apply(await staticExact(request, ctxInit));
+            return apply(await staticExact(request, ctxInit, outcome.ctx));
         }
 
         // 2. Dynamic / wildcard routes via the internal trie. The trie is
@@ -263,7 +283,7 @@ export class Router {
                 params: match.params,
                 wildcardParams: match.wildcardParams,
             };
-            return apply(await match.handler(request, ctxInit));
+            return apply(await match.handler(request, ctxInit, outcome.ctx));
         }
 
         // 3. Loose trailing-slash fallback for static routes: `/foo/` ≡ `/foo`.
@@ -276,7 +296,7 @@ export class Router {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
                 };
-                return apply(await loose(request, ctxInit));
+                return apply(await loose(request, ctxInit, outcome.ctx));
             }
         }
 

@@ -299,7 +299,8 @@ function buildCompiledHandler(
 ): CompiledHandler {
     return async (
         request: Request,
-        ctxInit?: ContextInit
+        ctxInit?: ContextInit,
+        prebuilt?: BurgerContext
     ): Promise<Response> => {
         const method = request.method;
         // `request.method` is a runtime string; the handler map only accepts
@@ -316,15 +317,20 @@ function buildCompiledHandler(
         const resolvedCtxInit =
             ctxInit ?? extractCtxInit(request, pattern, isWildcard);
 
-        // Create the one `BurgerContext` for this request. `meta` is accepted
-        // but ignored at runtime.
-        const ctx = BurgerContext.create(
-            request,
-            resolvedCtxInit,
-            meta,
-            providers,
-            config
-        );
+        // Create the one `BurgerContext` for this request. When the router
+        // already created one (for `onRequest` hooks), bind that instance to
+        // this route instead — state seeded pre-routing survives, and there
+        // is still exactly ONE context per request. `meta` is accepted but
+        // ignored at runtime.
+        const ctx = prebuilt
+            ? prebuilt.bind(request, resolvedCtxInit, meta, providers, config)
+            : BurgerContext.create(
+                  request,
+                  resolvedCtxInit,
+                  meta,
+                  providers,
+                  config
+              );
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {

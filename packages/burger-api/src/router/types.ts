@@ -12,13 +12,16 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
  * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior regardless of which
  * lookup mechanism reached it.
  *
- * the handler receives the raw `Request` plus an optional `ctxInit`
- * (seeded by `Router.fetch`) and is responsible for creating the single
- * `BurgerContext` for the request.
+ * The handler receives the raw `Request`, an optional `ctxInit` (seeded by
+ * `Router.fetch`) and an optional pre-built `BurgerContext` (created by the
+ * router before routing so `onRequest` hooks can seed state). When
+ * `prebuilt` is provided, the handler binds it to the matched route instead
+ * of allocating a second context — one context per request.
  */
 export type CompiledHandler = (
     request: Request,
-    ctxInit?: ContextInit
+    ctxInit?: ContextInit,
+    prebuilt?: import('../context/context').BurgerContext
 ) => Promise<Response>;
 
 /**

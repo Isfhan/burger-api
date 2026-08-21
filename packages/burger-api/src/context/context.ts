@@ -209,6 +209,36 @@ export class BurgerContext<TRoute = unknown> {
         return ctx;
     }
 
+    /**
+     * @internal Re-bind route-specific state on an existing context.
+     *
+     * The router creates ONE context per request before routing (so
+     * `onRequest` hooks can seed request IDs, counters, auth hints, …) and
+     * the dispatched handler then binds that same instance to the matched
+     * route instead of allocating a second context. Caches (`query`,
+     * `cookies`) stay valid — the underlying `Request` is identical — and
+     * any state hooks wrote is preserved.
+     */
+    bind(
+        raw: Request,
+        ctxInit?: ContextInit,
+        _meta?: RouteAccessInfo,
+        providers?: Map<string, unknown>,
+        config?: RouteConfig | Record<string, unknown>
+    ): this {
+        this._raw = raw;
+        this._ctxInit = ctxInit ?? this._ctxInit;
+        if (providers) {
+            this.services = Object.fromEntries(
+                providers
+            ) as unknown as BurgerServices;
+        }
+        if (config !== undefined) {
+            this._config = config as RouteConfig;
+        }
+        return this;
+    }
+
     /** Lazily parsed query record. Parsed once on first access, then cached. */
     get query(): Record<string, string | string[]> {
         if (this._query === undefined) {
