@@ -72,4 +72,15 @@ describe('StandardAdapter', () => {
             ).coercible
         ).toBe(true);
     });
+
+    it('is not cacheable — distinct schemas must never share a cached validator', () => {
+        // Vendors like valibot fingerprint every schema identically
+        // (`~standard.types` serializes to "[object Object]"), so a cache
+        // keyed on identity would validate one slot with another schema's
+        // validator (silently stripping fields). The adapter must opt out.
+        const a = makeStub(true);
+        const b = makeStub(true);
+        expect(StandardAdapter.identity(a)).toBe(StandardAdapter.identity(b));
+        expect(StandardAdapter.cacheable?.(a)).toBe(false);
+    });
 });

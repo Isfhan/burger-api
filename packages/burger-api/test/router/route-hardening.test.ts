@@ -175,7 +175,7 @@ describe('PageRouter — static over dynamic, decoding, loud failures', () => {
 describe('OpenAPI — wildcard paths and operationIds', () => {
     const baseOptions = { title: 'T', version: '1.0.0' } as any;
 
-    it('renders a catch-all route as a {path+} template', () => {
+    it('renders a catch-all route as a {path} template (valid OAS — no `+` suffix)', () => {
         const routes: RouteDefinition[] = [
             {
                 path: '/files/*',
@@ -183,8 +183,9 @@ describe('OpenAPI — wildcard paths and operationIds', () => {
             },
         ];
         const doc = generateOpenAPIDocument(routes, baseOptions);
-        expect(doc.paths['/files/{path+}']).toBeDefined();
+        expect(doc.paths['/files/{path}']).toBeDefined();
         expect(doc.paths['/files/*']).toBeUndefined();
+        expect(doc.paths['/files/{path+}']).toBeUndefined();
     });
 
     it('sanitizes wildcard chars out of generated operationIds', () => {
@@ -195,7 +196,7 @@ describe('OpenAPI — wildcard paths and operationIds', () => {
             },
         ];
         const doc = generateOpenAPIDocument(routes, baseOptions);
-        const opId = (doc.paths['/files/{path+}'] as any).get.operationId as string;
+        const opId = (doc.paths['/files/{path}'] as any).get.operationId as string;
         expect(opId).toMatch(/^[a-zA-Z0-9_.-]+$/);
         expect(opId).not.toContain('*');
     });

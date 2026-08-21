@@ -127,6 +127,12 @@ export interface OpenAPIConfig {
     /** Link to external documentation. */
     externalDocs?: OpenAPIExternalDocs;
 
+    /**
+     * Root security requirements. Defaults to `[]` ("no auth required") —
+     * pass your schemes when the API uses authentication.
+     */
+    security?: Array<Record<string, string[]>>;
+
     // ── Endpoint config ──
 
     /** Path for the OpenAPI JSON spec endpoint. Defaults to "/openapi.json". */

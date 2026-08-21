@@ -86,7 +86,12 @@ function schemaToJsonSchema(
     mapJsonSchema?: Record<string, JsonSchemaConverter>
 ): Record<string, unknown> | undefined {
     if (schema instanceof ZodType) {
-        return toJSONSchema(schema) as Record<string, unknown>;
+        const jsonSchema = toJSONSchema(schema) as Record<string, unknown>;
+        // Zod emits `$schema: "https://json-schema.org/draft/2020-12/schema"`.
+        // Valid JSON Schema, but illegal inside an OpenAPI `schema` object
+        // (OAS defines its own dialect) — Redocly struct rule rejects it.
+        delete jsonSchema.$schema;
+        return jsonSchema;
     }
     // Standard Schema: try configured converters
     if (mapJsonSchema && typeof schema === 'object' && schema !== null) {
@@ -186,7 +191,7 @@ function convertPathForOpenAPI(routePath: string): string {
     }
     return routePath
         .replace(/:([a-zA-Z0-9_]+)/g, '{$1}')
-        .replace(/\*+/g, '{path+}');
+        .replace(/\*+/g, '{path}');
 }
 
 /**
@@ -229,6 +234,15 @@ export function generateOpenAPIDocument(
     if (config?.externalDocs) {
         doc.externalDocs = config.externalDocs;
     }
+
+    // Root security. Defaults to `[]` ("no auth required") — BurgerAPI's core
+    // is auth-agnostic, and omitting security entirely makes strict linters
+    // flag every operation (`security-defined`). Apps with auth pass their
+    // schemes here.
+    doc.security =
+        config?.security && config.security.length > 0
+            ? config.security
+            : [];
 
     // Collect tags used across operations
     const tagSet = new Set<string>();
@@ -285,6 +299,23 @@ export function generateOpenAPIDocument(
                     ...buildParameters(schemaDef.headers, 'header'),
                     ...buildParameters(schemaDef.cookies, 'cookie'),
                 ];
+            }
+
+            // Every operation on a templated path MUST define the path's
+            // parameters (OAS `path-parameters-defined`), even when the
+            // method declares no schema slots. Wildcards serialize as a
+            // required `{path}` parameter.
+            for (const match of openApiPath.matchAll(/\{([^}]+)\}/g)) {
+                const name = match[1]!;
+                if (!parameters.some((p) => p.in === 'path' && p.name === name)) {
+                    parameters.unshift({
+                        name,
+                        in: 'path',
+                        required: true,
+                        schema: { type: 'string' },
+                        description: `Path parameter ${name}`,
+                    });
+                }
             }
 
             let requestBody = undefined;

@@ -71,6 +71,19 @@ export const StandardAdapter: ValidatorAdapter = {
         );
     },
 
+    /**
+     * Standard Schema vendors expose no reliable structural identity —
+     * `~standard.types` rarely serializes meaningfully (valibot's, for
+     * example, fingerprints every schema as `"[object Object]"`), so two
+     * different schemas can collide on one identity and the cache would
+     * validate a slot with the WRONG schema (silently stripping fields).
+     * Correctness first: always compile fresh. Compile cost is trivial —
+     * it just wraps `~standard.validate`.
+     */
+    cacheable(): boolean {
+        return false;
+    },
+
     compile(schema: SchemaInput, slot: ValidationSlot): CompiledValidator {
         const std = schema as StandardSchemaV1;
         const identity = this.identity(schema);
