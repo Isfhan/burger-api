@@ -7,17 +7,17 @@ const burger = new Burger({
     apiDir: setDir(__dirname, 'api'),
 });
 
-// Macro: rate limit — tracks request count per invocation
+// Macro: rate limit — tracks request count per invocation.
+// The counter lives in the factory's closure: it persists across requests
+// for this expanded macro instance. (Do NOT initialize per-request state
+// via `transform` — transform runs on EVERY request and would reset it.)
 burger.macro('rateLimit', (...args: unknown[]): RouteHooks => {
     const maxRequests = (args[0] as number) ?? 10;
+    let count = 0;
     return {
-        transform: {
-            _requestCount: () => 0,
-        },
         beforeRoute: [
-            (ctx) => {
-                const count = ((ctx as any)._requestCount ?? 0) + 1;
-                (ctx as any)._requestCount = count;
+            () => {
+                count += 1;
                 if (count > maxRequests) {
                     return new Response('Too Many Requests', { status: 429 });
                 }
