@@ -16,6 +16,15 @@ import type {
 
 import type { ScannedWebSocketRoute } from './scanner';
 
+/** Connection-level options — Bun.serve-wide, not per-route (see compile). */
+const WS_TRANSPORT_KEYS = [
+    'maxPayloadLength',
+    'idleTimeout',
+    'backpressureLimit',
+    'closeOnBackpressureLimit',
+    'compression',
+] as const;
+
 /**
  * WebSocket compiler
  * Compiles scanned WebSocket routes into executable form
@@ -80,6 +89,19 @@ export class WebSocketCompiler {
             routeConfig =
                 (configModule.default as WebSocketConfig) ??
                 ({ ...configModule } as WebSocketConfig);
+
+            // Connection-level options are Bun.serve-wide — a per-route value
+            // cannot override what Bun enforces for the whole server. Warn
+            // loud instead of silently ignoring the author's intent.
+            for (const key of WS_TRANSPORT_KEYS) {
+                if ((routeConfig as Record<string, unknown>)[key] !== undefined) {
+                    console.warn(
+                        `[burger-api] WebSocket route "${scanned.path}": config.${key} ` +
+                            'is connection-level and can only be set globally via ' +
+                            'burger.wsConfig() — the per-route value is ignored.'
+                    );
+                }
+            }
         }
 
         // Merge global and route-specific config. `auth` is merged deeply:

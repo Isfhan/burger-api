@@ -555,6 +555,10 @@ export class Burger {
         const prebuiltWsRoutes = this.options.wsRoutes;
         if (Array.isArray(prebuiltWsRoutes)) {
             for (const route of prebuiltWsRoutes) {
+                warnTransportLevelWsConfig(
+                    route.path,
+                    route.config as Record<string, unknown> | undefined
+                );
                 this.wsRouter.addRoute({
                     path: route.path,
                     handlers: route.handlers,
@@ -732,6 +736,36 @@ export class Burger {
  * so a route-level `auth: { roles: [...] }` keeps a global
  * `auth: { required: true }`; either side being `false` disables auth.
  */
+/**
+ * Connection-level WebSocket options (`maxPayloadLength`, `idleTimeout`,
+ * `compression`, …) are Bun.serve-wide — a route-level value cannot override
+ * what Bun enforces for the whole server. Warn loud instead of silently
+ * ignoring the author's intent. (Auth and other per-route keys are honored.)
+ */
+const WS_TRANSPORT_KEYS = [
+    'maxPayloadLength',
+    'idleTimeout',
+    'backpressureLimit',
+    'closeOnBackpressureLimit',
+    'compression',
+] as const;
+
+function warnTransportLevelWsConfig(
+    path: string,
+    config?: Record<string, unknown>
+): void {
+    if (!config) return;
+    for (const key of WS_TRANSPORT_KEYS) {
+        if (config[key] !== undefined) {
+            console.warn(
+                `[burger-api] WebSocket route "${path}": config.${key} is ` +
+                    'connection-level and can only be set globally via ' +
+                    'burger.wsConfig() — the per-route value is ignored.'
+            );
+        }
+    }
+}
+
 function mergeWsConfig(
     globalConfig: WebSocketConfig | undefined,
     routeConfig: WebSocketConfig | undefined
