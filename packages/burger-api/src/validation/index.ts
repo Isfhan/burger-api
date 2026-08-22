@@ -18,6 +18,9 @@ export {
     registerAdapter,
     detectAdapter,
 } from './adapter';
+// Schema input types — `compileRouteSchema` consumes exactly these, so
+// subpath users don't need the root import to type their schemas.
+export type { MethodSchema, RouteSchema } from '../types/index';
 export type { ValidatorAdapter } from './adapter';
 export { buildPlan, apply } from './coerce';
 export type {
