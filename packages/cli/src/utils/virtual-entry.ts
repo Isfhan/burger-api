@@ -11,7 +11,9 @@ import type {
     ApiRouteScanEntry,
     PageRouteScanEntry,
     WebSocketRouteScanEntry,
+    AssetRouteScanEntry,
 } from './scanner';
+import { readFileSync } from 'fs';
 
 /** Paths to app-level convention files for production builds. */
 export interface AppConventionPaths {
@@ -58,7 +60,8 @@ export function generateVirtualEntrySource(
     pageEntries: PageRouteScanEntry[],
     optionsImportPath?: string,
     appConventions?: AppConventionPaths,
-    wsEntries: WebSocketRouteScanEntry[] = []
+    wsEntries: WebSocketRouteScanEntry[] = [],
+    assetEntries: AssetRouteScanEntry[] = []
 ): string {
     const lines: string[] = [];
 
@@ -250,6 +253,18 @@ export function generateVirtualEntrySource(
     lines.push(' pageRoutes,');
     if (wsEntries.length) {
         lines.push(' wsRoutes,');
+    }
+    if (assetEntries.length) {
+        // Static assets are base64-embedded at build time so the bundle
+        // stays self-contained (no filesystem access at runtime).
+        lines.push(' assetRoutes: [');
+        for (const asset of assetEntries) {
+            const data = readFileSync(asset.absolutePath).toString('base64');
+            lines.push(
+                `  { path: ${JSON.stringify(asset.routePath)}, contentType: ${JSON.stringify(asset.contentType)}, data: ${JSON.stringify(data)} },`
+            );
+        }
+        lines.push(' ],');
     }
     lines.push('});');
     lines.push('');

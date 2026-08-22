@@ -4,6 +4,8 @@ import { timingSafeEqual } from './utils/timing-safe';
 
 // Import router
 import { Router } from './router';
+import { extractCtxInit } from './router/param-extract';
+import { BurgerContext } from './context/context';
 
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index';
@@ -258,6 +260,7 @@ export class Burger {
     private async processPageRoutes(): Promise<boolean> {
         // Production path: use pre-built page routes (no filesystem scan)
         const prebuiltPages = this.options.pageRoutes;
+        let hasPages = false;
         if (Array.isArray(prebuiltPages)) {
             // Sort the prebuilt pages
             const sorted = [...prebuiltPages].sort((a, b) =>
@@ -266,39 +269,93 @@ export class Burger {
 
             for (let i = 0; i < sorted.length; i++) {
                 const page = sorted[i]!;
-                this.routes[page.path] = page.handler;
+                this.routes[page.path] = this.wrapPageHandler(
+                    page.handler,
+                    page.path
+                );
             }
-            return sorted.length > 0;
+            hasPages = sorted.length > 0;
+        } else if (this.pageDir) {
+            // Dev path: load from filesystem via PageRouter
+            // Lazy-load the page router (dev-only; never evaluated in
+            // production AOT bundles that ship prebuilt pageRoutes).
+            const { PageRouter } = await import('./core/page-router');
+            const pageRouter = new PageRouter(this.pageDir, this.pagePrefix);
+            this.pageRouter = pageRouter;
+
+            // Load pages routes
+            await pageRouter.loadPages();
+            // If there are any page routes, add them to the routes object
+            const pages = pageRouter.pages;
+
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i]!;
+                this.routes[page.path] = this.wrapPageHandler(
+                    page.handler,
+                    page.path
+                );
+            }
+            hasPages = pages.length > 0;
         }
 
-        // Dev path: load from filesystem via PageRouter
-        if (!this.pageDir) return false;
+        // Static assets under `<pageDir>/assets/` — embedded table from the
+        // AOT build, or read-from-disk when running with `pageDir`.
+        await this.processAssetRoutes();
 
-        // Lazy-load the page router (dev-only; never evaluated in production
-        // AOT bundles that ship prebuilt pageRoutes).
-        const { PageRouter } = await import('./core/page-router');
-        const pageRouter = new PageRouter(this.pageDir, this.pagePrefix);
-        this.pageRouter = pageRouter;
+        return hasPages;
+    }
 
-        // Load pages routes
-        await pageRouter.loadPages();
-        // If there are any page routes, add them to the routes object
-        const pages = pageRouter.pages;
-        // Get the length of the pages routes
-        const pageCount = pages.length;
-        // If no pages, return false
-        if (pageCount === 0) return false;
+    /**
+     * Wraps a page handler for registration on Bun's native routes map.
+     *
+     * Dynamic pages (`[param]` → `:param`) need their params extracted from
+     * the URL (Bun matches the pattern but does not expose them), so the
+     * handler is wrapped with a per-request `BurgerContext`. Static pages
+     * pass through unchanged.
+     */
+    private wrapPageHandler(
+        handler: RequestHandler,
+        path: string
+    ): RequestHandler {
+        if (!path.includes(':')) return handler;
+        // Registered on Bun's native routes map, so this is invoked with the
+        // raw `Request` (mirrors `fetchHandler`'s static dispatch).
+        const wrapped = async (request: Request): Promise<Response> => {
+            const ctxInit = extractCtxInit(request, path, false);
+            const ctx = BurgerContext.create(request, ctxInit);
+            return handler(ctx);
+        };
+        return wrapped as unknown as RequestHandler;
+    }
 
-        // Loop through the pages
-        for (let i = 0; i < pageCount; i++) {
-            // Get the current page
-            const page = pages[i]!;
-            // Add the page to the routes
-            this.routes[page.path] = page.handler;
+    /**
+     * Registers static asset routes under `{pagePrefix}/assets/*`.
+     *
+     * Production AOT builds embed file contents as base64 (`assetRoutes`
+     * option — emitted by the CLI build), keeping bundles self-contained.
+     * Dev reads files from disk per request so edits show without a restart.
+     */
+    private async processAssetRoutes(): Promise<void> {
+        const prebuiltAssets = this.options.assetRoutes;
+        if (Array.isArray(prebuiltAssets)) {
+            const { embeddedAssetHandler } = await import('./core/assets');
+            for (const asset of prebuiltAssets) {
+                this.routes[asset.path] = embeddedAssetHandler(asset);
+            }
+            return;
         }
 
-        // Return true if there are any pages
-        return true;
+        if (!this.pageDir) return;
+        const { collectDiskAssetRoutes, diskAssetHandler } = await import(
+            './core/assets'
+        );
+        const routes = await collectDiskAssetRoutes(
+            this.pageDir,
+            this.pagePrefix
+        );
+        for (const route of routes) {
+            this.routes[route.routePath] = diskAssetHandler(route);
+        }
     }
 
     /**
@@ -801,6 +858,11 @@ export { timingSafeEqual } from './utils/timing-safe';
 
 // Export error classes
 export { HTTPError, renderHTTPError } from './errors/http-error';
+export { ASSET_MIME, contentTypeFor } from './core/assets';
+export type {
+    EmbeddedAsset,
+    DiskAssetRoute,
+} from './core/assets';
 export { ValidationError } from './validation/error';
 export { NotFoundError } from './errors/not-found';
 export { UnauthorizedError } from './errors/unauthorized';

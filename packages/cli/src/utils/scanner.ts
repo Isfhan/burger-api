@@ -19,6 +19,7 @@ import {
     filePathToPageRoutePath,
 } from './route-conventions';
 import { CONVENTION_DEFAULTS } from './config';
+import { contentTypeFor } from 'burger-api';
 
 /**
  * Ensure BURGER_API_APP_DIR is set for in-process CLI scanning: from the
@@ -275,6 +276,65 @@ export async function scanPageRoutes(
     const entries: PageRouteScanEntry[] = [];
     await scanPageDir(absolutePageDir, '', pagePrefix, entries);
     return entries;
+}
+
+/** A static asset resolved for embedding into the production bundle. */
+export interface AssetRouteScanEntry {
+    /** Route path including the prefix (e.g. `/assets/style.css`). */
+    routePath: string;
+    /** Content-Type derived from the file extension. */
+    contentType: string;
+    /** Absolute file path — read and base64-embedded at build time. */
+    absolutePath: string;
+}
+
+/**
+ * Scan `<pageDir>/assets/` recursively for static files to embed into the
+ * production bundle. Returns an empty array when no assets dir exists.
+ */
+export async function scanAssetRoutes(
+    cwd: string,
+    pageDir: string,
+    pagePrefix: string
+): Promise<AssetRouteScanEntry[]> {
+    const absolutePageDir = resolveScanDirOrThrow(
+        cwd,
+        pageDir,
+        'Pages',
+        'pageDir',
+        CONVENTION_DEFAULTS.pageDir
+    );
+    if (!absolutePageDir) return [];
+
+    const assetsDir = path.join(absolutePageDir, 'assets');
+    let entries;
+    try {
+        entries = await readdir(assetsDir, {
+            withFileTypes: true,
+            recursive: true,
+        });
+    } catch {
+        return [];
+    }
+
+    const cleanPrefix = pagePrefix ? `/${pagePrefix.replace(/^\/+|\/+$/g, '')}` : '';
+    const out: AssetRouteScanEntry[] = [];
+    for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const parent =
+            (entry as unknown as { parentPath?: string }).parentPath ?? '';
+        const relative = path.relative(
+            assetsDir,
+            path.join(parent, entry.name)
+        );
+        const normalized = relative.split(path.sep).join('/');
+        out.push({
+            routePath: `${cleanPrefix}/assets/${normalized}`,
+            contentType: contentTypeFor(entry.name),
+            absolutePath: path.join(assetsDir, relative),
+        });
+    }
+    return out.sort((a, b) => a.routePath.localeCompare(b.routePath));
 }
 
 async function scanPageDir(

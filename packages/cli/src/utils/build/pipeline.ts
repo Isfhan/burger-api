@@ -1,5 +1,10 @@
 import { resolveBuildConfig } from '../config';
-import { scanApiRoutes, scanPageRoutes, scanWebSocketRoutes } from '../scanner';
+import {
+    scanApiRoutes,
+    scanAssetRoutes,
+    scanPageRoutes,
+    scanWebSocketRoutes,
+} from '../scanner';
 import {
     generateVirtualEntrySource,
     type AppConventionPaths,
@@ -62,11 +67,13 @@ export async function runVirtualEntryBuild(options: {
         entryFile: options.entryFile,
     });
 
-    const [apiEntries, pageEntries, wsEntries] = await Promise.all([
-        scanApiRoutes(options.cwd, config.apiDir, config.apiPrefix),
-        scanPageRoutes(options.cwd, config.pageDir, config.pagePrefix),
-        scanWebSocketRoutes(options.cwd, config.wsDir ?? ''),
-    ]);
+    const [apiEntries, pageEntries, wsEntries, assetEntries] =
+        await Promise.all([
+            scanApiRoutes(options.cwd, config.apiDir, config.apiPrefix),
+            scanPageRoutes(options.cwd, config.pageDir, config.pagePrefix),
+            scanWebSocketRoutes(options.cwd, config.wsDir ?? ''),
+            scanAssetRoutes(options.cwd, config.pageDir, config.pagePrefix),
+        ]);
 
     if (
         apiEntries.length === 0 &&
@@ -88,7 +95,8 @@ export async function runVirtualEntryBuild(options: {
         pageEntries,
         entryOptions.importPath,
         appConventions,
-        wsEntries
+        wsEntries,
+        assetEntries
     );
     const hasPages = pageEntries.length > 0;
     const { outDir, virtualPath, virtualSourcePath } = prepareVirtualEntry({

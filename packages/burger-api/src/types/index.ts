@@ -91,6 +91,14 @@ export interface ServerOptions {
     pageRoutes?: PageDefinition[];
 
     /**
+     * Pre-built static asset routes from the CLI build (files under
+     * `<pageDir>/assets/` embedded as base64). When present, assets are
+     * served from the embedded table; otherwise dev reads them from disk
+     * under `pageDir`.
+     */
+    assetRoutes?: import('../core/assets').EmbeddedAsset[];
+
+    /**
      * Pre-built WebSocket routes (e.g. from CLI build). When provided, wsDir is
      * ignored and no runtime filesystem scanning is performed. Bun-only — wired
      * through `serve()` via the Bun adapter. Used for bundled/executable builds.

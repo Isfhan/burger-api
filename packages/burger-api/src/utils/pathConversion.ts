@@ -79,10 +79,13 @@ export function filePathToPageRoutePath(
         }
         if (
             segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
-            segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
+            segment.includes(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
         ) {
+            // Page dynamic segments are FILENAMES (`[name].tsx`) — the
+            // extension trails the closing bracket, so match on `includes`.
+            const end = segment.indexOf(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END);
             resultSegments.push(
-                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + segment.slice(1, -1)
+                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + segment.slice(1, end)
             );
         } else {
             resultSegments.push(segment);
