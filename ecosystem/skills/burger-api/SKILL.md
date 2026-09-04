@@ -160,7 +160,7 @@ export default { auth: false };
 ```typescript
 interface Plugin {
   name: string;
-  hooks?: RouteHooks;
+  hooks?: GlobalHooks; // plugin scope — onRequest is allowed here, unlike route-level RouteHooks
 }
 ```
 
@@ -168,8 +168,7 @@ interface Plugin {
 
 ```typescript
 // ecosystem/plugins/my-plugin/my-plugin.ts
-import type { Plugin } from "burger-api/plugin/types";
-import type { BurgerContext } from "burger-api/context/context";
+import type { Plugin, BurgerContext } from "burger-api";
 
 export function myPlugin(options?: MyPluginOptions): Plugin {
   return {

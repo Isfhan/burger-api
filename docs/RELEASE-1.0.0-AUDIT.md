@@ -516,4 +516,92 @@ tracked in git** from a pre-session commit (`66e6a53`, unrelated to this
 release effort) — deleted from the index too, since it's a test-generated
 fixture that should never have been committed.
 
+### Phase 4 & 5 — 2026-09-05
+
+Docs-only work across both repos (`burger-api` ecosystem/skills docs,
+`burger-api-website` Docusaurus site). Every claim re-verified against
+current source before writing, since a lot of source changed earlier this
+session. `bun run build` (Docusaurus) and `bun run typecheck` both pass
+clean on the website after all changes.
+
+**Phase 4 — drift fixes:**
+- `docs/websocket/overview.md` — the false "❌ Wrong, `sendText` does not
+  exist" example replaced with a correct one (`sendText`/`sendBinary` are
+  real, narrower siblings of `send`); the "types you use" bullet expanded to
+  list the full `BurgerWS` surface accurately.
+- `ecosystem/skills/burger-api/references/hooks.md` — global-hooks path
+  fixed to `src/hooks.ts` (was `api/hooks.ts`, contradicting its own code
+  block); `jwt-auth`/`api-key` moved out of the "Ecosystem Hooks" table into
+  a new "Ecosystem Plugins" table (they're plugins, not hooks), joined by
+  the other 4 real plugins (`basic-auth`, `session`, `oidc`, `env`) for
+  completeness; `cache-control`/`api-key-auth` renamed to their real
+  directory names `cache`/`api-key`.
+- `ecosystem/skills/burger-api/SKILL.md` — plugin template's imports fixed
+  from the non-existent `burger-api/plugin/types` / `burger-api/context/context`
+  subpaths to `import type { Plugin, BurgerContext } from "burger-api"`
+  (both real root exports); the inline `Plugin.hooks?: RouteHooks` snippet
+  also updated to `GlobalHooks` to match this session's Phase 2 type split
+  (missed by the original audit, found while fixing the imports next to it).
+  **Verified, not just fixed**: compiled the corrected template against the
+  local build with `tsc` — exits 0.
+- `docs/hooks/system.md` and `docs/hooks/global.md` — response-hook order
+  corrected to Route → Global → Plugin → Framework (was backwards).
+- `docs/websocket/overview.md` — added a "Pub/sub" section documenting the
+  full `BurgerWS` topic API (`subscribe`/`unsubscribe`/`isSubscribed`/
+  `publish`/`publishText`/`publishBinary`), and a "Node.js" section
+  documenting `createNodeWsBridge()` with a working example.
+- `docs/compatibility.md` — the WebSocket row's blanket "No (not in 1.0 — no
+  edge WS parity)" corrected to distinguish true edge runtimes (still no,
+  they have no raw socket access) from plain Node (yes, via
+  `createNodeWsBridge()`).
+- `docs/core/burger-class.md` — added `websocket()`, `createNodeWsBridge()`,
+  and `getServer()` method docs (all three confirmed missing). Also fixed
+  the pre-existing `macro(name, fn)` example, which showed `fn` taking an
+  `opts` parameter — stale since this session's Phase 2 change made `MacroFn`
+  zero-arg.
+- `docs/routing/pages/static-pages.md` — "BurgerAPI looks for `.html` files"
+  fixed to mention `.tsx`; added a new "Dynamic Pages (`.tsx`)" section
+  explicitly stating `.tsx` pages are plain handlers returning a `Response`,
+  **not** React/JSX SSR (this exact misconception was hit live during
+  Phase 3 testing), using the repo's own
+  `examples/page-routing/src/pages/blog/[slug]/index.tsx` as the reference
+  pattern.
+
+**Phase 5 — gap filling:**
+- New pages `docs/cli/inspect.md` and `docs/cli/doctor.md`, written from
+  reading `packages/cli/src/commands/inspect.ts`/`doctor.ts` directly (no
+  invented behavior); added to `sidebars.ts`'s "CLI Tool" category.
+  `generate` was left as-is in `docs/javascript.md` (already documented,
+  correctly identified by the plan as not a real gap) — judgment call to
+  skip the optional consolidation into a dedicated page given time budget.
+- Collapsed the 5-page OpenAPI cluster into the single canonical
+  `docs/api/openapi.md` (already the most complete page). The other 4
+  (`core-concepts/openapi.md`, `openapi/generation.md`,
+  `openapi/metadata.md`, `openapi/swagger-ui.md`) were pure summaries/links
+  back to `api/openapi.md` with one small exception — `swagger-ui.md` noted
+  the spec/docs paths are configurable, which `api/openapi.md` didn't say;
+  merged that detail in before deleting. Fixed every reference: `sidebars.ts`
+  (removed `core-concepts/openapi` from Core Concepts, collapsed the
+  "OpenAPI & Documentation" category to one entry), `docs/key-concepts.md`,
+  `docs/core-concepts/applications.md` (a relative `./openapi.md` link my
+  first `grep` pass on absolute `/docs/...` paths missed — caught by the
+  Docusaurus build's broken-link check, not manual review), two `src/`
+  components (`OpenAPI.tsx`, `Footer/index.tsx`).
+- Deleted `docs/api/route-meta.md` (duplicate of the more complete
+  `docs/api/route-metadata.md`); fixed `sidebars.ts` and
+  `route-metadata.md`'s own self-referential "Related" link.
+- Added a `:::caution` admonition (matching the site's existing `:::tip`/
+  `:::info` convention) to all 4 pre-1.0 blog posts (v0.3.0, v0.4.0, v0.5.0,
+  v0.6.2), linking forward to the v1.0.0 release post. Historical content
+  untouched.
+
+**Verification**: `bun run build` (Docusaurus) failed on the first pass with
+one broken link (the relative-link miss above) — fixed, rebuilt clean.
+`bun run typecheck` clean. No commits made in either repo — left staged for
+review (nothing was actually `git add`ed either; both repos show the changes
+as plain working-tree modifications).
+
+**Nothing left open from Phase 4/5's assigned scope.** The `generate.md`
+consolidation is the only deliberately-skipped optional item, noted above.
+
 

@@ -14,7 +14,7 @@ Hook functions can return three values:
 
 ## Global Hooks (all routes)
 
-Place hooks in the root `api/hooks.ts` — they apply to every route under `api/`:
+Place hooks in the app's root `src/hooks.ts` — they apply to every route:
 
 ```typescript
 // src/hooks.ts
@@ -84,8 +84,19 @@ Available via `burger-api add <name>` — these are **hook factories** wired int
 | rate-limiter | Request rate limiting |
 | compression | gzip/deflate response compression |
 | security-headers | Security HTTP headers |
-| jwt-auth | JWT token authentication |
-| api-key-auth | API key authentication |
 | timeout | Request timeout |
-| cache-control | HTTP caching headers |
+| cache | HTTP caching headers |
 | body-size-limiter | Request body size limits |
+
+## Ecosystem Plugins
+
+Also available via `burger-api add <name>`, but these are **plugins** (`burger.usePlugin(...)` in `src/plugins.ts`), not hooks — they need app-level registration, not a `hooks.ts` export. Auth in particular is plugin-only in v1: there is no `hooks.ts`-based auth hook.
+
+| Plugin | Description |
+|---|---|
+| jwt-auth | JWT token authentication |
+| api-key | API key authentication |
+| basic-auth | HTTP Basic authentication |
+| session | Cookie-based session auth |
+| oidc | OpenID Connect authentication |
+| env | Validates required environment variables on startup |
