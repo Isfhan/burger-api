@@ -714,3 +714,89 @@ testing (Cloudflare crash, `config.ts` drop) → website docs drift/gap-fill
 additional commit for its own docs changes.
 
 
+
+---
+
+## Phase 7 — Independent verification (2026-09-05, separate session)
+
+A second session re-verified every Phase 0–6 claim from scratch. **All
+claims confirmed.** Method: fresh reads of the diffs, re-runs of the gates,
+and brand-new runtime boots of the two Phase 3 P0 fixes against the packed
+tarball (`burger-api-1.0.0.tgz`, 159 files) — not the linked workspace copy.
+
+### Re-verified (evidence)
+
+- **Phase 0**: `elysiajs-2-code.txt`, empty `docs/`, 14 stale benchmark
+  reports, 4 root `.md` files all gone; `RELEASE-1.0.0-AUDIT.md` exists with
+  the harvested F1–F20 / decisions A–E / implementation-order content.
+- **Phase 1**: WIP committed as `dd169a7`. JIT guard is now
+  `if (plan.validators?.response)` (`src/lifecycle/jit.ts:127`), matching the
+  interpreter (`executor.ts:59`) — the clone+parse-per-request waste is gone.
+  `test/lifecycle/jit.test.ts` asserts JIT/interpreter equivalence including
+  the Cloudflare no-eval fallback path.
+- **Phase 2** (`422e7c4`): `RouteHooks` no longer has `onRequest` (compile
+  error now); `MacroRegistry.expand(...)` deleted; `chain/flattener.ts` is
+  driven by `SCOPE_ORDER_REQUEST`/`SCOPE_ORDER_RESPONSE` constants and
+  `test/chain/flatten-order.test.ts` reads `AGENTS.md` and fails on doc/code
+  order drift; `AGENTS.md` now states Route → Global → Plugin → Framework;
+  ~679 changed import lines (.js extensions) + `moduleResolution: NodeNext`;
+  `dist` imports under stock Node v22.14.0 verified live this session
+  (`dist/src/index.js` and `dist/src/adapter/index.js` both import; adapter
+  subpath is types-only by design, documented in the file itself).
+- **Phase 3** (`d291b00`): dead `METHOD_NOT_ALLOWED` constant removed from
+  `utils/response.ts`; `virtual-entry.ts:183` now unwraps `config.ts`'s
+  default export (`_c${i}.default ?? _c${i}`) with a named regression test.
+  **This session re-ran both P0 scenarios end-to-end against the packed
+  tarball**: Cloudflare (`wrangler dev --local` + `nodejs_compat`, clean
+  scratch dir outside the monorepo) → `/api/hello` 200
+  `{"message":"Hello from BurgerAPI on Cloudflare Workers!"}`, `/api/users/42`
+  → `{"id":"42"}` 200. Deno 2.9.6 (`deno run --node-modules-dir=manual` over
+  the same tarball) → both routes 200. **The audit log had recorded the
+  Cloudflare fix as "not re-tested after the fix" — now closed.**
+- **Phases 4–5** (website `5063b76`, skills `1205d50`): `ws.sendText()` now
+  documented as real; skill says `src/hooks.ts`; `jwt-auth`/`api-key` moved to
+  plugins framing; `burger-api/plugin/types` / `burger-api/context/context`
+  imports gone; `inspect.md`/`doctor.md` added; OpenAPI cluster collapsed;
+  4 pre-1.0 blog posts banner-flagged. `bun run build` passes with
+  `onBrokenLinks: throw` — no dangling links after the deletions.
+- **Phase 6**: re-ran this session — `test:all` **913 pass / 0 fail**
+  (route-sync 17, router 25, framework 181, ecosystem 8, cli 150, lifecycle
+  62, context 55, router-unit 24, smoke 5, chain 22, plugin 50, core 28,
+  errors 27, validation 68, compiler 41, adapter 19, provider 7, ws 124) +
+  typecheck OK. Size guard PASS (app-core entry 50.7/53.7 KB). `npm pack
+  --dry-run` clean for both packages (159 / 28 files), CLI also at 1.0.0.
+- **Git hygiene**: 11 commits ahead on `burger-api`, 1 on the website, both
+  trees clean, **no `Co-Authored-By`/generated trailers on any commit
+  (checked every commit body on both repos)**, nothing pushed, npm `latest`
+  still 0.9.7 — nothing published.
+
+### New findings this session (none release-blocking)
+
+1. **P1 — `deploy-cloudflare/wrangler.toml` lacks `nodejs_compat`.**
+   Without `compatibility_flags = ["nodejs_compat"]`, esbuild fails with
+   "Could not resolve path" (dev-only fs/path code — `compiler/scanner.ts`,
+   `core/page-router.ts`, `ws/scanner.ts` — is reachable from the dynamic
+   import graph even for an `apiRoutes`-only app). The website's
+   `deployment/cloudflare.md` doesn't mention the flag either. An end user
+   following the example verbatim hits this first thing. Fix: add the flag to
+   the example's `wrangler.toml` + one sentence in the doc (medium-term:
+   make the dev-only modules genuinely unreachable from the WinterCG graph).
+2. **P2 — `test/core/assets.test.ts:10` writes `./.tmp-assets-test/` into
+   the repo tree** instead of an OS temp dir. It was accidentally committed
+   once (removed in `d291b00`) and my `test:all` run regenerated it as
+   untracked noise. Fix: use `os.tmpdir()` or add to `.gitignore`.
+3. **P2 — `packages/burger-api/tsconfig.json` `paths` maps
+   `"burger-api" → ["src/index.ts"]`**, and esbuild auto-discovers that
+   tsconfig by walking up from any file under `packages/burger-api/**` —
+   so wrangler/esbuild run inside the monorepo subtree silently bundles
+   SOURCE instead of `dist`. Node itself is unaffected (doesn't read
+   tsconfig paths; verified: dist imports fine). Consequence: framework
+   examples under that subtree can't be bundled with their own tooling as-is
+   (why the Cloudflare verification was done from a scratch dir). Fix:
+   scope the paths mapping to `test/` via a nested tsconfig, or drop it and
+   rely on `bun link`.
+4. **P3 — `docs/cli/generate.md` still missing** (inspect/doctor were added;
+   `generate` is only mentioned in passing in `javascript.md`). Deliberately
+   skipped per the Phase 6 log; listing here so it isn't lost.
+
+**Verdict: the release-gate claims are accurate. GO state confirmed.**
