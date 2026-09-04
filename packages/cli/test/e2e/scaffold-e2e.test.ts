@@ -36,14 +36,6 @@ async function killTree(pid: number): Promise<void> {
     try {
         if (process.platform === 'win32') {
             await run(['taskkill', '/F', '/T', '/PID', String(pid)], '.');
-            // `taskkill /F /T` returns once the kill request is issued, not
-            // once every handle the tree held (files, named pipes) is
-            // actually released by the OS. Spawning another `bun` process
-            // immediately after can race that teardown and crash with
-            // SIGABRT (exit 134) — seen intermittently on the very next
-            // spawn (e.g. `bun run typecheck` right after killing a `bun
-            // --watch` dev server). A short grace period avoids the race.
-            await Bun.sleep(500);
         } else {
             process.kill(pid, 'SIGKILL');
         }
