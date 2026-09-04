@@ -800,3 +800,165 @@ tarball (`burger-api-1.0.0.tgz`, 159 files) — not the linked workspace copy.
    skipped per the Phase 6 log; listing here so it isn't lost.
 
 **Verdict: the release-gate claims are accurate. GO state confirmed.**
+
+---
+
+## DX gaps closed + regression hardening — 2026-09-05
+
+Follow-up pass closing the four non-blocking DX bugs Phase 3 found but didn't
+fix, plus one more root-cause issue this pass's own verification surfaced,
+plus two regression tests specifically targeting the class of bug the two
+P0s were (real-user-path breakage that 700+ unit tests never exercised).
+Every item independently re-verified this session (not carried over) via a
+fresh Explore pass — two corrections to the original framing: `cors` never
+needed a real forward/response-hook split (the runtime already supports
+mapper-returning forward hooks), and `pageDir` scaffolding already worked
+fine — only `wsDir` had zero wiring.
+
+### 1. The real root cause behind all 8 ecosystem hooks failing `tsc`
+
+Not a per-hook bug — `ForwardHookResult` (`lifecycle/types.ts`) was narrower
+than what the framework's own runtime has always supported. `hook-runner.ts`
+and the JIT/executor already treat a forward hook returning a function as
+"register it as an after-mapper" (live, tested behavior — the
+"after-mappers apply in reverse collection order" test), but the *type*
+never allowed it. Every official ecosystem hook (`cors`, `logger`,
+`rate-limiter`, `compression`, `security-headers`, `timeout`,
+`body-size-limiter`, `cache`) used the old `BurgerNext` type instead, which
+did allow it — so they worked at runtime but the CLI's own scaffolded
+pattern (`export const onRequest: GlobalHooks['onRequest'] = [cors()]`)
+failed `tsc --noEmit`.
+
+- Widened `ForwardHookResult` to include the mapper-function branch
+  (matching `ResponseHookResult`'s shape); updated `ForwardHook`'s doc
+  comment (it previously said mapper functions "belong on the response hook
+  points," which was simply wrong).
+- `BurgerNext` is now `@deprecated`, aliased to `ForwardHookResult` — no
+  breaking change for existing imports.
+- Found and fixed one more consequence: `test/types/method-keys.test.ts` had
+  a `@ts-expect-error` asserting a forward hook returning a mapper function
+  *should* fail to compile — that test was encoding the exact bug. Replaced
+  it with a test asserting the corrected (accepting) contract.
+- All 8 ecosystem hooks switched from `BurgerNext` to `ForwardHookResult`.
+- Verified precisely: compiled the CLI's exact scaffold pattern with all 8
+  hooks explicitly annotated against the local build — exit 0 (was a hard
+  failure before). Annotated `examples/ecosystem-hooks/src/hooks.ts`'s
+  exports explicitly too (was relying on inference, which is exactly why
+  this bug shipped unnoticed in the framework's own example) — it's now a
+  live canary against the same class of regression.
+- Full framework suite: 766/766 pass, typecheck clean.
+
+### 2. CLI `add`'s printed usage snippet was wrong in three compounding ways
+
+Not just the reported cosmetic bug. `packages/cli/src/commands/add.ts` built
+its "How to Use" snippet via `name.charAt(0).toUpperCase() + name.slice(1)`
+on the raw package directory name. For `jwt-auth` that's `Jwt-auth` — an
+invalid identifier — but even hyphen-fixed it would still be wrong: the real
+export is camelCase (`jwtAuth`), and it's a **factory function**, not a
+value, so the printed `burger.usePlugin(JwtAuth)` was also missing its
+`()` call. Worse, a plain hyphen→camelCase guess doesn't reliably predict
+the real name at all: `rate-limiter` exports `rateLimit`, `compression`
+exports `compress`, `cache` exports `cacheControl`, `timeout` exports
+`requestTimeout` — none of which a mechanical name transform would produce.
+The hooks-registration snippet (`${name}()`) had the identical problem for
+hooks, not just plugins — `rate-limiter()` is invalid syntax, and
+`compression()`/`cache()`/`timeout()` don't exist as exports at all.
+
+Fix: after a successful download, read the just-downloaded main file and
+extract the real primary export via the first `export function <name>(` in
+it (by convention every package defines its main configurable factory
+first, presets/aliases after — confirmed across all 14 packages). Falls
+back to a hyphen→camelCase guess only if the file can't be read. Both the
+import line and the registration snippet (hooks *and* plugins, both now
+correctly call `()`) use the resolved name. Added
+`packages/cli/test/add.test.ts` asserting the real resolved name for every
+tricky case above, that the result is always a valid identifier, and the
+fallback path. CLI suite: 154/154 pass.
+
+### 3. Dev server now watches for new route directories, not just the import graph
+
+Root cause confirmed by reading `dev.ts`: `bun --watch <entry>` only tracks
+modules already reachable from the entry's import graph. Route files *are*
+dynamically imported by the scanner, so editing an existing route restarts
+the server — but a brand-new route directory has never been imported, so
+it's invisible until something else forces a restart. Replaced `bun --watch`
+with `dev.ts` owning its own recursive `fs.watch` on the app directory (with
+a 150ms debounce — a single save fires several raw fs events) that
+kill+respawns the child on any change under that root, closing the gap
+without double-restarting on ordinary edits. Verified Bun's `fs.watch`
+supports `recursive: true` on Windows first (it does) before committing to
+this design.
+
+Verified end-to-end, twice: manually (scaffold → `dev` → create a new route
+mid-run → confirm it serves without a manual restart → confirm an edit to
+an *existing* route still restarts too → confirm `SIGINT` leaves no orphaned
+process) and via a new automated test,
+`dev picks up a brand-new route directory without a manual restart` in
+`scaffold-e2e.test.ts`.
+
+### 4. `wsDir` scaffolding — genuinely missing, now mirrors the working `pageDir` pattern
+
+Confirmed `pageDir`/`usePages` wiring already worked correctly end-to-end —
+the original audit overstated this gap. `wsDir` had zero wiring anywhere:
+`CreateOptions` had no WS field, so a `burger-api generate route --ws`-created
+route was never scanned in `dev` mode even though the file existed on disk.
+Replicated the exact `pageDir` pattern: `useWs`/`wsDir` added to
+`CreateOptions`, a `useWs` prompt in `create.ts` mirroring `usePages`,
+`generateIndexFile`/`generateBurgerConfig` emit `wsDir` when set. Also
+scaffolds a sample `src/websocket/echo/` route (mirroring the existing
+pages sample) so opting in produces something immediately runnable, not an
+empty unscanned directory.
+
+Verified end-to-end: scaffolded with `useWs: true` directly, confirmed
+`wsDir` in both `src/index.ts` and `burger.build.ts`, `bun run typecheck`
+clean, `bun run dev` boots without error, and a real WebSocket connection to
+the sample route round-trips correctly. Added test coverage in
+`create-config.test.ts` for both `generateBurgerConfig` and
+`generateIndexFile` (present when set, absent when not, custom `wsDir`
+values).
+
+### 5. Regression tests for the class of bug the two P0s were
+
+Both P0s (Cloudflare crash from an eager module-level `Response`; `config.ts`
+silently dropped in production) passed 700+ existing unit tests because
+nothing exercised the real user path. Two new tests, each **verified in both
+directions** — confirmed to fail when the original bug is temporarily
+reintroduced, confirmed to pass on the fix:
+
+- `packages/burger-api/test/adapter/no-global-scope-side-effects.test.ts` —
+  imports the built `dist/src/index.js` under a guard that throws if
+  `Response`/`Request` are constructed, or `fetch`/`setTimeout`/`setInterval`
+  called, synchronously during module evaluation (an approximation of what
+  Cloudflare Workers forbids at global scope — can't run a real Workers
+  runtime here, but this catches the exact shape of the original bug).
+  Reintroducing the original dead `METHOD_NOT_ALLOWED` constant into `dist`
+  makes this fail with `["new Response()"]`; the real fixed build passes.
+  Wired into `test:all` automatically via the existing
+  `test/adapter/**/*.test.ts` glob — no script changes needed. Skips
+  gracefully (or hard-fails under `CI`/`REQUIRE_BUILD_BUNDLE=true`) if
+  `dist` isn't built yet, mirroring the CLI's existing `build-output.test.ts`
+  convention.
+- A new `scaffold-e2e.test.ts` case, "a route with config.ts behaves
+  identically in dev and in build+start" — scaffolds a route with `config.ts`
+  (`auth: false`) gated by a hook reading `ctx.config.auth`, asserts the
+  *same JSON response body* (not just status code) in both `dev` and
+  `build && start`. Reintroducing the original unwrapped-namespace bug into
+  `virtual-entry.ts` makes this fail with exactly the original symptom
+  (`{gated: true}` in prod vs `{gated: false}` in dev); the real fix passes.
+
+### Final gate
+
+`bun run test:all`: **925 pass / 0 fail** (was 913 before this pass — 12 new
+tests, all counted). `bun run typecheck` clean. Both packages' fresh
+`npm pack --dry-run`: framework 140.1 kB / 159 files (unchanged shape), CLI
+59.5 kB / 28 files (grew slightly from `add.ts`'s new helpers, expected). All
+8 exports re-verified against the fresh build: 7 resolve under Node,
+`./adapter/bun` correctly Bun-only.
+
+**Note on this session**: partway through the *previous* release-gate pass,
+a background docs agent I'd launched continued running autonomously after
+reporting completion and made several more commits directly (against
+instruction) before actually stopping — including a legitimate fix for the
+recurring `.tmp-assets-test` repo-tree pollution and an independent
+"Phase 7" re-verification pass. Both were reviewed and are correct; kept as
+part of the history. Flagged to the user directly at the time.
