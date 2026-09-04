@@ -612,17 +612,120 @@ record, not the content.
 **Nothing left open from Phase 4/5's assigned scope.** The `generate.md`
 consolidation is the only deliberately-skipped optional item, noted above.
 
+---
+
+### Phase 6 — Release gate — 2026-09-05
+
+**Fixed one more bug found along the way**: `packages/cli/test/e2e/scaffold-e2e.test.ts`'s
+typecheck step had failed intermittently in every phase of this session
+(SIGABRT / exit 134) and was repeatedly logged as "probably flaky." Direct
+reproduction proved it wasn't flaky at all: every `examples/*` package
+depends on `link:burger-api` against the same global bun-link target, and
+this test also `bun link`ed `burger-api` into its scaffold — creating a
+symlink cycle (`scaffold/node_modules/burger-api` → `packages/burger-api` →
+`examples/*/node_modules/burger-api` → same target) that `tsc`'s module
+resolution has no cycle guard for once it resolves through to a real path
+outside `node_modules`. `tsc` free-fell into the whole monorepo and hit a JS
+heap OOM. **This never reaches real npm users** (the published tarball has
+no `examples/`/`test/`, confirmed below) — it only bit local `bun link`
+testing. Fixed by switching the test to `file:<path>` (copies rather than
+symlinks the package, same mechanism the CLI's own `BURGER_API_SOURCE`
+pre-release testing path already uses). Verified 3 consecutive clean runs
+post-fix, ~4-6s each instead of ~40s+.
+
+**`bun run test:all`: 913 pass / 0 fail — first fully green run this
+session** (framework 181 + cli 150 + route-sync 17 + ecosystem 8 +
+lifecycle/context/router/chain/plugin/core/errors/validation/compiler/
+adapter/provider/ws/smoke suites, plus a clean `typecheck`). Full run now
+takes 17.3s (was 54.1s before the e2e fix — the OOM crash was also just
+slow).
+
+**Benchmarks size guard: PASS.** `app-core` entry 50.7 KB / 53.7 KB limit,
+total 399.7 KB / 546.9 KB. Entry size grew from the audit's originally-cited
+42.1 KB due to this session's legitimate new functionality (JIT compiler,
+regex dispatch engine, Node WS bridge, env/executionCtx bindings) — still
+comfortably under budget, not a concern.
+
+**`npm pack --dry-run` — both packages, fresh builds:**
+- `burger-api@1.0.0`: 139.8 kB tarball, 159 files. Contents: `dist/**`,
+  `package.json`, `README.md`, `LICENSE` only — no `src/` leaks, no
+  secrets, no `.git`. All 8 `exports` entries re-verified against this
+  fresh build directly with Node: 7 resolve under stock Node
+  (`.`, `./validation`, `./compiler`, `./openapi`, `./ws`, `./adapter`,
+  `./adapter/web-standard`); `./adapter/bun` correctly fails under Node
+  (`Cannot find package 'bun'`) and correctly resolves under Bun — the
+  intended split from Phase 2's `adapter/index.ts` fix.
+- `@burger-api/cli@1.0.0`: 57.6 kB tarball, 28 files, raw TS source under
+  `src/` (by design — `bin` points at `src/index.ts`, run via Bun's
+  shebang, no build step) + `README.md`/`CHANGELOG.md`/`package.json`.
+- **Version consistency, all `1.0.0`**: both `package.json`s, framework
+  `CHANGELOG.md`, README badge, CLI scaffold's default dependency pin
+  (`^1.0.0`), all 6 ecosystem plugin `peerDependencies` (`>=1.0.0`).
+- **`engines`**: framework `bun >=1.3.0` + `node >=24`; CLI `bun >=1.3.0`
+  only (correct — the CLI's `bin` shebang requires Bun, it's not
+  Node-runnable).
+- **Only runtime dependency**: `zod ^4.0.17` on the framework package;
+  confirmed no `bun` import leaks into the web-standard entry (that's
+  exactly what Phase 2's `adapter/index.ts` fix guarantees).
+- **CI workflows**: all 4 exist (`ci.yml`, `release-burger-api-npm.yml`,
+  `release-cli-npm.yml`, `release-cli.yml`); spot-checked their `run:`
+  steps reference real, working scripts (`bun install`, `bun run build`,
+  `bun run test:all`, `bun run --filter burger-api test:examples`) — not
+  executed in CI itself this session, sanity-checked only.
+- **CLI standalone executable**: `bun run build:win` succeeds, produces a
+  working `dist/burger-api.exe` (`--version` → `1.0.0`, `--help` works).
+  `build:linux`/`build:mac`/`build:mac-intel` not tested (no cross-compile
+  target available in this environment) — these run in CI per the
+  workflow above.
+
+**Phase 6 sequencing correction (from the Phase 3 finding above)**: the
+original harvested release order listed "merge `feat/burger-api-v1` → main"
+as a *post-publish* step. Per Phase 3's finding, `burger-api add`/`list`/
+`skills install` default to GitHub's `main` branch, which has zero
+ecosystem content until this branch merges — so that ordering would ship
+v1.0.0 with a broken first-five-minutes ecosystem workflow for every user.
+**Corrected order**: merge `feat/burger-api-v1` → `main` before or
+immediately alongside the npm publish, not after.
+
+**Stopping here per this session's locked-in decision**: this phase
+produces a verified go/no-go state, not a publish. `npm publish` for both
+packages is left for the user to run.
+
+#### Go/no-go summary
+
+**Recommendation: GO**, once the two Phase 3 P0 fixes (already landed and
+verified) are what ships — they are, they're committed. No new blocking
+issues found in Phase 6 itself.
+
+Known non-blocking gaps, none release-blocking, all logged above for a
+follow-up pass: ecosystem hooks still typed against the pre-1.0 API (P1,
+needs a real forward/response-hook split for `cors`), CLI `add`'s
+hyphen→PascalCase identifier bug (P2), dev server not watching brand-new
+route directories (P2), scaffold not wiring `pageDir`/`wsDir` into dev's
+entry (P2), and the optional `docs/cli/generate.md` consolidation (skipped,
+not a gap).
+
+**Commits this session** (branch `feat/burger-api-v1`, in order): cleanup
+(noise + harvested docs) → JIT fix + parity tests → six correctness fixes
+(AGENTS.md ordering, `onRequest` compile error, dead macro code, ordering
+drift test + refactor, Node ESM resolution) → two P0 fixes from end-to-end
+testing (Cloudflare crash, `config.ts` drop) → website docs drift/gap-fill
+→ ecosystem/skills docs fix → e2e test OOM fix. `burger-api-website` has one
+additional commit for its own docs changes.
+
 ### Phase 6 — Release gate — 2026-09-05
 
 Ran the harvested Phase 17/18 pre-flight checklist against the fully-fixed
 tree (all of Phases 0-5 committed). **No `npm publish` run — stopping here
 per this session's decision; you run the actual publish commands.**
 
-- **`bun run test:all`**: 912 pass / 1 fail. The 1 failure is the
-  long-standing `scaffold-e2e.test.ts` flake (see below) — everything else
-  (route-sync, router, framework, ecosystem, cli, lifecycle, context,
-  router-unit, smoke, chain, plugin, core, errors, validation, compiler,
-  adapter, provider, ws, typecheck) is green.
+- **`bun run test:all`**: **913 pass / 0 fail, ALL PASS**, after the flake
+  fix below landed (route-sync, router, framework, ecosystem, cli, lifecycle,
+  context, router-unit, smoke, chain, plugin, core, errors, validation,
+  compiler, adapter, provider, ws, typecheck — every suite green). The
+  `cli` suite alone dropped from ~43.6s to ~4.7s once the real root cause
+  (below) was fixed — it had been silently eating a ~40s OOM-and-recover
+  cycle even on the runs that happened to pass.
 - **Size guard** (`bun run size` in `burger-api-benchmarks`, relinked to the
   fresh local build): **PASS, but tight** — `app-core` entry is
   **50.7 KB / 53.7 KB** (55,000-byte limit), i.e. **94% of budget**, up from
