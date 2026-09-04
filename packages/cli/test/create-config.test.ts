@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect } from 'bun:test';
 import {
     generateBurgerConfig,
+    generateIndexFile,
     generateJsConfig,
     generateHooksIndex,
     generateOpenAPIConfig,
@@ -33,6 +34,32 @@ describe('generateBurgerConfig', () => {
         expect(content).toContain('apiPrefix: "/api"');
         expect(content).toContain('pagePrefix: "/"');
         expect(content).toContain('debug: false');
+    });
+
+    it('omits wsDir when useWs is not set', () => {
+        const content = generateBurgerConfig({
+            name: 'my-api',
+            useApi: true,
+            apiDir: 'api',
+            apiPrefix: '/api',
+            debug: false,
+            usePages: false,
+        });
+        expect(content).not.toContain('wsDir');
+    });
+
+    it('includes wsDir when useWs is set (mirrors pageDir/usePages)', () => {
+        const content = generateBurgerConfig({
+            name: 'my-api',
+            useApi: true,
+            apiDir: 'api',
+            apiPrefix: '/api',
+            debug: false,
+            usePages: false,
+            useWs: true,
+            wsDir: 'websocket',
+        });
+        expect(content).toContain('wsDir: "./src/websocket"');
     });
 
     it('types the TS config with satisfies BuildConfig', () => {
@@ -91,6 +118,40 @@ describe('generateBurgerConfig', () => {
         expect(content).toContain('apiPrefix: "/v1"');
         expect(content).toContain('pagePrefix: "/web"');
         expect(content).toContain('debug: true');
+    });
+});
+
+describe('generateIndexFile', () => {
+    const base: CreateOptions = {
+        name: 'my-api',
+        useApi: true,
+        apiDir: 'api',
+        apiPrefix: '/api',
+        debug: false,
+        usePages: false,
+    };
+
+    it('omits wsDir from the Burger() call when useWs is not set', () => {
+        const content = generateIndexFile(base);
+        expect(content).not.toContain('wsDir');
+    });
+
+    it('wires wsDir into the Burger() call when useWs is set (mirrors pageDir)', () => {
+        const content = generateIndexFile({
+            ...base,
+            useWs: true,
+            wsDir: 'websocket',
+        });
+        expect(content).toContain("wsDir: './src/websocket'");
+    });
+
+    it('uses a custom wsDir when provided', () => {
+        const content = generateIndexFile({
+            ...base,
+            useWs: true,
+            wsDir: 'sockets',
+        });
+        expect(content).toContain("wsDir: './src/sockets'");
     });
 });
 

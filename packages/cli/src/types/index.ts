@@ -25,6 +25,10 @@ export interface CreateOptions {
     pageDir?: string;
     /** Prefix for Page routes (e.g., '/') */
     pagePrefix?: string;
+    /** Whether to include file-based WebSocket routes */
+    useWs?: boolean;
+    /** Directory for WebSocket routes (e.g., 'websocket') */
+    wsDir?: string;
     /** Whether to add AI agent skills */
     addSkills?: boolean;
     /** Project language — `ts` (default) or `js` (JavaScript with JSDoc) */

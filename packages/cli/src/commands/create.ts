@@ -145,6 +145,18 @@ export const createCommand = new Command('create')
                     process.exit(1);
                 }
             }
+            if (optionsWithLang.useWs) {
+                const wsDirError = validateDirUnderSrc(
+                    targetDir,
+                    optionsWithLang.wsDir || 'websocket',
+                    'WebSocket directory'
+                );
+                if (wsDirError) {
+                    clack.outro('Invalid configuration');
+                    logError(wsDirError);
+                    process.exit(1);
+                }
+            }
 
             // Show what we're about to create
             info('Creating project with the following configuration:');
@@ -158,6 +170,9 @@ export const createCommand = new Command('create')
             }
             if (optionsWithLang.usePages) {
                 console.log(` Page Routes: ${optionsWithLang.pageDir || 'pages'}`);
+            }
+            if (optionsWithLang.useWs) {
+                console.log(` WebSocket Routes: ${optionsWithLang.wsDir || 'websocket'}`);
             }
             if (optionsWithLang.addSkills) {
                 console.log(` AI Agent Skills: burger-api`);
@@ -226,6 +241,8 @@ function defaultOptions(projectName: string): CreateOptions {
         usePages: false,
         pageDir: 'pages',
         pagePrefix: '/',
+        useWs: false,
+        wsDir: 'websocket',
         addSkills: true,
     };
 }
@@ -320,7 +337,32 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('/'),
 
-            // Question 8: AI agent skills
+            // Question 8: Do you need file-based WebSocket routes?
+            useWs: () =>
+                clack.confirm({
+                    message: 'Do you need WebSocket routes?',
+                    initialValue: false,
+                }),
+
+            // Question 9: WebSocket directory (only if they said yes to WS)
+            wsDir: ({ results }) =>
+                results.useWs
+                    ? clack.text({
+                          message: 'WebSocket directory name:',
+                          initialValue: 'websocket',
+                          placeholder: 'websocket',
+                          validate: (value) => {
+                              if (!value)
+                                  return 'Please enter a directory name';
+                              if (value.includes(' '))
+                                  return 'Directory name cannot contain spaces';
+                              if (value.includes('..'))
+                                  return 'Directory name cannot contain ..';
+                          },
+                      })
+                    : Promise.resolve('websocket'),
+
+            // Question 10: AI agent skills
             addSkills: () =>
                 clack.confirm({
                     message:
@@ -347,6 +389,8 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
         usePages: answers.usePages as boolean,
         pageDir: answers.pageDir as string | undefined,
         pagePrefix: answers.pagePrefix as string | undefined,
+        useWs: answers.useWs as boolean,
+        wsDir: answers.wsDir as string | undefined,
         addSkills: answers.addSkills as boolean,
     };
 }

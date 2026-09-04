@@ -238,6 +238,10 @@ export function generateIndexFile(options: CreateOptions): string {
         }
     }
 
+    if (options.useWs) {
+        lines.push(` wsDir: './src/${options.wsDir || 'websocket'}',`);
+    }
+
     if (options.debug) {
         lines.push(' debug: true,');
     }
@@ -271,10 +275,15 @@ export function generateBurgerConfig(options: CreateOptions): string {
     const body = [
         ` apiDir: ${JSON.stringify(apiDir)}, // folder with API route files`,
         ` pageDir: ${JSON.stringify(pageDir)}, // folder with HTML pages`,
+        options.useWs
+            ? ` wsDir: ${JSON.stringify(`./src/${options.wsDir || 'websocket'}`)}, // folder with WebSocket route files`
+            : undefined,
         ` apiPrefix: ${JSON.stringify(apiPrefix)}, // URL prefix for API routes`,
         ` pagePrefix: ${JSON.stringify(pagePrefix)}, // URL prefix for pages`,
         ` debug: ${debug}, // extra logging when true`,
-    ].join('\n');
+    ]
+        .filter((line): line is string => line !== undefined)
+        .join('\n');
 
     if (options.lang === 'js') {
         return [
@@ -1015,6 +1024,22 @@ export async function createProject(
                 generateSampleJs()
             );
             // Logo is loaded from https://burger-api.com/img/logo.png
+        }
+
+        // Create a sample WebSocket route if requested, so opting in
+        // produces something immediately runnable under `bun run dev`
+        // instead of an empty, unscanned directory.
+        if (options.useWs) {
+            const wsRouteDir = join(
+                targetDir,
+                'src',
+                options.wsDir || 'websocket',
+                'echo'
+            );
+            const wsFiles = generateWsFiles('echo', {}, lang);
+            for (const [name, content] of Object.entries(wsFiles)) {
+                await Bun.write(join(wsRouteDir, name), content);
+            }
         }
 
         // Create ecosystem/hooks directory for installed hooks
