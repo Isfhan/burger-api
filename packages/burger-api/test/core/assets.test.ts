@@ -1,5 +1,7 @@
 import { describe, it, expect, afterAll } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
     contentTypeFor,
     collectDiskAssetRoutes,
@@ -7,7 +9,12 @@ import {
     embeddedAssetHandler,
 } from '../../src/core/assets';
 
-const tmp = './.tmp-assets-test';
+// OS temp dir (mkdtemp-style), never the repo tree — a crashed test run must
+// not leave untracked `.tmp-*` noise in `git status`.
+const tmp = join(
+    tmpdir(),
+    `burger-assets-test-${process.pid}-${Date.now().toString(36)}`
+);
 
 afterAll(() => {
     rmSync(tmp, { recursive: true, force: true });
