@@ -35,6 +35,28 @@ describe('generateVirtualEntrySource', () => {
         );
     });
 
+    it('unwraps config.ts default export (regression: config.ts uses a default export, unlike schema/openapi/hooks)', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                    configPath: '/tmp/api/config.ts',
+                },
+            ],
+            []
+        );
+
+        expect(source).toContain("import * as _c0 from '/tmp/api/config.ts'");
+        // Bare `_c0` would bind the raw module namespace ({ default: {...} })
+        // as the route's config, so `ctx.config.auth` is always undefined in
+        // production even when config.ts sets `auth: false`.
+        expect(source).toContain('config: _c0.default ?? _c0,');
+        expect(source).not.toContain('config: _c0,');
+    });
+
     it('when entry has methods [GET, POST], emits only those and auto OPTIONS', () => {
         const source = generateVirtualEntrySource(
             config,

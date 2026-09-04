@@ -179,7 +179,9 @@ export function generateVirtualEntrySource(
         lines.push(
             ` openapi: ${e.openapiPath ? `__normOpenapi(_o${i})` : `_r${i}.openapi`},`
         );
-        lines.push(` config: ${e.configPath ? `_c${i}` : `_r${i}.config`},`);
+        lines.push(
+            ` config: ${e.configPath ? `_c${i}.default ?? _c${i}` : `_r${i}.config`},`
+        );
         lines.push(` hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
         lines.push(` isWildcard: ${e.isWildcard},`);
         lines.push(' },');

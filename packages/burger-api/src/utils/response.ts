@@ -1,11 +1,4 @@
 /**
- * The shared 405 response.
- */
-export const METHOD_NOT_ALLOWED = new Response('Method Not Allowed', {
-    status: 405,
-});
-
-/**
  * Builds the framework's 404 response (RFC 9457 Problem Details).
  *
  * A factory (not a shared constant): a `Response` body is a single-use

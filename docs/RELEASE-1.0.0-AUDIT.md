@@ -231,6 +231,289 @@ exists now, not the 2026-08-20 note.
    build-config change are tightly coupled — the ESM fix touches nearly
    every file, so splitting further would just fragment one coherent change).
 
-*(Next: Phase 3 — end-to-end user journey against the local 1.0.0 build. Must
-rebuild `dist` fresh and repack before testing, since `dist` is gitignored and
-this session's build sat in a working tree that also had other Phase 2 edits.)*
+### Phase 3 — 2026-09-05
+
+End-to-end user journey against the local 1.0.0 build (`BURGER_API_SOURCE`
+pointed at `packages/burger-api`, all scaffolding done in scratch dirs outside
+the repo). `wrangler` and `deno` were both installed this session
+(`npm i -g wrangler`, `npm i -g deno`) so the WinterCG checks ran for real,
+not just as fetch-handler unit tests. **Two P0 (release-blocking) bugs found**,
+plus several P1/P2 DX gaps. Full repro steps below for anyone re-verifying.
+
+#### P0 — Cloudflare Workers cannot boot at all
+
+`packages/burger-api/src/utils/response.ts:4-6` still has:
+```ts
+export const METHOD_NOT_ALLOWED = new Response('Method Not Allowed', { status: 405 });
+```
+This is dead code — grepped the whole `src`/`test` tree, **zero** references
+anywhere else; the real 405 path is the `methodNotAllowed(allow)` *function*
+a few lines down. The session-2026-08-20 history (harvested from
+`MANUAL_TEST_CHECKLIST.md` Appendix B, see top of this file) already
+converted the sibling `NOT_FOUND`/`OPENAPI_ERROR` constants to factories for
+exactly this reason ("body stream is single-use") — `METHOD_NOT_ALLOWED` was
+missed.
+
+Because it's a **module-top-level `new Response(...)`**, it gets eagerly
+evaluated the instant anything imports `burger-api`, even though nothing ever
+reads the export. On Cloudflare Workers this eager construction crashes the
+whole worker before any request is handled:
+```
+✘ Uncaught Error: Disallowed operation called within global scope. Asynchronous
+  I/O (ex: fetch() or connect()), setting a timeout, and generating random
+  values are not allowed within global scope. To fix this error, perform this
+  operation within a handler.
+    at node_modules/burger-api/dist/src/utils/response.js:1171:26
+```
+Repro: `packages/burger-api/examples/deploy-cloudflare`'s own pattern
+(`import { Burger, toFetchHandler } from 'burger-api'`), installed via a
+`file:` dependency on the local build, `wrangler dev --local` with
+`compatibility_flags = ["nodejs_compat"]` (needed separately, see P1 below) →
+worker fails to start, 100% reproducible, zero requests served.
+**Fix is a one-line deletion** (the export is unused); not attempting it here
+since Phase 3's scope is test-and-report, not code fixes — flagging for
+immediate action before publish.
+
+#### P0 — `config.ts` (`RouteConfig`) is silently dropped in production builds
+
+Confirmed via `burger-api generate route users` (scaffolds `config.ts` with
+`export default { auth: false } satisfies RouteConfig`) + wiring the
+`jwt-auth` ecosystem plugin globally: **`GET /api/users` returns 200 (no
+token) in `bun run dev`, but 401 in the production build
+(`bun run build && bun run start`)** — same source, same route, no code
+changes, just dev vs. prod.
+
+Root cause, precisely: `packages/cli/src/utils/virtual-entry.ts:182`
+```ts
+lines.push(` config: ${e.configPath ? `_c${i}` : `_r${i}.config`},`);
+```
+imports `config.ts` as a namespace (`import * as _c${i} from configPath`)
+and uses that raw namespace object AS the route's `config` value. But the
+CLI's own `config.ts` scaffold template
+(`packages/cli/src/utils/templates.ts`, and `generate route`'s output) uses a
+**default export** (`export default {...} satisfies RouteConfig`) — unlike
+`schema.ts`/`openapi.ts`/`hooks.ts`, which all use *named* exports and so are
+correctly served by the raw-namespace pattern. For `config.ts` specifically,
+the bundled `config` value ends up as `{ default: { auth: false } }`, not
+`{ auth: false }` — so `ctx.config?.auth` is `undefined` in production,
+never `false`, and any plugin/hook gating on `config.auth` (like `jwt-auth`)
+silently enforces the default instead of the route's override.
+
+The sibling WS-route code path already handles this correctly — two lines
+below, `virtual-entry.ts:226`: `` config: _wc${i}.default ?? _wc${i}, `` —
+unwraps `.default` with a fallback. The API-route path at line 182 needs the
+same treatment. **This affects every route with a `config.ts` file**, not
+just this one repro — `RouteConfig`/`auth`/`cache`/`timeout` are all
+documented, flagship v1.0 features, and all of them are silently inert in
+production today. Confirmed real, not a fluke, by testing the identical
+route/request against dev (200) and a freshly rebuilt prod bundle (401),
+with a port-conflict false-positive ruled out along the way (first "prod"
+run was accidentally still hitting a leftover dev process on the same port;
+re-tested after confirming port 4000 was fully free).
+
+#### P1 — `burger-api add` / `list` / (likely) `skills install` are broken out of the box today
+
+`packages/cli/src/utils/github.ts:26` defaults `BRANCH` to `'main'`, with a
+comment on line 32-33 that already admits *"the default branch is stale
+until feat/burger-api-v1 merges, so list/add/skills would return empty
+results."* Confirmed via the GitHub API directly: `main` has **no**
+`ecosystem/hooks` or `ecosystem/plugins` content at all (empty listings),
+while `feat/burger-api-v1` has all 8 hooks + jwt-auth etc. `burger-api add
+cors` / `burger-api list` — a workflow the CLI's own `create` output actively
+recommends ("Add hooks and plugins (optional): `$ burger-api add cors
+logger`") — fails with "Package not found" / GitHub 404 for every fresh
+v1.0.0 user until `feat/burger-api-v1` is merged to `main` on GitHub.
+Verified the mechanism itself is fine (`BURGER_API_BRANCH=feat/burger-api-v1
+burger-api add cors jwt-auth` succeeds and downloads real files) — this is
+purely a branch-merge sequencing gap. **The release plan's Phase 6 currently
+lists "merge feat/burger-api-v1 → main" as step 6, *after* npm publish. That
+ordering needs to change** — the merge must land at or before publish, or
+`add`/`list`/`skills install` are broken for every real user on day one.
+
+#### P1 — official ecosystem hooks are typed against the pre-1.0 API
+
+All 8 `ecosystem/hooks/*` packages (`cors`, `logger`, `rate-limiter`,
+`compression`, `security-headers`, `timeout`, `body-size-limiter`, `cache`)
+declare their return type as the legacy `BurgerNext` (`Response |
+((response: Response) => Promise<Response>) | undefined`) — the old
+single-slot middleware contract. The new v1.0 `ForwardHook` contract (used by
+`onRequest`/`beforeRoute`) only allows `Response | void | undefined` — no
+function-returning branch (only `ResponseHook`, for `afterRoute`/
+`mapResponse`, allows that). Confirmed reproducible: `export const onRequest:
+GlobalHooks['onRequest'] = [cors()];` — literally the pattern the CLI's own
+`generate cors`-style "How to Use" output and the `ecosystem-hooks` *example*
+(`examples/ecosystem-hooks/src/hooks.ts`) both show — fails `tsc --noEmit`
+with a real type error. It does **not** fail `bun test`/`bun run dev`
+(Bun strips types at runtime, and the framework example doesn't explicitly
+annotate its `onRequest`/`beforeRoute` exports against `GlobalHooks`, so
+inference quietly papers over the mismatch there) — but any TypeScript user
+who explicitly types their hook exports, exactly as the CLI's own scaffold
+teaches for `beforeRoute`, hits this. `jwt-auth` (a *plugin*, not a hook) is
+correctly migrated (`beforeRoute: async (ctx): Promise<void> => {...}`) — so
+this is isolated to the `ecosystem/hooks/` directory, not `ecosystem/plugins/`.
+Given `cors` needs both a preflight-short-circuit (forward hook) and a
+response-header-injection (response hook) in the new model, this likely needs
+a real split/rewrite, not a type-only patch.
+
+#### P2 — CLI `add` output emits an invalid JS identifier
+
+`packages/cli/src/commands/add.ts:155` and `:176`: `name.charAt(0).toUpperCase()
++ name.slice(1)` naively capitalizes the raw package name for the "How to
+Use" snippet. For any hyphenated name (`jwt-auth`, `api-key`, `basic-auth`)
+this produces `Jwt-auth`, `Api-key`, `Basic-auth` — not valid JS identifiers,
+and not the actual exported symbol (`jwtAuth`, camelCase). Repro:
+`burger-api add jwt-auth` → printed instructions say `import { Jwt-auth }
+from "./ecosystem/plugins/jwt-auth/jwt-auth"` and `burger.usePlugin(Jwt-auth)`
+— both syntax errors if pasted verbatim. Real fix requires a hyphen→camelCase
+conversion, not just `.toUpperCase()` on the first character.
+
+#### P2 — dev server doesn't pick up brand-new route directories
+
+Confirmed and isolated cleanly: editing an **existing** route file while
+`bun run dev` is running triggers a restart (log shows a second "Server
+running on..." line, and the edit is reflected). Creating a **brand-new**
+route directory (e.g. via `burger-api generate route <name>` while `dev` is
+already running, or by hand) does **not** — no restart log line, the new
+route 404s until the dev process is manually killed and restarted. Given
+`generate route` is the CLI's own recommended workflow and is documented to
+work alongside a running dev server, this is a real, reproducible DX papercut
+worth fixing, though not release-blocking (workaround: restart `dev` after
+scaffolding a new route).
+
+#### P2 — scaffolded `src/index.ts` doesn't wire `pageDir`/`wsDir` for dev
+
+The generated `src/index.ts` only passes `apiDir` to `new Burger({...})`.
+`burger.build.ts` (used for `pageDir`/`wsDir`/etc. at **build** time) is
+never read by `dev` mode — `packages/cli/src/commands/dev.ts` just does
+`bun --watch <entry>`, and the entry file itself must manually list every
+dir. A fresh scaffold cannot serve pages or file-based WebSocket routes in
+dev until the user manually edits `src/index.ts` to add `pageDir`/`wsDir` —
+there's no automatic sync between `burger.build.ts` (single documented
+source of truth per its own top comment) and the dev entry point. Not a bug
+per se, but a real first-five-minutes trap; worth at least a scaffold
+comment or doc callout.
+
+#### Confirmed working correctly (no issues)
+
+- **Scaffold sanity**: `create --lang ts` and `--lang js` both produce sane,
+  complete projects (route/schema/openapi/hooks/config generation via
+  `generate route` all present and correctly shaped); `bun install` +
+  `bun run typecheck` clean on a fresh TS scaffold.
+- **Routing**: static, `[param]`, `[...]` wildcard, `(group)` routes, 405 +
+  `Allow`, auto-HEAD (empty body, headers preserved), loose trailing slash,
+  404 — all correct in dev.
+- **Validation + OpenAPI**: a `POST` with a bad body correctly 422s in RFC
+  9457 `problem+json` shape (`type`/`title`/`status`/`detail`/`errors`); the
+  generated `/openapi.json` document correctly reflects the route's body and
+  response schemas, including the 201 response shape. Docs UI serves at
+  `/docs` (200).
+- **jwt-auth plugin**: correctly enforces on routes without `config.ts`,
+  correctly *would* skip on routes with `auth: false` if that value actually
+  reached `ctx.config` (dev mode: confirmed working end-to-end, 401 without a
+  token / 200 on the `auth:false` route; broken only in prod per the P0 above).
+  Secret-length validation (`< 32 bytes` throws at startup) works as designed.
+- **WebSocket, file-based**: once correctly placed under `src/websocket/<name>/route.ts`
+  (see P2 naming note below) with `wsDir` wired into `src/index.ts`, `open`/
+  `message`/`sendText` all work over a real `ws://` connection — echoed
+  messages round-tripped correctly. (`ws.sendText()` — the Phase 4 audit's P0
+  doc-fix item — is confirmed real and working, consistent with that finding.)
+- **Pages**: both `.html` and `.tsx` pages work (`.tsx` pages are plain
+  handler functions that return a `Response` directly — not React/JSX SSR;
+  my first attempt wrongly assumed SSR and returned a JSX element instead of
+  a `Response`, which is a real footgun for anyone reasoning by analogy to
+  React frameworks, but not a framework bug — the repo's own
+  `examples/page-routing/src/pages/blog/[slug]/index.tsx` shows the correct
+  pattern). Static assets under `<pageDir>/assets/` serve correctly.
+- **Dev/prod parity**: confirmed identical for every route *except* the
+  `config.ts` case above — status codes, headers, and auto-HEAD/405 behavior
+  all matched between `bun run dev` and `bun run build && bun run start`.
+- **WinterCG — Deno**: real `deno run` boot (Deno 2.9.6, installed this
+  session) against the local build's `dist/src/index.js` via `toFetchHandler()`
+  — `zod` resolved via `deno add npm:zod`, then `/api/hello`, `/api/users/:id`,
+  and a 404 case all returned correct results. Confirmed working.
+- **WinterCG — Cloudflare**: `wrangler dev` (4.129.0, installed this session)
+  correctly identifies that the default build needs `nodejs_compat` (dev-only
+  filesystem-scanning code — `compiler/scanner.ts`, `core/page-router.ts`,
+  `ws/scanner.ts` — gets bundled into the same graph as `toFetchHandler()`
+  even though a WinterCG `apiRoutes`-only app never calls it, pulling in
+  Node's `path`/`fs`). Once that flag is added, hits the P0 crash above. Not
+  re-tested after a hypothetical fix to the P0 (no code change made this
+  phase) — flagging both findings together since a full "Cloudflare works"
+  verification needs the P0 fixed first.
+- **npm install of the actual tarball — the most important single check**:
+  `npm pack` on `packages/burger-api` produces a clean 139.9 kB tarball
+  (`package/{LICENSE,package.json,README.md,dist/**}` only — no `src`
+  leaks). Installed via `npm install <tarball>` into a bare scratch project
+  (`"type": "module"`, no other deps) and ran a real app against it under
+  **stock Node** (`node app.mjs`, no bundler, no loader): `toFetchHandler()`
+  → `200 {"ok":true}`. This is the direct proof that the Phase 2 Node-ESM fix
+  solves the exact problem this whole release effort exists to close.
+  `packages/cli`'s tarball (`npm pack --dry-run`) is 57.6 kB of raw TS
+  source (by design — `bin` points straight at `src/index.ts`, run via Bun's
+  shebang, no build step) — that's the intended shape, not a bug.
+- **`examples/` review**: `packages/burger-api/examples/` (not a top-level
+  `examples/` dir — the original audit's path was slightly off) has 26
+  example projects; `bun run test:examples` → **181 pass / 0 fail** against
+  the local build. `examples/production-app` is in good shape (real
+  convention usage, has a passing `api.test.ts`). **Correction to the
+  original audit**: `examples/test-utils/example-server.ts` is *not* "a
+  single stub file" today — it's a substantial, load-bearing shared test
+  harness (spawn + health-check + teardown for a real subprocess server),
+  actively imported by 22 of the 26 example test files. That audit note is
+  stale.
+
+#### Sequencing note for Phase 6
+
+Given the P1 finding above, **Phase 6's release-execution order needs
+revising**: merging `feat/burger-api-v1` → `main` cannot be a post-publish
+step (as currently listed) if `burger-api add`/`list`/`skills install` are
+meant to work for day-one v1.0.0 users. Recommend moving the merge to
+before (or concurrent with) the npm publish step, or explicitly documenting
+that ecosystem hooks/plugins are unavailable until the merge lands.
+
+#### Both P0s fixed and independently re-verified same session
+
+1. **Cloudflare-crash fix**: deleted the dead `METHOD_NOT_ALLOWED` module-top-level
+   `Response` constant from `packages/burger-api/src/utils/response.ts` (confirmed
+   zero live references repo-wide first — the only other hit was a stale, already-
+   committed pre-session `.edge-build` bundle artifact under
+   `examples/deploy-cloudflare/`, unrelated to source). Full framework suite still
+   766/766 after removal; typecheck clean.
+2. **`config.ts` unwrap fix**: `packages/cli/src/utils/virtual-entry.ts` line ~182
+   now emits `config: _c${i}.default ?? _c${i}` (mirrors the WS-route path's
+   existing `_wc${i}.default ?? _wc${i}` pattern two lines below it). Added a
+   regression test (`packages/cli/test/virtual-entry.test.ts`) asserting the
+   generated source contains the unwrap and not the bare-namespace form. Manually
+   re-reproduced the fork's exact repro end-to-end with the fix applied: fresh
+   scaffold → route with `config.ts` (`auth: false`) gating logic in `hooks.ts` →
+   `bun run build && bun run start` → `curl /api/gate` → `{"gated":false}` (was
+   the bug's symptom — `{"gated":true}` / ctx.config.auth undefined — before the
+   fix). CLI suite: 149 pass / 2 skip / 1 fail (same pre-existing flaky
+   `scaffold-e2e.test.ts` case from Phase 1, unrelated, not a new regression).
+
+**Not fixed this session (logged for a later pass, none release-blocking on
+their own but worth doing before or shortly after 1.0.0):**
+- Ecosystem hooks (P1) typed against pre-1.0 `BurgerNext` — needs a real
+  forward/response-hook split for `cors` at minimum, not a type-only patch.
+- CLI `add` output's hyphen→PascalCase identifier bug (P2, trivial fix, just
+  not yet done).
+- Dev server not watching brand-new route directories (P2, needs the file
+  watcher's glob/ignore config investigated).
+- Scaffold not wiring `pageDir`/`wsDir` into dev's `src/index.ts` (P2, scaffold
+  template change or a doc callout).
+- Branch-default sequencing for `add`/`list`/`skills install` (P1, a Phase 6
+  process change, not a code change — see above).
+
+**Incidental cleanup done while verifying the fixes**: the Phase 3 fork's
+testing left a bloated recursive `node_modules` under
+`examples/deploy-cloudflare/` (gitignored, disk-only, deleted) and re-created
+`packages/burger-api/.tmp-assets-test/` (a `bun test` fixture dir that
+`test/core/assets.test.ts` should clean up in `afterAll` but doesn't reliably
+when run as part of the full suite — deleted manually, logged as a minor,
+non-blocking test-hygiene gap, not investigated further). Also discovered
+while cleaning up: `packages/burger-api/.tmp-assets-test/` was **already
+tracked in git** from a pre-session commit (`66e6a53`, unrelated to this
+release effort) — deleted from the index too, since it's a test-generated
+fixture that should never have been committed.
+
+
