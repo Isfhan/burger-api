@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
@@ -80,6 +80,103 @@ async function bootAndCheck(
     await outReader;
     await errReader;
     return status;
+}
+
+/**
+ * Boots `bun run <script>`, waits for GET `path` to answer, returns its
+ * status and parsed JSON body, then kills the process tree. Returns
+ * `{ status: -1, body: null }` if the server never came up.
+ */
+async function bootAndCheckPath(
+    cwd: string,
+    port: number,
+    script: string,
+    path: string
+): Promise<{ status: number; body: unknown }> {
+    const proc = Bun.spawn(
+        ['bun', 'run', script, '--', '--port', String(port)],
+        { cwd, stdout: 'pipe', stderr: 'pipe' }
+    );
+    const outReader = new Response(proc.stdout).text();
+    const errReader = new Response(proc.stderr).text();
+
+    const deadline = Date.now() + 45_000;
+    let status = -1;
+    let body: unknown = null;
+    while (Date.now() < deadline) {
+        try {
+            const res = await fetch(`http://localhost:${port}${path}`);
+            status = res.status;
+            body = await res.json().catch(() => null);
+            break;
+        } catch {
+            await Bun.sleep(300);
+        }
+    }
+    await killTree(proc.pid);
+    await outReader;
+    await errReader;
+    return { status, body };
+}
+
+/**
+ * Boots `bun run dev`, waits for it to serve GET /api, then creates a
+ * brand-new route directory while dev keeps running (never restarting it
+ * manually) and polls the new route until it serves or a timeout elapses.
+ * Kills the process tree and returns the new route's final status (-1 if
+ * dev never came up at all).
+ *
+ * Regression test for: `bun --watch` only tracks modules already reachable
+ * from the entry's import graph, so a route directory that's never been
+ * imported is invisible to it — a brand-new route silently 404'd until dev
+ * was manually restarted. `dev.ts` now owns its own recursive directory
+ * watcher instead of relying on `--watch` alone.
+ */
+async function bootAddRouteAndCheck(cwd: string, port: number): Promise<number> {
+    const proc = Bun.spawn(['bun', 'run', 'dev', '--', '--port', String(port)], {
+        cwd,
+        stdout: 'pipe',
+        stderr: 'pipe',
+    });
+    const outReader = new Response(proc.stdout).text();
+    const errReader = new Response(proc.stderr).text();
+
+    // Polls until the route answers 200, not just until it answers at all —
+    // a brand-new route legitimately 404s for a while before the watcher's
+    // restart lands, and that transient 404 is exactly the case under test.
+    const waitFor = async (path: string, deadlineMs: number): Promise<number> => {
+        const deadline = Date.now() + deadlineMs;
+        let lastStatus = -1;
+        while (Date.now() < deadline) {
+            try {
+                const res = await fetch(`http://localhost:${port}${path}`);
+                lastStatus = res.status;
+                if (lastStatus === 200) return lastStatus;
+            } catch {
+                // not up yet
+            }
+            await Bun.sleep(300);
+        }
+        return lastStatus;
+    };
+
+    let finalStatus = -1;
+    const readyStatus = await waitFor('/api', 45_000);
+    if (readyStatus === 200) {
+        const routeDir = join(cwd, 'src', 'api', 'brand-new-route');
+        const { mkdir, writeFile: writeFileP } = await import('fs/promises');
+        await mkdir(routeDir, { recursive: true });
+        await writeFileP(
+            join(routeDir, 'route.ts'),
+            'export const GET = () => Response.json({ fresh: true });\n'
+        );
+        finalStatus = await waitFor('/api/brand-new-route', 20_000);
+    }
+
+    await killTree(proc.pid);
+    await outReader;
+    await errReader;
+    return finalStatus;
 }
 
 /**
@@ -177,6 +274,76 @@ describe('E2E scaffold — TypeScript', () => {
                 'start'
             );
             expect(startStatus).toBe(200);
+        },
+        E2E_TIMEOUT
+    );
+
+    it(
+        'dev picks up a brand-new route directory without a manual restart',
+        async () => {
+            const dir = trackDir(await scaffoldProject('e2e-newroute', 'ts'));
+            const status = await bootAddRouteAndCheck(
+                dir,
+                await getAvailablePort()
+            );
+            expect(status).toBe(200);
+        },
+        E2E_TIMEOUT
+    );
+
+    it(
+        'a route with config.ts behaves identically in dev and in build+start',
+        async () => {
+            // Regression test for the P0 found in Phase 3: config.ts's
+            // default export reached the route as a raw module namespace
+            // ({ default: {...} }) in production builds only, so
+            // `ctx.config.auth` was always undefined after `build && start`
+            // even though the same route worked correctly in `dev`. This
+            // route's hook makes that divergence directly observable in the
+            // response body, not just the status code.
+            const dir = trackDir(await scaffoldProject('e2e-config', 'ts'));
+            const routeDir = join(dir, 'src', 'api', 'gate');
+            await mkdir(routeDir, { recursive: true });
+            await writeFile(
+                join(routeDir, 'route.ts'),
+                "export const GET = () => Response.json({ ok: true });\n"
+            );
+            await writeFile(
+                join(routeDir, 'config.ts'),
+                "import type { RouteConfig } from 'burger-api';\n" +
+                    'export default { auth: false } satisfies RouteConfig;\n'
+            );
+            await writeFile(
+                join(routeDir, 'hooks.ts'),
+                "import type { BurgerContext } from 'burger-api';\n" +
+                    'export const beforeRoute = (ctx: BurgerContext) =>\n' +
+                    '    Response.json({ gated: ctx.config?.auth !== false });\n'
+            );
+
+            const dev = await bootAndCheckPath(
+                dir,
+                await getAvailablePort(),
+                'dev',
+                '/api/gate'
+            );
+            expect(dev.status).toBe(200);
+            expect(dev.body).toEqual({ gated: false });
+
+            const build = await run(['bun', 'run', 'build'], dir);
+            expect(build.code).toBe(0);
+
+            const prod = await bootAndCheckPath(
+                dir,
+                await getAvailablePort(),
+                'start',
+                '/api/gate'
+            );
+            expect(prod.status).toBe(200);
+            // The regression: this used to come back `{ gated: true }` in
+            // production because config.ts's default export never reached
+            // ctx.config there.
+            expect(prod.body).toEqual({ gated: false });
+            expect(prod.body).toEqual(dev.body);
         },
         E2E_TIMEOUT
     );
