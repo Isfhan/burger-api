@@ -204,7 +204,7 @@ describe('toFetchHandler — runtime independence', () => {
         const res = await handler(
             req('/api/products'),
             { CF_ENV: 'test' },
-            new Map()
+            { waitUntil: () => {} }
         );
         expect(res.status).toBe(200);
     });

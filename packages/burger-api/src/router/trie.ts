@@ -129,6 +129,28 @@ export class Trie {
         return m ? m.methods : null;
     }
 
+    /**
+     * Emits every registered pattern in strict match-priority order.
+     *
+     * The traversal is a pre-order DFS following the same per-node priority
+     * the matcher uses — static children (insertion order), then the
+     * `:param` subtree, then the `*` wildcard subtree — so for any request
+     * path, the first emitted pattern that can match it is exactly the
+     * pattern the trie would select. This is the authoritative ordering
+     * source for the RegExp matcher (`regex-matcher.ts`).
+     */
+    orderedPatterns(): string[] {
+        const out: string[] = [];
+        const visit = (node: DynTrieNode): void => {
+            if (node.handler && node.pattern) out.push(node.pattern);
+            for (const child of node.children.values()) visit(child);
+            if (node.paramChild) visit(node.paramChild);
+            if (node.wildcardChild) visit(node.wildcardChild);
+        };
+        visit(this.root);
+        return out;
+    }
+
     private descend(
         node: DynTrieNode,
         segments: string[],

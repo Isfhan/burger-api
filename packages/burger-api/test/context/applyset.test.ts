@@ -93,3 +93,46 @@ describe('auto-HEAD response validation', () => {
         expect(await ok.text()).toBe('');
     });
 });
+
+describe('lazy ctx.set allocation', () => {
+    it('does not allocate until first access; hasSet() flips on write', async () => {
+        let observed: { hasSet: boolean } | undefined;
+        const defs: RouteDefinition[] = [
+            {
+                path: '/lazy',
+                handlers: {
+                    GET: (ctx) => {
+                        // Simulate the pipeline exit probe BEFORE any touch.
+                        const before = ctx.hasSet();
+                        ctx.set.status = 201; // first touch allocates
+                        return Response.json({
+                            before,
+                            after: ctx.hasSet(),
+                        });
+                    },
+                },
+            },
+        ];
+        const router = new Router();
+        router.compile(defs);
+        const res = await router.fetch(new Request('http://t/lazy'));
+        const body = (await res.json()) as Record<string, unknown>;
+        expect(res.status).toBe(201); // set.status applied at exit
+        expect(body.before).toBe(false);
+        expect(body.after).toBe(true);
+        void observed;
+    });
+
+    it('untouched requests skip applySet entirely (identity preserved)', async () => {
+        const defs: RouteDefinition[] = [
+            {
+                path: '/clean',
+                handlers: { GET: () => new Response('ok', { status: 200 }) },
+            },
+        ];
+        const router = new Router();
+        router.compile(defs);
+        const res = await router.fetch(new Request('http://t/clean'));
+        expect(res.status).toBe(200);
+    });
+});

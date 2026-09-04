@@ -1,4 +1,8 @@
-import type { BurgerContext } from '../context/context';
+import type {
+    BurgerContext,
+    BurgerEnv,
+    BurgerExecutionContext,
+} from '../context/context';
 import type { SchemaInput, ValidatorConfig } from '../validation/types';
 import type { RouteHooks, TransformMap } from '../lifecycle/types';
 export type { RouteHooks, TransformMap } from '../lifecycle/types';
@@ -112,6 +116,24 @@ export interface ServerOptions {
     validation?: ValidatorConfig;
 
     /**
+     * JIT-compile each route's HookPlan into a single async function
+     * (Fastify-style codegen). ON by default (+3% measured on hook-carrying
+     * routes, burger-api-benchmarks `optimize/hooks-*`). Capability-probed
+     * at startup: runtimes that forbid dynamic code generation (Cloudflare
+     * Workers) silently keep the interpreter. Set `false` to opt out.
+     */
+    jit?: boolean;
+
+    /**
+     * Dynamic-route dispatch engine for the fetch-fallback path.
+     * `'auto'` (default) and `'trie'` use the radix trie — the measured
+     * winner (burger-api-benchmarks `optimize/many-*`). `'regex'` opts into
+     * the Hono-style compiled alternation matcher. Static dispatch is
+     * unaffected.
+     */
+    engine?: 'auto' | 'regex' | 'trie';
+
+    /**
      * OpenAPI configuration for production builds. When using pre-built
      * `apiRoutes`, the convention file cannot be discovered from the filesystem,
      * so the config must be passed here. In dev mode, `openapi.config.ts` is
@@ -182,8 +204,22 @@ export type RequestHandler = (
  */
 export type FetchHandler = (
     request: Request,
-    server?: ServerInfo
+    server?: ServerInfo,
+    env?: BurgerEnv,
+    executionCtx?: BurgerExecutionContext
 ) => Promise<Response> | Response;
+
+/**
+ * The handler returned by `burger.fetchHandler()` and wrapped by
+ * `toFetchHandler(burger)`: a Web-Standard dispatch entry that accepts the
+ * platform bindings (`env`, `executionCtx`) supplied by WinterCG runtimes
+ * (Cloudflare Workers, Vercel, Deno, Node 24+). On Bun both are `undefined`.
+ */
+export type EnvFetchHandler = (
+    request: Request,
+    env?: BurgerEnv,
+    executionCtx?: BurgerExecutionContext
+) => Promise<Response>;
 
 export interface RouteDefinition {
     /**

@@ -11,8 +11,21 @@ import type {
 } from './types';
 import { BurgerWSContext } from './types';
 import { BurgerContext } from '../context/context';
+import type {
+    BurgerEnv,
+    BurgerExecutionContext,
+} from '../context/context';
 import type { TransformMap } from '../lifecycle/types';
 import { applyTransform } from '../lifecycle/transform';
+import {
+    acceptWsUpgrade,
+    detectWsPlatform,
+    normalizeWsMessage,
+    type NodeWsBridge,
+    type NodeWsBridgeOptions,
+    type WsEventSink,
+    type WsUpgradeOutcome,
+} from './platform';
 
 /**
  * WebSocket adapter options
@@ -276,61 +289,173 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Create the fetch handler for WebSocket upgrade
+     * Handles a possibly-WebSocket request.
+     *
+     * This is THE entry point for WebSocket handling on every runtime. It
+     * detects the platform, matches the route, runs the auth gate, performs
+     * the protocol handoff, and returns an explicit outcome so callers can
+     * never confuse "not an upgrade" with "socket taken over" (the legacy
+     * `undefined`-on-success signal that caused post-upgrade HTTP
+     * fall-through).
+     *
+     * @param request incoming request (upgrade or normal)
+     * @param server Bun serve handle when running under `Bun.serve`
+     * @param env platform bindings (bound onto the temporary auth context)
+     */
+    async handleUpgrade(
+        request: Request,
+        server?: unknown,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<WsUpgradeOutcome> {
+        const upgradeHeader = request.headers.get('upgrade');
+        if (upgradeHeader?.toLowerCase() !== 'websocket') {
+            return { handled: false };
+        }
+
+        // Extract path from URL and match against the WS router
+        const url = new URL(request.url);
+        const match = this.router.match(url.pathname);
+        if (!match) {
+            return {
+                handled: true,
+                response: new Response('WebSocket route not found', {
+                    status: 404,
+                }),
+            };
+        }
+
+        // Run auth hooks before upgrade
+        const routeConfig = match.route.config;
+        const authResult = await this.runAuthHooks(
+            request,
+            routeConfig,
+            env,
+            executionCtx
+        );
+        if (authResult.response) {
+            return { handled: true, response: authResult.response };
+        }
+
+        // Attach matched route with resolved params and user to the socket
+        const upgradeData: Record<string, unknown> = {
+            route: { ...match.route, params: match.params },
+        };
+        if (authResult.user !== undefined) {
+            upgradeData.user = authResult.user;
+        }
+
+        const platform = detectWsPlatform(server);
+        if (platform === 'node') {
+            return this.nodeFetchUpgradeUnsupported();
+        }
+
+        const response = acceptWsUpgrade({
+            platform,
+            request,
+            server,
+            data: upgradeData,
+            events: this.eventSink(),
+        });
+        return { handled: true, response };
+    }
+
+    /**
+     * Node cannot complete a WebSocket handshake inside a fetch handler —
+     * surface an explicit 501 with remediation instead of a thrown error.
+     */
+    private nodeFetchUpgradeUnsupported(): WsUpgradeOutcome {
+        return {
+            handled: true,
+            response: new Response(
+                'WebSocket upgrades on Node require burger.createNodeWsBridge(...) ' +
+                    "wired to node:http's 'upgrade' event.",
+                { status: 501 }
+            ),
+        };
+    }
+
+    /** Shared event sink pushed into by non-Bun platforms. */
+    private eventSink(): WsEventSink {
+        return {
+            onOpen: (raw) => this.handleOpen(raw),
+            onMessage: (raw, message) => this.handleMessage(raw, message),
+            onClose: (raw, code, reason) =>
+                this.handleClose(raw, code, reason),
+        };
+    }
+
+    /**
+     * Legacy fetch-shaped wrapper around {@link handleUpgrade}.
+     *
+     * Returns `undefined` for BOTH "not an upgrade" and "Bun took over the
+     * socket" — callers needing the distinction must use `handleUpgrade`.
+     * Kept for backward compatibility with existing integrations.
      */
     createFetchHandler() {
-        const self = this;
-
         return async (
             request: Request,
-            // Platform boundary: the upgrade `server` handle is Bun's
-            // `Server` (Bun.serve return). Core stays WinterCG-pure, so the
-            // type is intentionally opaque here and only used structurally
-            // (calls `server.upgrade(...)`) by the Bun adapter at runtime.
-            server: any
+            server?: unknown
         ): Promise<Response | undefined> => {
-            // Check if this is a WebSocket upgrade request
-            const upgradeHeader = request.headers.get('upgrade');
-            if (upgradeHeader?.toLowerCase() !== 'websocket') {
-                return undefined;
-            }
+            const outcome = await this.handleUpgrade(request, server);
+            return outcome.handled ? outcome.response : undefined;
+        };
+    }
 
-            // Extract path from URL
-            const url = new URL(request.url);
-            const path = url.pathname;
-
-            // Match route
-            const match = self.router.match(path);
-            if (!match) {
-                return new Response('WebSocket route not found', {
-                    status: 404,
+    /**
+     * Node integration: bridges node:http's `'upgrade'` event into the
+     * framework pipeline using a framing library's `WebSocketServer`
+     * (e.g. the `ws` package) — Node has no fetch-native WebSocket upgrade.
+     *
+     * ```ts
+     * import http from 'node:http';
+     * import { WebSocketServer } from 'ws';
+     * import { Burger, toFetchHandler } from 'burger-api';
+     *
+     * const bridge = burger.createNodeWsBridge({ WebSocketServer });
+     * http.createServer((req, res) => toFetchHandler(burger)(req))
+     *     .on('upgrade', (req, socket, head) => bridge.handleUpgrade(req, socket, head))
+     *     .listen(3000);
+     * ```
+     */
+    createNodeWsBridge(options: NodeWsBridgeOptions): NodeWsBridge {
+        const wss = new options.WebSocketServer({ noServer: true });
+        const adapter = this;
+        return {
+            async handleUpgrade(req, socket, head): Promise<void> {
+                const raw = req as {
+                    url?: string;
+                    headers: Record<
+                        string,
+                        string | string[] | undefined
+                    >;
+                };
+                const host = String(raw.headers.host ?? 'localhost');
+                const request = new Request(`http://${host}${raw.url ?? '/'}`);
+                const outcome = await adapter.handleUpgrade(request);
+                if (!outcome.handled || outcome.response) {
+                    // Not an upgrade, unmatched route, or auth rejection —
+                    // destroy the raw socket; there is no Response channel.
+                    (socket as { destroy?(): void }).destroy?.();
+                    return;
+                }
+                wss.handleUpgrade(req, socket, head, (ws) => {
+                    ws.on('message', (...args: never[]) => {
+                        void adapter.handleMessage(
+                            ws,
+                            normalizeWsMessage(args[0])
+                        );
+                    });
+                    ws.on('close', (...args: never[]) => {
+                        void adapter.handleClose(
+                            ws,
+                            (args[0] as unknown as number) ?? 1005,
+                            (args[1] as unknown as string) ?? ''
+                        );
+                    });
+                    void adapter.handleOpen(ws);
                 });
-            }
-
-            // Run auth hooks before upgrade
-            const routeConfig = match.route.config;
-            const authResult = await self.runAuthHooks(request, routeConfig);
-            if (authResult.response) {
-                return authResult.response;
-            }
-
-            // Upgrade the request — attach matched route with resolved params and user
-            const upgradeData: Record<string, unknown> = {
-                route: { ...match.route, params: match.params },
-            };
-            if (authResult.user !== undefined) {
-                upgradeData.user = authResult.user;
-            }
-
-            const upgraded = server.upgrade(request, {
-                data: upgradeData,
-            });
-
-            if (upgraded) {
-                return undefined; // Bun automatically returns 101 Switching Protocols
-            }
-
-            return new Response('WebSocket upgrade failed', { status: 500 });
+            },
         };
     }
 
@@ -358,10 +483,14 @@ export class WebSocketAdapter {
     /**
      * Run auth hooks during WebSocket upgrade request.
      * Returns a Response if auth fails, or undefined if auth succeeds.
+     * Platform `env` / `executionCtx` are bound onto the temporary context
+     * so transform hooks can read bindings (e.g. JWT secrets from `env`).
      */
     private async runAuthHooks(
         request: Request,
-        routeConfig?: WebSocketConfig
+        routeConfig?: WebSocketConfig,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
     ): Promise<{ response?: Response; user?: unknown }> {
         // No auth plugins registered — skip
         if (
@@ -377,7 +506,9 @@ export class WebSocketAdapter {
             {},
             undefined,
             this.providers,
-            routeConfig as Record<string, unknown> | undefined
+            routeConfig as Record<string, unknown> | undefined,
+            env,
+            executionCtx
         );
 
         try {

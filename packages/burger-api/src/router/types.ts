@@ -17,11 +17,18 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
  * router before routing so `onRequest` hooks can seed state). When
  * `prebuilt` is provided, the handler binds it to the matched route instead
  * of allocating a second context — one context per request.
+ *
+ * `env` / `executionCtx` are the platform bindings forwarded from the
+ * serving entry point (`toFetchHandler`); they are bound onto the context
+ * at creation time. When a prebuilt context exists they were already bound
+ * there — passing them again is harmless (bind carries them over).
  */
 export type CompiledHandler = (
     request: Request,
     ctxInit?: ContextInit,
-    prebuilt?: import('../context/context').BurgerContext
+    prebuilt?: import('../context/context').BurgerContext,
+    env?: import('../context/context').BurgerEnv,
+    executionCtx?: import('../context/context').BurgerExecutionContext
 ) => Promise<Response>;
 
 /**
@@ -72,4 +79,23 @@ export interface RouterConfig {
     debug?: boolean;
     /** validation configuration (coercion / response / errors). */
     validation?: ValidatorConfig;
+    /**
+     * Dynamic-route dispatch engine for the `fetch` fallback path.
+     * - `'auto'` (default) and `'trie'`: the radix trie — measured
+     *   equal-or-faster than the compiled alternation (see
+     *   burger-api-benchmarks `optimize/many-*`).
+     * - `'regex'`: opt-in Hono-style RegExp matcher (trie-ordered, parity-
+     *   tested in test/router/regex-parity.test.ts); falls back to the trie
+     *   if its build bails out.
+     *
+     * Static routes are unaffected — they never reach this dispatch.
+     */
+    engine?: 'auto' | 'regex' | 'trie';
+    /**
+     * JIT-compile each route's HookPlan into one async function
+     * (`lifecycle/jit.ts`). ON by default — capability-probed per process;
+     * runtimes without dynamic codegen silently keep the interpreter.
+     * Set `false` to force the interpreter everywhere.
+     */
+    jit?: boolean;
 }

@@ -7,7 +7,7 @@ import { Burger } from '../../src/index';
 import { executeHookPlan } from '../../src/lifecycle/executor';
 import type { HookPlan } from '../../src/lifecycle/types';
 import { BurgerContext } from '../../src/context/context';
-import type { FetchHandler } from '../../src/types/index';
+import type { EnvFetchHandler } from '../../src/types/index';
 
 const throwingRoutes = [
     {
@@ -36,7 +36,7 @@ const throwingRoutes = [
     },
 ];
 
-let handler: FetchHandler;
+let handler: EnvFetchHandler;
 
 beforeAll(async () => {
     const burger = new Burger({

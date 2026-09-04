@@ -17,6 +17,9 @@ const RESERVED = new Set([
     'route',
     'request',
     'services',
+    'config',
+    'env',
+    'executionCtx',
     '_raw',
     '_ctxInit',
     '_query',
@@ -26,6 +29,12 @@ const RESERVED = new Set([
     'constructor',
     'prototype',
 ]);
+
+/**
+ * Keys a `transform` factory may never claim — built-ins plus prototype
+ * hazards. Exported so the JIT compiler shares the exact same guard.
+ */
+export const TRANSFORM_RESERVED = RESERVED;
 
 /**
  * Applies `transform` factories onto a context instance.

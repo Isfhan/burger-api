@@ -50,6 +50,31 @@ export interface BurgerValidated {
 }
 
 /**
+ * Module augmentation target for deployment-platform bindings (`ctx.env`).
+ * Populated by the serving entry point (`toFetchHandler(burger)` on WinterCG
+ * targets receives the platform `env`; Bun leaves it `undefined`):
+ *
+ * ```ts
+ * declare module "burger-api" {
+ * interface BurgerEnv {
+ * MY_DB: D1Database;
+ * SECRETS: { apiKey: string };
+ * }
+ * }
+ * ```
+ */
+export interface BurgerEnv {}
+
+/**
+ * Minimal structural view of a platform execution context (the third
+ * argument of a WinterCG `fetch(request, env, ctx)` handler). Only
+ * `waitUntil` is modeled — the one capability portable code relies on.
+ */
+export interface BurgerExecutionContext {
+    waitUntil(promise: Promise<unknown>): void;
+}
+
+/**
  * Module augmentation target for adding custom properties to BurgerContext.
  * Use this to type request-scoped values set in `transform` hooks:
  *
@@ -151,11 +176,29 @@ export class BurgerContext<TRoute = unknown> {
         : (InferValidated<TRoute> & BurgerValidated) | undefined;
 
     /**
-     * The response-mutation object exposed through `ctx.set`. Mutable instance
-     * state; merged into the response by `applySet` at the pipeline exit.
-     * `cookies` is reserved for a future release.
+     * The response-mutation object exposed through `ctx.set`. Allocated
+     * LAZILY on first access — the overwhelming majority of requests never
+     * mutate the response, so this saves one allocation plus the exit-time
+     * `applySet` scan per request. Merged into the response by `applySet`
+     * at the pipeline exit; `cookies` is reserved for a future release.
+     *
+     * Hot-path check: `hasSet()` is the O(1) "did anything mutate" probe
+     * used by the pipeline exit instead of scanning a candidate object.
      */
-    set: ContextSet = Object.create(null);
+    private _set?: ContextSet;
+
+    /** True once anything touched `ctx.set` (lazy allocation marker). */
+    hasSet(): boolean {
+        return this._set !== undefined;
+    }
+
+    get set(): ContextSet {
+        return (this._set ??= Object.create(null) as ContextSet);
+    }
+
+    set set(value: ContextSet) {
+        this._set = value;
+    }
 
     /**
      * Injected application services. Populated by `burger.provide()`.
@@ -179,6 +222,19 @@ export class BurgerContext<TRoute = unknown> {
     private _config?: RouteConfig;
 
     /**
+     * Deployment-platform bindings (`env.MY_KV`, secrets, …). Populated by
+     * the serving entry point when the platform provides them; `undefined`
+     * on runtimes without bindings (e.g. plain Bun `serve()`).
+     */
+    private _env?: BurgerEnv;
+
+    /**
+     * Platform execution context (`waitUntil` and friends). Same lifecycle
+     * as `_env`: provided by the entry point, carried across re-binding.
+     */
+    private _executionCtx?: BurgerExecutionContext;
+
+    /**
      * The single context creation entry point. Thin static method on
      * `BurgerContext` (not a separate factory class) so there is exactly one
      * obvious allocation site.
@@ -192,7 +248,9 @@ export class BurgerContext<TRoute = unknown> {
         ctxInit?: ContextInit,
         _meta?: RouteAccessInfo,
         providers?: Map<string, unknown>,
-        config?: RouteConfig | Record<string, unknown>
+        config?: RouteConfig | Record<string, unknown>,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
     ): BurgerContext {
         const ctx = new BurgerContext();
         ctx._raw = raw;
@@ -200,12 +258,14 @@ export class BurgerContext<TRoute = unknown> {
         ctx._query = undefined;
         ctx._cookies = undefined;
         ctx.validated = undefined;
-        ctx.set = Object.create(null);
+        ctx._set = undefined;
         ctx.services = (
             providers ? Object.fromEntries(providers) : Object.create(null)
         ) as BurgerServices;
         // Route config is opaque user data until `RouteConfig` is augmented.
         ctx._config = config as RouteConfig;
+        ctx._env = env ?? undefined;
+        ctx._executionCtx = executionCtx ?? undefined;
         return ctx;
     }
 
@@ -224,7 +284,9 @@ export class BurgerContext<TRoute = unknown> {
         ctxInit?: ContextInit,
         _meta?: RouteAccessInfo,
         providers?: Map<string, unknown>,
-        config?: RouteConfig | Record<string, unknown>
+        config?: RouteConfig | Record<string, unknown>,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
     ): this {
         this._raw = raw;
         this._ctxInit = ctxInit ?? this._ctxInit;
@@ -235,6 +297,14 @@ export class BurgerContext<TRoute = unknown> {
         }
         if (config !== undefined) {
             this._config = config as RouteConfig;
+        }
+        // Platform bindings carry over from the pre-routing context unless a
+        // fresh value is supplied by the dispatched route.
+        if (env !== undefined) {
+            this._env = env;
+        }
+        if (executionCtx !== undefined) {
+            this._executionCtx = executionCtx;
         }
         return this;
     }
@@ -281,6 +351,23 @@ export class BurgerContext<TRoute = unknown> {
     /** Route-specific configuration from `config.ts`. */
     get config(): RouteConfig | undefined {
         return this._config;
+    }
+
+    /**
+     * Deployment-platform bindings (`env.MY_KV`, secrets, …). Typed via
+     * module augmentation of `BurgerEnv`. `undefined` when the runtime
+     * provides no bindings (plain Bun `serve()`).
+     */
+    get env(): BurgerEnv | undefined {
+        return this._env;
+    }
+
+    /**
+     * Platform execution context (`waitUntil`). `undefined` when the
+     * runtime does not supply one.
+     */
+    get executionCtx(): BurgerExecutionContext | undefined {
+        return this._executionCtx;
     }
 
     // --- Delegated standard `Request` surface (read-only accessors) ---

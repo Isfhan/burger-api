@@ -9,6 +9,7 @@ import {
     applySet,
 } from '../utils/response';
 import { executeHookPlan } from '../lifecycle/executor';
+import { compileJitHookPlan } from '../lifecycle/jit';
 import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types';
 import { HookChain } from '../chain/chain';
 import { flatten } from '../chain/flattener';
@@ -43,10 +44,17 @@ import type {
 export class RouterCompiler {
     private debug?: boolean;
     private config: ValidatorConfig;
+    /** JIT HookPlan compilation (capability-gated, default off). */
+    private jit: boolean;
 
-    constructor(debug?: boolean, config: ValidatorConfig = {}) {
+    constructor(
+        debug?: boolean,
+        config: ValidatorConfig = {},
+        jit = false
+    ) {
         this.debug = debug;
         this.config = config;
+        this.jit = jit;
     }
 
     compile(
@@ -176,7 +184,8 @@ export class RouterCompiler {
                 path,
                 isWildcard,
                 providers,
-                def.config
+                def.config,
+                this.jit
             );
 
             // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
@@ -295,12 +304,40 @@ function buildCompiledHandler(
     pattern: string = '',
     isWildcard: boolean = false,
     providers?: Map<string, unknown>,
-    config?: Record<string, unknown>
+    config?: Record<string, unknown>,
+    jit = false
 ): CompiledHandler {
+    // JIT state: undefined = not yet attempted, null = unavailable/not
+    // worth it, otherwise the compiled dispatcher (lazily built on first
+    // hit so unused routes pay no startup cost).
+    let jitFn:
+        | ((
+              ctx: BurgerContext,
+              handler: RequestHandler,
+              method: string
+          ) => Promise<Response>)
+        | null
+        | undefined;
+    const runPlan = (
+        ctx: BurgerContext,
+        handler: RequestHandler,
+        request: Request
+    ): Promise<Response> => {
+        if (jit) {
+            if (jitFn === undefined) {
+                jitFn = compileJitHookPlan(plan, plan.debug);
+            }
+            const f = jitFn;
+            if (f) return f(ctx, handler, request.method);
+        }
+        return executeHookPlan(ctx, plan, handlers, request);
+    };
     return async (
         request: Request,
         ctxInit?: ContextInit,
-        prebuilt?: BurgerContext
+        prebuilt?: BurgerContext,
+        env?: import('../context/context').BurgerEnv,
+        executionCtx?: import('../context/context').BurgerExecutionContext
     ): Promise<Response> => {
         const method = request.method;
         // `request.method` is a runtime string; the handler map only accepts
@@ -323,27 +360,34 @@ function buildCompiledHandler(
         // is still exactly ONE context per request. `meta` is accepted but
         // ignored at runtime.
         const ctx = prebuilt
-            ? prebuilt.bind(request, resolvedCtxInit, meta, providers, config)
+            ? prebuilt.bind(
+                  request,
+                  resolvedCtxInit,
+                  meta,
+                  providers,
+                  config,
+                  env,
+                  executionCtx
+              )
             : BurgerContext.create(
                   request,
                   resolvedCtxInit,
                   meta,
                   providers,
-                  config
+                  config,
+                  env,
+                  executionCtx
               );
 
         // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
         if (!handler && method === 'HEAD' && handlers.GET) {
             handler = handlers.GET;
-            const response = await executeHookPlan(
-                ctx,
-                plan,
-                handlers,
-                request
-            );
+            const response = await runPlan(ctx, handler, request);
             // Uniform response mutation: apply `ctx.set`,
             // then strip the body from the mutated response.
-            const mutated = applySet(response, ctx.set);
+            const mutated = ctx.hasSet()
+                ? applySet(response, ctx.set)
+                : response;
             return new Response(null, {
                 status: mutated.status,
                 statusText: mutated.statusText,
@@ -355,8 +399,8 @@ function buildCompiledHandler(
             return methodNotAllowed(allow);
         }
 
-        const response = await executeHookPlan(ctx, plan, handlers, request);
-        return applySet(response, ctx.set);
+        const response = await runPlan(ctx, handler, request);
+        return ctx.hasSet() ? applySet(response, ctx.set) : response;
     };
 }
 

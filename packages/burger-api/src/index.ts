@@ -29,10 +29,15 @@ import type {
     RouteDefinition,
     RouteHooks,
     FetchHandler,
+    EnvFetchHandler,
     OpenAPIConfig,
     DocsProvider,
 } from './types/index';
 import type { WebSocketConfig } from './ws/types';
+import type {
+    NodeWsBridge,
+    NodeWsBridgeOptions,
+} from './ws/platform';
 
 export class Burger {
     /**
@@ -477,6 +482,8 @@ export class Burger {
         const router = new Router({
             debug: this.options.debug,
             validation: this.options.validation ?? {},
+            jit: this.options.jit !== false,
+            engine: this.options.engine,
         });
         // M5/M6: resolve plugins and expand macros, then merge both
         // into a single list passed to the compiler. Macro hooks are treated as
@@ -687,7 +694,10 @@ export class Burger {
      * call — never per request.
      *
      * Runtime-agnostic: usable with `Bun.serve`, `Deno.serve`, Vercel,
-     * Cloudflare Workers (`export default { fetch }`), and Node 24+. Pages and
+     * Cloudflare Workers (`export default { fetch }`), and Node 24+. The
+     * platform bindings (`env`, `executionCtx`) forwarded by WinterCG hosts
+     * are bound onto the per-request `BurgerContext` (`ctx.env`,
+     * `ctx.executionCtx`). Pages and
      * WebSocket are Bun-only and are not served by this handler.
      *
      * ```ts
@@ -696,21 +706,58 @@ export class Burger {
      * export default { fetch: toFetchHandler(burger) };
      * ```
      */
-    public async fetchHandler(): Promise<FetchHandler> {
+    public async fetchHandler(): Promise<EnvFetchHandler> {
         await this.processApiRoutes();
+
+        // Prepare WebSocket handling for WinterCG runtimes (Cloudflare /
+        // Deno consume upgrades right here). Bun's `serve()` path wires the
+        // same adapter itself; plain Node needs createNodeWsBridge instead.
+        const hasWsSources =
+            Array.isArray(this.options.wsRoutes) ||
+            this.programmaticWsRoutes.size > 0 ||
+            !!this.wsDir;
+        if (!this.wsAdapter && hasWsSources) {
+            await this.processWebSocketRoutes();
+        }
+        const wsAdapter = this.wsAdapter;
+
         const routes = this.routes;
         const router = this.dynamicRouter;
-        return async (request: Request): Promise<Response> => {
+        return async (
+            request: Request,
+            env?: import('./context/context').BurgerEnv,
+            executionCtx?: import('./context/context').BurgerExecutionContext
+        ): Promise<Response> => {
+            // WebSocket upgrades are consumed before HTTP dispatch.
+            if (
+                wsAdapter &&
+                request.headers.get('upgrade')?.toLowerCase() === 'websocket'
+            ) {
+                const outcome = await wsAdapter.handleUpgrade(
+                    request,
+                    undefined,
+                    env,
+                    executionCtx
+                );
+                if (outcome.handled) {
+                    return (outcome.response ??
+                        new Response(null, { status: 101 })) as Response;
+                }
+            }
             const pathname = new URL(request.url).pathname;
             const handler = routes[pathname];
             if (handler) {
                 return (
                     handler as unknown as (
-                        req: Request
+                        req: Request,
+                        ctxInit?: unknown,
+                        prebuilt?: unknown,
+                        env?: unknown,
+                        executionCtx?: unknown
                     ) => Promise<Response>
-                )(request);
+                )(request, undefined, undefined, env, executionCtx);
             }
-            if (router) return router.fetch(request);
+            if (router) return router.fetch(request, env, executionCtx);
             return this.notFound();
         };
     }
@@ -743,22 +790,24 @@ export class Burger {
 
             // Get WebSocket handlers and fetch handler if adapter is configured
             const wsOptions = this.wsAdapter?.createWebSocketOption();
-            const wsFetchHandler = this.wsAdapter?.createFetchHandler();
+            const wsAdapter = this.wsAdapter;
 
             // Create a combined fetch handler:
             // 1. Try WebSocket upgrade first (if wsAdapter exists)
-            // 2. Fall through to HTTP handler
-            const combinedFetch: FetchHandler = wsFetchHandler
+            // 2. Fall through to HTTP only when the request was NOT consumed.
+            const combinedFetch: FetchHandler = wsAdapter
                 ? async (request, server) => {
-                      // Try WebSocket upgrade (calls server.upgrade internally)
-                      const wsResponse = await wsFetchHandler(
+                      const outcome = await wsAdapter.handleUpgrade(
                           request,
-                          server as any
+                          server
                       );
-                      if (wsResponse !== undefined) {
-                          return wsResponse as Response;
+                      if (outcome.handled) {
+                          // The socket was taken over (Bun hijacks it and
+                          // returns 101 itself) or the platform produced the
+                          // protocol response (404 / auth rejection / 101).
+                          // Either way the HTTP pipeline must NOT run.
+                          return outcome.response as unknown as Response;
                       }
-                      // Not a WebSocket upgrade or upgrade failed — fall through to HTTP
                       return fetchHandler(request);
                   }
                 : fetchHandler;
@@ -785,6 +834,33 @@ export class Burger {
      */
     public getServer(): Server | undefined {
         return this.server;
+    }
+
+    /**
+     * Node WebSocket integration: returns a bridge that plugs the framework
+     * pipeline into node:http's `'upgrade'` event using a framing library's
+     * `WebSocketServer` (e.g. the `ws` package). Requires WebSocket routes
+     * to be configured (`wsDir`, `wsRoutes`, or `burger.websocket()`).
+     *
+     * ```ts
+     * import http from 'node:http';
+     * import { WebSocketServer } from 'ws';
+     *
+     * const bridge = burger.createNodeWsBridge({ WebSocketServer });
+     * http.createServer((req, res) => toFetchHandler(burger)(req, undefined))
+     *     .on('upgrade', (req, socket, head) =>
+     *         bridge.handleUpgrade(req, socket, head))
+     *     .listen(3000);
+     * ```
+     */
+    public createNodeWsBridge(options: NodeWsBridgeOptions): NodeWsBridge {
+        if (!this.wsAdapter) {
+            throw new Error(
+                '[burger-api] createNodeWsBridge requires WebSocket routes ' +
+                    '(wsDir / wsRoutes / burger.websocket()).'
+            );
+        }
+        return this.wsAdapter.createNodeWsBridge(options);
     }
 }
 
@@ -847,7 +923,12 @@ function mergeWsConfig(
 
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context';
-export type { BurgerServices, BurgerValidated } from './context/context';
+export type {
+    BurgerServices,
+    BurgerValidated,
+    BurgerEnv,
+    BurgerExecutionContext,
+} from './context/context';
 
 // Export utils used by examples and CLI build pipeline
 export { setDir } from './utils/index';
@@ -896,6 +977,7 @@ export type {
     RouteConfig,
     BuildConfig,
     FetchHandler,
+    EnvFetchHandler,
     PageDefinition,
     openapi,
     OpenAPIMeta,

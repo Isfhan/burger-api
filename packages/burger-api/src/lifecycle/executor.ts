@@ -111,7 +111,7 @@ export async function executeHookPlan(
  * response. `ValidationError` retains its structured error format for backward
  * compatibility. Unknown errors are wrapped in `HTTPError(500)`.
  */
-async function dispatchOnError(
+export async function dispatchOnError(
     error: unknown,
     onErrorHooks: ErrorHook[],
     ctx: BurgerContext,

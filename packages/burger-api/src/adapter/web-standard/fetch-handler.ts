@@ -25,16 +25,27 @@
  */
 
 import type { Burger } from '../../index';
-import type { FetchHandler } from '../../types/index';
+import type { EnvFetchHandler } from '../../types/index';
+import type {
+    BurgerEnv,
+    BurgerExecutionContext,
+} from '../../context/context';
 
 /**
  * The portable entry shape: a Web-Standard `Request` in, a `Response` out.
- * `env` is accepted and ignored so platform bindings (Workers env, etc.)
- * can pass their environment through without ceremony.
+ *
+ * `env` and `executionCtx` are the second/third arguments a WinterCG host
+ * supplies (`fetch(request, env, ctx)` — Cloudflare Workers, Vercel Edge,
+ * Deno Deploy). They are bound onto every per-request `BurgerContext`
+ * (`ctx.env`, `ctx.executionCtx`) so handlers access platform bindings
+ * uniformly across runtimes. Extra positional arguments beyond those two
+ * are accepted and ignored for forward compatibility.
  */
 export type FetchHandlerEntry = (
     request: Request,
-    ...env: unknown[]
+    env?: BurgerEnv,
+    executionCtx?: BurgerExecutionContext,
+    ...rest: unknown[]
 ) => Promise<Response>;
 
 /**
@@ -46,11 +57,17 @@ export type FetchHandlerEntry = (
  * `apiRoutes` on WinterCG targets (no filesystem access).
  */
 export function toFetchHandler(burger: Burger): FetchHandlerEntry {
-    let prepared: Promise<FetchHandler> | null = null;
-    return (request: Request): Promise<Response> => {
+    let prepared: Promise<EnvFetchHandler> | null = null;
+    return (
+        request: Request,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<Response> => {
         if (!prepared) {
             prepared = burger.fetchHandler();
         }
-        return prepared.then((handler) => handler(request));
+        return prepared.then((handler) =>
+            handler(request, env, executionCtx)
+        );
     };
 }

@@ -1,5 +1,4 @@
 import { renderHTTPError } from '../errors/http-error';
-import type { FetchHandler } from '../types/index';
 import type { ContextInit } from '../context/types';
 import { notFound, methodNotAllowed } from '../utils/response';
 import { normalizePath } from '../utils/index';
@@ -8,6 +7,11 @@ import { RouterCompiler } from './compiler';
 import { AllowCache } from './allow-cache';
 import { StaticMap } from './static-map';
 import { Trie } from './trie';
+import {
+    buildRegexMatcher,
+    type RegexMatch,
+    type RegexRouteEntry,
+} from './regex-matcher';
 import type { CompiledHandler, CompiledRoute, RouterConfig } from './types';
 import type { ValidatorConfig } from '../validation/types';
 import type { ResolvedPlugin } from '../plugin/types';
@@ -51,6 +55,8 @@ export class Router {
     private compiler: RouterCompiler;
     /** Dev mode: controls error-rendering detail (stack/cause in problem bodies). */
     private debug: boolean;
+    /** Dynamic-dispatch engine preference ('auto' default). */
+    private engine?: RouterConfig['engine'];
     /** Native dispatch table for `:param` / `*` routes (Bun `routes` map keys). */
     private nativeRoutesMap = new Map<string, CompiledHandler>();
     /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
@@ -61,12 +67,20 @@ export class Router {
     private onRequestHooks: Hook[] = [];
     /** App-level providers, bound onto the single per-request context. */
     private appProviders?: Map<string, unknown>;
+    /**
+     * RegExp matcher for dynamic/wildcard routes (WinterCG fast path).
+     * Built when the engine setting allows and compilation succeeds;
+     * `null` means dispatch stays on the trie.
+     */
+    private regexMatcher: ((path: string) => RegexMatch | null) | null = null;
 
     constructor(config: RouterConfig = {}) {
         this.debug = config.debug ?? false;
+        this.engine = config.engine;
         this.compiler = new RouterCompiler(
             config.debug,
-            config.validation ?? {}
+            config.validation ?? {},
+            config.jit !== false
         );
     }
 
@@ -95,6 +109,44 @@ export class Router {
         this.cachedStaticRoutes = undefined;
         this.onRequestHooks = onRequestHooks ?? [];
         this.appProviders = providers;
+        this.regexMatcher = this.buildMatcher(result);
+    }
+
+    /**
+     * Builds the RegExp dispatch matcher for dynamic/wildcard routes when
+     * the configured engine asks for it ('regex'). Benchmarks showed the
+     * radix trie equal-or-faster on fallback dispatch (single-route parity,
+     * ~2% trie edge at 241 routes), so 'auto' stays on the trie and the
+     * matcher is an explicit opt-in.
+     */
+    private buildMatcher(result: {
+        trie: Trie;
+        routes?: Map<string, CompiledRoute>;
+        nativeRoutes: Map<string, CompiledHandler>;
+    }): ((path: string) => RegexMatch | null) | null {
+        if (this.engine !== 'regex') return null;
+        if (!result.routes || result.routes.size === 0) return null;
+
+        const entries: RegexRouteEntry[] = [];
+        for (const [path, compiled] of result.routes) {
+            if (!isDynamicPath(path)) continue;
+            entries.push({
+                path,
+                handler: compiled.handler,
+                methods: new Set(
+                    Object.keys(compiled.def.handlers).map((m) =>
+                        m.toUpperCase()
+                    )
+                ),
+                isWildcard:
+                    compiled.def.isWildcard === true || path.includes('*'),
+            });
+        }
+        // The trie is compiled in the same pass — its DFS order is the
+        // authoritative alternative order.
+        const built = buildRegexMatcher(entries, result.trie.orderedPatterns());
+        if (!built) return null; // trie fallback applies
+        return built;
     }
 
     /**
@@ -146,10 +198,16 @@ export class Router {
         hasOnRequest: boolean,
         route: { path: string; pattern: string } | undefined
     ): CompiledHandler {
-        return async (request: Request, ctxInit?: any) => {
+        return async (
+            request: Request,
+            ctxInit?: ContextInit,
+            prebuilt?: BurgerContext,
+            env?: import('../context/context').BurgerEnv,
+            executionCtx?: import('../context/context').BurgerExecutionContext
+        ) => {
             let outcome: OnRequestOutcome | undefined;
             if (hasOnRequest) {
-                outcome = await this.runOnRequest(request);
+                outcome = await this.runOnRequest(request, env, executionCtx);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
             }
             try {
@@ -157,9 +215,17 @@ export class Router {
                     ? await handler(
                           request,
                           { ...ctxInit, route },
-                          outcome?.ctx
+                          prebuilt ?? outcome?.ctx,
+                          env,
+                          executionCtx
                       )
-                    : await handler(request);
+                    : await handler(
+                          request,
+                          undefined,
+                          undefined,
+                          env,
+                          executionCtx
+                      );
                 const mappers = outcome?.mappers;
                 return mappers && mappers.length > 0
                     ? this.applyMappers(result, mappers)
@@ -180,8 +246,14 @@ export class Router {
     /**
      * Executes pre-routing `onRequest` hooks on a minimal BurgerContext.
      * Returns a Response if any hook short-circuits, or undefined to continue.
+     * Platform `env` / `executionCtx` are bound onto the context here so they
+     * survive into the dispatched handler via re-binding.
      */
-    private async runOnRequest(request: Request): Promise<OnRequestOutcome> {
+    private async runOnRequest(
+        request: Request,
+        env?: import('../context/context').BurgerEnv,
+        executionCtx?: import('../context/context').BurgerExecutionContext
+    ): Promise<OnRequestOutcome> {
         // ONE context per request: created here (before routing) so
         // onRequest hooks can seed state that survives into the handler.
         // The dispatched route binds this instance to its matched route.
@@ -189,7 +261,10 @@ export class Router {
             request,
             undefined,
             undefined,
-            this.appProviders
+            this.appProviders,
+            undefined,
+            env,
+            executionCtx
         );
         const outcome: OnRequestOutcome = {
             shortCircuit: undefined,
@@ -236,12 +311,25 @@ export class Router {
      * The `fetch` fallback handed to `Bun.serve`.
      * Handles dynamic/wildcard routes via the trie, and resolves
      * loose-trailing-slash static variants that Bun did not match directly.
+     *
+     * `env` / `executionCtx` are optional platform bindings forwarded from
+     * the serving entry point (WinterCG `fetch(request, env, ctx)`). The
+     * signature is intentionally its own shape — NOT the server-oriented
+     * `FetchHandler` — so the platform slots stay unambiguous.
      */
-    fetch: FetchHandler = async (request: Request): Promise<Response> => {
+    fetch: (
+        request: Request,
+        env?: import('../context/context').BurgerEnv,
+        executionCtx?: import('../context/context').BurgerExecutionContext
+    ) => Promise<Response> = async (
+        request: Request,
+        env?: import('../context/context').BurgerEnv,
+        executionCtx?: import('../context/context').BurgerExecutionContext
+    ): Promise<Response> => {
         // Pre-routing: create minimal context and run onRequest hooks.
         // Any hook returning a Response short-circuits the entire pipeline.
         // Mapper functions are collected and applied to the eventual response.
-        const outcome = await this.runOnRequest(request);
+        const outcome = await this.runOnRequest(request, env, executionCtx);
         if (outcome.shortCircuit) return outcome.shortCircuit;
         const apply =
             outcome.mappers.length > 0
@@ -259,13 +347,26 @@ export class Router {
             // Every matched route gets a `ctxInit` with `route`; static routes
             // have no params/wildcardParams.
             const ctxInit: ContextInit = { route: { path, pattern: path } };
-            return apply(await staticExact(request, ctxInit, outcome.ctx));
+            return apply(
+                await staticExact(request, ctxInit, outcome.ctx, env, executionCtx)
+            );
         }
 
-        // 2. Dynamic / wildcard routes via the internal trie. The trie is
-        // consulted before the loose-slash static fallback so that a trailing
-        // slash resolving to an empty `:param` value wins (matching Bun).
-        const match = this.trie.match(path);
+        // 2. Dynamic / wildcard routes: the RegExp matcher first (when
+        // compiled), then the radix trie. Both produce identical match
+        // shapes (params, wildcard segments, methods) — verified by the
+        // parity test suite.
+        let dynamicMatch:
+            | RegexMatch
+            | import('./trie').TrieMatch
+            | null = null;
+        if (this.regexMatcher) {
+            dynamicMatch = this.regexMatcher(path);
+        }
+        if (!dynamicMatch) {
+            dynamicMatch = this.trie.match(path);
+        }
+        const match = dynamicMatch;
         if (match) {
             // Auto-HEAD: a GET route implies HEAD is allowed.
             const method = request.method;
@@ -283,7 +384,9 @@ export class Router {
                 params: match.params,
                 wildcardParams: match.wildcardParams,
             };
-            return apply(await match.handler(request, ctxInit, outcome.ctx));
+            return apply(
+                await match.handler(request, ctxInit, outcome.ctx, env, executionCtx)
+            );
         }
 
         // 3. Loose trailing-slash fallback for static routes: `/foo/` ≡ `/foo`.
@@ -296,10 +399,20 @@ export class Router {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
                 };
-                return apply(await loose(request, ctxInit, outcome.ctx));
+                return apply(
+                    await loose(request, ctxInit, outcome.ctx, env, executionCtx)
+                );
             }
         }
 
         return apply(notFound());
     };
+}
+
+/**
+ * A route path is dynamic when it carries a `:param` or `*` segment —
+ * the set dispatched through the trie / RegExp matcher.
+ */
+function isDynamicPath(path: string): boolean {
+    return path.includes(':') || path.includes('*');
 }
