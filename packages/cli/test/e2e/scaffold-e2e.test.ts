@@ -2,10 +2,17 @@ import { afterAll, describe, expect, it } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { createProject } from '../../src/utils/templates';
 import type { CreateOptions } from '../../src/types';
 import { getAvailablePort } from '../test-utils';
+
+// Absolute path to the local framework package, used as a `file:` dependency
+// below (see `scaffoldProject` for why this replaces `link:`/`bun link`).
+const LOCAL_BURGER_API_PATH = resolve(
+    import.meta.dir,
+    '../../../burger-api'
+);
 
 const E2E_TIMEOUT = 240_000;
 
@@ -29,6 +36,14 @@ async function killTree(pid: number): Promise<void> {
     try {
         if (process.platform === 'win32') {
             await run(['taskkill', '/F', '/T', '/PID', String(pid)], '.');
+            // `taskkill /F /T` returns once the kill request is issued, not
+            // once every handle the tree held (files, named pipes) is
+            // actually released by the OS. Spawning another `bun` process
+            // immediately after can race that teardown and crash with
+            // SIGABRT (exit 134) — seen intermittently on the very next
+            // spawn (e.g. `bun run typecheck` right after killing a `bun
+            // --watch` dev server). A short grace period avoids the race.
+            await Bun.sleep(500);
         } else {
             process.kill(pid, 'SIGKILL');
         }
@@ -76,9 +91,22 @@ async function bootAndCheck(
 }
 
 /**
- * Creates a project scaffold, links the local burger-api package, and
- * installs dependencies. package.json is patched to `link:burger-api` so
- * the local package is used (same approach as the framework examples).
+ * Creates a project scaffold and installs the local burger-api package as a
+ * `file:` dependency, then runs `bun install`.
+ *
+ * Deliberately NOT `link:` / `bun link`: `packages/burger-api/examples/*`
+ * all depend on `link:burger-api` against the same global link target. If
+ * this test also links `burger-api` into the scaffold, the scaffold's
+ * `node_modules/burger-api` (a symlink to `packages/burger-api`) and every
+ * example's own `node_modules/burger-api` (symlinks to the same target)
+ * form a symlink cycle reachable from the scaffold. `tsc`'s project-file
+ * discovery doesn't cycle-detect that, so `bun run typecheck` free-falls
+ * into it and crashes with a JS heap OOM (SIGABRT / exit 134) — confirmed by
+ * direct repro. `file:` copies the package instead of symlinking it, so the
+ * scaffold never sees that cycle. This mirrors the CLI's own documented
+ * pre-release testing path (`BURGER_API_SOURCE=<path>`, see
+ * `src/utils/templates.ts`'s `burgerApiSourceOverride`), so it's also a more
+ * realistic stand-in for what `npm install burger-api` gives a real user.
  */
 async function scaffoldProject(
     name: string,
@@ -101,11 +129,8 @@ async function scaffoldProject(
 
     const pkgPath = join(dir, 'package.json');
     const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
-    pkg.dependencies['burger-api'] = 'link:burger-api';
+    pkg.dependencies['burger-api'] = `file:${LOCAL_BURGER_API_PATH}`;
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
-
-    const link = await run(['bun', 'link', 'burger-api'], dir);
-    expect(link.code).toBe(0);
 
     const install = await run(['bun', 'install'], dir);
     expect(install.code).toBe(0);
