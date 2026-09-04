@@ -6,4 +6,4 @@
  * percent-decoding; this module exists only for backward compatibility
  * with internal imports.
  */
-export { parseCookies } from '../validation/validator';
+export { parseCookies } from '../validation/validator.js';

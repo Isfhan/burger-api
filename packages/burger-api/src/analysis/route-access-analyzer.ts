@@ -1,6 +1,6 @@
-import type { ContextField, RouteAccessInfo } from '../context/types';
-import type { RouteDefinition } from '../types/index';
-import { freezeRouteAccessInfo } from '../context/route-access';
+import type { ContextField, RouteAccessInfo } from '../context/types.js';
+import type { RouteDefinition } from '../types/index.js';
+import { freezeRouteAccessInfo } from '../context/route-access.js';
 
 /**
  * `RouteAccessAnalyzer` — an optional, compile-time-only, self-contained

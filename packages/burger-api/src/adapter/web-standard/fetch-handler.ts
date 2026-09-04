@@ -24,12 +24,12 @@
  * adapter is loaded lazily by `Server` only when `serve()` is called.
  */
 
-import type { Burger } from '../../index';
-import type { EnvFetchHandler } from '../../types/index';
+import type { Burger } from '../../index.js';
+import type { EnvFetchHandler } from '../../types/index.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
-} from '../../context/context';
+} from '../../context/context.js';
 
 /**
  * The portable entry shape: a Web-Standard `Request` in, a `Response` out.

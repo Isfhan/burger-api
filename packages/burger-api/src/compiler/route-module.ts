@@ -1,8 +1,8 @@
-import type { RequestHandler, RouteSchema, openapi } from '../types/index';
-import type { HTTPMethod } from '../utils/routing';
-import type { RouteHooks } from '../lifecycle/types';
-import type { ConventionFile } from './conventions';
-import type { Hook } from '../lifecycle/types';
+import type { RequestHandler, RouteSchema, openapi } from '../types/index.js';
+import type { HTTPMethod } from '../utils/routing.js';
+import type { RouteHooks } from '../lifecycle/types.js';
+import type { ConventionFile } from './conventions.js';
+import type { Hook } from '../lifecycle/types.js';
 
 /**
  * The compiler's internal view of ONE route directory.

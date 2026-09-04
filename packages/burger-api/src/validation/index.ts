@@ -5,24 +5,24 @@
  * coercion, and RFC 9457 error rendering.
  */
 
-export { compileRouteSchema, validatorCache, clearValidatorCache } from './compiler';
-export { createValidationHook } from './validator';
+export { compileRouteSchema, validatorCache, clearValidatorCache } from './compiler.js';
+export { createValidationHook } from './validator.js';
 export {
     ValidationError,
     renderValidationError,
     toValidationErrors,
-} from './error';
-export type { RenderContext } from './error';
-export { ValidatorCache } from './cache';
+} from './error.js';
+export type { RenderContext } from './error.js';
+export { ValidatorCache } from './cache.js';
 export {
     registerAdapter,
     detectAdapter,
-} from './adapter';
+} from './adapter.js';
 // Schema input types — `compileRouteSchema` consumes exactly these, so
 // subpath users don't need the root import to type their schemas.
-export type { MethodSchema, RouteSchema } from '../types/index';
-export type { ValidatorAdapter } from './adapter';
-export { buildPlan, apply } from './coerce';
+export type { MethodSchema, RouteSchema } from '../types/index.js';
+export type { ValidatorAdapter } from './adapter.js';
+export { buildPlan, apply } from './coerce.js';
 export type {
     SchemaInput,
     ValidatorKind,
@@ -35,4 +35,4 @@ export type {
     CoercionPlan,
     StandardSchemaV1,
     StandardSchemaV1Result,
-} from './types';
+} from './types.js';

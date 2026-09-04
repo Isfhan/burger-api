@@ -1,6 +1,11 @@
-import type { RouteHooks } from '../lifecycle/types';
-import type { ResolvedPlugin, MacroFn } from './types';
+import type { ResolvedPlugin, MacroFn } from './types.js';
 
+/**
+ * Registers named macros — plugin-scoped `GlobalHooks` bundles — and expands
+ * all of them into `ResolvedPlugin`s (scope `'plugin'`) at app-build time.
+ * Macros take no per-call arguments; a macro factory is a zero-arg bundle
+ * of hooks, not a per-route configurable unit.
+ */
 export class MacroRegistry {
     private macros = new Map<string, MacroFn>();
 
@@ -14,16 +19,10 @@ export class MacroRegistry {
         return this.macros.has(name);
     }
 
-    expand(name: string, ...args: unknown[]): RouteHooks | undefined {
-        const fn = this.macros.get(name);
-        if (!fn) return undefined;
-        return fn(...args) as RouteHooks;
-    }
-
     expandAll(): ResolvedPlugin[] {
         const out: ResolvedPlugin[] = [];
         for (const [name, fn] of this.macros) {
-            const hooks = fn() as RouteHooks;
+            const hooks = fn();
             out.push({ name, hooks, scope: 'plugin' });
         }
         return out;

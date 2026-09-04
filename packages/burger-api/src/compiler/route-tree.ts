@@ -1,4 +1,4 @@
-import type { RouteModule } from './route-module';
+import type { RouteModule } from './route-module.js';
 
 /**
  * A lightweight structural view of the compiled route set, used for

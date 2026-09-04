@@ -1,6 +1,6 @@
-import type { Plugin, ResolvedPlugin, PluginEntry } from './types';
-import type { Scope } from '../chain/node';
-import type { RouteHooks } from '../lifecycle/types';
+import type { Plugin, ResolvedPlugin, PluginEntry } from './types.js';
+import type { Scope } from '../chain/node.js';
+import type { GlobalHooks } from '../lifecycle/types.js';
 
 export class PluginRegistry {
     private entries = new Map<string, PluginEntry>();
@@ -39,7 +39,7 @@ export class PluginRegistry {
                 ? await (entry.plugin as () => Plugin | Promise<Plugin>)()
                 : entry.plugin;
 
-        const hooks: RouteHooks = raw.hooks ?? {};
+        const hooks: GlobalHooks = raw.hooks ?? {};
         const resolved: ResolvedPlugin = {
             name: raw.name,
             hooks,

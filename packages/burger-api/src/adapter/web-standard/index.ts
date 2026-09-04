@@ -5,5 +5,5 @@
  * portable fetch surface used by Cloudflare Workers, Vercel, Deno Deploy,
  * and Node 24+.
  */
-export { toFetchHandler } from './fetch-handler';
-export type { FetchHandlerEntry } from './fetch-handler';
+export { toFetchHandler } from './fetch-handler.js';
+export type { FetchHandlerEntry } from './fetch-handler.js';

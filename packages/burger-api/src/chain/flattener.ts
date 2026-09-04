@@ -3,66 +3,60 @@ import type {
     ResponseHook,
     ErrorHook,
     HookPlan,
-} from '../lifecycle/types';
-import type { HookChain } from './chain';
-import type { ChainNode } from './node';
+} from '../lifecycle/types.js';
+import type { HookChain } from './chain.js';
+import type { ChainNode } from './node.js';
+import type { Scope } from './node.js';
 
 /**
  * Execution order for request hooks (beforeRoute):
  * Framework → Plugin → Global → Local
+ *
+ * This is the single source of truth for request-hook ordering — kept in
+ * sync with `AGENTS.md`'s lifecycle scope description by
+ * `test/chain/flatten-order.test.ts`, which reads that file and fails if the
+ * two drift apart.
  */
-const SCOPE_ORDER_REQUEST = ['framework', 'plugin', 'global', 'local'];
+const SCOPE_ORDER_REQUEST: readonly Scope[] = [
+    'framework',
+    'plugin',
+    'global',
+    'local',
+];
 
 /**
- * Execution order for response/error hooks (afterRoute, mapResponse, onError):
- * Local → Global → Plugin → Framework
+ * Execution order for response/error hooks (afterRoute, mapResponse,
+ * onError): Local → Global → Plugin → Framework (nearest-first).
+ *
+ * Single source of truth — see {@link SCOPE_ORDER_REQUEST}.
  */
-const SCOPE_ORDER_RESPONSE = ['local', 'global', 'plugin', 'framework'];
+const SCOPE_ORDER_RESPONSE: readonly Scope[] = [
+    'local',
+    'global',
+    'plugin',
+    'framework',
+];
 
-function pushByScope(
-    buckets: Record<string, unknown[]>,
-    scope: string,
-    fn: unknown
-): void {
-    if (buckets[scope]) {
-        buckets[scope].push(fn);
-    } else {
-        // Unknown scope falls through to the innermost bucket.
-        // For request hooks that's 'local'; for response hooks that's 'framework'.
-        const keys = Object.keys(buckets);
-        // The key comes from Object.keys, so the bucket exists.
-        buckets[keys[keys.length - 1]!]!.push(fn);
-    }
+/** Buckets one hook kind by scope, in insertion order within each scope. */
+function bucketByScope<T>(): Record<Scope, T[]> {
+    return { framework: [], global: [], plugin: [], local: [] };
+}
+
+/** Flattens scope buckets into a single array following `order`. */
+function orderBuckets<T>(buckets: Record<Scope, T[]>, order: readonly Scope[]): T[] {
+    const out: T[] = [];
+    for (const scope of order) out.push(...buckets[scope]);
+    return out;
 }
 
 export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
     const nodes = chain.getNodes();
 
     let validation: ForwardHook | undefined;
-    const beforeRoute: ForwardHook[] = [];
-    const afterRoute: ResponseHook[] = [];
-    const mapResponse: ResponseHook[] = [];
-    const onError: ErrorHook[] = [];
-
-    const frameworkBefore: ForwardHook[] = [];
-    const globalBefore: ForwardHook[] = [];
-    const pluginBefore: ForwardHook[] = [];
-    const localBefore: ForwardHook[] = [];
-
-    const localAfter: ResponseHook[] = [];
-    const globalAfter: ResponseHook[] = [];
-    const pluginAfter: ResponseHook[] = [];
-    const frameworkAfter: ResponseHook[] = [];
-
-    const localResp: ResponseHook[] = [];
-    const globalResp: ResponseHook[] = [];
-    const pluginResp: ResponseHook[] = [];
-    const frameworkResp: ResponseHook[] = [];
-
-    const localError: ErrorHook[] = [];
-    const globalError: ErrorHook[] = [];
-    const pluginError: ErrorHook[] = [];
-    const frameworkError: ErrorHook[] = [];
+    const before = bucketByScope<ForwardHook>();
+    const after = bucketByScope<ResponseHook>();
+    const mapResp = bucketByScope<ResponseHook>();
+    const error = bucketByScope<ErrorHook>();
 
     for (const node of nodes) {
         // The ChainNode is discriminated on `stage`, so `fn` narrows to the
@@ -73,69 +67,30 @@ export function flatten(chain: HookChain, _routeOwner: string): HookPlan {
                 break;
             }
             case 'beforeRoute': {
-                const fn = node.fn;
-                if (node.scope === 'framework') frameworkBefore.push(fn);
-                else if (node.scope === 'global') globalBefore.push(fn);
-                else if (node.scope === 'plugin') pluginBefore.push(fn);
-                else localBefore.push(fn);
+                before[node.scope].push(node.fn);
                 break;
             }
             case 'afterRoute': {
-                const fn = node.fn;
-                if (node.scope === 'framework') frameworkAfter.push(fn);
-                else if (node.scope === 'global') globalAfter.push(fn);
-                else if (node.scope === 'plugin') pluginAfter.push(fn);
-                else localAfter.push(fn);
+                after[node.scope].push(node.fn);
                 break;
             }
             case 'mapResponse': {
-                const fn = node.fn;
-                if (node.scope === 'framework') frameworkResp.push(fn);
-                else if (node.scope === 'global') globalResp.push(fn);
-                else if (node.scope === 'plugin') pluginResp.push(fn);
-                else localResp.push(fn);
+                mapResp[node.scope].push(node.fn);
                 break;
             }
             case 'onError': {
-                const fn = node.fn;
-                if (node.scope === 'local') localError.push(fn);
-                else if (node.scope === 'global') globalError.push(fn);
-                else if (node.scope === 'plugin') pluginError.push(fn);
-                else frameworkError.push(fn);
+                error[node.scope].push(node.fn);
                 break;
             }
         }
     }
 
-    // Request hooks: Framework → Plugin → Global → Route (forward)
-    beforeRoute.push(
-        ...frameworkBefore,
-        ...pluginBefore,
-        ...globalBefore,
-        ...localBefore
-    );
-    // Response hooks: Route → Global → Plugin → Framework (reversed)
-    afterRoute.push(
-        ...localAfter,
-        ...globalAfter,
-        ...pluginAfter,
-        ...frameworkAfter
-    );
-    mapResponse.push(
-        ...localResp,
-        ...globalResp,
-        ...pluginResp,
-        ...frameworkResp
-    );
-    // Error hooks: Route → Global → Plugin → Framework (reversed, nearest-first)
-    onError.push(
-        ...localError,
-        ...globalError,
-        ...pluginError,
-        ...frameworkError
-    );
-
-    const plan: HookPlan = { beforeRoute, afterRoute, mapResponse, onError };
+    const plan: HookPlan = {
+        beforeRoute: orderBuckets(before, SCOPE_ORDER_REQUEST),
+        afterRoute: orderBuckets(after, SCOPE_ORDER_RESPONSE),
+        mapResponse: orderBuckets(mapResp, SCOPE_ORDER_RESPONSE),
+        onError: orderBuckets(error, SCOPE_ORDER_RESPONSE),
+    };
     if (validation) plan.validation = validation;
     return plan;
 }

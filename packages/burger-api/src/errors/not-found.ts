@@ -1,4 +1,4 @@
-import { HTTPError } from './http-error';
+import { HTTPError } from './http-error.js';
 
 /**
  * 404 Not Found — thrown when a requested resource does not exist.

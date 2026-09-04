@@ -1,5 +1,5 @@
-import type { CompiledHandler } from './types';
-import { ROUTE_CONSTANTS } from '../utils/routing';
+import type { CompiledHandler } from './types.js';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
 
 /**
  * Internal trie node for `:param` and `*` routes.

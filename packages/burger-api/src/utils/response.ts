@@ -91,7 +91,7 @@ export const createAutoOptionsHandler = (
     return handler;
 };
 
-import type { ContextSet } from '../context/types';
+import type { ContextSet } from '../context/types.js';
 
 /**
  * Reports whether a `ContextSet` carries any response mutation.

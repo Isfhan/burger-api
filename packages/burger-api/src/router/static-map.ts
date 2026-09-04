@@ -1,4 +1,4 @@
-import type { CompiledHandler } from './types';
+import type { CompiledHandler } from './types.js';
 
 /**
  * O(1) static dispatch table.

@@ -1,4 +1,4 @@
-import type { ContextField, RouteAccessInfo } from './types';
+import type { ContextField, RouteAccessInfo } from './types.js';
 
 /**
  * Builds and freezes a `RouteAccessInfo` hint.

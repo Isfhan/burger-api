@@ -6,14 +6,14 @@
  * apps consume prebuilt `apiRoutes` instead.
  */
 
-export { DirectoryScanner } from './scanner';
-export { ModuleLoader } from './module-loader';
-export { RouteTree } from './route-tree';
+export { DirectoryScanner } from './scanner.js';
+export { ModuleLoader } from './module-loader.js';
+export { RouteTree } from './route-tree.js';
 export type {
     RouteModule,
     ScannedRoute,
     ScanResult,
-} from './route-module';
+} from './route-module.js';
 export {
     CONVENTION_FILES,
     CONVENTION_EXTENSIONS,
@@ -21,5 +21,5 @@ export {
     splitConventionName,
     isConventionFile,
     assertConventionFile,
-} from './conventions';
-export type { ConventionFile } from './conventions';
+} from './conventions.js';
+export type { ConventionFile } from './conventions.js';

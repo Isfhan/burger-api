@@ -1,6 +1,6 @@
-import { extractPathnameFromUrl } from '../utils/wildcard';
-import { ROUTE_CONSTANTS } from '../utils/routing';
-import type { ContextInit } from '../context/types';
+import { extractPathnameFromUrl } from '../utils/wildcard.js';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
+import type { ContextInit } from '../context/types.js';
 
 /**
  * Web-Standard param extraction for native route dispatch.

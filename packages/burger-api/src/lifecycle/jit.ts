@@ -1,13 +1,13 @@
-import type { BurgerContext } from '../context/context';
-import type { RequestHandler } from '../types/index';
-import type { HookPlan, ResponseHook } from './types';
-import { applyTransform } from './transform';
-import { dispatchOnError } from './executor';
-import { validateResponse } from '../validation/response';
+import type { BurgerContext } from '../context/context.js';
+import type { RequestHandler } from '../types/index.js';
+import type { HookPlan, ResponseHook } from './types.js';
+import { applyTransform } from './transform.js';
+import { dispatchOnError } from './executor.js';
+import { validateResponse } from '../validation/response.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
-} from '../validation/types';
+} from '../validation/types.js';
 
 /**
  * Capability probe: dynamic code generation (`new Function`) is forbidden
@@ -37,13 +37,13 @@ export function resetJitProbe(): void {
 
 interface JitDeps {
     /** transform map (applyTransform owns reserved-key guarding). */
-    tf?: import('./types').TransformMap;
+    tf?: import('./types.js').TransformMap;
     /** framework validation hook */
-    v?: import('./types').ForwardHook;
-    b: import('./types').ForwardHook[];
+    v?: import('./types.js').ForwardHook;
+    b: import('./types.js').ForwardHook[];
     a: ResponseHook[];
     m: ResponseHook[];
-    e: import('./types').ErrorHook[];
+    e: import('./types.js').ErrorHook[];
     /** response validators present? */
     rv?: CompiledRouteValidators;
     vc?: ValidatorConfig;

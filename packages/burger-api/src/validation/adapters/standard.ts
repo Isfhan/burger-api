@@ -13,7 +13,7 @@
  * validation compiler (explicit registration survives tree-shaking).
  */
 
-import type { ValidatorAdapter } from '../adapter';
+import type { ValidatorAdapter } from '../adapter.js';
 import type {
     SchemaInput,
     StandardSchemaV1,
@@ -22,7 +22,7 @@ import type {
     CompiledValidator,
     ValidationResult,
     ValidationIssue,
-} from '../types';
+} from '../types.js';
 
 /** Flattens a Standard Schema issue path into `(string | number)[]`. */
 function normalizePath(

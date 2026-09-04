@@ -1,22 +1,22 @@
-import { renderHTTPError } from '../errors/http-error';
-import type { ContextInit } from '../context/types';
-import { notFound, methodNotAllowed } from '../utils/response';
-import { normalizePath } from '../utils/index';
-import { extractPathnameFromUrl } from '../utils/wildcard';
-import { RouterCompiler } from './compiler';
-import { AllowCache } from './allow-cache';
-import { StaticMap } from './static-map';
-import { Trie } from './trie';
+import { renderHTTPError } from '../errors/http-error.js';
+import type { ContextInit } from '../context/types.js';
+import { notFound, methodNotAllowed } from '../utils/response.js';
+import { normalizePath } from '../utils/index.js';
+import { extractPathnameFromUrl } from '../utils/wildcard.js';
+import { RouterCompiler } from './compiler.js';
+import { AllowCache } from './allow-cache.js';
+import { StaticMap } from './static-map.js';
+import { Trie } from './trie.js';
 import {
     buildRegexMatcher,
     type RegexMatch,
     type RegexRouteEntry,
-} from './regex-matcher';
-import type { CompiledHandler, CompiledRoute, RouterConfig } from './types';
-import type { ValidatorConfig } from '../validation/types';
-import type { ResolvedPlugin } from '../plugin/types';
-import type { Hook } from '../lifecycle/types';
-import { BurgerContext } from '../context/context';
+} from './regex-matcher.js';
+import type { CompiledHandler, CompiledRoute, RouterConfig } from './types.js';
+import type { ValidatorConfig } from '../validation/types.js';
+import type { ResolvedPlugin } from '../plugin/types.js';
+import type { Hook } from '../lifecycle/types.js';
+import { BurgerContext } from '../context/context.js';
 
 interface OnRequestOutcome {
     shortCircuit: Response | undefined;
@@ -90,7 +90,7 @@ export class Router {
      * cannot leak stale routes.
      */
     compile(
-        defs: import('../types/index').RouteDefinition[],
+        defs: import('../types/index.js').RouteDefinition[],
         plugins?: ResolvedPlugin[],
         providers?: Map<string, unknown>,
         onRequestHooks?: Hook[]
@@ -202,8 +202,8 @@ export class Router {
             request: Request,
             ctxInit?: ContextInit,
             prebuilt?: BurgerContext,
-            env?: import('../context/context').BurgerEnv,
-            executionCtx?: import('../context/context').BurgerExecutionContext
+            env?: import('../context/context.js').BurgerEnv,
+            executionCtx?: import('../context/context.js').BurgerExecutionContext
         ) => {
             let outcome: OnRequestOutcome | undefined;
             if (hasOnRequest) {
@@ -251,8 +251,8 @@ export class Router {
      */
     private async runOnRequest(
         request: Request,
-        env?: import('../context/context').BurgerEnv,
-        executionCtx?: import('../context/context').BurgerExecutionContext
+        env?: import('../context/context.js').BurgerEnv,
+        executionCtx?: import('../context/context.js').BurgerExecutionContext
     ): Promise<OnRequestOutcome> {
         // ONE context per request: created here (before routing) so
         // onRequest hooks can seed state that survives into the handler.
@@ -319,12 +319,12 @@ export class Router {
      */
     fetch: (
         request: Request,
-        env?: import('../context/context').BurgerEnv,
-        executionCtx?: import('../context/context').BurgerExecutionContext
+        env?: import('../context/context.js').BurgerEnv,
+        executionCtx?: import('../context/context.js').BurgerExecutionContext
     ) => Promise<Response> = async (
         request: Request,
-        env?: import('../context/context').BurgerEnv,
-        executionCtx?: import('../context/context').BurgerExecutionContext
+        env?: import('../context/context.js').BurgerEnv,
+        executionCtx?: import('../context/context.js').BurgerExecutionContext
     ): Promise<Response> => {
         // Pre-routing: create minimal context and run onRequest hooks.
         // Any hook returning a Response short-circuits the entire pipeline.
@@ -358,7 +358,7 @@ export class Router {
         // parity test suite.
         let dynamicMatch:
             | RegexMatch
-            | import('./trie').TrieMatch
+            | import('./trie.js').TrieMatch
             | null = null;
         if (this.regexMatcher) {
             dynamicMatch = this.regexMatcher(path);

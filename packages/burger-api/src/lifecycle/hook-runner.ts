@@ -1,6 +1,6 @@
-import type { BurgerContext } from '../context/context';
-import type { RequestHandler } from '../types/index';
-import type { ForwardHook, ResponseHook } from './types';
+import type { BurgerContext } from '../context/context.js';
+import type { RequestHandler } from '../types/index.js';
+import type { ForwardHook, ResponseHook } from './types.js';
 
 /**
  * A forward hook that may also return a transform function at runtime.

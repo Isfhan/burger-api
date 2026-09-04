@@ -1,16 +1,16 @@
-import type { BurgerContext } from '../context/context';
-import type { RequestHandler } from '../types/index';
+import type { BurgerContext } from '../context/context.js';
+import type { RequestHandler } from '../types/index.js';
 import type {
     HookPlan,
     ResponseHook,
     ErrorHook,
-} from './types';
-import { runHooks } from './hook-runner';
-import { methodNotAllowed } from '../utils/response';
-import { applyTransform } from './transform';
-import { HTTPError, renderHTTPError } from '../errors/http-error';
-import { ValidationError } from '../validation/error';
-import { validateResponse } from '../validation/response';
+} from './types.js';
+import { runHooks } from './hook-runner.js';
+import { methodNotAllowed } from '../utils/response.js';
+import { applyTransform } from './transform.js';
+import { HTTPError, renderHTTPError } from '../errors/http-error.js';
+import { ValidationError } from '../validation/error.js';
+import { validateResponse } from '../validation/response.js';
 
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
@@ -116,7 +116,7 @@ export async function dispatchOnError(
     onErrorHooks: ErrorHook[],
     ctx: BurgerContext,
     debug?: boolean,
-    validatorConfig?: import('../validation/types').ValidatorConfig
+    validatorConfig?: import('../validation/types.js').ValidatorConfig
 ): Promise<Response> {
     for (const hook of onErrorHooks) {
         try {

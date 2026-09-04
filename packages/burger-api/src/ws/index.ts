@@ -13,20 +13,20 @@ export type {
     WebSocketModule,
     WebSocketHooksModule,
     WebSocketConfigModule,
-} from './types';
+} from './types.js';
 
 export {
     WebSocketReadyState,
     WebSocketCloseCode,
     BurgerWSContext,
-} from './types';
+} from './types.js';
 
-export { WebSocketScanner } from './scanner';
-export type { ScannedWebSocketRoute, WebSocketScanResult } from './scanner';
+export { WebSocketScanner } from './scanner.js';
+export type { ScannedWebSocketRoute, WebSocketScanResult } from './scanner.js';
 
-export { WebSocketCompiler } from './compiler';
+export { WebSocketCompiler } from './compiler.js';
 
-export { WebSocketRouter } from './router';
+export { WebSocketRouter } from './router.js';
 
-export { WebSocketAdapter } from './adapter';
-export type { WebSocketAdapterOptions } from './adapter';
+export { WebSocketAdapter } from './adapter.js';
+export type { WebSocketAdapterOptions } from './adapter.js';

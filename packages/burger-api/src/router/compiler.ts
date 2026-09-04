@@ -1,32 +1,32 @@
-import type { RouteDefinition, RequestHandler } from '../types/index';
-import type { HTTPMethod } from '../utils/routing';
-import type { RouteModule } from '../compiler/route-module';
-import type { ContextInit, RouteAccessInfo } from '../context/types';
-import { compileRouteSchema } from '../validation/compiler';
-import { createValidationHook } from '../validation/validator';
+import type { RouteDefinition, RequestHandler } from '../types/index.js';
+import type { HTTPMethod } from '../utils/routing.js';
+import type { RouteModule } from '../compiler/route-module.js';
+import type { ContextInit, RouteAccessInfo } from '../context/types.js';
+import { compileRouteSchema } from '../validation/compiler.js';
+import { createValidationHook } from '../validation/validator.js';
 import {
     methodNotAllowed,
     applySet,
-} from '../utils/response';
-import { executeHookPlan } from '../lifecycle/executor';
-import { compileJitHookPlan } from '../lifecycle/jit';
-import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types';
-import { HookChain } from '../chain/chain';
-import { flatten } from '../chain/flattener';
-import { composePluginHooks } from '../plugin/composer';
-import type { ResolvedPlugin } from '../plugin/types';
-import { BurgerContext } from '../context/context';
-import { analyzeRouteAccess } from '../analysis/route-access-analyzer';
-import { AllowCache } from './allow-cache';
-import { StaticMap } from './static-map';
-import { Trie } from './trie';
-import { ROUTE_CONSTANTS } from '../utils/routing';
-import { extractCtxInit } from './param-extract';
-import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types';
+} from '../utils/response.js';
+import { executeHookPlan } from '../lifecycle/executor.js';
+import { compileJitHookPlan } from '../lifecycle/jit.js';
+import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types.js';
+import { HookChain } from '../chain/chain.js';
+import { flatten } from '../chain/flattener.js';
+import { composePluginHooks } from '../plugin/composer.js';
+import type { ResolvedPlugin } from '../plugin/types.js';
+import { BurgerContext } from '../context/context.js';
+import { analyzeRouteAccess } from '../analysis/route-access-analyzer.js';
+import { AllowCache } from './allow-cache.js';
+import { StaticMap } from './static-map.js';
+import { Trie } from './trie.js';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
+import { extractCtxInit } from './param-extract.js';
+import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
-} from '../validation/types';
+} from '../validation/types.js';
 
 /**
  * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
@@ -92,7 +92,7 @@ export class RouterCompiler {
 
             const hasSchema = !!def.schema;
             let routeValidators:
-                | import('../validation/types').CompiledRouteValidators
+                | import('../validation/types.js').CompiledRouteValidators
                 | undefined;
 
             // Compose the frozen `HookPlan` once at compile time.
@@ -336,8 +336,8 @@ function buildCompiledHandler(
         request: Request,
         ctxInit?: ContextInit,
         prebuilt?: BurgerContext,
-        env?: import('../context/context').BurgerEnv,
-        executionCtx?: import('../context/context').BurgerExecutionContext
+        env?: import('../context/context.js').BurgerEnv,
+        executionCtx?: import('../context/context.js').BurgerExecutionContext
     ): Promise<Response> => {
         const method = request.method;
         // `request.method` is a runtime string; the handler map only accepts

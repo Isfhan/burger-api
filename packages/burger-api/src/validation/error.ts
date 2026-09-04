@@ -12,13 +12,13 @@
  * Production bodies never leak stacks/source/schema internals (R7).
  */
 
-import { HTTPError, renderHTTPError } from '../errors/http-error';
+import { HTTPError, renderHTTPError } from '../errors/http-error.js';
 import type {
     ValidationIssue,
     ValidationResult,
     ValidatorConfig,
     ValidationSlot,
-} from './types';
+} from './types.js';
 
 /**
  * A structured validation error thrown when request validation fails.

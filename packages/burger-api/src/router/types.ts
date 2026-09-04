@@ -1,9 +1,9 @@
-import type { RouteDefinition } from '../types/index';
+import type { RouteDefinition } from '../types/index.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
-} from '../validation/types';
-import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
+} from '../validation/types.js';
+import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types.js';
 
 /**
  * A compiled route handler.
@@ -26,9 +26,9 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types';
 export type CompiledHandler = (
     request: Request,
     ctxInit?: ContextInit,
-    prebuilt?: import('../context/context').BurgerContext,
-    env?: import('../context/context').BurgerEnv,
-    executionCtx?: import('../context/context').BurgerExecutionContext
+    prebuilt?: import('../context/context.js').BurgerContext,
+    env?: import('../context/context.js').BurgerEnv,
+    executionCtx?: import('../context/context.js').BurgerExecutionContext
 ) => Promise<Response>;
 
 /**
@@ -52,9 +52,9 @@ export interface CompiledRoute {
  * The output of a single RouterCompiler.compile pass.
  */
 export interface CompiledRouter {
-    staticMap: import('./static-map').StaticMap;
-    trie: import('./trie').Trie;
-    allowCache: import('./allow-cache').AllowCache;
+    staticMap: import('./static-map.js').StaticMap;
+    trie: import('./trie.js').Trie;
+    allowCache: import('./allow-cache.js').AllowCache;
     /**
      * Native dispatch table for `:param` / `*` routes, keyed by their Bun-native
      * pattern (e.g. `/users/:id`). Consumed only by the Bun adapter, which

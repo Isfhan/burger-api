@@ -5,11 +5,11 @@
 
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
-import { resolveScanDir } from '../utils/fs';
+import { resolveScanDir } from '../utils/fs.js';
 import {
     splitConventionName,
     type ConventionFile,
-} from '../compiler/conventions';
+} from '../compiler/conventions.js';
 
 /** WebSocket convention stems (extension is `.ts` / `.js` / `.mjs`). */
 const WS_CONVENTION_FILES = ['ws', 'hooks', 'config'] as const;

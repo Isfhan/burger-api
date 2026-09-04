@@ -64,8 +64,8 @@ onRequest → Routing → transform → Validation → beforeRoute
 ```
 
 Error → `onError`. Scopes: Framework → Plugin → Global → Route for request hooks.
-Response hooks (`afterRoute`, `mapResponse`) run Global → Route → Plugin → Framework
-(global hooks merge into route scope, global-first — see `module-loader.ts`).
+Response hooks (`afterRoute`, `mapResponse`) run Route → Global → Plugin → Framework
+(nearest-first — see `chain/flattener.ts`).
 Error hooks (`onError`) run nearest-first, Route → Global → Plugin → Framework.
 
 **Context:** public type **`BurgerContext`**. Standard Web **`Response`** only.

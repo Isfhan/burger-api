@@ -17,8 +17,8 @@ import type {
     CompiledValidator,
     ValidationResult,
     ValidationIssue,
-} from '../types';
-import type { ValidatorAdapter } from '../adapter';
+} from '../types.js';
+import type { ValidatorAdapter } from '../adapter.js';
 
 /** Maps a Zod issue path to the normalized `(string | number)[]`. */
 function normalizePath(path: (string | number)[]): (string | number)[] {

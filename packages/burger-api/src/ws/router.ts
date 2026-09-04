@@ -3,7 +3,7 @@
  * Maps WebSocket paths to compiled handlers
  */
 
-import type { CompiledWebSocketRoute } from './types';
+import type { CompiledWebSocketRoute } from './types.js';
 
 /**
  * WebSocket router

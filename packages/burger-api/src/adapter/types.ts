@@ -1,5 +1,5 @@
-import type { CompiledHandler } from '../router/types';
-import type { FetchHandler, RequestHandler } from '../types/index';
+import type { CompiledHandler } from '../router/types.js';
+import type { FetchHandler, RequestHandler } from '../types/index.js';
 
 /**
  * Options the runtime passes to an adapter to boot the server.

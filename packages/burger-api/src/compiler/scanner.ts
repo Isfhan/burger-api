@@ -1,15 +1,15 @@
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
-import { ROUTE_CONSTANTS } from '../utils/routing';
-import { filePathToApiRoutePath } from '../utils/pathConversion';
-import { resolveScanDir } from '../utils/fs';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
+import { filePathToApiRoutePath } from '../utils/pathConversion.js';
+import { resolveScanDir } from '../utils/fs.js';
 import {
     assertConventionFile,
     isConventionFile,
     splitConventionName,
     type ConventionFile,
-} from './conventions';
-import type { ScannedRoute, ScanResult } from './route-module';
+} from './conventions.js';
+import type { ScannedRoute, ScanResult } from './route-module.js';
 
 /**
  * Walks a route directory tree and produces a pure inventory of route
@@ -234,4 +234,4 @@ export class DirectoryScanner {
 }
 
 /** Re-exported for convenience / symmetry with the module loader. */
-export { CONVENTION_FILES } from './conventions';
+export { CONVENTION_FILES } from './conventions.js';

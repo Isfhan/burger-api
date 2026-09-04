@@ -20,8 +20,8 @@ import type {
     OpenAPIConfig,
     OpenAPIObject,
     JsonSchemaConverter,
-} from '../types/index';
-import type { SchemaInput } from '../validation/types';
+} from '../types/index.js';
+import type { SchemaInput } from '../validation/types.js';
 
 /**
  * Maps a Zod type to an OpenAPI schema type.

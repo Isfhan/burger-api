@@ -1,4 +1,4 @@
-import { HTTPError } from './http-error';
+import { HTTPError } from './http-error.js';
 
 /**
  * 403 Forbidden — thrown when the user is authenticated but lacks permission.

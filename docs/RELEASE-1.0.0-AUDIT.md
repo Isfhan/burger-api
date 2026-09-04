@@ -162,6 +162,75 @@ exists now, not the 2026-08-20 note.
   regex dispatch engine, Node WS bridge) together with the JIT fix and new tests
   as one coherent commit.
 
-*(Next: Phase 2 checkpoint — AGENTS.md ordering fix, route-level `onRequest`
-removal, dead macro-`expand()` removal, WS legacy-wrapper doc note, ordering drift
-test, Node ESM extension fix.)*
+### Phase 2 — 2026-09-05
+
+1. **AGENTS.md:67 ordering fixed** to match code: response/error hooks now
+   documented as Route → Global → Plugin → Framework (was "Global → Route").
+2. **Route-level `onRequest` is now a compile error, not a silent no-op**
+   (Decision A). Split `RouteHooks` (route scope — no `onRequest`) from a new
+   `GlobalHooks` type (app `src/hooks.ts` + plugin `hooks` — has `onRequest`).
+   Updated `plugin/types.ts` (`Plugin.hooks`, `ResolvedPlugin.hooks`,
+   `MacroFn`), `plugin/registry.ts`, `plugin/composer.ts` to use `GlobalHooks`;
+   `GlobalHooks` is now a public export (`types/index.ts`, main `index.ts`).
+   Added `test/types/method-keys.test.ts` type-level tests
+   (`@ts-expect-error` on route-scope `onRequest`, acceptance on
+   `GlobalHooks`). Also fixed the CLI's global `src/hooks.ts` scaffold
+   (`templates.ts` `generateHooksFile`) to type against `GlobalHooks` instead
+   of `RouteHooks`, since a user following its `beforeRoute` pattern to also
+   type `onRequest` would otherwise hit the same error at the one scope where
+   `onRequest` is legitimate.
+3. **Deleted dead macro code**: `MacroRegistry.expand(name, ...args)` (never
+   called anywhere) and its zero-arg-call footgun in `expandAll()`. `MacroFn`
+   is now `() => GlobalHooks` — macros are documented as plugin-scoped
+   bundles with no per-call arguments.
+4. **WS legacy wrapper**: audit's cited line numbers (`ws/adapter.ts:329-331`)
+   didn't match current code. The actual `undefined`-for-both-cases ambiguity
+   lives only in `createFetchHandler()` (a legacy wrapper around
+   `handleUpgrade()`), is already documented in its own JSDoc, and is not
+   reachable as a live bug against current `handleUpgrade()` return shapes.
+   No code fix needed; strengthened the JSDoc to explicitly recommend
+   `handleUpgrade()` for new integrations.
+5. **Ordering-drift test added**, plus a real drift-prevention fix:
+   `chain/flattener.ts`'s `SCOPE_ORDER_REQUEST`/`SCOPE_ORDER_RESPONSE`
+   constants and its `pushByScope` helper were **dead code** — the actual
+   order was hardcoded separately in four duplicated `push(...)` call sites
+   that happened to agree with the unused constants. Refactored `flatten()`
+   to be driven by those constants (single source of truth per hook
+   direction) instead of duplicating the order four times. Added
+   `test/chain/flatten-order.test.ts`: a behavioral test asserting exact
+   scope order for `beforeRoute`/`afterRoute`/`mapResponse`/`onError`, plus a
+   doc-sync test that reads `AGENTS.md` directly and fails if its stated
+   order ever drifts from the code again — closing the exact gap that let
+   the item-1 AGENTS.md bug ship unnoticed.
+6. **Node ESM fixed and proven**, not just claimed: ran a codemod adding
+   explicit `.js` extensions to all ~330 relative import/export specifiers
+   across `packages/burger-api/src` (228 static, one multi-line dynamic
+   `import()` the codemod's regex missed and was fixed by hand), then
+   switched `tsconfig.build.json` to `module`/`moduleResolution: "NodeNext"`
+   (dev `tsconfig.json` stays on `"bundler"` — it already tolerates `.js`
+   specifiers resolving to `.ts` files, so no dev-workflow change). Verified
+   by building fresh and running `node --version` (stock, no bundler/loader,
+   v22.14.0) `import()` against the built `dist/src/index.js` — succeeds.
+   **New finding while verifying subpath exports**: `burger-api/adapter`
+   (the plain, non-Bun subpath) eagerly re-exported the concrete
+   `BunAdapter` class, which imports the `bun` runtime package at module
+   scope — so importing `burger-api/adapter` crashed under Node/Cloudflare/
+   Deno/Vercel even after the extension fix, defeating the point of having a
+   separate runtime-agnostic subpath. Nothing internal used this re-export
+   (`core/server.ts` already lazily imports `burger-api/adapter/bun`
+   directly). Removed the eager re-export from `adapter/index.ts`; type-only
+   exports (`RuntimeAdapter`, etc.) are erased at runtime and stay. Verified
+   all 8 `package.json` `exports` entries against Node directly: 7 resolve
+   under stock Node, and `./adapter/bun` correctly fails under Node (missing
+   `bun` package) while resolving under Bun — exactly the intended split.
+7. Full framework suite: **766 pass / 0 fail**. `bun run typecheck` clean for
+   both packages. CLI suite: 956 pass / 2 skip / 1 fail — the same
+   Phase 1-flagged flaky `scaffold-e2e.test.ts` typecheck-exit-134 case, no
+   new failures.
+8. Committing all of Phase 2 as one commit (correctness fixes + Node ESM
+   build-config change are tightly coupled — the ESM fix touches nearly
+   every file, so splitting further would just fragment one coherent change).
+
+*(Next: Phase 3 — end-to-end user journey against the local 1.0.0 build. Must
+rebuild `dist` fresh and repack before testing, since `dist` is gitignored and
+this session's build sat in a working tree that also had other Phase 2 edits.)*

@@ -1,10 +1,10 @@
-import type { ServerOptions } from '../types/index';
+import type { ServerOptions } from '../types/index.js';
 import type {
     AdapterStartOptions,
     RuntimeAdapter,
     ServerHandle,
-} from '../adapter/types';
-import type { BunAdapterStartOptions } from '../adapter/bun/types';
+} from '../adapter/types.js';
+import type { BunAdapterStartOptions } from '../adapter/bun/types.js';
 
 /**
  * Non-foldable module id for the Bun adapter. Bundlers keep dynamic imports
@@ -45,7 +45,7 @@ export class Server {
         opts: AdapterStartOptions | BunAdapterStartOptions
     ): Promise<void> {
         if (!this.adapter) {
-            const { BunAdapter } = (await import(adapterModuleId())) as typeof import('../adapter/bun');
+            const { BunAdapter } = (await import(adapterModuleId())) as typeof import('../adapter/bun/index.js');
             this.adapter = new BunAdapter();
         }
         this.handle = this.adapter.start({

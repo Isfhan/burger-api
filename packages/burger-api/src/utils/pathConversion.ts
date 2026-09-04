@@ -1,6 +1,6 @@
 import * as path from 'path';
-import { cleanPrefix } from './index';
-import { ROUTE_CONSTANTS } from './routing';
+import { cleanPrefix } from './index.js';
+import { ROUTE_CONSTANTS } from './routing.js';
 
 /**
  * Converts a file path to an API route path.

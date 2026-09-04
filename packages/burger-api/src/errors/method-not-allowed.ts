@@ -1,4 +1,4 @@
-import { HTTPError } from './http-error';
+import { HTTPError } from './http-error.js';
 
 /**
  * 405 Method Not Allowed — thrown when the HTTP method is not supported.

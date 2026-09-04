@@ -6,7 +6,7 @@
  */
 
 import type { z } from 'zod';
-import type { LowercaseHTTPMethod } from '../utils/routing';
+import type { LowercaseHTTPMethod } from '../utils/routing.js';
 
 /**
  * Minimal structural type for a Standard Schema V1 validator — the common

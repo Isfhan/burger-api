@@ -1,11 +1,11 @@
-export { Router } from './router';
-export { RouterCompiler } from './compiler';
-export { Trie } from './trie';
-export { StaticMap } from './static-map';
-export { AllowCache } from './allow-cache';
+export { Router } from './router.js';
+export { RouterCompiler } from './compiler.js';
+export { Trie } from './trie.js';
+export { StaticMap } from './static-map.js';
+export { AllowCache } from './allow-cache.js';
 export type {
     CompiledHandler,
     CompiledRoute,
     CompiledRouter,
     RouterConfig,
-} from './types';
+} from './types.js';

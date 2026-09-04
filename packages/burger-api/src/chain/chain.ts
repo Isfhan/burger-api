@@ -1,5 +1,5 @@
-import type { ForwardHook, ResponseHook, ErrorHook } from '../lifecycle/types';
-import type { ChainNode, Scope } from './node';
+import type { ForwardHook, ResponseHook, ErrorHook } from '../lifecycle/types.js';
+import type { ChainNode, Scope } from './node.js';
 
 export class HookChain {
     private nodes: ChainNode[] = [];

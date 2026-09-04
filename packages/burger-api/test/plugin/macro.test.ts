@@ -3,7 +3,6 @@ import { MacroRegistry } from '../../src/plugin/macro';
 import { composePluginHooks } from '../../src/plugin/composer';
 import { HookChain } from '../../src/chain/chain';
 import { flatten } from '../../src/chain/flattener';
-import type { MacroFn } from '../../src/plugin/types';
 
 describe('MacroRegistry', () => {
     it('registers and checks a macro', () => {
@@ -11,21 +10,6 @@ describe('MacroRegistry', () => {
         reg.register('auth', () => ({ beforeRoute: [() => undefined] }));
         expect(reg.has('auth')).toBe(true);
         expect(reg.has('missing')).toBe(false);
-    });
-
-    it('expands a registered macro into RouteHooks', () => {
-        const reg = new MacroRegistry();
-        reg.register('auth', () => ({
-            beforeRoute: [() => undefined],
-        }));
-        const hooks = reg.expand('auth');
-        expect(hooks).toBeDefined();
-        expect(hooks!.beforeRoute).toHaveLength(1);
-    });
-
-    it('returns undefined for unknown macro', () => {
-        const reg = new MacroRegistry();
-        expect(reg.expand('nope')).toBeUndefined();
     });
 
     it('expandAll returns ResolvedPlugin entries with plugin scope', () => {

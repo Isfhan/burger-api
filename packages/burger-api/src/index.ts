@@ -1,26 +1,26 @@
 // Import stuff from core
-import { Server } from './core/server';
-import { timingSafeEqual } from './utils/timing-safe';
+import { Server } from './core/server.js';
+import { timingSafeEqual } from './utils/timing-safe.js';
 
 // Import router
-import { Router } from './router';
-import { extractCtxInit } from './router/param-extract';
-import { BurgerContext } from './context/context';
+import { Router } from './router/index.js';
+import { extractCtxInit } from './router/param-extract.js';
+import { BurgerContext } from './context/context.js';
 
 // Import utils
-import { collectRoutes, compareRoutes, setDir } from './utils/index';
-import { notFound, openApiError } from './utils/response';
+import { collectRoutes, compareRoutes, setDir } from './utils/index.js';
+import { notFound, openApiError } from './utils/response.js';
 
 // Import plugin system
-import { PluginRegistry } from './plugin/registry';
-import { MacroRegistry } from './plugin/macro';
-import type { Plugin, MacroFn } from './plugin/types';
-import type { Scope } from './chain/node';
+import { PluginRegistry } from './plugin/registry.js';
+import { MacroRegistry } from './plugin/macro.js';
+import type { Plugin, MacroFn } from './plugin/types.js';
+import type { Scope } from './chain/node.js';
 
 // Import WebSocket modules (scanner/compiler are loaded lazily on the dev
 // filesystem path only — production AOT builds never evaluate them)
-import { WebSocketRouter } from './ws/router';
-import { WebSocketAdapter } from './ws/adapter';
+import { WebSocketRouter } from './ws/router.js';
+import { WebSocketAdapter } from './ws/adapter.js';
 
 // Import types
 import type {
@@ -32,12 +32,12 @@ import type {
     EnvFetchHandler,
     OpenAPIConfig,
     DocsProvider,
-} from './types/index';
-import type { WebSocketConfig } from './ws/types';
+} from './types/index.js';
+import type { WebSocketConfig } from './ws/types.js';
 import type {
     NodeWsBridge,
     NodeWsBridgeOptions,
-} from './ws/platform';
+} from './ws/platform.js';
 
 export class Burger {
     /**
@@ -60,7 +60,7 @@ export class Burger {
      * The page router instance (dev path only — created lazily on first
      * page-routes scan, so production AOT bundles never load it).
      */
-    private pageRouter?: import('./core/page-router').PageRouter;
+    private pageRouter?: import('./core/page-router.js').PageRouter;
 
     /**
      * The page directory (dev path) — retained so the page router can be
@@ -84,7 +84,7 @@ export class Burger {
      * deterministic ordering. Built once from the Module Loader output; not
      * used on the request hot path.
      */
-    private routeTree?: import('./compiler/route-tree').RouteTree;
+    private routeTree?: import('./compiler/route-tree.js').RouteTree;
 
     /**
      * Plugin registry. Populated via `.usePlugin()` before `serve()`;
@@ -210,10 +210,11 @@ export class Burger {
 
     /**
      * Registers a reusable hook factory (macro). Macros are expanded at compile
-     * time into plugin-scoped hooks that apply to every route.
+     * time into plugin-scoped hooks that apply to every route. Macros take no
+     * per-call arguments — a macro factory is a zero-arg bundle of hooks.
      *
      * @param name Unique macro name.
-     * @param fn Factory function that returns `RouteHooks`.
+     * @param fn Factory function that returns `GlobalHooks`.
      * @returns `this` for chaining.
      */
     macro(name: string, fn: MacroFn): this {
@@ -242,7 +243,7 @@ export class Burger {
      */
     websocket(
         path: string,
-        handlers: import('./ws/types').WebSocketHandlers
+        handlers: import('./ws/types.js').WebSocketHandlers
     ): this {
         this.programmaticWsRoutes.set(path, { path, handlers });
         return this;
@@ -284,7 +285,7 @@ export class Burger {
             // Dev path: load from filesystem via PageRouter
             // Lazy-load the page router (dev-only; never evaluated in
             // production AOT bundles that ship prebuilt pageRoutes).
-            const { PageRouter } = await import('./core/page-router');
+            const { PageRouter } = await import('./core/page-router.js');
             const pageRouter = new PageRouter(this.pageDir, this.pagePrefix);
             this.pageRouter = pageRouter;
 
@@ -343,7 +344,7 @@ export class Burger {
     private async processAssetRoutes(): Promise<void> {
         const prebuiltAssets = this.options.assetRoutes;
         if (Array.isArray(prebuiltAssets)) {
-            const { embeddedAssetHandler } = await import('./core/assets');
+            const { embeddedAssetHandler } = await import('./core/assets.js');
             for (const asset of prebuiltAssets) {
                 this.routes[asset.path] = embeddedAssetHandler(asset);
             }
@@ -352,7 +353,7 @@ export class Burger {
 
         if (!this.pageDir) return;
         const { collectDiskAssetRoutes, diskAssetHandler } = await import(
-            './core/assets'
+            './core/assets.js'
         );
         const routes = await collectDiskAssetRoutes(
             this.pageDir,
@@ -380,7 +381,7 @@ export class Burger {
         if (this.routesProcessed) return true;
         // Production path: use pre-built API routes (no filesystem scan)
         let apiRoutes: RouteDefinition[];
-        let globalOnRequest: import('./lifecycle/types').Hook[] | undefined;
+        let globalOnRequest: import('./lifecycle/types.js').Hook[] | undefined;
         if (Array.isArray(this.options.apiRoutes)) {
             apiRoutes = [...this.options.apiRoutes].sort((a, b) =>
                 compareRoutes(a, b)
@@ -394,8 +395,8 @@ export class Burger {
                 const onRequest = globalHooks.onRequest;
                 if (onRequest) {
                     globalOnRequest = Array.isArray(onRequest)
-                        ? (onRequest as import('./lifecycle/types').Hook[])
-                        : [onRequest as import('./lifecycle/types').Hook];
+                        ? (onRequest as import('./lifecycle/types.js').Hook[])
+                        : [onRequest as import('./lifecycle/types.js').Hook];
                 }
             }
 
@@ -422,8 +423,8 @@ export class Burger {
             // Loaded lazily: production AOT builds ship prebuilt apiRoutes
             // and never evaluate these filesystem modules.
             if (!this.apiDir) return false;
-            const { DirectoryScanner } = await import('./compiler/scanner');
-            const { ModuleLoader } = await import('./compiler/module-loader');
+            const { DirectoryScanner } = await import('./compiler/scanner.js');
+            const { ModuleLoader } = await import('./compiler/module-loader.js');
             const scanned = await new DirectoryScanner(
                 this.apiDir,
                 this.apiPrefix
@@ -448,7 +449,7 @@ export class Burger {
             }
 
             // Retained for introspection (deterministic ordering, no dispatch).
-            const { RouteTree } = await import('./compiler/route-tree');
+            const { RouteTree } = await import('./compiler/route-tree.js');
             this.routeTree = new RouteTree(modules);
             apiRoutes = modules.map((m) => ({
                 path: m.path,
@@ -470,7 +471,7 @@ export class Burger {
         // Generate the OpenAPI document only when docs are enabled, and load
         // the generator lazily (it pulls Zod's JSON Schema machinery).
         if (openapiEnabled) {
-            const { generateOpenAPIDocument } = await import('./core/openapi');
+            const { generateOpenAPIDocument } = await import('./core/openapi.js');
             this.openApiDoc = generateOpenAPIDocument(
                 apiRoutes,
                 this.options,
@@ -496,7 +497,7 @@ export class Burger {
         // Extract onRequest hooks from plugins — these run before routing
         // (pre-routing, app-level). They are NOT per-route HookPlan entries.
         // Order: Framework (internal) → Plugin → Global (src/hooks.ts) → Route
-        const onRequestHooks: import('./lifecycle/types').Hook[] = [];
+        const onRequestHooks: import('./lifecycle/types.js').Hook[] = [];
         for (const plugin of allHooks) {
             const h = plugin.hooks.onRequest;
             if (h) {
@@ -531,7 +532,7 @@ export class Burger {
 
             // Docs UI: use configured provider or default to Swagger UI (loaded
             // lazily — only needed when the docs route is registered).
-            const { swaggerDocs } = await import('./core/docs-providers');
+            const { swaggerDocs } = await import('./core/docs-providers.js');
             const provider: DocsProvider = config?.provider ?? swaggerDocs();
             const expectedAuth = config?.docsAuth
                 ? 'Basic ' +
@@ -578,8 +579,8 @@ export class Burger {
         // Extract auth hooks from resolved plugins for WebSocket upgrade
         const resolvedPlugins = await this.pluginRegistry.resolveAll();
         let pluginTransform:
-            import('./lifecycle/types').TransformMap | undefined;
-        const pluginBeforeRoute: import('./lifecycle/types').Hook[] = [];
+            import('./lifecycle/types.js').TransformMap | undefined;
+        const pluginBeforeRoute: import('./lifecycle/types.js').Hook[] = [];
 
         for (const plugin of resolvedPlugins) {
             // Collect transform hooks
@@ -639,12 +640,12 @@ export class Burger {
         if (this.wsDir) {
             // Dev path — the scanner/compiler are loaded lazily so production
             // AOT builds (prebuilt wsRoutes) never evaluate them.
-            const { WebSocketScanner } = await import('./ws/scanner');
+            const { WebSocketScanner } = await import('./ws/scanner.js');
             const scanner = new WebSocketScanner(this.wsDir);
             const scanResult = await scanner.scan();
 
             if (scanResult.routes.length > 0) {
-                const { WebSocketCompiler } = await import('./ws/compiler');
+                const { WebSocketCompiler } = await import('./ws/compiler.js');
                 const compiler = new WebSocketCompiler();
 
                 // Set global hooks if found
@@ -725,8 +726,8 @@ export class Burger {
         const router = this.dynamicRouter;
         return async (
             request: Request,
-            env?: import('./context/context').BurgerEnv,
-            executionCtx?: import('./context/context').BurgerExecutionContext
+            env?: import('./context/context.js').BurgerEnv,
+            executionCtx?: import('./context/context.js').BurgerExecutionContext
         ): Promise<Response> => {
             // WebSocket upgrades are consumed before HTTP dispatch.
             if (
@@ -922,49 +923,49 @@ function mergeWsConfig(
 }
 
 // Export BurgerContext (the public request context type)
-export { BurgerContext } from './context/context';
+export { BurgerContext } from './context/context.js';
 export type {
     BurgerServices,
     BurgerValidated,
     BurgerEnv,
     BurgerExecutionContext,
-} from './context/context';
+} from './context/context.js';
 
 // Export utils used by examples and CLI build pipeline
-export { setDir } from './utils/index';
-export { cleanPrefix, normalizePath } from './utils/index';
+export { setDir } from './utils/index.js';
+export { cleanPrefix, normalizePath } from './utils/index.js';
 
 // Export constant-time comparison (used by ecosystem auth plugins)
-export { timingSafeEqual } from './utils/timing-safe';
+export { timingSafeEqual } from './utils/timing-safe.js';
 
 // Export error classes
-export { HTTPError, renderHTTPError } from './errors/http-error';
-export { ASSET_MIME, contentTypeFor } from './core/assets';
+export { HTTPError, renderHTTPError } from './errors/http-error.js';
+export { ASSET_MIME, contentTypeFor } from './core/assets.js';
 export type {
     EmbeddedAsset,
     DiskAssetRoute,
-} from './core/assets';
-export { ValidationError } from './validation/error';
-export { NotFoundError } from './errors/not-found';
-export { UnauthorizedError } from './errors/unauthorized';
-export { ForbiddenError } from './errors/forbidden';
-export { MethodNotAllowedError } from './errors/method-not-allowed';
+} from './core/assets.js';
+export { ValidationError } from './validation/error.js';
+export { NotFoundError } from './errors/not-found.js';
+export { UnauthorizedError } from './errors/unauthorized.js';
+export { ForbiddenError } from './errors/forbidden.js';
+export { MethodNotAllowedError } from './errors/method-not-allowed.js';
 
 // Export docs providers
-export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers';
+export { scalarDocs, swaggerDocs, redocDocs } from './core/docs-providers.js';
 
 // Export the Web-Standard (WinterCG) fetch entry
-export { toFetchHandler } from './adapter/web-standard';
-export type { FetchHandlerEntry } from './adapter/web-standard';
+export { toFetchHandler } from './adapter/web-standard/index.js';
+export type { FetchHandlerEntry } from './adapter/web-standard/index.js';
 
 // Export adapter contract types
 export type {
     RuntimeAdapter,
     AdapterStartOptions,
     ServerHandle,
-} from './adapter/types';
-export type { BunAdapterStartOptions } from './adapter/bun/types';
-export type { ServerInfo } from './types/index';
+} from './adapter/types.js';
+export type { BunAdapterStartOptions } from './adapter/bun/types.js';
+export type { ServerInfo } from './types/index.js';
 
 // Export public types
 export type {
@@ -982,6 +983,7 @@ export type {
     openapi,
     OpenAPIMeta,
     RouteHooks,
+    GlobalHooks,
     TransformMap,
     ContextSet,
     RouteMeta,
@@ -989,14 +991,14 @@ export type {
     DocsAuth,
     DocsProvider,
     OpenAPIObject,
-} from './types/index';
+} from './types/index.js';
 
 // The Server class returned by `getServer()` — exported as a type so callers
 // can name it.
-export type { Server } from './core/server';
+export type { Server } from './core/server.js';
 
 // Export HTTP method unions (used by typed route definition keys)
-export type { HTTPMethod, LowercaseHTTPMethod } from './utils/routing';
+export type { HTTPMethod, LowercaseHTTPMethod } from './utils/routing.js';
 
 // Export lifecycle types
 export type {
@@ -1006,14 +1008,14 @@ export type {
     ResponseHook,
     ResponseHookResult,
     ErrorHook,
-} from './lifecycle/types';
+} from './lifecycle/types.js';
 
 // Export validation types
-export type { ValidationIssue } from './validation/types';
+export type { ValidationIssue } from './validation/types.js';
 
 // Export plugin types and macro types
-export type { Plugin, MacroFn } from './plugin/types';
-export type { Scope } from './chain/node';
+export type { Plugin, MacroFn } from './plugin/types.js';
+export type { Scope } from './chain/node.js';
 
 // Export WebSocket types
 export type {
@@ -1027,13 +1029,13 @@ export type {
     WebSocketModule,
     WebSocketHooksModule,
     WebSocketConfigModule,
-} from './ws/types';
+} from './ws/types.js';
 
 export {
     WebSocketReadyState,
     WebSocketCloseCode,
     BurgerWSContext,
-} from './ws/types';
+} from './ws/types.js';
 
-export { WebSocketAdapter } from './ws/adapter';
-export type { WebSocketAdapterOptions } from './ws/adapter';
+export { WebSocketAdapter } from './ws/adapter.js';
+export type { WebSocketAdapterOptions } from './ws/adapter.js';

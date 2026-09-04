@@ -19,7 +19,7 @@
  */
 
 import type { z } from 'zod';
-import type { SchemaInput, StandardSchemaV1 } from '../validation/types';
+import type { SchemaInput, StandardSchemaV1 } from '../validation/types.js';
 
 /**
  * The shape of a per-method `schema.ts` export: one optional schema per

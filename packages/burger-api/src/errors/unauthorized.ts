@@ -1,4 +1,4 @@
-import { HTTPError } from './http-error';
+import { HTTPError } from './http-error.js';
 
 /**
  * 401 Unauthorized — thrown when authentication is missing or invalid.

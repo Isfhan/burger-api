@@ -14,17 +14,17 @@
  * - throws a `ValidationError` (422, RFC 9457 problem details) on failure.
  */
 
-import type { BurgerContext } from '../context/context';
-import type { LowercaseHTTPMethod } from '../utils/routing';
-import type { ForwardHook } from '../lifecycle/types';
+import type { BurgerContext } from '../context/context.js';
+import type { LowercaseHTTPMethod } from '../utils/routing.js';
+import type { ForwardHook } from '../lifecycle/types.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
     ValidationIssue,
     ValidationSlot,
-} from './types';
-import { apply as applyCoercion } from './coerce';
-import { ValidationError } from './error';
+} from './types.js';
+import { apply as applyCoercion } from './coerce.js';
+import { ValidationError } from './error.js';
 
 /**
  * Splits a `Cookie` header into `name=value` pairs, honoring RFC 6265 quoted

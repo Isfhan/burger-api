@@ -3,12 +3,12 @@ import type {
     ContextSet,
     RouteAccessInfo,
     RouteMeta,
-} from './types';
-import { parseQuery } from './query-parser';
-import { parseCookies } from './cookie-parser';
-import type { InferValidated } from '../types/inference';
-import type { RouteMethodSchema } from '../types/inference';
-import type { RouteConfig } from '../types/index';
+} from './types.js';
+import { parseQuery } from './query-parser.js';
+import { parseCookies } from './cookie-parser.js';
+import type { InferValidated } from '../types/inference.js';
+import type { RouteMethodSchema } from '../types/inference.js';
+import type { RouteConfig } from '../types/index.js';
 
 /**
  * Empty interface for module augmentation. Users extend this to type

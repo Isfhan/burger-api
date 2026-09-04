@@ -14,18 +14,18 @@
  * schemas (by reference) share one cached validator.
  */
 
-import type { RouteSchema, MethodSchema } from '../types/index';
-import type { LowercaseHTTPMethod } from '../utils/routing';
-import { ValidatorCache } from './cache';
+import type { RouteSchema, MethodSchema } from '../types/index.js';
+import type { LowercaseHTTPMethod } from '../utils/routing.js';
+import { ValidatorCache } from './cache.js';
 import {
     detectAdapter,
     __setZodAdapter,
     __setStandardAdapter,
-} from './adapter';
+} from './adapter.js';
 // Explicit adapter registration — value imports (not side-effect imports) so
 // registration survives tree-shaking under `sideEffects: false`.
-import { ZodAdapter } from './adapters/zod';
-import { StandardAdapter } from './adapters/standard';
+import { ZodAdapter } from './adapters/zod.js';
+import { StandardAdapter } from './adapters/standard.js';
 __setZodAdapter(ZodAdapter);
 __setStandardAdapter(StandardAdapter);
 import type {
@@ -35,8 +35,8 @@ import type {
     ValidationSlot,
     ValidatorConfig,
     CoercionPlan,
-} from './types';
-import { buildPlan as buildCoercionPlan } from './coerce';
+} from './types.js';
+import { buildPlan as buildCoercionPlan } from './coerce.js';
 
 /** The shared, process-lifetime validator cache. */
 export const validatorCache = new ValidatorCache();

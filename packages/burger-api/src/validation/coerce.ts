@@ -24,7 +24,7 @@ import type {
     CoercionPlan,
     SchemaInput,
     ValidationSlot,
-} from './types';
+} from './types.js';
 
 /** Unwraps optional/nullable/default wrappers to reach the inner type. */
 function unwrap(def: unknown): unknown {

@@ -767,7 +767,7 @@ export function generateHooksFile(lang: 'ts' | 'js' = 'ts'): string {
  * Hook points: onRequest, transform, beforeRoute, afterRoute, mapResponse, onError
  */
 
-/** @type {import('burger-api').RouteHooks['beforeRoute']} */
+/** @type {import('burger-api').GlobalHooks['beforeRoute']} */
 export const beforeRoute = [];
 `;
     }
@@ -776,9 +776,9 @@ export const beforeRoute = [];
  * Hook points: onRequest, transform, beforeRoute, afterRoute, mapResponse, onError
  */
 
-import type { RouteHooks } from 'burger-api';
+import type { GlobalHooks } from 'burger-api';
 
-export const beforeRoute: RouteHooks['beforeRoute'] = [];
+export const beforeRoute: GlobalHooks['beforeRoute'] = [];
 `;
 }
 

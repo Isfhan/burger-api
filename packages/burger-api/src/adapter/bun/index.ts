@@ -1,10 +1,10 @@
 import { serve } from 'bun';
-import { renderHTTPError } from '../../errors/http-error';
+import { renderHTTPError } from '../../errors/http-error.js';
 import type {
     RuntimeAdapter,
     ServerHandle,
-} from '../types';
-import type { BunAdapterStartOptions } from './types';
+} from '../types.js';
+import type { BunAdapterStartOptions } from './types.js';
 
 /**
  * The primary, optimized runtime adapter. Wraps `Bun.serve` + Bun's native

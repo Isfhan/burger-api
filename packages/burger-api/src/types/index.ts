@@ -2,14 +2,14 @@ import type {
     BurgerContext,
     BurgerEnv,
     BurgerExecutionContext,
-} from '../context/context';
-import type { SchemaInput, ValidatorConfig } from '../validation/types';
-import type { RouteHooks, TransformMap } from '../lifecycle/types';
-export type { RouteHooks, TransformMap } from '../lifecycle/types';
-import type { OpenAPIConfig } from './openapi-config';
-import type { RuntimeAdapter } from '../adapter/types';
-import type { WebSocketRouteDefinition } from '../ws/types';
-import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing';
+} from '../context/context.js';
+import type { SchemaInput, ValidatorConfig } from '../validation/types.js';
+import type { RouteHooks, TransformMap } from '../lifecycle/types.js';
+export type { RouteHooks, GlobalHooks, TransformMap } from '../lifecycle/types.js';
+import type { OpenAPIConfig } from './openapi-config.js';
+import type { RuntimeAdapter } from '../adapter/types.js';
+import type { WebSocketRouteDefinition } from '../ws/types.js';
+import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing.js';
 
 /**
  * Minimal structural view of the running server exposed to `fetch` handlers.
@@ -100,7 +100,7 @@ export interface ServerOptions {
      * served from the embedded table; otherwise dev reads them from disk
      * under `pageDir`.
      */
-    assetRoutes?: import('../core/assets').EmbeddedAsset[];
+    assetRoutes?: import('../core/assets.js').EmbeddedAsset[];
 
     /**
      * Pre-built WebSocket routes (e.g. from CLI build). When provided, wsDir is
@@ -396,7 +396,7 @@ export type {
     ContextSet,
     RouteAccessInfo,
     RouteMeta,
-} from '../context/types';
+} from '../context/types.js';
 
 // Re-export OpenAPI config types
 export type {
@@ -409,4 +409,4 @@ export type {
     OpenAPIContact,
     OpenAPILicense,
     OpenAPIExternalDocs,
-} from './openapi-config';
+} from './openapi-config.js';

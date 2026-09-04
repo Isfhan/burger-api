@@ -18,7 +18,7 @@ import type {
     StandardSchemaV1,
     ValidationSlot,
     CompiledValidator,
-} from './types';
+} from './types.js';
 
 /**
  * A stable connector between BurgerAPI's request flow and a concrete schema

@@ -1,7 +1,7 @@
 import type { HTMLBundle } from 'bun';
-import type { CompiledHandler } from '../../router/types';
-import type { RequestHandler } from '../../types/index';
-import type { AdapterStartOptions } from '../types';
+import type { CompiledHandler } from '../../router/types.js';
+import type { RequestHandler } from '../../types/index.js';
+import type { AdapterStartOptions } from '../types.js';
 
 /**
  * Bun-only adapter options: native page `HTMLBundle`s and the Bun WebSocket

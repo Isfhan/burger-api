@@ -12,9 +12,9 @@ import type {
     WebSocketModule,
     WebSocketHooksModule,
     WebSocketConfigModule,
-} from './types';
+} from './types.js';
 
-import type { ScannedWebSocketRoute } from './scanner';
+import type { ScannedWebSocketRoute } from './scanner.js';
 
 /** Connection-level options — Bun.serve-wide, not per-route (see compile). */
 const WS_TRANSPORT_KEYS = [

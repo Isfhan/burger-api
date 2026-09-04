@@ -1,4 +1,4 @@
-import type { OpenAPIObject, DocsProvider } from '../types/openapi-config';
+import type { OpenAPIObject, DocsProvider } from '../types/openapi-config.js';
 
 /**
  * Scalar API Reference — alternative docs UI.

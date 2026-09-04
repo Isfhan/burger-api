@@ -1,8 +1,8 @@
-import type { BurgerContext } from '../context/context';
+import type { BurgerContext } from '../context/context.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
-} from '../validation/types';
+} from '../validation/types.js';
 
 /**
  * The forward hook points that run inside the single request pipeline.
@@ -122,15 +122,30 @@ export type TransformMap = Record<string, (ctx: BurgerContext) => unknown>;
 
 /**
  * The raw, uncompiled hook object carried on a `RouteModule` / `RouteDefinition`
- * from `hooks.ts`. Every value is normalized to a `Hook[]` / `ErrorHook[]` when
- * the plan is built.
+ * from a route's `hooks.ts` (or inline `route.ts` export). Every value is
+ * normalized to a `Hook[]` / `ErrorHook[]` when the plan is built.
+ *
+ * Route scope only — there is no `onRequest` here. `onRequest` runs
+ * pre-routing, before a route is even matched, so it cannot be scoped to one
+ * route; declaring it in a route's `hooks.ts` is always a no-op. Use
+ * {@link GlobalHooks} (the app's `src/hooks.ts`) or a plugin's `hooks` for
+ * `onRequest`.
  */
 export interface RouteHooks {
-    /** Pre-routing hook — runs before the route is matched. App-level only. */
-    onRequest?: ForwardHook | ForwardHook[];
     beforeRoute?: ForwardHook | ForwardHook[];
     afterRoute?: ResponseHook | ResponseHook[];
     mapResponse?: ResponseHook | ResponseHook[];
     onError?: ErrorHook | ErrorHook[];
     transform?: TransformMap;
+}
+
+/**
+ * The hook object shape for scopes that run before routing: the app's global
+ * `src/hooks.ts` and plugin `hooks`. Adds `onRequest` on top of
+ * {@link RouteHooks} — the pre-routing hook that runs before a route is
+ * matched, so it can only apply app-wide or plugin-wide, never per-route.
+ */
+export interface GlobalHooks extends RouteHooks {
+    /** Pre-routing hook — runs before the route is matched. */
+    onRequest?: ForwardHook | ForwardHook[];
 }

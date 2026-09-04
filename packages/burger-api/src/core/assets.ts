@@ -15,7 +15,7 @@
 
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { RequestHandler } from '../types/index';
+import type { RequestHandler } from '../types/index.js';
 
 /** Extension → Content-Type map for supported static assets. */
 export const ASSET_MIME: Record<string, string> = {

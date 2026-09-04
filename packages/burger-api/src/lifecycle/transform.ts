@@ -1,5 +1,5 @@
-import type { BurgerContext } from '../context/context';
-import type { TransformMap } from './types';
+import type { BurgerContext } from '../context/context.js';
+import type { TransformMap } from './types.js';
 
 const RESERVED = new Set([
     'params',

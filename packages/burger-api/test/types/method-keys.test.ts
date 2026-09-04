@@ -12,6 +12,7 @@ import type {
     RouteSchema,
     openapi,
     RouteHooks,
+    GlobalHooks,
     RequestHandler,
     HTTPMethod,
     BuildConfig,
@@ -317,5 +318,25 @@ describe('consumer convention-file types', () => {
         // @ts-expect-error unknown keys still fail under the augmentation
         const bogus = ctx.config?.nope;
         expect(bogus).toBeUndefined();
+    });
+});
+
+describe('onRequest is app/plugin scope only, never route scope', () => {
+    it('rejects onRequest on a route-level hooks object (always a no-op there)', () => {
+        const hooks: RouteHooks = {
+            beforeRoute: [() => undefined],
+            // @ts-expect-error onRequest is pre-routing — a route can't be
+            // matched yet, so it's not part of route-scoped RouteHooks.
+            onRequest: [() => undefined],
+        };
+        expect(hooks).toBeDefined();
+    });
+
+    it('accepts onRequest on GlobalHooks (app hooks.ts / plugin hooks)', () => {
+        const hooks: GlobalHooks = {
+            onRequest: [() => undefined],
+            beforeRoute: [() => undefined],
+        };
+        expect(hooks.onRequest).toBeDefined();
     });
 });

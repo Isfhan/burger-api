@@ -14,12 +14,12 @@ import {
     normalizePath,
     compareRoutes,
     ROUTE_CONSTANTS,
-} from '../utils/index';
-import { resolveScanDir } from '../utils/fs';
-import { filePathToPageRoutePath } from '../utils/pathConversion';
+} from '../utils/index.js';
+import { resolveScanDir } from '../utils/fs.js';
+import { filePathToPageRoutePath } from '../utils/pathConversion.js';
 
 // Import types
-import type { PageDefinition, RequestHandler } from '../types/index';
+import type { PageDefinition, RequestHandler } from '../types/index.js';
 
 /**
  * PageRouter class for handling file-based page routing.

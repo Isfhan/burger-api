@@ -3,6 +3,12 @@
     "compilerOptions": {
         "noEmit": false,
         "allowImportingTsExtensions": false,
+        // NodeNext (not "bundler"): the published dist must resolve under
+        // stock Node ESM with no bundler/loader. This requires explicit
+        // .js extensions on every relative import in src — enforced by tsc
+        // at this step, not just documented (see docs/RELEASE-1.0.0-AUDIT.md).
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         "declaration": true,
         "declarationDir": "./dist",
         "outDir": "./dist",

@@ -2,7 +2,7 @@
  * WebSocket types for BurgerAPI
  */
 
-import type { BurgerServices } from '../context/context';
+import type { BurgerServices } from '../context/context.js';
 
 /**
  * Per-connection data structure

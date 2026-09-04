@@ -3,20 +3,20 @@
  * Integrates WebSocket router with Bun.serve()
  */
 
-import type { WebSocketRouter } from './router';
+import type { WebSocketRouter } from './router.js';
 import type {
     CompiledWebSocketRoute,
     BurgerWS,
     WebSocketConfig,
-} from './types';
-import { BurgerWSContext } from './types';
-import { BurgerContext } from '../context/context';
+} from './types.js';
+import { BurgerWSContext } from './types.js';
+import { BurgerContext } from '../context/context.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
-} from '../context/context';
-import type { TransformMap } from '../lifecycle/types';
-import { applyTransform } from '../lifecycle/transform';
+} from '../context/context.js';
+import type { TransformMap } from '../lifecycle/types.js';
+import { applyTransform } from '../lifecycle/transform.js';
 import {
     acceptWsUpgrade,
     detectWsPlatform,
@@ -25,7 +25,7 @@ import {
     type NodeWsBridgeOptions,
     type WsEventSink,
     type WsUpgradeOutcome,
-} from './platform';
+} from './platform.js';
 
 /**
  * WebSocket adapter options
@@ -391,6 +391,11 @@ export class WebSocketAdapter {
      * Returns `undefined` for BOTH "not an upgrade" and "Bun took over the
      * socket" — callers needing the distinction must use `handleUpgrade`.
      * Kept for backward compatibility with existing integrations.
+     *
+     * Prefer {@link handleUpgrade} directly for any new integration: it
+     * returns a discriminated `{ handled: false }` / `{ handled: true,
+     * response }` outcome, so the ambiguity this wrapper carries never
+     * arises.
      */
     createFetchHandler() {
         return async (

@@ -1,15 +1,15 @@
-import { HTTP_METHODS } from '../utils/routing';
-import type { HTTPMethod } from '../utils/routing';
-import { createAutoOptionsHandler } from '../utils/response';
+import { HTTP_METHODS } from '../utils/routing.js';
+import type { HTTPMethod } from '../utils/routing.js';
+import { createAutoOptionsHandler } from '../utils/response.js';
 import type {
     openapi,
     OpenAPIConfig,
     RequestHandler,
     RouteSchema,
-} from '../types/index';
-import type { RouteHooks } from '../lifecycle/types';
-import type { RouteModule, ScannedRoute, ScanResult } from './route-module';
-import type { Hook } from '../lifecycle/types';
+} from '../types/index.js';
+import type { RouteHooks } from '../lifecycle/types.js';
+import type { RouteModule, ScannedRoute, ScanResult } from './route-module.js';
+import type { Hook } from '../lifecycle/types.js';
 
 /** Uppercase HTTP method names for schema export detection. */
 const HTTP_METHOD_SET: ReadonlySet<string> = new Set(HTTP_METHODS);

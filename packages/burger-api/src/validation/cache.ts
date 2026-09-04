@@ -12,7 +12,7 @@
  * storage mechanism (`Map`) is an implementation detail.
  */
 
-import type { CompiledValidator } from './types';
+import type { CompiledValidator } from './types.js';
 
 export class ValidatorCache {
     private store = new Map<string, CompiledValidator>();

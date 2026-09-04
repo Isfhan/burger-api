@@ -2,7 +2,7 @@ import type {
     ForwardHook,
     ResponseHook,
     ErrorHook,
-} from '../lifecycle/types';
+} from '../lifecycle/types.js';
 
 export type Scope = 'framework' | 'global' | 'plugin' | 'local';
 

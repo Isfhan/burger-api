@@ -1,4 +1,4 @@
-import type { PageDefinition, RouteDefinition, TrieNode } from '../types/index';
+import type { PageDefinition, RouteDefinition, TrieNode } from '../types/index.js';
 
 /**
  * Constants for route handling.

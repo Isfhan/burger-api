@@ -1,6 +1,6 @@
-import type { Hook, ErrorHook, RouteHooks } from '../lifecycle/types';
-import { HookChain } from '../chain/chain';
-import type { ResolvedPlugin } from './types';
+import type { Hook, ErrorHook, GlobalHooks } from '../lifecycle/types.js';
+import { HookChain } from '../chain/chain.js';
+import type { ResolvedPlugin } from './types.js';
 
 export function composePluginHooks(
     chain: HookChain,
@@ -8,7 +8,7 @@ export function composePluginHooks(
     _routePath: string
 ): void {
     for (const plugin of plugins) {
-        const hooks: RouteHooks = plugin.hooks;
+        const hooks: GlobalHooks = plugin.hooks;
         const scope = plugin.scope;
 
         if (hooks.beforeRoute) {

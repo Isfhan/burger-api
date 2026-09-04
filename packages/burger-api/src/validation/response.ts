@@ -17,8 +17,8 @@ import type {
     CompiledValidator,
     ValidationResult,
     ValidatorConfig,
-} from './types';
-import { renderValidationError } from './error';
+} from './types.js';
+import { renderValidationError } from './error.js';
 
 /** Resolves the response validator for a status (exact, then class). */
 function selectResponseValidator(
