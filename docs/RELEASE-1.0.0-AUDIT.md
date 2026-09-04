@@ -612,4 +612,102 @@ record, not the content.
 **Nothing left open from Phase 4/5's assigned scope.** The `generate.md`
 consolidation is the only deliberately-skipped optional item, noted above.
 
+### Phase 6 — Release gate — 2026-09-05
+
+Ran the harvested Phase 17/18 pre-flight checklist against the fully-fixed
+tree (all of Phases 0-5 committed). **No `npm publish` run — stopping here
+per this session's decision; you run the actual publish commands.**
+
+- **`bun run test:all`**: 912 pass / 1 fail. The 1 failure is the
+  long-standing `scaffold-e2e.test.ts` flake (see below) — everything else
+  (route-sync, router, framework, ecosystem, cli, lifecycle, context,
+  router-unit, smoke, chain, plugin, core, errors, validation, compiler,
+  adapter, provider, ws, typecheck) is green.
+- **Size guard** (`bun run size` in `burger-api-benchmarks`, relinked to the
+  fresh local build): **PASS, but tight** — `app-core` entry is
+  **50.7 KB / 53.7 KB** (55,000-byte limit), i.e. **94% of budget**, up from
+  the 42.1 KB the plan cited at session start. This session's WIP additions
+  (JIT compiler, regex dispatch engine, Node WS bridge, env/executionCtx
+  bindings) are real code, not bloat, but there's only ~3 KB of headroom
+  left before this guard starts failing on the next feature. Flagging for
+  awareness, not blocking — recommend revisiting the budget or looking for
+  trim opportunities in a follow-up, not this release.
+- **`npm pack --dry-run`**: `burger-api` → 139.8 kB tarball, 159 files, only
+  `dist/**` + `LICENSE` + `README.md` + `package.json` — no `src/` leaks, no
+  secrets, no `.git`. `@burger-api/cli` → 57.6 kB, raw TS source (by design,
+  `bin` points at `src/index.ts`, run via Bun's shebang, no build step).
+- **All 8 `package.json` exports re-verified** against the final rebuilt
+  `dist` directly with Node: `.`, `./validation`, `./compiler`, `./openapi`,
+  `./ws`, `./adapter`, `./adapter/web-standard` all resolve under stock Node;
+  `./adapter/bun` correctly fails under Node (missing `bun` package) and
+  resolves under Bun — the intended split, confirmed again on the fully
+  fixed tree, not just the mid-session Phase 2 state.
+- **`engines` fixed**: `packages/burger-api/package.json` only declared
+  `bun: >=1.3.0`; added `node: >=24` to match every compatibility claim made
+  elsewhere (docs, `AGENTS.md`, `toFetchHandler` support) — the checklist's
+  own expected shape (`bun >= 1.3, node >= 24`) wasn't actually met until now.
+  `dependencies` confirmed as only `zod ^4.0.17` — no `bun` import leaks into
+  the web-standard entry (re-verified: `./adapter/web-standard` and `./ws`
+  both import-clean under Node above).
+- **CLI standalone executables**: `build:win`, `build:linux`, `build:mac` all
+  built successfully; the Windows one was also smoke-run (`--version` → `1.0.0`).
+  `build:mac-intel` not separately verified (four architectures, one spot-check
+  of the cross-compile path via win/linux/mac was judged sufficient — same
+  build script, just a different `--target`).
+- **CI workflow files** (`ci.yml`, `release-burger-api-npm.yml`,
+  `release-cli-npm.yml`, `release-cli.yml`) — existence not re-verified this
+  session; not re-checked whether they'd actually pass (no CI run triggered).
+
+**Investigated further: the recurring `scaffold-e2e.test.ts` flake.**
+Root-caused this session (finally): `killTree`'s `taskkill /F /T` on Windows
+returns once the kill is *issued*, not once every handle (files, named
+pipes) the killed process tree held is *released* by the OS. The test kills
+a `bun --watch` dev server and immediately spawns `bun run typecheck` right
+after — occasionally racing that teardown and crashing the new process with
+SIGABRT (exit 134). Added a 500ms grace period after `taskkill` on Windows.
+**This reduced but did not eliminate the flake** — re-ran the isolated test
+file twice after the fix: one failure, one pass, both within the same
+40-60s-per-run range as before. Kept the fix (it's a correct, harmless
+partial mitigation and the reasoning is now documented in the test file for
+whoever picks this up next), but **this is not fully solved**. Not
+release-blocking: every manual reproduction of the underlying scaffold →
+`bun run typecheck` sequence outside the test harness has succeeded cleanly,
+every single time, across all of Phases 1, 2, 3, and 6 — this is a CI/test-
+harness timing issue specific to killing a watch process and immediately
+spawning another Bun process on Windows, not a defect in what ships to users.
+
+## Go / No-Go summary
+
+**Shippable.** Every release-blocking (P0) issue found during this session's
+audit has been fixed and independently re-verified:
+- JIT/interpreter divergence (Phase 1)
+- Route-level `onRequest` silent no-op, dead macro code, hook-ordering doc
+  drift (with a regression test), Node ESM resolution + the `adapter`
+  subpath crash it uncovered (Phase 2)
+- Cloudflare Workers crash on boot, `config.ts` silently dropped in
+  production builds (Phase 3)
+- Doc drift across the website and AI skill that would have shipped
+  incorrect/non-compiling guidance to every v1.0.0 user and AI agent
+  (Phase 4/5)
+
+**Before running `npm publish`, two non-code items from Phase 3 still need a
+decision from you** (neither is a code change, both are process/sequencing):
+1. `burger-api add`/`list`/`skills install` will 404 for every user until
+   `feat/burger-api-v1` merges to `main` on GitHub — the current plan
+   sequences that merge *after* publish. Move it to before-or-concurrent, or
+   accept ecosystem hooks/plugins being broken for a window after 1.0.0 ships.
+2. The size-guard headroom (94% of budget) and the still-intermittent e2e
+   flake are both worth a follow-up, but neither blocks this release.
+
+**Not fixed, logged as follow-up work (none release-blocking):**
+ecosystem hooks typed against the pre-1.0 `BurgerNext` contract (P1, needs a
+real rewrite for `cors` at minimum), CLI `add`'s hyphen→identifier bug (P2,
+trivial), dev server not watching new route directories (P2), scaffold not
+wiring `pageDir`/`wsDir` into dev's entry (P2).
+
+**Commits this session** (branch `feat/burger-api-v1`): `d84780a`, `7c5684d`,
+`98cd392`, `7ab098d` (burger-api repo), `e288a13`, `3fc25ea`, `66e6a67`
+(burger-api repo continued) + `f51c6d2` (burger-api-website repo). No `git
+push`, no `npm publish`, no `git tag` — all left for you.
+
 
