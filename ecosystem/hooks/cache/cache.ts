@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the cache control hook.
@@ -105,7 +105,7 @@ export interface CacheControlOptions {
  * });
  * ```
  */
-export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         directive = 'no-cache',
         maxAge,
@@ -119,7 +119,7 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
         vary,
     } = options;
 
-    return (_ctx: BurgerContext): BurgerNext => {
+    return (_ctx: BurgerContext): ForwardHookResult => {
         // Transform response to add cache headers
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
@@ -195,7 +195,7 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
 /**
  * Preset: No caching (default, secure)
  */
-export function noCache(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function noCache(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return cacheControl({
         directive: 'no-store',
         custom: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
@@ -205,7 +205,7 @@ export function noCache(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerN
 /**
  * Preset: Public cache with configurable max-age
  */
-export function publicCache(maxAge: number = 3600): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function publicCache(maxAge: number = 3600): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return cacheControl({
         directive: 'public',
         maxAge,
@@ -215,7 +215,7 @@ export function publicCache(maxAge: number = 3600): (ctx: BurgerContext) => Prom
 /**
  * Preset: Private cache (for user-specific data)
  */
-export function privateCache(maxAge: number = 300): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function privateCache(maxAge: number = 300): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return cacheControl({
         directive: 'private',
         maxAge,
@@ -226,7 +226,7 @@ export function privateCache(maxAge: number = 300): (ctx: BurgerContext) => Prom
 /**
  * Preset: Immutable cache (for static assets with fingerprints)
  */
-export function immutableCache(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function immutableCache(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return cacheControl({
         directive: 'public',
         maxAge: 31536000, // 1 year
@@ -237,7 +237,7 @@ export function immutableCache(): (ctx: BurgerContext) => Promise<BurgerNext> | 
 /**
  * Preset: CDN cache with different browser/CDN durations
  */
-export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return cacheControl({
         directive: 'public',
         maxAge: browserMaxAge,

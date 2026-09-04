@@ -2,12 +2,7 @@ import type { BurgerContext } from '../context/context.js';
 import type { RequestHandler } from '../types/index.js';
 import type { ForwardHook, ResponseHook } from './types.js';
 
-/**
- * A forward hook that may also return a transform function at runtime.
- * The shared runner accepts the full 3-return contract even from forward
- * hooks (permissive runtime); the public `ForwardHook` type only promises
- * the documented `Response | void | undefined` contract.
- */
+/** Either hook kind — both share the same runtime 3-way return contract. */
 type RunnerHook = ForwardHook | ResponseHook;
 
 /**

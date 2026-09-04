@@ -17,10 +17,22 @@ export type HookStage =
 
 /**
  * The return contract of a forward (pre-handler) hook:
- * `Response` short-circuits the pipeline; `undefined` / `void` continues.
- * The `Promise` variants cover async hooks.
+ * `Response` short-circuits the pipeline; `(response) => Response` registers
+ * an after-mapper that transforms the eventual response once the handler
+ * runs (queued in reverse collection order — see `runHooks`/the JIT's
+ * beforeRoute unrolling); `undefined` / `void` continues. The `Promise`
+ * variants cover async hooks.
+ *
+ * The mapper-return branch is real, tested runtime behavior (it's how a
+ * single hook — e.g. `cors()` — can both short-circuit preflight requests
+ * AND inject headers on the real response), not a legacy leftover; keep it
+ * in sync with `ResponseHookResult` below.
  */
-export type ForwardHookResult = Response | void | undefined;
+export type ForwardHookResult =
+    | Response
+    | ((response: Response) => Response | Promise<Response>)
+    | void
+    | undefined;
 
 /**
  * The return contract of a response hook (`afterRoute` / `mapResponse`):
@@ -35,8 +47,10 @@ export type ResponseHookResult =
 
 /**
  * A forward (pre-handler) lifecycle hook — `onRequest`, `validation`,
- * `beforeRoute`. Transform functions are NOT part of the forward contract —
- * they belong on the response hook points.
+ * `beforeRoute`. May return an after-mapper function (see
+ * {@link ForwardHookResult}) to transform the response once the handler
+ * runs — this is distinct from the `transform` hook point, which injects
+ * derived values onto the context before the handler, not the response.
  */
 export type ForwardHook = (
     ctx: BurgerContext

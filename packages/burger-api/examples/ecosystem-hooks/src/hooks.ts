@@ -1,3 +1,4 @@
+import type { GlobalHooks } from 'burger-api';
 import { cors } from '../../../../../ecosystem/hooks/cors/cors';
 import { logger } from '../../../../../ecosystem/hooks/logger/logger';
 import { rateLimit } from '../../../../../ecosystem/hooks/rate-limiter/rate-limiter';
@@ -9,11 +10,16 @@ import { noCache } from '../../../../../ecosystem/hooks/cache/cache';
 
 // All hooks applied globally.
 // CORS is in onRequest (pre-routing) so it handles OPTIONS preflight correctly.
-export const onRequest = [
+//
+// Explicitly annotated (not left to inference) so this example acts as a
+// canary: if an ecosystem hook's exported type ever drifts from the
+// GlobalHooks contract again, `tsc` catches it here, not just when a real
+// user's project fails to compile.
+export const onRequest: GlobalHooks['onRequest'] = [
     cors({ origin: '*', debug: true }),
 ];
 
-export const beforeRoute = [
+export const beforeRoute: GlobalHooks['beforeRoute'] = [
     logger(),
     // Direct connections: provide a keyGenerator (e.g. an API key or
     // session id). Behind a proxy that overwrites X-Forwarded-For /

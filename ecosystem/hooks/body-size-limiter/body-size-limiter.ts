@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the body size limiter hook.
@@ -72,7 +72,7 @@ export interface BodySizeLimiterOptions {
  * });
  * ```
  */
-export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         maxSize = 1048576, // 1MB
         mode = 'header',
@@ -80,7 +80,7 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
         includeLimit = true,
     } = options;
 
-    return async (ctx: BurgerContext): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<ForwardHookResult> => {
         // Skip check for methods that typically don't have bodies
         if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(ctx.method)) {
             return undefined;
@@ -193,28 +193,28 @@ function defaultErrorHandler(size: number, maxSize: number): Response {
 /**
  * Preset: Small payloads (100KB) - for text-based APIs
  */
-export function smallPayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function smallPayloadLimit(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return bodySizeLimiter({ maxSize: 102400 }); // 100KB
 }
 
 /**
  * Preset: Medium payloads (1MB) - default, good for most APIs
  */
-export function mediumPayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function mediumPayloadLimit(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return bodySizeLimiter({ maxSize: 1048576 }); // 1MB
 }
 
 /**
  * Preset: Large payloads (10MB) - for file uploads
  */
-export function largePayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function largePayloadLimit(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return bodySizeLimiter({ maxSize: 10485760 }); // 10MB
 }
 
 /**
  * Preset: Extra large payloads (50MB) - for large file uploads
  */
-export function extraLargePayloadLimit(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function extraLargePayloadLimit(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return bodySizeLimiter({ maxSize: 52428800 }); // 50MB
 }
 

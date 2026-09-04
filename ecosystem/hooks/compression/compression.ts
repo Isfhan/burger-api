@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the compression hook.
@@ -68,7 +68,7 @@ export interface CompressionOptions {
  * });
  * ```
  */
-export function compress(options: CompressionOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function compress(options: CompressionOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         threshold = 1024, // 1KB
         encodings = ['gzip', 'deflate'],
@@ -76,7 +76,7 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
         excludeContentTypes = ['image/', 'video/', 'audio/', 'font/'],
     } = options;
 
-    return (ctx: BurgerContext): BurgerNext => {
+    return (ctx: BurgerContext): ForwardHookResult => {
         const acceptEncoding = ctx.headers.get('Accept-Encoding') || '';
 
         // Determine which encoding to use based on client support and preference

@@ -4,7 +4,11 @@ import type {
     BurgerExecutionContext,
 } from '../context/context.js';
 import type { SchemaInput, ValidatorConfig } from '../validation/types.js';
-import type { RouteHooks, TransformMap } from '../lifecycle/types.js';
+import type {
+    RouteHooks,
+    TransformMap,
+    ForwardHookResult,
+} from '../lifecycle/types.js';
 export type { RouteHooks, GlobalHooks, TransformMap } from '../lifecycle/types.js';
 import type { OpenAPIConfig } from './openapi-config.js';
 import type { RuntimeAdapter } from '../adapter/types.js';
@@ -177,13 +181,14 @@ export interface ServerOptions {
 }
 
 /**
- * Represents what a hook can return to control the request flow:
+ * @deprecated Use {@link ForwardHookResult} (same shape) instead — kept only
+ * so existing imports keep resolving. Represents what a forward hook can
+ * return to control the request flow:
  * - Response: Stop here, send this response back to the client
  * - Function(Response): Continue processing, but transform the final response after handler runs
  * - undefined: I'm done, continue to the next hook or handler
  */
-export type BurgerNext =
-    Response | ((response: Response) => Promise<Response>) | undefined;
+export type BurgerNext = ForwardHookResult;
 
 /**
  * A request handler function that processes incoming HTTP requests.

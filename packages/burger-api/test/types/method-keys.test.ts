@@ -157,12 +157,19 @@ describe('stage-precise hook contracts', () => {
         expect(bad).toBeDefined();
     });
 
-    it('rejects transform functions on forward stages', () => {
-        const bad: RouteHooks = {
-            // @ts-expect-error transforms belong on afterRoute / mapResponse
-            beforeRoute: [(ctx) => (res) => res],
+    it('accepts a forward hook returning an after-mapper function', () => {
+        // A forward hook may return `(response) => Response` to transform
+        // the eventual response once the handler runs — this is real,
+        // tested runtime behavior (see `test/lifecycle/jit.test.ts`'s
+        // after-mapper tests), distinct from the `transform` hook point
+        // (which injects context values, not response mappers).
+        const ok: RouteHooks = {
+            beforeRoute: [(ctx) => {
+                void ctx;
+                return (res: Response) => res;
+            }],
         };
-        expect(bad).toBeDefined();
+        expect(ok).toBeDefined();
     });
 
     it('rejects onError-shaped hooks on forward stages', () => {

@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the rate limiter hook.
@@ -100,7 +100,7 @@ interface RateLimitRecord {
  * });
  * ```
  */
-export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         windowMs = 60000, // 1 minute
         maxRequests = 100,
@@ -141,7 +141,7 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         }
     }
 
-    return async (ctx: BurgerContext): Promise<BurgerNext> => {
+    return async (ctx: BurgerContext): Promise<ForwardHookResult> => {
         let rawKey: string | null;
         if (keyGenerator) {
             rawKey = keyGenerator(ctx);

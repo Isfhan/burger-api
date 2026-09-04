@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the logger hook.
@@ -161,7 +161,7 @@ const colors = {
  * });
  * ```
  */
-export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         colors: useColors = true,
         logHeaders = false,
@@ -176,7 +176,7 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
         skip,
     } = options;
 
-    return (ctx: BurgerContext): BurgerNext => {
+    return (ctx: BurgerContext): ForwardHookResult => {
         // Check if we should skip logging for this request
         if (skip) {
             if (typeof skip === 'string' && ctx.url.includes(skip)) {
@@ -414,7 +414,7 @@ function colorize(info: LogInfo, message: string): string {
  * export const beforeRoute = [logger()];
  * ```
  */
-export function logger(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function logger(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return createLogger();
 }
 

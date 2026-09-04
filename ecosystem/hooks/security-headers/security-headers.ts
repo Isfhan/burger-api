@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the security headers hook.
@@ -160,7 +160,7 @@ export interface SecurityHeadersOptions {
  * });
  * ```
  */
-export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         contentSecurityPolicy,
         strictTransportSecurity = { maxAge: 31536000, includeSubDomains: true },
@@ -174,7 +174,7 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
         permittedCrossDomainPolicies = 'none',
     } = options;
 
-    return (_ctx: BurgerContext): BurgerNext => {
+    return (_ctx: BurgerContext): ForwardHookResult => {
         // Transform response to add security headers
         return (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
@@ -273,7 +273,7 @@ function camelToKebab(str: string): string {
 /**
  * Preset: Strict security (recommended for production)
  */
-export function strictSecurity(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function strictSecurity(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return securityHeaders({
         contentSecurityPolicy: {
             defaultSrc: ["'self'"],
@@ -306,7 +306,7 @@ export function strictSecurity(): (ctx: BurgerContext) => Promise<BurgerNext> | 
 /**
  * Preset: Relaxed security (for development)
  */
-export function relaxedSecurity(): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function relaxedSecurity(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     return securityHeaders({
         contentSecurityPolicy: false,
         strictTransportSecurity: false,

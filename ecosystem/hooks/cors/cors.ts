@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 // Allowed HTTP methods for type safety
 export type HttpMethod =
@@ -109,7 +109,7 @@ export interface CorsOptions {
  * });
  * ```
  */
-export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         origin = '*',
         methods = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -203,7 +203,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         Vary: 'Origin',
     };
 
-    return (ctx: BurgerContext): BurgerNext => {
+    return (ctx: BurgerContext): ForwardHookResult => {
         const requestOrigin = ctx.headers.get('Origin');
 
         /**
@@ -311,7 +311,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         exposedHeadersHeader: Record<string, string>,
         varyHeader: Record<string, string>,
         debug: boolean
-    ): BurgerNext {
+    ): ForwardHookResult {
         // --- Preflight request optimization ---
         if (ctx.method === 'OPTIONS') {
             // Optimize header parsing - avoid unnecessary operations

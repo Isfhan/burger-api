@@ -1,4 +1,4 @@
-import type { BurgerContext, BurgerNext } from 'burger-api';
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
  * Configuration options for the timeout hook.
@@ -59,7 +59,7 @@ export interface TimeoutOptions {
  * });
  * ```
  */
-export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContext) => Promise<BurgerNext> | BurgerNext {
+export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
     const {
         ms = 30000, // 30 seconds
         onTimeout,
@@ -82,7 +82,7 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
         );
     };
 
-    return (ctx: BurgerContext): BurgerNext => {
+    return (ctx: BurgerContext): ForwardHookResult => {
         // Start timer when the hook runs
         const startTime = Date.now();
 
