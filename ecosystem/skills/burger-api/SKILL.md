@@ -149,8 +149,24 @@ Implemented through official **ecosystem plugins** under `ecosystem/plugins/` (J
 
 ```ts
 // config.ts
-export default { auth: false };
-// or { auth: { required: true, roles: ["admin"] } }
+import type { RouteConfig } from "burger-api";
+
+export default {
+  auth: false,
+  // or { required: true, roles: ["admin"] }
+} satisfies RouteConfig;
+```
+
+`RouteConfig` is an empty interface by default (`satisfies` accepts any
+shape against it), so this compiles as-is — but reading it back via
+`ctx.config.auth` elsewhere requires augmenting `RouteConfig` first:
+
+```ts
+declare module "burger-api" {
+  interface RouteConfig {
+    auth?: boolean | { required?: boolean; roles?: string[] };
+  }
+}
 ```
 
 ## Plugin Development
@@ -253,7 +269,7 @@ ecosystem/skills/
 
 ## Supported
 
-- **WebSocket:** file-based router under `src/ws/` (`wsDir`, `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`
+- **WebSocket:** file-based router under `src/websocket/` (default `wsDir`; `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`, or opt in at `create` time via the WebSocket-routes prompt
 
 ## Legacy names (avoid in new code)
 

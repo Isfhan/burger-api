@@ -56,6 +56,72 @@ export async function GET(ctx: BurgerContext) {
 }
 ```
 
+## Page Routes
+
+Pages live under `pageDir` (default `src/pages`) and are discovered the same
+way API routes are. Two file types are supported — **both are real, neither
+is a fallback for the other**:
+
+```
+src/pages/index.html          →  /
+src/pages/about.html          →  /about
+src/pages/blog/[slug]/index.tsx  →  /blog/:slug
+```
+
+- **`.html`** — served as static markup.
+- **`.tsx`** — a plain handler function that returns a `Response`, exactly
+  like an API route handler:
+
+```typescript
+// src/pages/blog/[slug]/index.tsx
+import type { BurgerContext } from 'burger-api';
+
+export default async function GET(ctx: BurgerContext): Promise<Response> {
+    const slug = (ctx.params as Record<string, string>)?.slug ?? 'unknown';
+    return new Response(`<h1>Post: ${slug}</h1>`, {
+        headers: { 'Content-Type': 'text/html' },
+    });
+}
+```
+
+`.tsx` here does **not** mean React or JSX server-side rendering — there is
+no SSR/hydration step. It's a `.tsx` file purely so JSX-shaped return values
+type-check if you choose to use them; a page handler that returns a plain
+`Response` (as above) works identically.
+
+Static assets go under `<pageDir>/assets/` (e.g. `src/pages/assets/style.css`
+→ served at `/assets/style.css`).
+
+## WebSocket Route Scaffolding
+
+WebSocket routes live under `wsDir` (default `src/websocket`) and use their
+own convention files — **not** `route.ts`:
+
+```
+src/websocket/chat/ws.ts       # handlers: open, message, close, drain, ping, pong
+src/websocket/chat/hooks.ts    # onOpen, onMessage, onClose (optional)
+src/websocket/chat/config.ts   # per-route config (optional)
+```
+
+```typescript
+// src/websocket/chat/ws.ts
+import type { BurgerWS } from 'burger-api';
+
+export function open(ws: BurgerWS) {
+    ws.subscribe('chat');
+}
+
+export function message(ws: BurgerWS, message: string | Buffer) {
+    ws.publish('chat', message); // broadcast to every subscriber
+}
+```
+
+Scaffold with `burger-api generate ws <path>` (see `cli.md`), or opt into a
+sample route at project creation time via `create`'s "Do you need WebSocket
+routes?" prompt. `ws.ts`/`ws.js`/`ws.mjs` are all valid extensions,
+resolved the same way `apiDir`/`pageDir` are (see Directory Path Resolution
+below).
+
 ## AOT Routing (Production Builds)
 
 Routes are prepared ahead of time (AOT), i.e. built into the app before it runs. In production (`burger-api build`), the CLI:

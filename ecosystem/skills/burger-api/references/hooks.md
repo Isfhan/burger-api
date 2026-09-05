@@ -27,11 +27,14 @@ export const onRequest = [
 
 ## Route-Specific Hooks
 
-Place hooks in a route directory's `hooks.ts` — they apply only to that route:
+Place hooks in a route directory's `hooks.ts` — they apply only to that route.
+`onRequest` is app/plugin scope only (it runs before a route is even
+matched, so it can't be scoped to one route) — declaring it in a route's
+`hooks.ts` is a compile error. Use `beforeRoute` for route-scoped logic:
 
 ```typescript
 // api/protected/hooks.ts
-export const onRequest = [
+export const beforeRoute = [
     async (ctx: BurgerContext) => {
         const token = ctx.headers.get('Authorization');
         if (!token) {
