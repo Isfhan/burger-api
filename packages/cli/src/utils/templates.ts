@@ -820,15 +820,15 @@ export function generatePluginsFile(lang: 'ts' | 'js' = 'ts'): string {
         return `// Register plugins here — apply to every request.
 // burger.usePlugin(myPlugin);
 
-/** @param {import('burger-api').Burger} burger */
+/** @param {import('burger-api').PluginRegistrar} burger */
 export default (burger) => {
  // burger.usePlugin(myPlugin);
 };
 `;
     }
-    return `import type { Burger } from 'burger-api';
+    return `import type { PluginRegistrar } from 'burger-api';
 
-export default (burger: Burger) => {
+export default (burger: PluginRegistrar) => {
  // burger.usePlugin(myPlugin);
 };
 `;
@@ -839,15 +839,15 @@ export function generateProvidersFile(lang: 'ts' | 'js' = 'ts'): string {
         return `// Register services here — injected into ctx.services.
 // burger.provide('db', myDatabase);
 
-/** @param {import('burger-api').Burger} burger */
+/** @param {import('burger-api').ProviderRegistrar} burger */
 export default (burger) => {
  // burger.provide('db', myDatabase);
 };
 `;
     }
-    return `import type { Burger } from 'burger-api';
+    return `import type { ProviderRegistrar } from 'burger-api';
 
-export default (burger: Burger) => {
+export default (burger: ProviderRegistrar) => {
  // burger.provide('db', myDatabase);
 };
 `;

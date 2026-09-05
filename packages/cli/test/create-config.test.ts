@@ -322,7 +322,33 @@ describe('JS scaffold (--lang js)', () => {
         expect(generatePluginsFile('js')).toContain('export default (burger) =>');
         expect(generateProvidersFile('js')).not.toContain('import type');
         expect(generateProvidersFile('ts')).toContain(
-            "import type { Burger } from 'burger-api';"
+            "import type { ProviderRegistrar } from 'burger-api';"
+        );
+    });
+
+    it('types plugins.ts/providers.ts against the narrow registrar types, not the full Burger class', () => {
+        // Regression: these files used to be typed against the entire
+        // Burger class, exposing serve()/fetchHandler()/etc. in autocomplete
+        // — methods that are actively unsafe (or throw) if called from this
+        // registration-time callback. Each file should now only see the one
+        // method it exists for.
+        expect(generatePluginsFile('ts')).toContain(
+            "import type { PluginRegistrar } from 'burger-api';"
+        );
+        expect(generatePluginsFile('ts')).toContain(
+            '(burger: PluginRegistrar) =>'
+        );
+        expect(generatePluginsFile('ts')).not.toContain('Burger');
+        expect(generatePluginsFile('js')).toContain(
+            "@param {import('burger-api').PluginRegistrar} burger"
+        );
+
+        expect(generateProvidersFile('ts')).toContain(
+            '(burger: ProviderRegistrar) =>'
+        );
+        expect(generateProvidersFile('ts')).not.toContain('Burger');
+        expect(generateProvidersFile('js')).toContain(
+            "@param {import('burger-api').ProviderRegistrar} burger"
         );
     });
 

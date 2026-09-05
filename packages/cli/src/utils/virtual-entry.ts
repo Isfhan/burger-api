@@ -19,9 +19,9 @@ import { readFileSync } from 'fs';
 export interface AppConventionPaths {
     /** Path to `src/hooks.ts` — exports all 6 hook points */
     hooksPath?: string;
-    /** Path to `src/plugins.ts` — default export: (burger: Burger) => void */
+    /** Path to `src/plugins.ts` — default export: (burger: PluginRegistrar) => void */
     pluginsPath?: string;
-    /** Path to `src/providers.ts` — default export: (burger: Burger) => void */
+    /** Path to `src/providers.ts` — default export: (burger: ProviderRegistrar) => void */
     providersPath?: string;
     /** Path to `src/openapi.config.ts` — default export: OpenAPIConfig */
     openapiConfigPath?: string;

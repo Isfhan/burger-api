@@ -186,10 +186,10 @@ Plugins register on the app:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from 'burger-api';
+import type { PluginRegistrar } from 'burger-api';
 import { jwtAuth } from '../ecosystem/plugins/jwt-auth';
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
     burger.usePlugin(jwtAuth({ secret: process.env.JWT_SECRET! }));
 }
 ```
