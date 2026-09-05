@@ -19,6 +19,8 @@ import type {
     MethodSchema,
     OpenAPIMeta,
     RouteConfig,
+    PluginRegistrar,
+    ProviderRegistrar,
 } from '../../src/index';
 import type { BurgerWS } from '../../src/ws/types';
 
@@ -345,5 +347,79 @@ describe('onRequest is app/plugin scope only, never route scope', () => {
             beforeRoute: [() => undefined],
         };
         expect(hooks.onRequest).toBeDefined();
+    });
+});
+
+describe('PluginRegistrar/ProviderRegistrar narrow the burger parameter in plugins.ts/providers.ts', () => {
+    // Real (not `as`-cast) minimal implementations — `usePlugin`/`provide`
+    // are genuinely callable at runtime, so the "real method" assertions
+    // below exercise actual behavior, not just a type-system fiction. The
+    // `@ts-expect-error` checks are bare property references (never calls)
+    // so an out-of-scope method — which genuinely doesn't exist on these
+    // objects at runtime — never throws; the compiler catches the misuse,
+    // not a runtime crash.
+    function makePluginRegistrar(): PluginRegistrar {
+        const registrar: PluginRegistrar = {
+            usePlugin(_plugin, _scope, _seed) {
+                return registrar;
+            },
+        };
+        return registrar;
+    }
+    function makeProviderRegistrar(): ProviderRegistrar {
+        const registrar: ProviderRegistrar = {
+            provide(_name, _service) {
+                return registrar;
+            },
+        };
+        return registrar;
+    }
+
+    it('PluginRegistrar exposes usePlugin but not provide/serve/fetchHandler', () => {
+        const registrar = makePluginRegistrar();
+        // Real method — must compile and actually run.
+        registrar.usePlugin({ name: 'x' });
+        // @ts-expect-error provide() belongs to ProviderRegistrar, not this scope
+        registrar.provide;
+        // @ts-expect-error serve() would re-enter route compilation this early
+        registrar.serve;
+        // @ts-expect-error fetchHandler() has the same reentrancy problem
+        registrar.fetchHandler;
+        expect(typeof registrar.usePlugin).toBe('function');
+    });
+
+    it('ProviderRegistrar exposes provide but not usePlugin/serve/fetchHandler', () => {
+        const registrar = makeProviderRegistrar();
+        // Real method — must compile and actually run.
+        registrar.provide('db', {});
+        // @ts-expect-error usePlugin() belongs to PluginRegistrar, not this scope
+        registrar.usePlugin;
+        // @ts-expect-error serve() would re-enter route compilation this early
+        registrar.serve;
+        // @ts-expect-error fetchHandler() has the same reentrancy problem
+        registrar.fetchHandler;
+        expect(typeof registrar.provide).toBe('function');
+    });
+
+    it('usePlugin()/provide() stay chainable within their own narrow type (this stays polymorphic)', () => {
+        // If the narrow type had concretized `this` to the full `Burger`
+        // class (the bug the hand-written-interface design avoids), the
+        // chained result below would widen back to `Burger` and the
+        // `.provide`/`.usePlugin` cross-scope checks would silently stop
+        // erroring — that's the real regression this test guards.
+        const pluginRegistrar = makePluginRegistrar();
+        const chained = pluginRegistrar.usePlugin({ name: 'a' });
+        chained.usePlugin({ name: 'b' });
+        // @ts-expect-error the chained result stays PluginRegistrar-narrow
+        chained.provide;
+
+        const providerRegistrar = makeProviderRegistrar();
+        const chainedProvider = providerRegistrar.provide('a', 1);
+        chainedProvider.provide('b', 2);
+        // @ts-expect-error the chained result stays ProviderRegistrar-narrow
+        chainedProvider.usePlugin;
+
+        expect(chained).toBeDefined();
+        expect(chainedProvider).toBeDefined();
     });
 });

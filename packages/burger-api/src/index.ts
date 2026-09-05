@@ -38,6 +38,35 @@ import type {
     NodeWsBridgeOptions,
 } from './ws/platform.js';
 
+/**
+ * The narrow surface passed to a `plugins.ts` default export — deliberately
+ * excludes the rest of `Burger`. `serve()`/`fetchHandler()` would re-enter
+ * route compilation if called this early (the app is still mid-construction
+ * at this point — `routesProcessed` isn't set until after `plugins.ts` runs,
+ * so the reentrancy guard doesn't stop it); `createNodeWsBridge()` throws
+ * unconditionally here (`wsAdapter` doesn't exist yet); `websocket()`/
+ * `wsConfig()` are a different concern (WS route registration, not plugin
+ * setup). Structurally compatible with `Burger` — this is a type-level
+ * restriction only, not a runtime wrapper.
+ *
+ * Hand-written (not `Pick<Burger, 'usePlugin'>`) so `this` stays polymorphic:
+ * an indexed-access type (`Burger['usePlugin']`) would concretize `this` to
+ * the full `Burger` instance at extraction time, so a chained call's result
+ * would show the entire `Burger` surface again — defeating the narrowing.
+ */
+export interface PluginRegistrar {
+    usePlugin(plugin: Plugin, scope?: Scope, seed?: string): this;
+}
+
+/**
+ * The narrow surface passed to a `providers.ts` default export. See
+ * {@link PluginRegistrar} for why the rest of `Burger` is excluded and why
+ * this is hand-written rather than derived via indexed access.
+ */
+export interface ProviderRegistrar {
+    provide(name: string, service: unknown): this;
+}
+
 export class Burger {
     /**
      * The server instance
@@ -383,7 +412,11 @@ export class Burger {
             if (pluginsMod) {
                 const defaultFn = (pluginsMod as any).default;
                 if (typeof defaultFn === 'function') {
-                    (defaultFn as (burger: Burger) => void)(this);
+                    await (
+                        defaultFn as (
+                            burger: PluginRegistrar
+                        ) => void | Promise<void>
+                    )(this);
                 }
             }
 
@@ -392,7 +425,11 @@ export class Burger {
             if (providersMod) {
                 const defaultFn = (providersMod as any).default;
                 if (typeof defaultFn === 'function') {
-                    (defaultFn as (burger: Burger) => void)(this);
+                    await (
+                        defaultFn as (
+                            burger: ProviderRegistrar
+                        ) => void | Promise<void>
+                    )(this);
                 }
             }
         } else {
@@ -417,13 +454,21 @@ export class Burger {
             // Load and execute plugins.ts (auto-discovered at app root)
             const pluginsFn = await loader.loadPlugins(scanned);
             if (typeof pluginsFn === 'function') {
-                (pluginsFn as (burger: Burger) => void)(this);
+                await (
+                    pluginsFn as (
+                        burger: PluginRegistrar
+                    ) => void | Promise<void>
+                )(this);
             }
 
             // Load and execute providers.ts (auto-discovered at app root)
             const providersFn = await loader.loadProviders(scanned);
             if (typeof providersFn === 'function') {
-                (providersFn as (burger: Burger) => void)(this);
+                await (
+                    providersFn as (
+                        burger: ProviderRegistrar
+                    ) => void | Promise<void>
+                )(this);
             }
 
             // Retained for introspection (deterministic ordering, no dispatch).
