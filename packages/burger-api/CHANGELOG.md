@@ -43,6 +43,41 @@ breaks for existing users).
   the public type, so every official ecosystem hook failed `tsc` when
   typed against `GlobalHooks` exactly as the CLI's own scaffold teaches.
   `BurgerNext` is now `@deprecated`, aliased to `ForwardHookResult`.
+- **`plugins.ts`/`providers.ts` no longer type against the full `Burger`
+  class** — the default-export callback's parameter is now `PluginRegistrar`
+  (`usePlugin` only) / `ProviderRegistrar` (`provide` only), so autocomplete
+  no longer surfaces `serve()`/`fetchHandler()` (which would re-enter route
+  compilation this early) or `createNodeWsBridge()` (throws unconditionally
+  at this point). Both call sites now also `await` the default export's
+  return value — previously fire-and-forgotten, so an `async` `plugins.ts`/
+  `providers.ts` could lose the race against route compilation.
+- **`createNodeWsBridge()` was completely non-functional** — found by
+  actually running it against the real `ws` package for the first time
+  (there was no prior test for this path). Five separate bugs, all fixed:
+  a type mismatch that made the documented pattern fail to compile against
+  `ws`'s real, concretely-typed `.on()` overloads; a synthetic `Request`
+  built with no headers at all, so the bridge's own `Upgrade: websocket`
+  check always failed and destroyed the socket; a routing bug where even a
+  correct upgrade request fell into a platform-detection branch that always
+  resolves to `'node'` and returns an unconditional 501; `ws.data` (where
+  the matched route lives) never being attached to the real socket, so
+  handlers would have silently no-op'd anyway; and text frames arriving as
+  a raw `Buffer` instead of a `string` (Bun's native behavior), since `ws`'s
+  `isBinary` flag was ignored.
+- **`process.env.NODE_ENV` reads could crash every request on Deno** — Deno
+  throws a permission error (`NotCapable`) on the *first* `process.env`
+  access without `--allow-env`, unlike Node/Bun's `undefined`. Three call
+  sites (`lifecycle/jit.ts`, `lifecycle/executor.ts` x2) now go through a
+  guarded helper that treats the throw the same as `process` not existing
+  at all (the existing Cloudflare/browser fallback) — no `--allow-env` flag
+  needed.
+- **Cloudflare Workers bundling needs `nodejs_compat`** — `burger-api`'s
+  dist statically imports `node:fs`/`node:path` via dev-time
+  filesystem-scanner modules, pulled in transitively through the package's
+  barrel export even though AOT `apiRoutes` deployments never execute that
+  code path. Not a framework bug fix (esbuild needs *some* module to
+  satisfy the static import); documented as a required `wrangler.toml`
+  setting.
 
 **Removed**
 - `burger.macro()` / `MacroFn` — confirmed zero real usage anywhere in the
