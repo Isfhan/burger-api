@@ -29,10 +29,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { jwtAuth } from "../ecosystem/plugins/jwt-auth/jwt-auth";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(jwtAuth({
     secret: process.env.JWT_SECRET,
   }));
@@ -51,7 +51,7 @@ const publicKey = await crypto.subtle.importKey(
   ["verify"]
 );
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(jwtAuth({
     publicKey,
     algorithm: "RS256",
@@ -62,7 +62,7 @@ export default function (burger: Burger) {
 ### With issuer and audience validation
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(jwtAuth({
     secret: process.env.JWT_SECRET,
     algorithm: "HS256",

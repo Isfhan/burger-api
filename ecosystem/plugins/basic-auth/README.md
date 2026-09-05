@@ -25,10 +25,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { basicAuth } from "../ecosystem/plugins/basic-auth/basic-auth";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(basicAuth({
     validate: async (username, password) => {
       // Check against database
@@ -45,7 +45,7 @@ export default function (burger: Burger) {
 ### With custom realm
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(basicAuth({
     validate: async (username, password) => {
       // ... validation logic

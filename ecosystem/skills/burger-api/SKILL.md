@@ -126,22 +126,32 @@ also return `(res) => Response` to transform the response; `ErrorHook`
 
 ```ts
 // src/plugins.ts
-export default (burger) => {
+import type { PluginRegistrar } from "burger-api";
+
+export default (burger: PluginRegistrar) => {
   burger.usePlugin(/* official plugin */);
 };
 ```
+
+`PluginRegistrar` exposes only `usePlugin` — not the full `Burger` class
+(no `serve`/`fetchHandler`/etc. in autocomplete here; those would re-enter
+route compilation if called this early).
 
 ## Providers
 
 ```ts
 // src/providers.ts
-export default (burger) => {
+import type { ProviderRegistrar } from "burger-api";
+
+export default (burger: ProviderRegistrar) => {
   burger.provide("db", db);
 };
 
 // route
 const db = ctx.services.db;
 ```
+
+`ProviderRegistrar` exposes only `provide`, for the same reason.
 
 ## Auth
 
@@ -210,9 +220,10 @@ Register plugins in `src/plugins.ts`:
 
 ```typescript
 // src/plugins.ts
+import type { PluginRegistrar } from "burger-api";
 import { myPlugin } from "./ecosystem/plugins/my-plugin/my-plugin";
 
-export default (burger) => {
+export default (burger: PluginRegistrar) => {
   burger.usePlugin(myPlugin({ /* options */ }));
 };
 ```

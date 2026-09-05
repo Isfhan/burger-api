@@ -77,9 +77,10 @@ Authentication is implemented through official ecosystem **plugins** that integr
 
 ```ts
 // src/plugins.ts
+import type { PluginRegistrar } from "burger-api";
 import { jwt } from "../ecosystem/plugins/jwt";
 
-export default (burger) => {
+export default (burger: PluginRegistrar) => {
   burger.usePlugin(jwt({ secret: process.env.JWT_SECRET }));
 };
 

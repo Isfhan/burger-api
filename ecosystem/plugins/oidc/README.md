@@ -27,10 +27,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { oidc } from "../ecosystem/plugins/oidc/oidc";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(oidc({
     issuer: "https://accounts.google.com",
     audience: "my-client-id",
@@ -41,7 +41,7 @@ export default function (burger: Burger) {
 ### Auth0
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(oidc({
     issuer: "https://my-tenant.auth0.com/",
     audience: "https://api.myapp.com",
@@ -52,7 +52,7 @@ export default function (burger: Burger) {
 ### Azure AD
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(oidc({
     issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0",
     audience: "my-app-id",

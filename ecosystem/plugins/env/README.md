@@ -25,10 +25,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { env } from "../ecosystem/plugins/env/env";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(env({
     required: {
       DATABASE_URL: { type: "url" },
@@ -45,7 +45,7 @@ export default function (burger: Burger) {
 ### With custom validation
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(env({
     required: {
       API_KEY: {
@@ -61,7 +61,7 @@ export default function (burger: Burger) {
 ### With custom error handler
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(env({
     required: {
       DATABASE_URL: { type: "url" },

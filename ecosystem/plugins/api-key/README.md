@@ -25,10 +25,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { apiKey } from "../ecosystem/plugins/api-key/api-key";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(apiKey({
     keys: ["key1", "key2", "key3"],
   }));
@@ -38,7 +38,7 @@ export default function (burger: Burger) {
 ### Dynamic validation
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(apiKey({
     validate: async (key) => {
       // Check against database
@@ -52,7 +52,7 @@ export default function (burger: Burger) {
 ### Custom header
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(apiKey({
     header: "Authorization",
     keys: ["key1", "key2"],
@@ -63,7 +63,7 @@ export default function (burger: Burger) {
 ### Custom extraction
 
 ```typescript
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(apiKey({
     extract: (ctx) => {
       // Extract from query string

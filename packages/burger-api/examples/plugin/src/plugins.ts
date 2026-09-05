@@ -1,4 +1,4 @@
-import type { Burger, Plugin } from 'burger-api';
+import type { PluginRegistrar, Plugin } from 'burger-api';
 
 const auditLogger: Plugin = {
     name: 'audit-logger',
@@ -15,6 +15,6 @@ const auditLogger: Plugin = {
     },
 };
 
-export default (burger: Burger) => {
+export default (burger: PluginRegistrar) => {
     burger.usePlugin(auditLogger);
 };

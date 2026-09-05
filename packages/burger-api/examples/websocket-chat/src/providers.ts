@@ -1,6 +1,6 @@
-import type { Burger } from 'burger-api';
+import type { ProviderRegistrar } from 'burger-api';
 
-export default (burger: Burger) => {
+export default (burger: ProviderRegistrar) => {
     burger.provide('logger', {
         info: (msg: string) => console.log(`[Logger] ${msg}`),
         warn: (msg: string) => console.warn(`[Logger] ${msg}`),

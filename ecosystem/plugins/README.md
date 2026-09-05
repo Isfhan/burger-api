@@ -25,10 +25,10 @@ Or manually copy the plugin to `ecosystem/plugins/` and register it in `src/plug
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from 'burger-api';
+import type { PluginRegistrar } from 'burger-api';
 import { jwtAuth } from '../ecosystem/plugins/jwt-auth/jwt-auth';
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
     burger.usePlugin(jwtAuth({
         secret: process.env.JWT_SECRET,
     }));
@@ -93,10 +93,10 @@ Example:
 
 ```typescript
 // src/plugins.ts (global defaults)
-import type { Burger } from 'burger-api';
+import type { PluginRegistrar } from 'burger-api';
 import { jwtAuth } from '../ecosystem/plugins/jwt-auth/jwt-auth';
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
     burger.usePlugin(jwtAuth({
         secret: process.env.JWT_SECRET,
         algorithm: 'HS256',

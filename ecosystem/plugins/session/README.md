@@ -27,10 +27,10 @@ that receives the `Burger` instance:
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { session } from "../ecosystem/plugins/session/session";
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(session({
     secret: process.env.SESSION_SECRET,
   }));
@@ -41,7 +41,7 @@ export default function (burger: Burger) {
 
 ```typescript
 // src/plugins.ts
-import type { Burger } from "burger-api";
+import type { PluginRegistrar } from "burger-api";
 import { session } from "../ecosystem/plugins/session/session";
 
 // Implement your own store
@@ -58,7 +58,7 @@ const redisStore = {
   },
 };
 
-export default function (burger: Burger) {
+export default function (burger: PluginRegistrar) {
   burger.usePlugin(session({
     secret: process.env.SESSION_SECRET,
     store: redisStore,

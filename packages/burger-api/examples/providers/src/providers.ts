@@ -1,6 +1,6 @@
-import type { Burger } from 'burger-api';
+import type { ProviderRegistrar } from 'burger-api';
 
-export default (burger: Burger) => {
+export default (burger: ProviderRegistrar) => {
     burger.provide('db', {
         users: [
             { id: 1, name: 'Alice', email: 'alice@example.com' },
