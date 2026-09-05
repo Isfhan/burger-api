@@ -21,11 +21,3 @@ export interface PluginEntry {
 }
 
 export type { Scope };
-
-/**
- * A macro factory bundles a plugin-scoped `GlobalHooks` set under a name,
- * registered via `burger.macro(name, fn)` and expanded (as a plugin, scope
- * `'plugin'`) by `expandAll()`. Macros are plugin-scoped bundles, not a
- * per-route opt-in — there is no per-call-site argument passing today.
- */
-export type MacroFn = () => GlobalHooks;

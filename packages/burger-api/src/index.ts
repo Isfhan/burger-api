@@ -13,8 +13,7 @@ import { notFound, openApiError } from './utils/response.js';
 
 // Import plugin system
 import { PluginRegistry } from './plugin/registry.js';
-import { MacroRegistry } from './plugin/macro.js';
-import type { Plugin, MacroFn } from './plugin/types.js';
+import type { Plugin } from './plugin/types.js';
 import type { Scope } from './chain/node.js';
 
 // Import WebSocket modules (scanner/compiler are loaded lazily on the dev
@@ -91,13 +90,6 @@ export class Burger {
      * resolved into `HookChain` nodes during `processApiRoutes()`.
      */
     private pluginRegistry = new PluginRegistry();
-
-    /**
-     * Macro registry. Populated via `.macro()` before `serve()`;
-     * expanded into `ResolvedPlugin` entries during `processApiRoutes()` and
-     * composed into the HookChain alongside plugins.
-     */
-    private macroRegistry = new MacroRegistry();
 
     /**
      * Application services registered via `burger.provide()`. Injected into
@@ -205,20 +197,6 @@ export class Burger {
      */
     usePlugin(plugin: Plugin, scope?: Scope, seed?: string): this {
         this.pluginRegistry.register(plugin, scope ?? 'plugin', seed);
-        return this;
-    }
-
-    /**
-     * Registers a reusable hook factory (macro). Macros are expanded at compile
-     * time into plugin-scoped hooks that apply to every route. Macros take no
-     * per-call arguments — a macro factory is a zero-arg bundle of hooks.
-     *
-     * @param name Unique macro name.
-     * @param fn Factory function that returns `GlobalHooks`.
-     * @returns `this` for chaining.
-     */
-    macro(name: string, fn: MacroFn): this {
-        this.macroRegistry.register(name, fn);
         return this;
     }
 
@@ -486,13 +464,8 @@ export class Burger {
             jit: this.options.jit !== false,
             engine: this.options.engine,
         });
-        // M5/M6: resolve plugins and expand macros, then merge both
-        // into a single list passed to the compiler. Macro hooks are treated as
-        // plugin-scoped entries, so the flattener orders them between global
-        // (validation) and local (route) hooks.
-        const resolvedPlugins = await this.pluginRegistry.resolveAll();
-        const expandedMacros = this.macroRegistry.expandAll();
-        const allHooks = [...resolvedPlugins, ...expandedMacros];
+        // M5: resolve plugins into a single list passed to the compiler.
+        const allHooks = await this.pluginRegistry.resolveAll();
 
         // Extract onRequest hooks from plugins — these run before routing
         // (pre-routing, app-level). They are NOT per-route HookPlan entries.
@@ -1013,8 +986,8 @@ export type {
 // Export validation types
 export type { ValidationIssue } from './validation/types.js';
 
-// Export plugin types and macro types
-export type { Plugin, MacroFn } from './plugin/types.js';
+// Export plugin types
+export type { Plugin } from './plugin/types.js';
 export type { Scope } from './chain/node.js';
 
 // Export WebSocket types

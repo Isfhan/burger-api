@@ -1,7 +1,0 @@
-{
-    "name": "macros-example",
-    "private": true,
-    "dependencies": {
-        "burger-api": "link:burger-api"
-    }
-}
