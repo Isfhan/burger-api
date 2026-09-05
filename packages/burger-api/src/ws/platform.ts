@@ -43,11 +43,26 @@ export interface WsEventSink {
 
 export type WsPlatformName = 'bun' | 'cloudflare' | 'deno' | 'node';
 
-/** Minimal shape of a framing-library socket on Node (`ws` package). */
+/**
+ * Minimal shape of a framing-library socket on Node (`ws` package).
+ *
+ * `listener` is `(...args: any[]) => void`, not `never[]`: a real `ws`
+ * `WebSocket.on('close', (code: number, reason: Buffer) => ...)` has
+ * concretely-typed parameters, and `never[]` rejects it (checking whether a
+ * function with real parameter types is assignable to a rest-`never[]`
+ * listener requires each concrete parameter type to be assignable to
+ * `never`, which is only true for `never` itself) — so the framework's own
+ * documented `createNodeWsBridge({ WebSocketServer })` pattern, passed the
+ * real `ws` package, failed to typecheck. `any[]` is intentionally
+ * permissive here: this interface only describes what the framework calls
+ * `.on()` with (never what it reads back out of `args`), so widening the
+ * listener's declared parameters doesn't weaken anything the framework
+ * itself relies on.
+ */
 export interface NodeWsLike {
     on(
         event: 'message' | 'close',
-        listener: (...args: never[]) => void
+        listener: (...args: any[]) => void
     ): void;
 }
 
@@ -219,15 +234,35 @@ function wirePushListeners(socket: PushSocket, events: WsEventSink): void {
     });
 }
 
-export function normalizeWsMessage(data: unknown): string | Buffer {
+/**
+ * `isBinary` matters for `ws`-package callers only: `ws`'s `'message'` event
+ * always hands a Node `Buffer` — for text *and* binary frames alike — with
+ * a separate `isBinary` flag distinguishing them (verified by running a
+ * real Node WebSocket bridge end to end: text frames arrived as `Buffer`,
+ * not `string`, breaking parity with Bun's native `ServerWebSocket`, which
+ * delivers text frames as `string` directly). When `isBinary` is `false`,
+ * decode the buffer as UTF-8 text instead of passing it through raw.
+ * Cloudflare/Deno's `MessageEvent.data` is already a `string` for text
+ * frames per the Fetch/WHATWG WebSocket standard, so `isBinary` is
+ * irrelevant there — the `typeof data === 'string'` branch handles it.
+ */
+export function normalizeWsMessage(
+    data: unknown,
+    isBinary?: boolean
+): string | Buffer {
     if (typeof data === 'string') return data;
-    if (data instanceof ArrayBuffer) return Buffer.from(data);
+    if (data instanceof ArrayBuffer) {
+        return isBinary === false
+            ? Buffer.from(data).toString('utf-8')
+            : Buffer.from(data);
+    }
     if (ArrayBuffer.isView(data)) {
-        return Buffer.from(
+        const buf = Buffer.from(
             data.buffer,
             data.byteOffset,
             data.byteLength
         );
+        return isBinary === false ? buf.toString('utf-8') : buf;
     }
     return String(data ?? '');
 }

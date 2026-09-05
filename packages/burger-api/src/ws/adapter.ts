@@ -313,36 +313,13 @@ export class WebSocketAdapter {
             return { handled: false };
         }
 
-        // Extract path from URL and match against the WS router
-        const url = new URL(request.url);
-        const match = this.router.match(url.pathname);
-        if (!match) {
-            return {
-                handled: true,
-                response: new Response('WebSocket route not found', {
-                    status: 404,
-                }),
-            };
-        }
-
-        // Run auth hooks before upgrade
-        const routeConfig = match.route.config;
-        const authResult = await this.runAuthHooks(
+        const result = await this.matchAndAuthorize(
             request,
-            routeConfig,
             env,
             executionCtx
         );
-        if (authResult.response) {
-            return { handled: true, response: authResult.response };
-        }
-
-        // Attach matched route with resolved params and user to the socket
-        const upgradeData: Record<string, unknown> = {
-            route: { ...match.route, params: match.params },
-        };
-        if (authResult.user !== undefined) {
-            upgradeData.user = authResult.user;
+        if (!result.ok) {
+            return { handled: true, response: result.response };
         }
 
         const platform = detectWsPlatform(server);
@@ -354,10 +331,56 @@ export class WebSocketAdapter {
             platform,
             request,
             server,
-            data: upgradeData,
+            data: result.data,
             events: this.eventSink(),
         });
         return { handled: true, response };
+    }
+
+    /**
+     * Route-match + auth, shared by every platform's upgrade handoff (the
+     * fetch-shaped path above, and the Node bridge below — which cannot
+     * reuse {@link handleUpgrade} wholesale since that method always routes
+     * through {@link detectWsPlatform}/{@link acceptWsUpgrade}, and
+     * `detectWsPlatform` falls back to `'node'` whenever no Bun/Cloudflare/
+     * Deno platform object is present — which is always true here).
+     */
+    private async matchAndAuthorize(
+        request: Request,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<
+        { ok: false; response: Response } | { ok: true; data: Record<string, unknown> }
+    > {
+        const url = new URL(request.url);
+        const match = this.router.match(url.pathname);
+        if (!match) {
+            return {
+                ok: false,
+                response: new Response('WebSocket route not found', {
+                    status: 404,
+                }),
+            };
+        }
+
+        const routeConfig = match.route.config;
+        const authResult = await this.runAuthHooks(
+            request,
+            routeConfig,
+            env,
+            executionCtx
+        );
+        if (authResult.response) {
+            return { ok: false, response: authResult.response };
+        }
+
+        const data: Record<string, unknown> = {
+            route: { ...match.route, params: match.params },
+        };
+        if (authResult.user !== undefined) {
+            data.user = authResult.user;
+        }
+        return { ok: true, data };
     }
 
     /**
@@ -412,13 +435,20 @@ export class WebSocketAdapter {
      * framework pipeline using a framing library's `WebSocketServer`
      * (e.g. the `ws` package) — Node has no fetch-native WebSocket upgrade.
      *
+     * `toFetchHandler(burger)` returns a `(request: Request) => Promise<Response>`
+     * — feeding it a raw `node:http` `IncomingMessage` doesn't work; bridge
+     * the request/response yourself (headers, method, body stream) or use a
+     * helper that does. `fetchHandler()` must also have run at least once
+     * (it lazily processes routes, including WS ones) before this method —
+     * call it before `createNodeWsBridge()`, not only for the HTTP path:
+     *
      * ```ts
      * import http from 'node:http';
      * import { WebSocketServer } from 'ws';
-     * import { Burger, toFetchHandler } from 'burger-api';
      *
+     * const fetchHandler = await burger.fetchHandler();
      * const bridge = burger.createNodeWsBridge({ WebSocketServer });
-     * http.createServer((req, res) => toFetchHandler(burger)(req))
+     * http.createServer((req, res) => { ... }) // bridge req/res <-> Request/Response
      *     .on('upgrade', (req, socket, head) => bridge.handleUpgrade(req, socket, head))
      *     .listen(3000);
      * ```
@@ -428,6 +458,9 @@ export class WebSocketAdapter {
         const adapter = this;
         return {
             async handleUpgrade(req, socket, head): Promise<void> {
+                const destroy = () =>
+                    (socket as { destroy?(): void }).destroy?.();
+
                 const raw = req as {
                     url?: string;
                     headers: Record<
@@ -435,23 +468,60 @@ export class WebSocketAdapter {
                         string | string[] | undefined
                     >;
                 };
+
+                // Real headers, not just `host` — `matchAndAuthorize`'s auth
+                // hooks may read cookies/Authorization, and the `Upgrade`
+                // header check below needs it to be present at all.
+                const headers = new Headers();
+                for (const [key, value] of Object.entries(raw.headers)) {
+                    if (value === undefined) continue;
+                    if (Array.isArray(value)) {
+                        for (const v of value) headers.append(key, v);
+                    } else {
+                        headers.set(key, value);
+                    }
+                }
                 const host = String(raw.headers.host ?? 'localhost');
-                const request = new Request(`http://${host}${raw.url ?? '/'}`);
-                const outcome = await adapter.handleUpgrade(request);
-                if (!outcome.handled || outcome.response) {
-                    // Not an upgrade, unmatched route, or auth rejection —
-                    // destroy the raw socket; there is no Response channel.
-                    (socket as { destroy?(): void }).destroy?.();
+                const request = new Request(
+                    `http://${host}${raw.url ?? '/'}`,
+                    { headers }
+                );
+
+                const upgradeHeader = request.headers.get('upgrade');
+                if (upgradeHeader?.toLowerCase() !== 'websocket') {
+                    destroy();
                     return;
                 }
+
+                // Not `adapter.handleUpgrade()`: that method always routes
+                // through `detectWsPlatform`, which falls back to `'node'`
+                // with no Bun/Cloudflare/Deno platform object present (i.e.
+                // always, here) and returns an unconditional 501. Node's
+                // handoff happens below via `wss.handleUpgrade` instead.
+                const result = await adapter.matchAndAuthorize(request);
+                if (!result.ok) {
+                    // Unmatched route or auth rejection — destroy the raw
+                    // socket; there is no Response channel to send it on.
+                    destroy();
+                    return;
+                }
+
                 wss.handleUpgrade(req, socket, head, (ws) => {
-                    ws.on('message', (...args: never[]) => {
+                    // `getRouteFromWs` reads `ws.data?.route` — Bun sets
+                    // this natively via `server.upgrade(request, { data })`;
+                    // `ws` package sockets have no such property, so it must
+                    // be attached explicitly for handleOpen/Message/Close to
+                    // find the matched route (and any resolved user).
+                    (ws as { data?: unknown }).data = result.data;
+                    ws.on('message', (...args: any[]) => {
                         void adapter.handleMessage(
                             ws,
-                            normalizeWsMessage(args[0])
+                            // `ws`'s `'message'` event signature is
+                            // `(data: Buffer, isBinary: boolean)`.
+                            normalizeWsMessage(args[0], args[1] as boolean)
                         );
                     });
-                    ws.on('close', (...args: never[]) => {
+                    ws.on('close', (...args: any[]) => {
                         void adapter.handleClose(
                             ws,
                             (args[0] as unknown as number) ?? 1005,

@@ -859,14 +859,17 @@ export class Burger {
      * Node WebSocket integration: returns a bridge that plugs the framework
      * pipeline into node:http's `'upgrade'` event using a framing library's
      * `WebSocketServer` (e.g. the `ws` package). Requires WebSocket routes
-     * to be configured (`wsDir`, `wsRoutes`, or `burger.websocket()`).
+     * to be configured (`wsDir`, `wsRoutes`, or `burger.websocket()`) — and
+     * for that route processing to have already run at least once, so
+     * `await`/call `fetchHandler()` (or `serve()`) first, not after.
      *
      * ```ts
      * import http from 'node:http';
      * import { WebSocketServer } from 'ws';
      *
+     * const fetchHandler = await burger.fetchHandler();
      * const bridge = burger.createNodeWsBridge({ WebSocketServer });
-     * http.createServer((req, res) => toFetchHandler(burger)(req, undefined))
+     * http.createServer((req, res) => { ... })
      *     .on('upgrade', (req, socket, head) =>
      *         bridge.handleUpgrade(req, socket, head))
      *     .listen(3000);
@@ -876,7 +879,9 @@ export class Burger {
         if (!this.wsAdapter) {
             throw new Error(
                 '[burger-api] createNodeWsBridge requires WebSocket routes ' +
-                    '(wsDir / wsRoutes / burger.websocket()).'
+                    '(wsDir / wsRoutes / burger.websocket()) to already be ' +
+                    'processed — call/await fetchHandler() or serve() before ' +
+                    'createNodeWsBridge().'
             );
         }
         return this.wsAdapter.createNodeWsBridge(options);
