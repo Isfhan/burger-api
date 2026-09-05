@@ -195,7 +195,7 @@ describe('generatePackageJson BURGER_API_SOURCE', () => {
     it('keeps the npm range when the env var is unset', () => {
         delete process.env.BURGER_API_SOURCE;
         const pkg = JSON.parse(generatePackageJson('x'));
-        expect(pkg.dependencies['burger-api']).toBe('^1.0.0');
+        expect(pkg.dependencies['burger-api']).toBe('^1.0.0-beta.1');
     });
 
     it('emits link:burger-api when set to "link"', () => {

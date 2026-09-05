@@ -2,6 +2,12 @@
 
 A Command-Line Tool for Creating and Managing BurgerAPI Projects.
 
+> **Beta release.** Install with `npm i -g @burger-api/cli@beta`.
+> `add`/`list`/`skills install` need `BURGER_API_BRANCH=feat/burger-api-v1`
+> set until this branch's ecosystem content lands on `main`. See
+> `CHANGELOG.md` for the full list of fixes and known limitations in this
+> beta.
+
 ## Installation
 
 ### Option 1: Bun Global Installation (Recommended if you have Bun installed)

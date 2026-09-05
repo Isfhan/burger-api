@@ -7,10 +7,29 @@
  */
 
 import { join, resolve } from 'path';
+import { readFileSync } from 'fs';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
 import { downloadSkill } from './github';
+
+/**
+ * True when the installed CLI is a prerelease (`-beta.`, `-rc.`, `-alpha.`)
+ * build — used to gate temporary beta-only messaging (e.g. the ecosystem
+ * `BURGER_API_BRANCH` note in `create`'s success output) so it disappears
+ * on its own once a stable version ships, with nothing to remember to undo.
+ */
+export function isPrereleaseBuild(): boolean {
+    try {
+        const pkgPath = join(import.meta.dir, '..', '..', 'package.json');
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+            version?: string;
+        };
+        return /-(?:beta|rc|alpha)\./.test(pkg.version ?? '');
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Resolve a local burger-api source override from the BURGER_API_SOURCE env
@@ -50,8 +69,13 @@ export function generatePackageJson(
     lang: 'ts' | 'js' = 'ts'
 ): string {
     const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
+    // Pinned to the exact 1.0.0-beta.1 line (not `^1.0.0`) so scaffolded
+    // projects during the beta can't accidentally resolve a future stable
+    // 1.0.0 — a caret range on a prerelease version only matches other
+    // prereleases sharing the same version core (semver's prerelease-tag
+    // matching rule), so this still picks up 1.0.0-beta.2, .3, etc.
     const burgerApiSpecifier =
-        burgerApiSourceOverride()?.specifier ?? '^1.0.0';
+        burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta.1';
     const packageJson = {
         name: projectName,
         version: '0.1.0',
@@ -748,7 +772,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
  <!-- Footer -->
  <footer class="footer">
- <div class="version">BurgerAPI v1.0.0 • Bun v1.3+</div>
+ <div class="version">BurgerAPI v1.0.0-beta.1 • Bun v1.3+</div>
  <div class="social-links">
  <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
  <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>

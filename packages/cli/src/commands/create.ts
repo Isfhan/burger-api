@@ -12,7 +12,12 @@ import * as clack from '@clack/prompts';
 import { existsSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import type { CreateOptions } from '../types/index';
-import { createProject, installDependencies, burgerApiSourceOverride } from '../utils/templates';
+import {
+    createProject,
+    installDependencies,
+    burgerApiSourceOverride,
+    isPrereleaseBuild,
+} from '../utils/templates';
 import {
     success,
     error as logError,
@@ -21,6 +26,7 @@ import {
     header,
     command,
     highlight,
+    warning,
 } from '../utils/logger';
 
 /**
@@ -219,6 +225,13 @@ export const createCommand = new Command('create')
                 command('burger-api skills install');
             }
             newline();
+            if (isPrereleaseBuild()) {
+                warning(
+                    'Beta note: burger-api add/list/skills install need BURGER_API_BRANCH=feat/burger-api-v1 ' +
+                        'until the ecosystem content lands on the main branch.'
+                );
+                newline();
+            }
             success('Happy coding!');
         } catch (err) {
             clack.outro('Failed to create project');

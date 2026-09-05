@@ -2,6 +2,41 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
+## Version 1.0.0-beta.1 - (September 6, 2026)
+
+First public beta, tracking `burger-api@1.0.0-beta.1`. Install with
+`npm i -g @burger-api/cli@beta`.
+
+- **Added** – `useWs`/WebSocket-routes prompt on `create` (mirrors the
+  existing `usePages` prompt), scaffolding a sample `src/websocket/echo/`
+  route and wiring `wsDir` into both `src/index.ts` and `burger.build.ts`
+  when opted in.
+- **Added** – `inspect` and `doctor` commands: `inspect` prints every
+  discovered route/hook/plugin/convention-file; `doctor` validates project
+  structure (missing entry file, no discoverable routes, a leftover legacy
+  `burger.config.ts`, etc.) and exits non-zero on failure.
+- **Added** – `generate ws <path>` scaffolds a WebSocket handler directory
+  (`ws.ts`/`hooks.ts`/`config.ts`).
+- **Fixed** – `burger-api add`'s printed "How to Use" snippet showed an
+  invalid identifier for any hyphenated package (`jwt-auth` → `Jwt-auth`,
+  a syntax error) and, even fixed, guessed the wrong case and omitted the
+  factory call entirely (`rate-limiter` really exports `rateLimit()`,
+  `cache` exports `cacheControl()` — a naive rename can't predict these).
+  Now resolves the real exported name by reading the downloaded file.
+- **Fixed** – `burger-api dev` only restarted on changes to files already
+  reachable from the entry's import graph (`bun --watch`'s own
+  limitation), so a brand-new route directory 404'd until the dev server
+  was manually restarted. `dev` now owns a recursive filesystem watcher
+  covering the whole app directory.
+- **Fixed** – `burger-api build:exec` produced an executable that crashed
+  immediately on startup (see the framework CHANGELOG for the root cause).
+- **Changed** – Scaffold pins `burger-api@^1.0.0-beta.1` (was `^1.0.0`) for
+  the duration of the beta, so scaffolded projects track beta releases and
+  don't jump to a future stable `1.0.0` mid-beta.
+- **Known limitation** – `add`/`list`/`skills install` default to GitHub's
+  `main` branch, which doesn't have this release's ecosystem content yet.
+  Set `BURGER_API_BRANCH=feat/burger-api-v1` until `main` is updated.
+
 ## Version 1.0.0 - (August 2, 2026)
 
 - **Added** – `--lang ts|js` and `--yes`/`--defaults` flags on `create`; JS

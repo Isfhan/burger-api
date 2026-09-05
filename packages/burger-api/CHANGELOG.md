@@ -1,5 +1,66 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Version 1.0.0-beta.1
+
+Released 2026-09-06. First public beta of the vision-locked 1.0.0 API — the
+`0.9.x` line on npm predates this rewrite entirely (`BurgerRequest`/
+`Middleware`-based). Install with `npm i burger-api@beta` (a plain
+`npm i burger-api` still resolves the current `0.9.x` `latest`, so nothing
+breaks for existing users).
+
+**Fixed**
+- **Cloudflare Workers crash on boot** — a dead, eagerly-evaluated
+  module-level `Response` constant in `utils/response.ts` crashed every
+  Worker before any request was handled ("Disallowed operation... within
+  global scope"). Removed; had zero live references.
+- **`config.ts` silently dropped in production builds** — a route's
+  `config.ts` (auth/cache/timeout) bundled as a raw module namespace
+  instead of unwrapping its default export, so `ctx.config` was always
+  `undefined` after `bun run build && bun run start`, even though the
+  identical route worked correctly in `bun run dev`.
+- **`dist` not resolvable under stock Node ESM** — explicit `.js`
+  extensions added to every relative import, and the build switched to
+  `NodeNext` module resolution; verified by importing the published
+  package under plain `node`, no bundler or loader.
+- **`burger-api build:exec` standalone executables crashed on startup**
+  ("Cannot find module 'burger-api/adapter/bun'") — the Bun adapter's
+  dynamic import specifier is deliberately non-static so bundlers keep
+  `bun` out of WinterCG (Cloudflare/Vercel/Deno) bundles, but that means
+  Bun's `--compile` step (which needs a literal specifier to embed a
+  module into a self-contained binary) could never resolve it. The
+  generated build:exec entry now statically imports the adapter and
+  injects it via the existing `ServerOptions.adapter` seam — scoped
+  strictly to `build:exec`; `bun run build` and WinterCG output are
+  unaffected.
+- Route-level `onRequest` is now a **compile error** instead of a silent
+  no-op — it never ran (pre-routing hooks can't be scoped to one route);
+  declaring it in a route's `hooks.ts` now fails `tsc` instead of quietly
+  doing nothing.
+- `ForwardHookResult` widened to match the runtime's actual behavior — a
+  forward hook (`onRequest`/`beforeRoute`) returning a mapper function
+  (e.g. `cors()` short-circuiting preflight *and* transforming the real
+  response) was always supported by the hook runner but wasn't part of
+  the public type, so every official ecosystem hook failed `tsc` when
+  typed against `GlobalHooks` exactly as the CLI's own scaffold teaches.
+  `BurgerNext` is now `@deprecated`, aliased to `ForwardHookResult`.
+
+**Removed**
+- `burger.macro()` / `MacroFn` — confirmed zero real usage anywhere in the
+  framework's own examples, ecosystem hooks/plugins, or the CLI. A macro
+  was a named, plugin-scoped hook bundle with no capability `usePlugin()`
+  doesn't already provide; removed before any external dependency could
+  form. Use `burger.usePlugin(...)` instead.
+
+**Known limitations in this beta**
+- **Pages (`src/pages/`) are Bun-only** — no page routing support on any
+  WinterCG target (Cloudflare Workers, Vercel, Deno Deploy, Node), not
+  even via AOT-compiled `pageRoutes`. API routes are fully portable; pages
+  are not, in this release.
+- `burger-api add` / `list` / `skills install` resolve ecosystem content
+  from GitHub's `main` branch by default, which does not yet have this
+  release's hooks/plugins/skills. Set `BURGER_API_BRANCH=feat/burger-api-v1`
+  until `main` is updated.
+
 ### Version 1.0.0 (Stable — Vision-Locked API)
 
 Released 2026-08-02. First stable release. All legacy API names removed; the
