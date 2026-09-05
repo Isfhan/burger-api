@@ -962,3 +962,149 @@ instruction) before actually stopping — including a legitimate fix for the
 recurring `.tmp-assets-test` repo-tree pollution and an independent
 "Phase 7" re-verification pass. Both were reviewed and are correct; kept as
 part of the history. Flagged to the user directly at the time.
+
+---
+
+## Shipping `1.0.0-beta.1` — 2026-09-06
+
+Decided to ship a beta first rather than go straight to a final stable
+`1.0.0`, since two WinterCG targets (Node 24+, Vercel) were documented but
+never independently boot-verified — a beta explicitly asks for that kind
+of stress-testing before calling it final.
+
+### Scope cut: removed `burger.macro()`
+
+Grepped before recommending anything: **zero** real usage anywhere in the
+26 framework examples, the ecosystem hooks/plugins, or the CLI. A macro is
+a named, plugin-scoped `GlobalHooks` bundle — `usePlugin()` already
+provides the identical capability with no unique value macros add.
+Removed pre-beta, before any external user could take a dependency on it
+(free today; a breaking change later). Touched: deleted
+`src/plugin/macro.ts`, `test/plugin/macro.test.ts`, and the entire
+`examples/macros/` directory (existed solely to demonstrate this feature,
+confirmed via `grep` before deleting); removed `MacroFn` from
+`plugin/types.ts` and all wiring from `index.ts` (`macroRegistry` field,
+`.macro()` method, `expandAll()` merge into the plugin list); trimmed the
+macro-specific assertions out of the real integration test
+`test/plugin-macro-smoke.test.ts` and its `plugin-harness` fixture while
+keeping the plugin-only coverage intact; removed the `macro(name, fn)`
+section from `docs/core/burger-class.md` and the stale `MacroFn` mention
+(already describing dead per-call-args syntax) from
+`docs/ecosystem/hooks-plugins.md`. `createFetchHandler()` — the other dead
+API flagged in the same pass — was kept per explicit decision, deferred to
+a future scope review.
+
+Verified: `bun run typecheck` and `bun run test:all` clean after removal
+(918/918 — down from 925 by exactly the deleted macro/examples tests, all
+accounted for); Docusaurus `bun run build` clean after the two doc edits.
+
+### Corrected a misconception: `--lang js` is unrelated to cross-runtime support
+
+Flagged directly rather than silently acting on it: JSDoc-based JavaScript
+scaffolding (`--lang js`) is purely an authoring-time choice for a
+consumer's own project code. Both `.ts` and `.js` source go through the
+identical `Bun.build` pipeline and produce identical runtime output —
+removing it would not affect Node/Cloudflare/Vercel/Deno support at all.
+What actually gates cross-runtime support is confirmed, in the framework's
+own `fetch-handler.ts` JSDoc: **pages are Bun-only in 1.0, full stop** — no
+page routing on any WinterCG target, not even AOT-compiled. That limitation
+is real and is now called out explicitly in both CHANGELOGs rather than
+left implicit.
+
+### Version bump to `1.0.0-beta.1`
+
+Both `packages/burger-api/package.json` and `packages/cli/package.json` →
+`1.0.0-beta.1`. Also updated: the CLI's default scaffold dependency pin
+(`templates.ts`, was `^1.0.0`, now `^1.0.0-beta.1` — a caret range on a
+prerelease version only matches other prereleases sharing the same version
+core per semver's prerelease-tag rule, so scaffolded projects track
+`beta.2`/`beta.3` etc. but can't accidentally jump to a future stable
+`1.0.0` mid-beta) and the scaffolded landing page's footer version string.
+Left the CLI's dynamic `--version` flag alone (already reads from
+`package.json`, no hardcoding) and the OpenAPI `info.version` default of
+`'1.0.0'` alone (that's the *consumer's own API* version placeholder, not
+BurgerAPI's — unrelated). Fixed one test asserting the old scaffold-pin
+literal (`create-config.test.ts`). CHANGELOG entries added to both
+packages covering everything shipped since the original `1.0.0` vision-lock
+line: both P0 fixes, the Node ESM fix, the `build:exec` crash fix, the
+`ForwardHookResult` widening, the DX fixes, and the macro removal — plus
+an explicit "known limitations" section (pages Bun-only;
+`add`/`list`/`skills install` need `BURGER_API_BRANCH` until `main` is
+updated) so beta testers aren't surprised by either.
+
+### Node 24+ and Vercel: independently verified, not just documented
+
+Only Cloudflare (`wrangler dev`) and Deno (`deno run`) had been
+independently boot-tested before this session; Node and Vercel were
+documented via the same `toFetchHandler` mechanism but never proven the
+same way. Closed that gap:
+
+- **Node**: no Node 24+ available in this environment (local Node is
+  v22.14.0) — grepped the framework source for anything gating a
+  Node-24-specific API and found none; the `>=24` `engines` requirement
+  reads as a general "modern Node" baseline, not a hard technical gate, so
+  a real boot on v22.14.0 is a strong (not perfect) substitute. Wrote a
+  minimal `node:http` ↔ `toFetchHandler` bridge (the exact pattern the
+  framework's own JSDoc shows), installed the framework as a real `file:`
+  dependency (not `bun link`, to avoid the known monorepo symlink-cycle
+  risk), and booted it with plain `node server.mjs`: `GET /api/hello` →
+  200, `GET /api/users/:id` → 200 with the param resolved, unknown path →
+  404 RFC 9457. All correct.
+- **Vercel**: no `vercel` CLI available in this environment either. The
+  repo's own `examples/deploy-vercel/api/index.ts` declares
+  `export const runtime = 'nodejs'` — meaning Vercel's own production
+  execution of this file *is* a real Node.js process, not a V8-isolate
+  edge runtime (a genuinely useful distinction: this framework's "Vercel
+  support" claim is specifically via Vercel's Node.js Functions, not Vercel
+  Edge Functions). Copied that exact file's runtime logic (types stripped,
+  zero logic changes) and ran it directly under `node`: identical
+  hello/params/404 results. This verifies the code path Vercel actually
+  executes at request time; it does not verify the Vercel platform's own
+  build/deploy pipeline (routing config, `vercel.json` rewrites, cold-start
+  behavior), which would need the `vercel` CLI or a real account to check.
+
+Both verified clean — no changes needed to the CHANGELOG's "known
+limitations" section beyond what was already written (pages Bun-only,
+ecosystem-content branch workaround).
+
+### Final gate
+
+`bun run test:all`: **918 pass / 0 fail**. `bun run typecheck` clean for
+both packages. Fresh framework `dist` build confirmed clean after the
+macro removal + version bump.
+
+**`npm pack --dry-run`**, both packages, against the new version:
+- `burger-api@1.0.0-beta.1` — 139.1 kB tarball, 157 files (down from 159
+  pre-beta, exactly the two deleted macro dist files — `macro.js`/
+  `macro.d.ts` — accounted for). Contents unchanged in shape: `dist/**` +
+  `package.json` + `README.md` + `LICENSE` only.
+- `@burger-api/cli@1.0.0-beta.1` — 61.4 kB, 28 files, raw TS source (by
+  design).
+- All 8 subpath exports re-verified directly against the fresh build: 7
+  resolve under stock Node, `./adapter/bun` correctly Bun-only (fails
+  under Node with "Cannot find package 'bun'", resolves under Bun) — the
+  same intentional split confirmed every other gate this session.
+
+**Playground re-verification** (the closest thing to a real pre-beta
+smoke test — 4 actual consumer projects, not internal tests): re-ran
+`bun install` + `bun run typecheck` for all 4 projects under
+`C:\Users\EC\Desktop\burger-api-testing` against the updated framework
+(macro removal + version bump). All 4 clean — none of them use `macro()`,
+confirming the removal is genuinely invisible to real consumer code, not
+just to the framework's own internal tests. Re-booted `01-basic-api`'s
+dev server as a final spot-check: `GET /api/users` still correct.
+
+**Stopped before `npm publish`**, per the standing decision every gate in
+this session has followed. Handoff for the two commands still needed:
+
+```bash
+cd packages/burger-api && npm publish --tag beta
+cd packages/cli && npm publish --tag beta
+```
+
+Both packages are at `1.0.0-beta.1`; publish `burger-api` first (the CLI
+declares no hard dependency on the framework package itself, so order is
+not strictly required, but matches this session's convention throughout).
+A bare `npm i burger-api` / `npm i -g @burger-api/cli` will keep resolving
+today's `0.9.7`/`0.9.9` `latest` — nothing changes for existing users
+until they explicitly opt in with `@beta`.
