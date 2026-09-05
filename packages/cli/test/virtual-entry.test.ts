@@ -35,6 +35,47 @@ describe('generateVirtualEntrySource', () => {
         );
     });
 
+    it('compile: true statically imports BunAdapter and injects it via ServerOptions.adapter (regression: build:exec cannot resolve a computed dynamic import specifier)', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                },
+            ],
+            [],
+            undefined,
+            undefined,
+            [],
+            [],
+            true
+        );
+
+        expect(source).toContain(
+            "import { BunAdapter as __BunAdapter } from 'burger-api/adapter/bun';"
+        );
+        expect(source).toContain('adapter: new __BunAdapter(),');
+    });
+
+    it('compile: false/undefined never imports BunAdapter (must stay dynamic-only for WinterCG targets)', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            [
+                {
+                    importPath: '/tmp/api/route.ts',
+                    routePath: '/api',
+                    isWildcard: false,
+                },
+            ],
+            []
+        );
+
+        expect(source).not.toContain('BunAdapter');
+        expect(source).not.toContain("from 'burger-api/adapter/bun'");
+    });
+
     it('unwraps config.ts default export (regression: config.ts uses a default export, unlike schema/openapi/hooks)', () => {
         const source = generateVirtualEntrySource(
             config,

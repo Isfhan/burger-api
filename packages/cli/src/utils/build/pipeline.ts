@@ -96,7 +96,8 @@ export async function runVirtualEntryBuild(options: {
         entryOptions.importPath,
         appConventions,
         wsEntries,
-        assetEntries
+        assetEntries,
+        options.compile
     );
     const hasPages = pageEntries.length > 0;
     const { outDir, virtualPath, virtualSourcePath } = prepareVirtualEntry({
