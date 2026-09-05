@@ -11,6 +11,7 @@ import { applyTransform } from './transform.js';
 import { HTTPError, renderHTTPError } from '../errors/http-error.js';
 import { ValidationError } from '../validation/error.js';
 import { validateResponse } from '../validation/response.js';
+import { isNotProductionEnv } from '../utils/env.js';
 
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
@@ -70,7 +71,7 @@ export async function executeHookPlan(
                         response.status,
                         body,
                         plan.validatorConfig ?? {},
-                        plan.debug ?? process.env.NODE_ENV !== 'production'
+                        plan.debug ?? isNotProductionEnv()
                     );
                     if (!outcome.ok && outcome.errorResponse) {
                         return outcome.errorResponse;
@@ -133,7 +134,7 @@ export async function dispatchOnError(
 
     // Default fallback: unhandled errors → RFC 9457.
     // Dev mode: stack + cause included. Production: no internals.
-    const isDev = debug ?? process.env.NODE_ENV !== 'production';
+    const isDev = debug ?? isNotProductionEnv();
 
     // ValidationError retains its structured format (errorsBySlot grouping).
     if (error instanceof ValidationError) {

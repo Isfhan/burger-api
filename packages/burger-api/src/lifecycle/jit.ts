@@ -4,6 +4,7 @@ import type { HookPlan, ResponseHook } from './types.js';
 import { applyTransform } from './transform.js';
 import { dispatchOnError } from './executor.js';
 import { validateResponse } from '../validation/response.js';
+import { isNotProductionEnv } from '../utils/env.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
@@ -95,11 +96,7 @@ export function compileJitHookPlan(
         vc: plan.validatorConfig,
         // Resolve the executor's env fallback NOW so the hot path reads one
         // boolean: explicit flag ?? NODE_ENV !== production.
-        dbg:
-            (debug ?? plan.debug) ??
-            (typeof process === 'undefined'
-                ? true
-                : process.env.NODE_ENV !== 'production'),
+        dbg: (debug ?? plan.debug) ?? isNotProductionEnv(),
     };
 
     const L: string[] = [];
