@@ -1,7 +1,7 @@
-import type { BurgerContext } from 'burger-api';
+import { defineRoute } from 'burger-api';
+import { POST as PostSchema } from './schema';
 
-export async function POST(ctx: BurgerContext) {
+export const POST = defineRoute(PostSchema, (ctx) => {
     console.log('[POST] Products route invoked');
-    const body = (ctx.validated!.body as any);
-    return Response.json(body);
-}
+    return Response.json(ctx.validated.body);
+});

@@ -947,6 +947,10 @@ function mergeWsConfig(
 
 // Export BurgerContext (the public request context type)
 export { BurgerContext } from './context/context.js';
+
+// Export the schema-typed route/hooks helpers
+export { defineRoute, defineHooks } from './router/define.js';
+export type { TypedRouteHooks } from './router/define.js';
 export type {
     BurgerServices,
     BurgerValidated,

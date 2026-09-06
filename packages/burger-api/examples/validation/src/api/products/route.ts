@@ -1,17 +1,13 @@
-import type { BurgerContext } from 'burger-api';
-import type { GET as GetSchema, POST as PostSchema } from './schema';
+import { defineRoute } from 'burger-api';
+import { GET as GetSchema, POST as PostSchema } from './schema';
 
-export async function GET(ctx: BurgerContext<typeof GetSchema>) {
-    const query: { search: string } | undefined = ctx.validated?.query;
+export const GET = defineRoute(GetSchema, (ctx) => {
     return Response.json({
-        query,
+        query: ctx.validated.query,
         name: 'John Doe',
     });
-}
+});
 
-export async function POST(ctx: BurgerContext<typeof PostSchema>) {
-    const body:
-        | { name: string; price: number }
-        | undefined = ctx.validated?.body;
-    return Response.json(body);
-}
+export const POST = defineRoute(PostSchema, (ctx) => {
+    return Response.json(ctx.validated.body);
+});
