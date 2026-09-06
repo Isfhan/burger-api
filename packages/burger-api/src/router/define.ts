@@ -18,8 +18,7 @@
  */
 
 import type { BurgerContext } from '../context/context.js';
-import type { RequestHandler } from '../types/index.js';
-import type { RouteMethodSchema } from '../types/inference.js';
+import type { MethodSchema, RequestHandler } from '../types/index.js';
 import type {
     ErrorHook,
     ForwardHookResult,
@@ -28,7 +27,7 @@ import type {
 } from '../lifecycle/types.js';
 
 /** Identity wrapper: infers `ctx` from `schema`, returns `handler` unchanged. */
-export function defineRoute<T extends RouteMethodSchema>(
+export function defineRoute<T extends MethodSchema>(
     schema: T,
     handler: (ctx: BurgerContext<T>) => Promise<Response> | Response
 ): RequestHandler {
@@ -62,7 +61,7 @@ export interface TypedRouteHooks<T> {
 }
 
 /** Identity wrapper: infers every hook's `ctx` from `schema`, returns `hooks` unchanged. */
-export function defineHooks<T extends RouteMethodSchema>(
+export function defineHooks<T extends MethodSchema>(
     schema: T,
     hooks: TypedRouteHooks<T>
 ): RouteHooks {

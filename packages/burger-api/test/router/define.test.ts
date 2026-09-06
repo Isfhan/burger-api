@@ -47,6 +47,16 @@ describe('defineRoute', () => {
             return new Response(name);
         });
     });
+
+    it('accepts a response-only schema (regression: TS2559 "no properties in common" against a request-slot-only bound)', () => {
+        const responseOnlySchema = {
+            response: { 200: z.object({ ok: z.boolean() }) },
+        };
+        const handler = defineRoute(responseOnlySchema, () => {
+            return new Response('ok');
+        });
+        expect(typeof handler).toBe('function');
+    });
 });
 
 describe('defineHooks', () => {
