@@ -168,23 +168,61 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
     return results;
 }
 
+/**
+ * Structured, machine-readable doctor result — same checks the formatted
+ * console output presents, serialized instead of printed. A real, versioned
+ * type (not an ad-hoc object literal) for the same reason as
+ * `InspectResult`: a CLI meant for AI-agent/tooling consumption needs a
+ * documented contract, not an implicit shape.
+ */
+export interface DoctorResult {
+    /** Schema version for this JSON shape — bump on any breaking field change. */
+    version: 1;
+    ok: boolean;
+    errorCount: number;
+    checks: CheckResult[];
+}
+
 export const doctorCommand = new Command('doctor')
     .description('Validate project structure and detect issues')
-    .action(async () => {
+    .option(
+        '--json',
+        'Output a structured JSON result instead of formatted text (for tooling/agents)'
+    )
+    .action(async (options: { json?: boolean }) => {
         if (!existsSync('package.json')) {
-            logError('Not in a BurgerAPI project directory.');
-            info('Run this from your project root.');
+            if (options.json) {
+                console.log(
+                    JSON.stringify({
+                        error: 'Not in a BurgerAPI project directory.',
+                    })
+                );
+            } else {
+                logError('Not in a BurgerAPI project directory.');
+                info('Run this from your project root.');
+            }
             process.exit(1);
         }
 
         const cwd = process.cwd();
         const results = await runChecks(cwd);
+        const errorCount = results.filter((r) => !r.pass).length;
+
+        if (options.json) {
+            const result: DoctorResult = {
+                version: 1,
+                ok: errorCount === 0,
+                errorCount,
+                checks: results,
+            };
+            console.log(JSON.stringify(result, null, 2));
+            process.exit(errorCount > 0 ? 1 : 0);
+        }
 
         newline();
         header('BurgerAPI Doctor');
         newline();
 
-        let errorCount = 0;
         for (const result of results) {
             if (result.pass) {
                 success(`✓ ${result.name}`);
@@ -192,7 +230,6 @@ export const doctorCommand = new Command('doctor')
                     info(` ${result.message}`);
                 }
             } else {
-                errorCount++;
                 logError(`✗ ${result.name}`);
                 info(` ${result.message}`);
             }

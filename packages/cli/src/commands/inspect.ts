@@ -63,17 +63,159 @@ function hasPluginsFile(cwd: string): boolean {
     return existsSync(join(cwd, 'src', 'plugins.ts'));
 }
 
+/**
+ * Structured, machine-readable inspection result — the same data the
+ * formatted console output presents, serialized instead of printed. Kept
+ * as a single named interface (not an inline object literal at the print
+ * site) so it's a documented, versionable contract: a CLI meant to be
+ * consumed by AI agents/tooling needs its structured output to be a real
+ * type, not an implicit shape that can drift silently.
+ */
+export interface InspectResult {
+    /** Schema version for this JSON shape — bump on any breaking field change. */
+    version: 1;
+    config: {
+        apiDir: string;
+        pageDir: string;
+        apiPrefix: string;
+        pagePrefix: string;
+        wsDir: string;
+        debug: boolean;
+    };
+    apiRoutes: {
+        routePath: string;
+        importPath: string;
+        methods: string[];
+        hasHooks: boolean;
+        hasSchema: boolean;
+        hasOpenapi: boolean;
+        hasConfig: boolean;
+    }[];
+    pageRoutes: { routePath: string; importPath: string }[];
+    wsRoutes: {
+        routePath: string;
+        importPath: string;
+        hasHooks: boolean;
+        hasConfig: boolean;
+    }[];
+    hooks: {
+        global: string[];
+        routes: { routePath: string; importPath: string }[];
+    };
+    plugins: { pluginsFileFound: boolean };
+    conventionFiles: {
+        totalApiRoutes: number;
+        schema: number;
+        openapi: number;
+        config: number;
+        hooks: number;
+    };
+}
+
+async function buildInspectResult(cwd: string): Promise<InspectResult> {
+    ensureAppDirEnv();
+    const config = await resolveBuildConfig(cwd);
+
+    const apiEntries = await scanApiRoutes(
+        cwd,
+        config.apiDir,
+        config.apiPrefix
+    );
+    const pageEntries = await scanPageRoutes(
+        cwd,
+        config.pageDir,
+        config.pagePrefix
+    );
+    const wsEntries = config.wsDir
+        ? await scanWebSocketRoutes(cwd, config.wsDir)
+        : [];
+    const globalHooks = await detectGlobalHooks(cwd);
+    const routesWithHooks = apiEntries.filter((e) => e.hooksPath);
+
+    return {
+        version: 1,
+        config: {
+            apiDir: config.apiDir,
+            pageDir: config.pageDir,
+            apiPrefix: config.apiPrefix,
+            pagePrefix: config.pagePrefix,
+            wsDir: config.wsDir ?? '',
+            debug: config.debug ?? false,
+        },
+        apiRoutes: apiEntries.map((e) => ({
+            routePath: e.routePath,
+            importPath: e.importPath,
+            methods: e.methods ?? [
+                'GET',
+                'POST',
+                'PUT',
+                'DELETE',
+                'PATCH',
+                'HEAD',
+            ],
+            hasHooks: !!e.hooksPath,
+            hasSchema: !!e.schemaPath,
+            hasOpenapi: !!e.openapiPath,
+            hasConfig: !!e.configPath,
+        })),
+        pageRoutes: pageEntries.map((e) => ({
+            routePath: e.routePath,
+            importPath: e.importPath,
+        })),
+        wsRoutes: wsEntries.map((e) => ({
+            routePath: e.routePath,
+            importPath: e.importPath,
+            hasHooks: !!e.hooksPath,
+            hasConfig: !!e.configPath,
+        })),
+        hooks: {
+            global: globalHooks,
+            routes: routesWithHooks.map((e) => ({
+                routePath: e.routePath,
+                importPath: e.hooksPath!,
+            })),
+        },
+        plugins: { pluginsFileFound: hasPluginsFile(cwd) },
+        conventionFiles: {
+            totalApiRoutes: apiEntries.length,
+            schema: countConventionFiles(apiEntries, 'schema.ts'),
+            openapi: countConventionFiles(apiEntries, 'openapi.ts'),
+            config: countConventionFiles(apiEntries, 'config.ts'),
+            hooks: countConventionFiles(apiEntries, 'hooks.ts'),
+        },
+    };
+}
+
 export const inspectCommand = new Command('inspect')
     .description('Display discovered routes, hooks, and config')
-    .action(async () => {
+    .option(
+        '--json',
+        'Output a structured JSON result instead of formatted text (for tooling/agents)'
+    )
+    .action(async (options: { json?: boolean }) => {
         if (!existsSync('package.json')) {
-            info('Not in a BurgerAPI project directory.');
+            if (options.json) {
+                console.log(
+                    JSON.stringify({
+                        error: 'Not in a BurgerAPI project directory.',
+                    })
+                );
+            } else {
+                info('Not in a BurgerAPI project directory.');
+            }
             process.exit(1);
         }
 
         const cwd = process.cwd();
-        ensureAppDirEnv();
-        const config = await resolveBuildConfig(cwd);
+        const result = await buildInspectResult(cwd);
+
+        if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+            return;
+        }
+
+        const { config, apiRoutes: apiEntries, pageRoutes: pageEntries, wsRoutes: wsEntries } =
+            result;
 
         // Config summary
         newline();
@@ -85,20 +227,8 @@ export const inspectCommand = new Command('inspect')
         bullet(`wsDir: ${config.wsDir}`);
         bullet(`debug: ${config.debug}`);
 
-        // Scan routes
-        const apiEntries = await scanApiRoutes(
-            cwd,
-            config.apiDir,
-            config.apiPrefix
-        );
-        const pageEntries = await scanPageRoutes(
-            cwd,
-            config.pageDir,
-            config.pagePrefix
-        );
-        const wsEntries = config.wsDir
-            ? await scanWebSocketRoutes(cwd, config.wsDir)
-            : [];
+        const relTo = (p: string) =>
+            p.replace(cwd.replace(/\\/g, '/'), '.').replace(/\\/g, '/');
 
         // API Routes
         newline();
@@ -107,20 +237,9 @@ export const inspectCommand = new Command('inspect')
             info(' No API routes found.');
         } else {
             for (const entry of apiEntries) {
-                const methods = entry.methods ?? [
-                    'GET',
-                    'POST',
-                    'PUT',
-                    'DELETE',
-                    'PATCH',
-                    'HEAD',
-                ];
-                const methodStr = methods.join(', ');
-                const relativePath = entry.importPath
-                    .replace(cwd.replace(/\\/g, '/'), '.')
-                    .replace(/\\/g, '/');
+                const methodStr = entry.methods.join(', ');
                 bullet(
-                    `${highlight(methodStr.padEnd(30))} ${entry.routePath} ${dimText(relativePath)}`
+                    `${highlight(methodStr.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
                 );
             }
         }
@@ -132,11 +251,8 @@ export const inspectCommand = new Command('inspect')
             info(' No page routes found.');
         } else {
             for (const entry of pageEntries) {
-                const relativePath = entry.importPath
-                    .replace(cwd.replace(/\\/g, '/'), '.')
-                    .replace(/\\/g, '/');
                 bullet(
-                    `${highlight('GET'.padEnd(30))} ${entry.routePath} ${dimText(relativePath)}`
+                    `${highlight('GET'.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
                 );
             }
         }
@@ -148,16 +264,13 @@ export const inspectCommand = new Command('inspect')
             info(' No WebSocket routes found.');
         } else {
             for (const entry of wsEntries) {
-                const relativePath = entry.importPath
-                    .replace(cwd.replace(/\\/g, '/'), '.')
-                    .replace(/\\/g, '/');
                 const features: string[] = [];
-                if (entry.hooksPath) features.push('hooks');
-                if (entry.configPath) features.push('config');
+                if (entry.hasHooks) features.push('hooks');
+                if (entry.hasConfig) features.push('config');
                 const featureStr =
                     features.length > 0 ? ` [${features.join(', ')}]` : '';
                 bullet(
-                    `${highlight('WS'.padEnd(30))} ${entry.routePath} ${dimText(relativePath + featureStr)}`
+                    `${highlight('WS'.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath) + featureStr)}`
                 );
             }
         }
@@ -165,28 +278,21 @@ export const inspectCommand = new Command('inspect')
         // Global hooks
         newline();
         header('Hooks');
-        const globalHooks = await detectGlobalHooks(cwd);
-        if (globalHooks.length > 0) {
-            bullet(`Global: src/hooks.ts ( ${globalHooks.join(', ')} )`);
+        if (result.hooks.global.length > 0) {
+            bullet(`Global: src/hooks.ts ( ${result.hooks.global.join(', ')} )`);
         } else {
             info(' Global: src/hooks.ts not found or no hooks exported.');
         }
 
         // Route hooks
-        const routesWithHooks = apiEntries.filter((e) => e.hooksPath);
-        if (routesWithHooks.length > 0) {
-            for (const entry of routesWithHooks) {
-                const relativePath = entry
-                    .hooksPath!.replace(cwd.replace(/\\/g, '/'), '.')
-                    .replace(/\\/g, '/');
-                bullet(`Route: ${entry.routePath} ${dimText(relativePath)}`);
-            }
+        for (const entry of result.hooks.routes) {
+            bullet(`Route: ${entry.routePath} ${dimText(relTo(entry.importPath))}`);
         }
 
         // Plugins
         newline();
         header('Plugins');
-        if (hasPluginsFile(cwd)) {
+        if (result.plugins.pluginsFileFound) {
             bullet('src/plugins.ts found');
         } else {
             info(' No src/plugins.ts found.');
@@ -195,16 +301,13 @@ export const inspectCommand = new Command('inspect')
         // Convention file stats
         newline();
         header('Convention Files');
-        const total = apiEntries.length;
-        if (total > 0) {
-            const withSchema = countConventionFiles(apiEntries, 'schema.ts');
-            const withOpenapi = countConventionFiles(apiEntries, 'openapi.ts');
-            const withConfig = countConventionFiles(apiEntries, 'config.ts');
-            const withHooks = countConventionFiles(apiEntries, 'hooks.ts');
-            bullet(`schema.ts: ${withSchema}/${total} routes`);
-            bullet(`openapi.ts: ${withOpenapi}/${total} routes`);
-            bullet(`config.ts: ${withConfig}/${total} routes`);
-            bullet(`hooks.ts: ${withHooks}/${total} routes`);
+        const { totalApiRoutes, schema, openapi, config: withConfig, hooks: withHooks } =
+            result.conventionFiles;
+        if (totalApiRoutes > 0) {
+            bullet(`schema.ts: ${schema}/${totalApiRoutes} routes`);
+            bullet(`openapi.ts: ${openapi}/${totalApiRoutes} routes`);
+            bullet(`config.ts: ${withConfig}/${totalApiRoutes} routes`);
+            bullet(`hooks.ts: ${withHooks}/${totalApiRoutes} routes`);
         }
 
         newline();
