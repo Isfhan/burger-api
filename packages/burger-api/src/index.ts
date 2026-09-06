@@ -963,7 +963,7 @@ export { timingSafeEqual } from './utils/timing-safe.js';
 
 // Export error classes
 export { HTTPError, renderHTTPError } from './errors/http-error.js';
-export { ASSET_MIME, contentTypeFor } from './core/assets.js';
+export { ASSET_MIME, contentTypeFor } from './core/asset-mime.js';
 export type {
     EmbeddedAsset,
     DiskAssetRoute,

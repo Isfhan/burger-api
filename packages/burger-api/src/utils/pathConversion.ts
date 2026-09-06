@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 import { cleanPrefix } from './index.js';
 import { ROUTE_CONSTANTS } from './routing.js';
 
