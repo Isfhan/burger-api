@@ -16,6 +16,7 @@ import type {
     SkillInfo,
 } from '../types/index';
 import { unlinkSync } from 'fs';
+import { withEcosystemCache } from './ecosystem-cache';
 
 /**
  * Configuration for GitHub repository.
@@ -147,6 +148,19 @@ export async function getComponentList(): Promise<
             'Could not get the ecosystem list from GitHub. Please check your internet connection.'
         );
     }
+}
+
+/**
+ * Cached wrapper around {@link getComponentList} — see `ecosystem-cache.ts`
+ * for the caching contract (fresh: served from disk; stale: refreshed,
+ * falling back to the stale copy on a failed refresh; cold + failing
+ * fetch: throws, same as the uncached function).
+ */
+export async function getCachedComponentList(): Promise<{
+    data: Array<{ name: string; kind: 'hook' | 'plugin' }>;
+    stale: boolean;
+}> {
+    return withEcosystemCache('component-list', getComponentList);
 }
 
 /**
@@ -408,6 +422,16 @@ export async function getSkillList(): Promise<string[]> {
         .filter((f) => f.type === 'dir')
         .map((f) => f.name)
         .sort();
+}
+
+/**
+ * Cached wrapper around {@link getSkillList} — see {@link getCachedComponentList}.
+ */
+export async function getCachedSkillList(): Promise<{
+    data: string[];
+    stale: boolean;
+}> {
+    return withEcosystemCache('skill-list', getSkillList);
 }
 
 /**

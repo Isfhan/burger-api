@@ -8,7 +8,7 @@
  */
 
 import { Command } from 'commander';
-import { getComponentList, getComponentInfo } from '../utils/github';
+import { getCachedComponentList, getComponentInfo } from '../utils/github';
 import {
     header,
     withSpinner,
@@ -18,6 +18,7 @@ import {
     info,
     dim,
     command,
+    warning,
 } from '../utils/logger';
 
 /**
@@ -32,7 +33,8 @@ export const listCommand = new Command('list')
             await withSpinner(
                 'Fetching hooks and plugins list from GitHub...',
                 async (spin) => {
-                    const components = await getComponentList();
+                    const { data: components, stale } =
+                        await getCachedComponentList();
 
                     const componentDetails = await Promise.all(
                         components.map(({ name, kind }) =>
@@ -47,6 +49,13 @@ export const listCommand = new Command('list')
 
                     spin.stop('Found available hooks and plugins!');
                     newline();
+
+                    if (stale) {
+                        warning(
+                            'GitHub is unreachable — showing a cached list, which may be out of date.'
+                        );
+                        newline();
+                    }
 
                     header('Available Hooks and Plugins');
 

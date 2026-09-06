@@ -5,7 +5,7 @@ import * as clack from '@clack/prompts';
 import {
     skillExists,
     downloadSkill,
-    getSkillList,
+    getCachedSkillList,
     getSkillInfo,
 } from '../utils/github';
 import {
@@ -19,6 +19,7 @@ import {
     table,
     withSpinner,
     command,
+    warning,
 } from '../utils/logger';
 
 /** Path to .agents/skills/ relative to project root */
@@ -191,10 +192,12 @@ const availableCommand = new Command('available')
         clack.intro('Available skills');
 
         let list: string[];
+        let stale = false;
         try {
-            list = await withSpinner('Fetching available skills...', () =>
-                getSkillList()
-            );
+            ({ data: list, stale } = await withSpinner(
+                'Fetching available skills...',
+                () => getCachedSkillList()
+            ));
         } catch (err) {
             logError(
                 err instanceof Error
@@ -202,6 +205,13 @@ const availableCommand = new Command('available')
                     : 'Could not fetch skill list from GitHub.'
             );
             process.exit(1);
+        }
+
+        if (stale) {
+            warning(
+                'GitHub is unreachable — showing a cached list, which may be out of date.'
+            );
+            newline();
         }
 
         if (list.length === 0) {
