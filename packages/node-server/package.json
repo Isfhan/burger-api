@@ -1,0 +1,57 @@
+{
+  "name": "@burger-api/node-server",
+  "version": "0.1.0",
+  "author": "Isfhan Ahmed",
+  "type": "module",
+  "sideEffects": false,
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json",
+    "test": "bun run build && node --experimental-strip-types --test test/serve.test.ts"
+  },
+  "keywords": [
+    "burger-api",
+    "node",
+    "node-server",
+    "adapter",
+    "http",
+    "websocket"
+  ],
+  "description": "Official Node.js adapter for burger-api — one serve(app) call bridges node:http to burger-api's Fetch-standard handler, wiring WebSocket routes automatically when present.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isfhan/burger-api.git",
+    "directory": "packages/node-server"
+  },
+  "homepage": "https://burger-api.com",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/ws": "^8.5.13",
+    "burger-api": "workspace:*"
+  },
+  "peerDependencies": {
+    "burger-api": ">=1.0.0-beta.1",
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
