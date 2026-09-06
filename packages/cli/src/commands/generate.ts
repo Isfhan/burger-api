@@ -16,6 +16,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, dirname, resolve as resolvePath } from 'path';
 import { resolveBuildConfig } from '../utils/config';
 import { ensureAppDirEnv } from '../utils/scanner';
+import { getCachedComponentList } from '../utils/github';
 import {
     generateRouteFiles,
     generateHookTemplate,
@@ -32,7 +33,39 @@ import {
     bullet,
     code,
     header,
+    warning,
 } from '../utils/logger';
+
+/**
+ * Best-effort, non-blocking check: does a real ecosystem hook/plugin
+ * already exist under this name? `generate` scaffolds an empty local stub
+ * regardless of the answer (see the plan's DRY note — this is an additive
+ * hint, not a behavior change) — but a same-named real implementation
+ * downloadable via `burger-api add` is worth surfacing before someone
+ * fills in a blank file that already exists, tested, in the ecosystem.
+ * Uses the cached catalog (`getCachedComponentList`), not a live
+ * `detectEcosystemType` call, so this never turns an instant local command
+ * into a network-dependent one — and any failure here (offline, cold
+ * cache, GitHub down) is swallowed silently rather than blocking or
+ * warning about an unrelated network issue.
+ */
+async function warnIfEcosystemComponentExists(name: string): Promise<void> {
+    try {
+        const { data: components } = await getCachedComponentList();
+        const existing = components.find((c) => c.name === name);
+        if (existing) {
+            warning(
+                `A real "${existing.kind}" named "${name}" already exists in the ecosystem catalog.`
+            );
+            info(
+                `Consider "burger-api add ${name}" instead — it downloads the real, working implementation rather than a blank stub.`
+            );
+            newline();
+        }
+    } catch {
+        // Best-effort only.
+    }
+}
 
 /**
  * Resolve the project language: explicit `--lang` flag wins, otherwise a
@@ -143,6 +176,8 @@ const hookCommand = new Command('hook')
             process.exit(1);
         }
 
+        await warnIfEcosystemComponentExists(name);
+
         await mkdir(targetDir, { recursive: true });
         const content = generateHookTemplate(name, lang);
         await writeFile(join(targetDir, `${name}.${ext}`), content);
@@ -181,6 +216,8 @@ const pluginCommand = new Command('plugin')
             logError(`Plugin "${name}" already exists at ${targetDir}`);
             process.exit(1);
         }
+
+        await warnIfEcosystemComponentExists(name);
 
         await mkdir(targetDir, { recursive: true });
         const content = generatePluginTemplate(name, lang);
