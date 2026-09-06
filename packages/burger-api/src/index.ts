@@ -623,6 +623,7 @@ export class Burger {
             pluginTransform,
             pluginBeforeRoute:
                 pluginBeforeRoute.length > 0 ? pluginBeforeRoute : undefined,
+            runtimeTarget: this.options.runtimeTarget,
         });
 
         // Add programmatic routes
@@ -951,6 +952,11 @@ export { BurgerContext } from './context/context.js';
 // Export the schema-typed route/hooks helpers
 export { defineRoute, defineHooks } from './router/define.js';
 export type { TypedRouteHooks } from './router/define.js';
+
+// Export the runtime-capability model (single source of truth for the CLI
+// build's per-target validation and the docs compatibility page)
+export { RUNTIME_CAPABILITIES } from './runtime/capabilities.js';
+export type { RuntimeTarget, RuntimeCapability } from './runtime/capabilities.js';
 export type {
     BurgerServices,
     BurgerValidated,

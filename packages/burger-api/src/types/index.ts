@@ -14,6 +14,7 @@ import type { OpenAPIConfig } from './openapi-config.js';
 import type { RuntimeAdapter } from '../adapter/types.js';
 import type { WebSocketRouteDefinition } from '../ws/types.js';
 import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing.js';
+import type { RuntimeTarget } from '../runtime/capabilities.js';
 
 /**
  * Minimal structural view of the running server exposed to `fetch` handlers.
@@ -108,8 +109,10 @@ export interface ServerOptions {
 
     /**
      * Pre-built WebSocket routes (e.g. from CLI build). When provided, wsDir is
-     * ignored and no runtime filesystem scanning is performed. Bun-only — wired
-     * through `serve()` via the Bun adapter. Used for bundled/executable builds.
+     * ignored and no runtime filesystem scanning is performed. Wired through
+     * both `serve()` (Bun) and `fetchHandler()`/`toFetchHandler()` (the
+     * WinterCG entry) — see `ws/platform.ts` for per-runtime upgrade support.
+     * Used for bundled/executable builds.
      */
     wsRoutes?: WebSocketRouteDefinition[];
 
@@ -178,6 +181,16 @@ export interface ServerOptions {
      * import it.
      */
     adapter?: RuntimeAdapter;
+
+    /**
+     * The deployment target this build was produced for — set automatically
+     * by `burger-api build --target=<platform>`. When present, WebSocket
+     * upgrade handling trusts this over live runtime detection: some targets
+     * (Node, Vercel) are structurally indistinguishable via `globalThis`
+     * alone, so a declared target resolves the ambiguity that live
+     * detection cannot. See `runtime/capabilities.ts`.
+     */
+    runtimeTarget?: RuntimeTarget;
 }
 
 /**

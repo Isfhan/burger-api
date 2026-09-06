@@ -24,8 +24,10 @@ import {
     type NodeWsBridge,
     type NodeWsBridgeOptions,
     type WsEventSink,
+    type WsPlatformName,
     type WsUpgradeOutcome,
 } from './platform.js';
+import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../runtime/capabilities.js';
 
 /**
  * WebSocket adapter options
@@ -60,6 +62,15 @@ export interface WebSocketAdapterOptions {
      * Resolved plugin beforeRoute hooks for auth execution during upgrade
      */
     pluginBeforeRoute?: ((ctx: BurgerContext) => unknown | Promise<unknown>)[];
+
+    /**
+     * The deployment target declared by `burger-api build --target`, if any.
+     * When present, resolves the upgrade handoff via `RUNTIME_CAPABILITIES`
+     * instead of live `detectWsPlatform` probing — the only way to give an
+     * accurate answer on targets (Node vs. Vercel) that look identical to
+     * `globalThis`-based detection.
+     */
+    runtimeTarget?: RuntimeTarget;
 }
 
 /**
@@ -93,6 +104,7 @@ export class WebSocketAdapter {
     private pluginBeforeRoute?: ((
         ctx: BurgerContext
     ) => unknown | Promise<unknown>)[];
+    private runtimeTarget?: RuntimeTarget;
 
     /** One context per connection, so `ws.data` mutations persist. */
     private wsContexts = new WeakMap<object, BurgerWS>();
@@ -104,6 +116,7 @@ export class WebSocketAdapter {
         this.providers = options.providers;
         this.pluginTransform = options.pluginTransform;
         this.pluginBeforeRoute = options.pluginBeforeRoute;
+        this.runtimeTarget = options.runtimeTarget;
     }
 
     /**
@@ -322,7 +335,25 @@ export class WebSocketAdapter {
             return { handled: true, response: result.response };
         }
 
-        const platform = detectWsPlatform(server);
+        if (
+            this.runtimeTarget &&
+            !RUNTIME_CAPABILITIES[this.runtimeTarget].websocket
+        ) {
+            return this.capabilityUnsupportedResponse(this.runtimeTarget);
+        }
+
+        // A declared bun/node/cloudflare/deno target resolves the handoff
+        // directly — it's exactly the ambiguity live detection can't settle
+        // (Node and Vercel are indistinguishable via `globalThis`). No
+        // declared target (dev mode, or a hand-rolled `toFetchHandler` use)
+        // falls back to live probing. `!== 'vercel'` is unreachable in
+        // practice (the capability guard above already returned for it) —
+        // it's here so the type checker can see `WsPlatformName` has no
+        // `'vercel'` member without a cast.
+        const platform: WsPlatformName =
+            this.runtimeTarget && this.runtimeTarget !== 'vercel'
+                ? this.runtimeTarget
+                : detectWsPlatform(server);
         if (platform === 'node') {
             return this.nodeFetchUpgradeUnsupported();
         }
@@ -393,6 +424,28 @@ export class WebSocketAdapter {
             response: new Response(
                 'WebSocket upgrades on Node require burger.createNodeWsBridge(...) ' +
                     "wired to node:http's 'upgrade' event.",
+                { status: 501 }
+            ),
+        };
+    }
+
+    /**
+     * The declared-target counterpart to {@link nodeFetchUpgradeUnsupported}:
+     * a target whose `RUNTIME_CAPABILITIES` entry says `websocket: false`
+     * (today, only `vercel`) gets an honest "not supported here" response
+     * instead of the Node-bridge suggestion, which would be wrong advice —
+     * there is no persistent process on that target to wire a bridge to.
+     */
+    private capabilityUnsupportedResponse(
+        target: RuntimeTarget
+    ): WsUpgradeOutcome {
+        return {
+            handled: true,
+            response: new Response(
+                `WebSocket is not supported on the "${target}" deployment ` +
+                    'target: this platform has no persistent-connection ' +
+                    'model for WebSocket upgrades. See the compatibility ' +
+                    'docs for what each runtime supports.',
                 { status: 501 }
             ),
         };

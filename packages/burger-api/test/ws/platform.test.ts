@@ -213,6 +213,33 @@ describe('handleUpgrade outcomes (adapter level)', () => {
         expect((outcome as { response?: Response }).response?.status).toBe(501);
     });
 
+    it('a declared vercel target gets an honest capability message, not the Node-bridge suggestion', async () => {
+        const router = new WebSocketRouter();
+        router.addRoute({ path: '/ws', handlers: {}, config: {} });
+        const adapter = new WebSocketAdapter({
+            router,
+            runtimeTarget: 'vercel',
+        });
+        const outcome = await adapter.handleUpgrade(upgradeRequest('/ws'));
+        expect(outcome.handled).toBe(true);
+        const response = (outcome as { response?: Response }).response;
+        expect(response?.status).toBe(501);
+        const body = await response!.text();
+        expect(body).toContain('not supported on the "vercel" deployment target');
+        expect(body).not.toContain('createNodeWsBridge');
+    });
+
+    it('a declared node target still gets the createNodeWsBridge suggestion', async () => {
+        const router = new WebSocketRouter();
+        router.addRoute({ path: '/ws', handlers: {}, config: {} });
+        const adapter = new WebSocketAdapter({ router, runtimeTarget: 'node' });
+        const outcome = await adapter.handleUpgrade(upgradeRequest('/ws'));
+        expect(outcome.handled).toBe(true);
+        const response = (outcome as { response?: Response }).response;
+        expect(response?.status).toBe(501);
+        expect(await response!.text()).toContain('createNodeWsBridge');
+    });
+
     it('legacy createFetchHandler stays undefined for non-upgrades', async () => {
         const adapter = makeAdapter();
         const res = await adapter.createFetchHandler()(
