@@ -8,7 +8,7 @@
     "burger-api": ">=1.0.0"
   },
   "devDependencies": {
-    "burger-api": "1.0.0"
+    "burger-api": "workspace:*"
   },
   "keywords": [
     "burger-api",
