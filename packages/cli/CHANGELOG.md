@@ -15,6 +15,11 @@ First public beta, tracking `burger-api@1.0.0-beta.1`. Install with
   discovered route/hook/plugin/convention-file; `doctor` validates project
   structure (missing entry file, no discoverable routes, a leftover legacy
   `burger.config.ts`, etc.) and exits non-zero on failure.
+- **Added** – `--json` on both `inspect` and `doctor`: emits a single
+  structured, versioned JSON object (`InspectResult`/`DoctorResult`,
+  `version: 1`) instead of colored console text — for tooling and AI
+  agents that need to read a project's shape programmatically rather than
+  parse formatted output. Exit-code behavior on `doctor` is unchanged.
 - **Added** – `generate ws <path>` scaffolds a WebSocket handler directory
   (`ws.ts`/`hooks.ts`/`config.ts`).
 - **Fixed** – `burger-api add`'s printed "How to Use" snippet showed an
