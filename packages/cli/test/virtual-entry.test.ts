@@ -199,3 +199,89 @@ describe('generateVirtualEntrySource', () => {
         expect(source).not.toContain('globalMiddleware');
     });
 });
+
+describe('generateVirtualEntrySource: --target codegen', () => {
+    const routeEntries = [
+        {
+            importPath: '/tmp/api/route.ts',
+            routePath: '/api',
+            isWildcard: false,
+        },
+    ];
+
+    it('defaults to bun: app.serve(), no runtimeTarget branch imports', () => {
+        const source = generateVirtualEntrySource(config, routeEntries, []);
+        expect(source).toContain('runtimeTarget: "bun"');
+        expect(source).toContain('app.serve(port,');
+        expect(source).toContain('process.chdir(import.meta.dir);');
+        expect(source).not.toContain("from '@burger-api/node-server'");
+        expect(source).not.toContain('toFetchHandler');
+    });
+
+    it('target=node: imports serve() from @burger-api/node-server instead of app.serve()', () => {
+        const source = generateVirtualEntrySource(
+            config,
+            routeEntries,
+            [],
+            undefined,
+            undefined,
+            [],
+            [],
+            false,
+            'node'
+        );
+        expect(source).toContain('runtimeTarget: "node"');
+        expect(source).toContain(
+            "import { serve } from '@burger-api/node-server';"
+        );
+        expect(source).toContain('serve(app, { port });');
+        expect(source).not.toContain('app.serve(');
+        // Bun-only chunk-path fixup must not leak into a Node-run bundle.
+        expect(source).not.toContain('process.chdir(import.meta.dir);');
+    });
+
+    for (const target of ['cloudflare', 'deno'] as const) {
+        it(`target=${target}: bare fetch export, no port/serve, no chdir`, () => {
+            const source = generateVirtualEntrySource(
+                config,
+                routeEntries,
+                [],
+                undefined,
+                undefined,
+                [],
+                [],
+                false,
+                target
+            );
+            expect(source).toContain(`runtimeTarget: "${target}"`);
+            expect(source).toContain(
+                "import { toFetchHandler } from 'burger-api';"
+            );
+            expect(source).toContain(
+                'export default { fetch: toFetchHandler(app) };'
+            );
+            expect(source).not.toContain('app.serve(');
+            expect(source).not.toContain('process.chdir(import.meta.dir);');
+            expect(source).not.toContain("runtime = 'nodejs'");
+        });
+    }
+
+    it("target=vercel: also emits export const runtime = 'nodejs' (required for the fetch shape)", () => {
+        const source = generateVirtualEntrySource(
+            config,
+            routeEntries,
+            [],
+            undefined,
+            undefined,
+            [],
+            [],
+            false,
+            'vercel'
+        );
+        expect(source).toContain('runtimeTarget: "vercel"');
+        expect(source).toContain("export const runtime = 'nodejs';");
+        expect(source).toContain(
+            'export default { fetch: toFetchHandler(app) };'
+        );
+    });
+});

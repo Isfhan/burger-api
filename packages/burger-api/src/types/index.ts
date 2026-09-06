@@ -372,6 +372,12 @@ export interface BuildConfig {
     wsDir?: string;
     /** Extra logging when true. */
     debug?: boolean;
+    /**
+     * Deployment target for `burger-api build --target=<platform>`.
+     * Defaults to `'bun'`. See `RUNTIME_CAPABILITIES` for what each target
+     * supports.
+     */
+    target?: RuntimeTarget;
 }
 
 /**

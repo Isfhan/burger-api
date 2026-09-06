@@ -8,8 +8,16 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import type { BuildConfig } from '../types/index';
+import type { BuildConfig, RuntimeTarget } from '../types/index';
 import { warning } from './logger';
+
+export const VALID_TARGETS: RuntimeTarget[] = [
+    'bun',
+    'node',
+    'cloudflare',
+    'deno',
+    'vercel',
+];
 
 export const CONVENTION_DEFAULTS: BuildConfig = {
     apiDir: './src/api',
@@ -18,6 +26,7 @@ export const CONVENTION_DEFAULTS: BuildConfig = {
     pagePrefix: '/',
     wsDir: './src/websocket',
     debug: false,
+    target: 'bun',
 };
 
 const CONFIG_NAMES = [
@@ -83,5 +92,10 @@ function mergeBuildConfig(
                 : defaults.pagePrefix,
         wsDir: typeof user.wsDir === 'string' ? user.wsDir : defaults.wsDir,
         debug: typeof user.debug === 'boolean' ? user.debug : defaults.debug,
+        target:
+            typeof user.target === 'string' &&
+            VALID_TARGETS.includes(user.target as RuntimeTarget)
+                ? (user.target as RuntimeTarget)
+                : defaults.target,
     };
 }

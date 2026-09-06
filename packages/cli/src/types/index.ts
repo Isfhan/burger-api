@@ -82,3 +82,10 @@ export interface GitHubFile {
  * Single source of truth: the consumer-facing type exported from `burger-api`.
  */
 export type { BuildConfig } from 'burger-api';
+
+/**
+ * The five `--target` platforms `burger-api build` supports, and what each
+ * one is capable of. Single source of truth: exported from `burger-api`.
+ */
+export type { RuntimeTarget, RuntimeCapability } from 'burger-api';
+export { RUNTIME_CAPABILITIES } from 'burger-api';

@@ -71,9 +71,22 @@ export async function collectDiskAssetRoutes(
 /**
  * Handler for a disk-backed asset: streams the file via `Bun.file` on every
  * request so dev edits are served without a restart.
+ *
+ * Dev-mode only in practice — `burger-api dev` always runs under Bun — but
+ * `Bun` is undefined on every other runtime, so a guard here fails with a
+ * clear message instead of a bare "Bun is not defined" if this handler is
+ * ever reached outside Bun (e.g. `apiRoutes` built by hand for a non-Bun
+ * target). Matches the guard pattern in `router/compiler.ts`.
  */
 export function diskAssetHandler(route: DiskAssetRoute): RequestHandler {
     return async () => {
+        if (typeof Bun === 'undefined') {
+            throw new Error(
+                `[burger-api] Disk-backed asset serving ("${route.routePath}") ` +
+                    'requires Bun. Use `burger-api build` to embed assets ' +
+                    'for other runtimes — see EmbeddedAsset / embeddedAssetHandler.'
+            );
+        }
         const file = Bun.file(route.file);
         if (!(await file.exists())) {
             return new Response('Asset not found', { status: 404 });
