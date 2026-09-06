@@ -71,13 +71,34 @@ breaks for existing users).
   guarded helper that treats the throw the same as `process` not existing
   at all (the existing Cloudflare/browser fallback) — no `--allow-env` flag
   needed.
-- **Cloudflare Workers bundling needs `nodejs_compat`** — `burger-api`'s
-  dist statically imports `node:fs`/`node:path` via dev-time
-  filesystem-scanner modules, pulled in transitively through the package's
-  barrel export even though AOT `apiRoutes` deployments never execute that
-  code path. Not a framework bug fix (esbuild needs *some* module to
-  satisfy the static import); documented as a required `wrangler.toml`
-  setting.
+- **`ASSET_MIME`/`contentTypeFor` no longer statically drag in `node:fs`** —
+  `index.ts` re-exported these two pure lookup functions straight from
+  `core/assets.ts`, which also does disk scanning (`readdir`) — so the
+  package's main entry unconditionally pulled filesystem code into its
+  static import graph, regardless of runtime. Split into a new
+  `core/asset-mime.ts` leaf module with zero `node:fs` dependency;
+  `index.ts` now re-exports from there. Also standardized the two remaining
+  bare `'path'` specifiers (`utils/index.ts`, `utils/pathConversion.ts`) to
+  `'node:path'`, matching every other Node-builtin import in the codebase.
+  A new test (`test/adapter/no-static-fs-import.test.ts`) walks the built
+  package's real static import/export graph and fails if `fs`/`node:fs`
+  ever becomes statically reachable again.
+- **Cloudflare Workers still needs `nodejs_compat`, and now more precisely
+  understood why** — confirmed by running `wrangler dev` with the flag
+  removed, both before and after the fix above. `node:fs`/`node:path`
+  become soft *warnings* instead of hard build failures (wrangler treats
+  `node:`-prefixed specifiers as "the runtime will provide this"), but the
+  real `workerd` runtime genuinely has no `node:path` module without the
+  flag — so an unreached-at-runtime `import * as path from 'node:path'` in
+  a dev-time scanner module still crashes on boot. Dynamic `import()` does
+  **not** exempt a module from this: wrangler's bundler still resolves
+  dynamic-import targets at build time for code-splitting, so "lazily
+  loaded" alone isn't enough to keep a module's own top-level imports out
+  of what gets shipped. Fully eliminating the `nodejs_compat` requirement
+  would need dev-only/filesystem-scanning code to be unreachable from the
+  AOT/WinterCG entry point by construction (a separate production-only
+  entry, or build-time conditional exports) — out of scope for this pass;
+  documented as a required `wrangler.toml` setting instead.
 
 **Removed**
 - `burger.macro()` / `MacroFn` — confirmed zero real usage anywhere in the
