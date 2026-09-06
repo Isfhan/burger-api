@@ -22,6 +22,19 @@ First public beta, tracking `burger-api@1.0.0-beta.1`. Install with
   parse formatted output. Exit-code behavior on `doctor` is unchanged.
 - **Added** – `generate ws <path>` scaffolds a WebSocket handler directory
   (`ws.ts`/`hooks.ts`/`config.ts`).
+- **Added** – `generate hook <name>`/`generate plugin <name>` now check the
+  ecosystem catalog first (via the same cached lookup `add`/`list` use) and
+  warn — suggesting `burger-api add <name>` instead — when a real, working
+  implementation already exists under that name, rather than silently
+  producing a same-named blank stub. Non-blocking: the local stub is still
+  created either way; this is a hint, not a behavior change.
+- **Added** – local caching (`~/.burger-api/cache/`, a few hours TTL) for
+  the ecosystem catalog `add`/`list`/`available`/`skills available` all
+  read from. Previously every invocation hit GitHub's Contents API live —
+  slow, and it broke outright offline or when GitHub was unreachable. Now
+  falls back to a stale cached copy (with a warning) when a live refresh
+  fails and a cache exists; a cold cache with no network still fails loud,
+  same as before.
 - **Fixed** – `burger-api add`'s printed "How to Use" snippet showed an
   invalid identifier for any hyphenated package (`jwt-auth` → `Jwt-auth`,
   a syntax error) and, even fixed, guessed the wrong case and omitted the
