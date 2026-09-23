@@ -54,6 +54,20 @@ installs this beta by default; pin an exact `0.9.x` version (e.g.
   covering the whole app directory.
 - **Fixed** – `burger-api build:exec` produced an executable that crashed
   immediately on startup (see the framework CHANGELOG for the root cause).
+- **Fixed** – `doctor` reported false failures on JavaScript projects: it
+  now recognizes `src/index`/`hooks`/`plugins`/`openapi.config` as `.ts`,
+  `.js`, or `.mjs`, and accepts `jsconfig.json` in place of `tsconfig.json`.
+- **Fixed** – `create`'s "next steps" pointed JS projects at
+  `burger.build.ts`; it now names `burger.build.js`.
+- **Fixed** – `build --target=node` now fails early with an install hint
+  when `@burger-api/node-server` isn't in the project, instead of a
+  confusing bundler resolution error.
+- **Fixed** – scaffolded projects pin the exact `zod` version the CLI's own
+  `burger-api` resolves, instead of an independent `^4.0.17` range. Two zod
+  copies (even adjacent patch versions) made TypeScript fail with `TS2589`.
+- **Fixed** – `generate ws` scaffolded `maxPayloadLength`/`idleTimeout` in
+  the route's `config`, which are connection-level options ignored per
+  route. The template now shows the valid per-route `auth` override.
 - **Changed** – `generate ws` now uses `config.wsDir` (was hardcoded
   `src/websocket`).
 - **Changed** – API + WS scanners accept `.ts`/`.js`/`.mjs` conventions and

@@ -6,12 +6,55 @@
  *
  */
 
-import { join, resolve } from 'path';
-import { readFileSync } from 'fs';
+import { join, resolve, dirname } from 'path';
+import { readFileSync, existsSync } from 'fs';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
 import { downloadSkill } from './github';
+
+/** Walks up from `startFile` to the nearest `package.json` and returns its dir. */
+function findPackageRoot(startFile: string): string | undefined {
+    let dir = dirname(startFile);
+    for (let i = 0; i < 10; i++) {
+        if (existsSync(join(dir, 'package.json'))) return dir;
+        const parent = dirname(dir);
+        if (parent === dir) return undefined;
+        dir = parent;
+    }
+    return undefined;
+}
+
+/**
+ * Resolves the exact `zod` version the CLI's own `burger-api` dependency
+ * uses, so the scaffold can pin to that same concrete version instead of an
+ * independently-drifting range. This matters even when the ranges overlap:
+ * TypeScript treats two separately-installed zod copies (even adjacent
+ * patch versions) as distinct, deeply-recursive generic types, and checking
+ * a schema against both can blow up (`TS2589`, tens of millions of type
+ * instantiations) — verified against zod 4.5.4 vs 4.6.5. Pinning to the
+ * exact version burger-api itself resolves avoids that class of bug,
+ * whether burger-api came from a real npm install or `bun link`.
+ */
+function resolveMatchingZodVersion(): string {
+    const FALLBACK = '^4.5.4';
+    try {
+        const burgerApiEntry = Bun.resolveSync('burger-api', import.meta.dir);
+        const burgerApiRoot = findPackageRoot(burgerApiEntry);
+        if (!burgerApiRoot) return FALLBACK;
+
+        const zodEntry = Bun.resolveSync('zod', burgerApiRoot);
+        const zodRoot = findPackageRoot(zodEntry);
+        if (!zodRoot) return FALLBACK;
+
+        const zodPkg = JSON.parse(
+            readFileSync(join(zodRoot, 'package.json'), 'utf-8')
+        ) as { version?: string };
+        return zodPkg.version ?? FALLBACK;
+    } catch {
+        return FALLBACK;
+    }
+}
 
 /**
  * True when the installed CLI is a prerelease (`-beta.`, `-rc.`, `-alpha.`)
@@ -94,7 +137,7 @@ export function generatePackageJson(
         },
         dependencies: {
             'burger-api': burgerApiSpecifier,
-            zod: '^4.0.17',
+            zod: resolveMatchingZodVersion(),
         },
         devDependencies: {
             '@types/bun': 'latest',
@@ -1463,8 +1506,9 @@ export function generateWsFiles(
             files['config.js'] = [
                 "/** @type {import('burger-api').WebSocketConfig} */",
                 'export default {',
-                ' maxPayloadLength: 1024 * 1024, // 1MB',
-                ' idleTimeout: 30,',
+                ' // Per-route auth override. Connection-level socket options',
+                ' // must be set globally via burger.wsConfig() instead.',
+                ' // auth: { required: true },',
                 '};',
                 '',
             ].join('\n');
@@ -1473,8 +1517,9 @@ export function generateWsFiles(
                 "import type { WebSocketConfig } from 'burger-api';",
                 '',
                 'export default {',
-                ' maxPayloadLength: 1024 * 1024, // 1MB',
-                ' idleTimeout: 30,',
+                ' // Per-route auth override. Connection-level socket options',
+                ' // must be set globally via burger.wsConfig() instead.',
+                ' // auth: { required: true },',
                 '} satisfies WebSocketConfig;',
                 '',
             ].join('\n');

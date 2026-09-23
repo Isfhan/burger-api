@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { runChecks } from '../src/commands/doctor';
 
 const tmpDir = join(import.meta.dir, '__tmp_doctor');
 
@@ -133,5 +134,53 @@ describe('doctor checks (via project structure)', () => {
         expect(existsSync(join(tmpDir, 'src', 'index.ts'))).toBe(true);
         expect(existsSync(join(tmpDir, 'src', 'api', 'route.ts'))).toBe(true);
         expect(existsSync(join(tmpDir, 'tsconfig.json'))).toBe(true);
+    });
+});
+
+describe('runChecks (JavaScript projects)', () => {
+    // A JS-language project has no tsconfig.json/*.ts files at all — doctor
+    // must recognize the .js equivalents instead of reporting false failures.
+    it('passes src/index and tsconfig checks for a .js-only project', async () => {
+        await createFile(
+            'package.json',
+            JSON.stringify({
+                name: 'test',
+                dependencies: { 'burger-api': '^1.0.0' },
+            })
+        );
+        await createFile('burger.build.js', 'export default {};');
+        await createFile('src/index.js', 'export {};');
+        await createFile(
+            'src/api/route.js',
+            'export async function GET() {}'
+        );
+        await createFile('jsconfig.json', '{}');
+
+        const results = await runChecks(tmpDir);
+        const byName = (name: string) =>
+            results.find((r) => r.name === name);
+
+        expect(byName('src/index.ts')?.pass).toBe(true);
+        expect(byName('tsconfig.json')?.pass).toBe(true);
+        expect(results.every((r) => r.pass)).toBe(true);
+    });
+
+    it('recognizes .js optional convention files instead of reporting them missing', async () => {
+        await createFile(
+            'package.json',
+            JSON.stringify({ name: 'test', dependencies: {} })
+        );
+        await createFile('src/index.js', 'export {};');
+        await createFile('src/hooks.js', 'export {};');
+        await createFile('src/plugins.js', 'export {};');
+        await createFile('src/openapi.config.js', 'export default {};');
+
+        const results = await runChecks(tmpDir);
+        const byName = (name: string) =>
+            results.find((r) => r.name === name);
+
+        expect(byName('src/hooks.ts')?.message).toContain('Found');
+        expect(byName('src/plugins.ts')?.message).toContain('Found');
+        expect(byName('src/openapi.config.ts')?.message).toContain('Found');
     });
 });

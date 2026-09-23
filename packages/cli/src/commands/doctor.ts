@@ -22,7 +22,7 @@ import {
     warning,
 } from '../utils/logger';
 
-interface CheckResult {
+export interface CheckResult {
     name: string;
     pass: boolean;
     message: string;
@@ -32,7 +32,16 @@ function check(name: string, pass: boolean, message: string): CheckResult {
     return { name, pass, message };
 }
 
-async function runChecks(cwd: string): Promise<CheckResult[]> {
+/** Finds the first existing file among `${cwd}/${base}${ext}` for each ext. */
+function findExisting(
+    cwd: string,
+    base: string,
+    exts: readonly string[]
+): string | undefined {
+    return exts.find((ext) => existsSync(join(cwd, `${base}${ext}`)));
+}
+
+export async function runChecks(cwd: string): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
 
     // 1. package.json
@@ -84,10 +93,18 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
         )
     );
 
-    // 4. src/index.ts
-    const hasIndex = existsSync(join(cwd, 'src', 'index.ts'));
+    // 4. src/index.(ts|js|mjs)
+    const indexExt = findExisting(join(cwd, 'src'), 'index', [
+        '.ts',
+        '.js',
+        '.mjs',
+    ]);
     results.push(
-        check('src/index.ts', hasIndex, hasIndex ? 'Found' : 'Not found')
+        check(
+            'src/index.ts',
+            !!indexExt,
+            indexExt ? `Found (index${indexExt})` : 'Not found'
+        )
     );
 
     // 5. src/api/
@@ -121,10 +138,19 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
         );
     }
 
-    // 7. tsconfig.json
+    // 7. tsconfig.json (or jsconfig.json for JavaScript projects)
     const hasTsconfig = existsSync(join(cwd, 'tsconfig.json'));
+    const hasJsconfig = existsSync(join(cwd, 'jsconfig.json'));
     results.push(
-        check('tsconfig.json', hasTsconfig, hasTsconfig ? 'Found' : 'Not found')
+        check(
+            'tsconfig.json',
+            hasTsconfig || hasJsconfig,
+            hasTsconfig
+                ? 'Found'
+                : hasJsconfig
+                  ? 'Found (jsconfig.json)'
+                  : 'Not found'
+        )
     );
 
     // 8. Legacy config warning
@@ -142,26 +168,41 @@ async function runChecks(cwd: string): Promise<CheckResult[]> {
     }
 
     // 9. Optional files (info only)
-    const hasHooks = existsSync(join(cwd, 'src', 'hooks.ts'));
+    const CONVENTION_EXTS = ['.ts', '.js', '.mjs'] as const;
+    const hooksExt = findExisting(join(cwd, 'src'), 'hooks', CONVENTION_EXTS);
     results.push(
-        check('src/hooks.ts', true, hasHooks ? 'Found' : 'Not found (optional)')
+        check(
+            'src/hooks.ts',
+            true,
+            hooksExt ? `Found (hooks${hooksExt})` : 'Not found (optional)'
+        )
     );
 
-    const hasPlugins = existsSync(join(cwd, 'src', 'plugins.ts'));
+    const pluginsExt = findExisting(
+        join(cwd, 'src'),
+        'plugins',
+        CONVENTION_EXTS
+    );
     results.push(
         check(
             'src/plugins.ts',
             true,
-            hasPlugins ? 'Found' : 'Not found (optional)'
+            pluginsExt ? `Found (plugins${pluginsExt})` : 'Not found (optional)'
         )
     );
 
-    const hasOpenapiConfig = existsSync(join(cwd, 'src', 'openapi.config.ts'));
+    const openapiConfigExt = findExisting(
+        join(cwd, 'src'),
+        'openapi.config',
+        CONVENTION_EXTS
+    );
     results.push(
         check(
             'src/openapi.config.ts',
             true,
-            hasOpenapiConfig ? 'Found' : 'Not found (optional)'
+            openapiConfigExt
+                ? `Found (openapi.config${openapiConfigExt})`
+                : 'Not found (optional)'
         )
     );
 

@@ -132,6 +132,20 @@ export async function runVirtualEntryBuild(options: {
         );
     }
 
+    if (platformTarget === 'node') {
+        try {
+            Bun.resolveSync('@burger-api/node-server', options.cwd);
+        } catch {
+            cleanupEntryOptionsModule(entryOptions.tempFilePath);
+            throw new Error(
+                '--target=node requires the "@burger-api/node-server" ' +
+                    'package, which is not installed in this project. ' +
+                    'Run `bun add @burger-api/node-server` (or the npm/pnpm/yarn ' +
+                    'equivalent) and try again.'
+            );
+        }
+    }
+
     const appConventions = scanAppConventions(options.cwd);
 
     const source = generateVirtualEntrySource(

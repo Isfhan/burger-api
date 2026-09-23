@@ -29,11 +29,11 @@
   },
   "dependencies": {
     "commander": "^11.1.0",
-    "@clack/prompts": "^0.7.0"
+    "@clack/prompts": "^0.7.0",
+    "burger-api": "^1.0.0-beta"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "burger-api": "workspace:*"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

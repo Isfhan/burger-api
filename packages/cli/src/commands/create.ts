@@ -209,7 +209,9 @@ export const createCommand = new Command('create')
             command('bun run dev');
             newline();
             console.log(` 3. Edit config if needed:`);
-            command('burger.build.ts');
+            command(
+                `burger.build.${optionsWithLang.lang === 'js' ? 'js' : 'ts'}`
+            );
             newline();
             console.log(` 4. Open your browser:`);
             console.log(` ${highlight('http://localhost:4000')}`);
