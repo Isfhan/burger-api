@@ -1,12 +1,46 @@
 ## 📣 Release Notes - Burger API Framework
 
-### Version 1.0.0-beta.1
+### Version 1.0.0-beta
 
-Released 2026-09-06. First public beta of the vision-locked 1.0.0 API — the
-`0.9.x` line on npm predates this rewrite entirely (`BurgerRequest`/
-`Middleware`-based). Install with `npm i burger-api@beta` (a plain
-`npm i burger-api` still resolves the current `0.9.x` `latest`, so nothing
-breaks for existing users).
+Released 2026-09-06. First public beta of the vision-locked 1.0.0 API — a
+breaking rewrite of the `0.9.x` line (`BurgerRequest`/`Middleware`-based),
+not an incremental update. `npm i burger-api` installs this beta by
+default; pin an exact `0.9.x` version (e.g. `npm i burger-api@0.9.7`) if you
+need the previous stable line.
+
+**Breaking changes from 0.9.x**
+- `BurgerRequest` type removed — replaced by `BurgerContext`.
+- Legacy hook names removed (`beforeHandle`, `afterHandle`, `onResponse`,
+  `provide`) — use `beforeRoute`, `afterRoute`, `mapResponse`, `transform`
+  (plus `onRequest` / `onError`).
+- The middleware system and `Middleware` type removed — replaced by hooks +
+  plugins.
+- `Burger.use` removed — use `burger.usePlugin()`.
+- CLI `serve` command removed — use `burger-api dev`.
+- `burger.config.ts` renamed `burger.build.ts` (build-time only).
+- `use.ts` / `webhook.ts` route convention files removed — use `config.ts`.
+- Auth factories moved from `ecosystem/hooks/` to `ecosystem/plugins/`
+  (api-key, basic-auth, jwt-auth, session, oidc, env).
+
+**Full JavaScript support**
+- Same conventions in `.ts` / `.js` / `.mjs` (route, schema, hooks, openapi,
+  config + app-level files). Scanner throws on conflicting extensions
+  (e.g. `route.ts` + `route.js`).
+- `create --lang js` scaffolds a `jsconfig.json` (`checkJs: true`) project
+  with JSDoc-typed `.js` files.
+- `generate route|hook|plugin|ws` follows the project language (`--lang` or
+  `jsconfig.json` detection); `generate ws` honors `config.wsDir`.
+
+**WinterCG deploy surface**
+- `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+.
+- AOT `apiRoutes` required on non-Bun runtimes (no filesystem); core package
+  no longer imports `bun` in shared types (`BunAdapterStartOptions` lives in
+  the Bun adapter).
+
+**Ecosystem**
+- Official hooks (cors, logger, rate-limiter, cache, compression,
+  security-headers, timeout, body-size-limiter) and plugins (api-key,
+  basic-auth, env, jwt-auth, oidc, session), installed via `burger-api add`.
 
 **Fixed**
 - **Cloudflare Workers crash on boot** — a dead, eagerly-evaluated
@@ -116,44 +150,6 @@ breaks for existing users).
   from GitHub's `main` branch by default, which does not yet have this
   release's hooks/plugins/skills. Set `BURGER_API_BRANCH=feat/burger-api-v1`
   until `main` is updated.
-
-### Version 1.0.0 (Stable — Vision-Locked API)
-
-Released 2026-08-02. First stable release. All legacy API names removed; the
-public surface is exactly the vision API.
-
-**Removed (breaking from 0.x)**
-- `BurgerRequest` type — replaced by `BurgerContext`.
-- Legacy hook names `beforeHandle`, `afterHandle`, `onResponse`, `provide` —
-  use `beforeRoute`, `afterRoute`, `mapResponse`, `transform` (plus
-  `onRequest` / `onError`).
-- The middleware system and `Middleware` type — replaced by hooks + plugins.
-- `Burger.use` — replaced by `burger.usePlugin()`.
-- CLI `serve` command — use `burger-api dev`.
-- `burger.config.ts` — renamed `burger.build.ts` (build-time only).
-- `use.ts` / `webhook.ts` route convention files — use `config.ts`.
-- Auth factories under `ecosystem/hooks/` — now `ecosystem/plugins/` (api-key,
-  basic-auth, jwt-auth, session, oidc, env).
-
-**Full JavaScript support**
-- Same conventions in `.ts` / `.js` / `.mjs` (route, schema, hooks, openapi,
-  config + app-level files). Scanner throws on conflicting extensions
-  (e.g. `route.ts` + `route.js`).
-- `create --lang js` scaffolds a `jsconfig.json` (`checkJs: true`) project
-  with JSDoc-typed `.js` files.
-- `generate route|hook|plugin|ws` follows the project language (`--lang` or
-  `jsconfig.json` detection); `generate ws` honors `config.wsDir`.
-
-**WinterCG deploy surface**
-- `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+.
-- AOT `apiRoutes` required on non-Bun runtimes (no filesystem); core package
-  no longer imports `bun` in shared types (`BunAdapterStartOptions` lives in
-  the Bun adapter).
-
-**Ecosystem**
-- Official hooks (cors, logger, rate-limiter, cache, compression,
-  security-headers, timeout, body-size-limiter) and plugins (api-key,
-  basic-auth, env, jwt-auth, oidc, session), installed via `burger-api add`.
 
 ### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
 

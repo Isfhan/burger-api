@@ -94,7 +94,7 @@ jobs:
             - name: Publish to npm
               run: |
                   cd packages/cli
-                  npm publish --access public
+                  npm publish --access public --tag latest
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

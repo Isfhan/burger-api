@@ -965,7 +965,7 @@ part of the history. Flagged to the user directly at the time.
 
 ---
 
-## Shipping `1.0.0-beta.1` — 2026-09-06
+## Shipping `1.0.0-beta` — 2026-09-06
 
 Decided to ship a beta first rather than go straight to a final stable
 `1.0.0`, since two WinterCG targets (Node 24+, Vercel) were documented but
@@ -1011,11 +1011,11 @@ page routing on any WinterCG target, not even AOT-compiled. That limitation
 is real and is now called out explicitly in both CHANGELOGs rather than
 left implicit.
 
-### Version bump to `1.0.0-beta.1`
+### Version bump to `1.0.0-beta`
 
 Both `packages/burger-api/package.json` and `packages/cli/package.json` →
-`1.0.0-beta.1`. Also updated: the CLI's default scaffold dependency pin
-(`templates.ts`, was `^1.0.0`, now `^1.0.0-beta.1` — a caret range on a
+`1.0.0-beta`. Also updated: the CLI's default scaffold dependency pin
+(`templates.ts`, was `^1.0.0`, now `^1.0.0-beta` — a caret range on a
 prerelease version only matches other prereleases sharing the same version
 core per semver's prerelease-tag rule, so scaffolded projects track
 `beta.2`/`beta.3` etc. but can't accidentally jump to a future stable
@@ -1074,11 +1074,11 @@ both packages. Fresh framework `dist` build confirmed clean after the
 macro removal + version bump.
 
 **`npm pack --dry-run`**, both packages, against the new version:
-- `burger-api@1.0.0-beta.1` — 139.1 kB tarball, 157 files (down from 159
+- `burger-api@1.0.0-beta` — 139.1 kB tarball, 157 files (down from 159
   pre-beta, exactly the two deleted macro dist files — `macro.js`/
   `macro.d.ts` — accounted for). Contents unchanged in shape: `dist/**` +
   `package.json` + `README.md` + `LICENSE` only.
-- `@burger-api/cli@1.0.0-beta.1` — 61.4 kB, 28 files, raw TS source (by
+- `@burger-api/cli@1.0.0-beta` — 61.4 kB, 28 files, raw TS source (by
   design).
 - All 8 subpath exports re-verified directly against the fresh build: 7
   resolve under stock Node, `./adapter/bun` correctly Bun-only (fails
@@ -1102,7 +1102,7 @@ cd packages/burger-api && npm publish --tag beta
 cd packages/cli && npm publish --tag beta
 ```
 
-Both packages are at `1.0.0-beta.1`; publish `burger-api` first (the CLI
+Both packages are at `1.0.0-beta`; publish `burger-api` first (the CLI
 declares no hard dependency on the framework package itself, so order is
 not strictly required, but matches this session's convention throughout).
 A bare `npm i burger-api` / `npm i -g @burger-api/cli` will keep resolving

@@ -4,12 +4,16 @@
  </a>
 </div>
 
-[![Version](https://img.shields.io/badge/version-1.0.0--beta.1-orange.svg)](https://github.com/isfhan/burger-api/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0--beta-orange.svg)](https://github.com/isfhan/burger-api/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
 
-> **Beta release.** Install with `npm i burger-api@beta` (a plain
-> `npm i burger-api` still resolves the current stable `0.9.x` line).
+> **⚠️ Beta release — not yet recommended for production.** `npm i burger-api`
+> installs `1.0.0-beta` by default: a vision-locked rewrite of the
+> framework, not an incremental update over the `0.9.x` line (see
+> `CHANGELOG.md` for the full breaking-change list). If you need the
+> previous stable line for a production project, pin an exact version,
+> e.g. `npm i burger-api@0.9.7`.
 > `burger-api add`/`list`/`skills install` need
 > `BURGER_API_BRANCH=feat/burger-api-v1` set until this branch's ecosystem
 > content lands on `main`. See `CHANGELOG.md` for the full list of fixes

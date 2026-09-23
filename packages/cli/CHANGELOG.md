@@ -2,11 +2,17 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 1.0.0-beta.1 - (September 6, 2026)
+## Version 1.0.0-beta - (September 6, 2026)
 
-First public beta, tracking `burger-api@1.0.0-beta.1`. Install with
-`npm i -g @burger-api/cli@beta`.
+First public beta, tracking `burger-api@1.0.0-beta`. `npm i -g @burger-api/cli`
+installs this beta by default; pin an exact `0.9.x` version (e.g.
+`npm i -g @burger-api/cli@0.9.9`) if you need the previous stable line.
 
+- **Added** – `--lang ts|js` and `--yes`/`--defaults` flags on `create`; JS
+  scaffolds use `jsconfig.json` (`checkJs: true`) and `.js` convention files
+  with JSDoc types.
+- **Added** – `-l, --lang` on `generate route|hook|plugin|ws`; language
+  auto-detected via `jsconfig.json` presence.
 - **Added** – `useWs`/WebSocket-routes prompt on `create` (mirrors the
   existing `usePages` prompt), scaffolding a sample `src/websocket/echo/`
   route and wiring `wsDir` into both `src/index.ts` and `burger.build.ts`
@@ -48,28 +54,18 @@ First public beta, tracking `burger-api@1.0.0-beta.1`. Install with
   covering the whole app directory.
 - **Fixed** – `burger-api build:exec` produced an executable that crashed
   immediately on startup (see the framework CHANGELOG for the root cause).
-- **Changed** – Scaffold pins `burger-api@^1.0.0-beta.1` (was `^1.0.0`) for
-  the duration of the beta, so scaffolded projects track beta releases and
-  don't jump to a future stable `1.0.0` mid-beta.
-- **Known limitation** – `add`/`list`/`skills install` default to GitHub's
-  `main` branch, which doesn't have this release's ecosystem content yet.
-  Set `BURGER_API_BRANCH=feat/burger-api-v1` until `main` is updated.
-
-## Version 1.0.0 - (August 2, 2026)
-
-- **Added** – `--lang ts|js` and `--yes`/`--defaults` flags on `create`; JS
-  scaffolds use `jsconfig.json` (`checkJs: true`) and `.js` convention files
-  with JSDoc types.
-- **Added** – `-l, --lang` on `generate route|hook|plugin|ws`; language
-  auto-detected via `jsconfig.json` presence.
 - **Changed** – `generate ws` now uses `config.wsDir` (was hardcoded
   `src/websocket`).
 - **Changed** – API + WS scanners accept `.ts`/`.js`/`.mjs` conventions and
   fail loud when conflicting files coexist (e.g. `route.ts` + `route.js`).
-- **Changed** – Scaffold pins `burger-api@^1.0.0`.
 - **Removed** – `burger-api serve` command (use `dev`); `burger.config.ts`
-  renamed `burger.build.ts`.
-- **Aligned** – With `burger-api` 1.0.0 vision-locked API.
+  renamed `burger.build.ts` (build-time only).
+- **Changed** – Scaffold pins `burger-api@^1.0.0-beta` (was `^1.0.0`, which
+  excludes prereleases), so scaffolded projects resolve the beta and pick up
+  later betas and the eventual stable `1.x`.
+- **Known limitation** – `add`/`list`/`skills install` default to GitHub's
+  `main` branch, which doesn't have this release's ecosystem content yet.
+  Set `BURGER_API_BRANCH=feat/burger-api-v1` until `main` is updated.
 
 ## Version 0.10.0 - (July 24, 2026)
 

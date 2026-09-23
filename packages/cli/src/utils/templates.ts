@@ -69,13 +69,11 @@ export function generatePackageJson(
     lang: 'ts' | 'js' = 'ts'
 ): string {
     const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
-    // Pinned to the exact 1.0.0-beta.1 line (not `^1.0.0`) so scaffolded
-    // projects during the beta can't accidentally resolve a future stable
-    // 1.0.0 — a caret range on a prerelease version only matches other
-    // prereleases sharing the same version core (semver's prerelease-tag
-    // matching rule), so this still picks up 1.0.0-beta.2, .3, etc.
+    // `^1.0.0-beta` (not `^1.0.0`) so scaffolded projects resolve the beta
+    // at all — a plain `^1.0.0` range excludes prereleases. It also picks up
+    // later betas (1.0.0-beta.2, …) and, once released, stable 1.x.
     const burgerApiSpecifier =
-        burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta.1';
+        burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta';
     const packageJson = {
         name: projectName,
         version: '0.1.0',
@@ -772,7 +770,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
  <!-- Footer -->
  <footer class="footer">
- <div class="version">BurgerAPI v1.0.0-beta.1 • Bun v1.3+</div>
+ <div class="version">BurgerAPI v1.0.0-beta • Bun v1.3+</div>
  <div class="social-links">
  <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
  <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
