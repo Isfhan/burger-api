@@ -7,11 +7,8 @@ A Command-Line Tool for Creating and Managing BurgerAPI Projects.
 > vision-locked rewrite, not an incremental update over the `0.9.x` line; see
 > `CHANGELOG.md` for the full breaking-change list). If you need the
 > previous stable line, pin an exact version, e.g.
-> `npm i -g @burger-api/cli@0.9.9`.
-> `add`/`list`/`skills install` need `BURGER_API_BRANCH=feat/burger-api-v1`
-> set until this branch's ecosystem content lands on `main`. See
-> `CHANGELOG.md` for the full list of fixes and known limitations in this
-> beta.
+> `npm i -g @burger-api/cli@0.9.9`. See `CHANGELOG.md` for the full list of
+> fixes and known limitations in this beta.
 
 ## Installation
 
@@ -46,7 +43,7 @@ irm https://burger-api.com/install.ps1 | iex
 ### Option 3: Manual Download (Alternative Installation Method)
 
 1. Download the executable for your platform from
- [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
+   [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
 2. Add to PATH
 3. Make executable (Linux/macOS): `chmod +x burger-api`
 
@@ -92,17 +89,17 @@ burger-api create my-api --lang js
 - ✅ Ready to run!
 - ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
 - ✅ When page routes are enabled, the sample `index.html` matches your choices
- (API prefix for “Try API”, and edit hints for your API/page directories)
+  (API prefix for “Try API”, and edit hints for your API/page directories)
 
 Generated config example:
 
 ```ts
 export default {
- apiDir: './src/api',
- pageDir: './src/pages',
- apiPrefix: '/api',
- pagePrefix: '/',
- debug: false,
+    apiDir: './src/api',
+    pageDir: './src/pages',
+    apiPrefix: '/api',
+    pagePrefix: '/',
+    debug: false,
 };
 ```
 
@@ -233,11 +230,11 @@ burger-api skills available
 .agents/skills/burger-api/
 ├── SKILL.md # Main skill definition
 └── references/ # Reference documentation
- ├── routing.md
- ├── validation.md
- ├── hooks.md
- ├── cli.md
- └── openapi.md
+    ├── routing.md
+    ├── validation.md
+    ├── hooks.md
+    ├── cli.md
+    └── openapi.md
 ```
 
 **Compatible agents:** Skills in `.agents/skills/` are automatically detected by
@@ -283,8 +280,8 @@ present. If no config exists, the CLI uses defaults:
 
 ```
 ✓ Build completed successfully!
- Output: .build/bundle/app.js
- Size: 42.5 KB
+    Output: .build/bundle/app.js
+    Size: 42.5 KB
 ```
 
 - API-only apps: `app.js` is usually enough to deploy.
@@ -334,11 +331,11 @@ burger-api build:exec src/index.ts --outfile my-server.exe
 
 ```
 ✓ Compilation completed successfully!
- Executable: .build/executable/<project>.exe
- Size: 45.2 MB
+    Executable: .build/executable/<project>.exe
+    Size: 45.2 MB
 
- Your standalone executable is ready to run!
- Run it: .build/executable/<project>.exe
+    Your standalone executable is ready to run!
+    Run it: .build/executable/<project>.exe
 ```
 
 **Use case:** Perfect for deploying your API to production servers without
@@ -378,7 +375,7 @@ burger-api dev --port 8080 --file app.ts
 
 ✓ Server running on http://localhost:4000
 ℹ Press Ctrl+C to stop
- File changes will automatically restart the server
+    File changes will automatically restart the server
 ```
 
 **Pro tip:** Edit your code and save - the server restarts automatically! No
@@ -484,17 +481,17 @@ Create a new file in the `src/api/` folder:
 import type { BurgerContext } from 'burger-api';
 
 export async function GET(ctx: BurgerContext) {
- return Response.json({
-  users: ['Alice', 'Bob', 'Charlie'],
- });
+    return Response.json({
+        users: ['Alice', 'Bob', 'Charlie'],
+    });
 }
 
 export async function POST(ctx: BurgerContext) {
- const body = await ctx.request.json();
- return Response.json({
-  message: 'User created',
-  data: body,
- });
+    const body = await ctx.request.json();
+    return Response.json({
+        message: 'User created',
+        data: body,
+    });
 }
 ```
 
@@ -507,10 +504,10 @@ Create a new file in the `pages/` folder:
 ```html
 <!-- pages/about.html -->
 <html>
- <body>
- <h1>About Page</h1>
- <p>This is the about page.</p>
- </body>
+    <body>
+        <h1>About Page</h1>
+        <p>This is the about page.</p>
+    </body>
 </html>
 ```
 
@@ -737,14 +734,14 @@ BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
 - Test all commands before submitting
 - Update README if adding new features
 - Keep route rules in one place:
- - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
- - scanner traversal: `packages/cli/src/utils/scanner.ts`
+  - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
+  - scanner traversal: `packages/cli/src/utils/scanner.ts`
 - Run build tests when changing routing/build (keeps dev and production behavior the same):
- - `bun run test:build`
+  - `bun run test:build`
 - CLI: commands that should return to the shell when finished must not leave
- stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
- in `src/utils/github.ts` for outbound requests. `dev` is meant to stay
- running until you stop it.
+  stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
+  in `src/utils/github.ts` for outbound requests. `dev` is meant to stay
+  running until you stop it.
 
 ### Design Principles
 

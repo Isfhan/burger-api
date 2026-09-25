@@ -15,7 +15,8 @@ import type {
     EcosystemComponentInfo,
     SkillInfo,
 } from '../types/index';
-import { unlinkSync } from 'fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync } from 'fs';
+import { dirname, join } from 'path';
 import { withEcosystemCache } from './ecosystem-cache';
 
 /**
@@ -24,7 +25,37 @@ import { withEcosystemCache } from './ecosystem-cache';
  */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
 const REPO_NAME = process.env.BURGER_API_REPO_NAME ?? 'burger-api';
-const BRANCH = process.env.BURGER_API_BRANCH ?? 'main';
+/** Injected at build time when compiling to executable (--define CLI_VERSION). */
+declare const CLI_VERSION: string | undefined;
+
+/**
+ * True when the installed CLI is a prerelease (`1.0.0-beta`, `-rc.1`, …).
+ * Prerelease CLIs read ecosystem content from the 1.0 development branch,
+ * because `main` does not carry 1.0 content until the stable release — so
+ * this switches back to `main` on its own once a stable version ships.
+ */
+export function isPrereleaseBuild(): boolean {
+    let version = typeof CLI_VERSION !== 'undefined' ? CLI_VERSION : '';
+    if (!version) {
+        try {
+            const pkgPath = join(import.meta.dir, '..', '..', 'package.json');
+            version =
+                (JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+                    version?: string;
+                }).version ?? '';
+        } catch {
+            return false;
+        }
+    }
+    return /-(?:beta|rc|alpha)(?:[.-]|$)/.test(version);
+}
+
+/** Ecosystem branch for prerelease CLIs (see {@link isPrereleaseBuild}). */
+export const PRERELEASE_BRANCH = 'feat/burger-api-v1';
+
+const BRANCH =
+    process.env.BURGER_API_BRANCH ??
+    (isPrereleaseBuild() ? PRERELEASE_BRANCH : 'main');
 
 // Build the URLs we'll use to access GitHub
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
@@ -88,8 +119,8 @@ async function throwForGitHubError(response: Response): Promise<never> {
     }
     throw new Error(
         `GitHub request failed (HTTP ${response.status}${detail}).` +
-            (response.status === 403
-                ? ' Set GITHUB_TOKEN to raise the rate limit.'
+            (response.status === 403 || response.status === 429
+                ? ' GitHub API rate limit likely exceeded — set GITHUB_TOKEN to raise it, or retry later.'
                 : '')
     );
 }
@@ -163,6 +194,52 @@ export async function getCachedComponentList(): Promise<{
     return withEcosystemCache('component-list', getComponentList);
 }
 
+/** First non-heading, non-empty README line — the package's one-line description. */
+function readmeDescription(readme: string): string {
+    for (const line of readme.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) return trimmed;
+    }
+    return 'No description available';
+}
+
+/** A catalog entry for `burger-api list`. */
+export interface ComponentCatalogEntry {
+    name: string;
+    kind: 'hook' | 'plugin';
+    description: string;
+}
+
+/**
+ * The component list plus each README's description, cached together so a
+ * warm `burger-api list` makes no network calls at all. A cold fetch costs
+ * 2 Contents API calls (the rate-limited API); descriptions come from raw
+ * README files, which don't count against the API rate limit.
+ */
+export async function getCachedComponentCatalog(): Promise<{
+    data: ComponentCatalogEntry[];
+    stale: boolean;
+}> {
+    return withEcosystemCache('component-catalog', async () => {
+        const list = await getComponentList();
+        return Promise.all(
+            list.map(async ({ name, kind }) => {
+                const dir = kind === 'plugin' ? 'plugins' : 'hooks';
+                let description = 'No description available';
+                try {
+                    const res = await fetchWithTimeout(
+                        `${RAW_URL}/ecosystem/${dir}/${name}/README.md`
+                    );
+                    if (res.ok) description = readmeDescription(await res.text());
+                } catch {
+                    // Description is cosmetic — keep the entry.
+                }
+                return { name, kind, description };
+            })
+        );
+    });
+}
+
 /**
  * Get detailed information about a specific ecosystem component.
  * This reads the README file to get the description.
@@ -190,9 +267,11 @@ export async function getComponentInfo(
             }
         );
 
-        if (!response.ok) {
+        if (response.status === 404) {
             throw new Error(`Component "${name}" not found`);
         }
+        // Rate limit (403/429), outage, … — say so instead of "not found".
+        if (!response.ok) await throwForGitHubError(response);
 
         const files = (await response.json()) as GitHubFile[];
 
@@ -510,9 +589,12 @@ export async function skillExists(name: string): Promise<boolean> {
             }
         );
 
-        return response.ok;
-    } catch {
-        return false;
+        if (response.status === 404) return false;
+        // Rate limit / outage: surface it instead of a false "not found".
+        if (!response.ok) await throwForGitHubError(response);
+        return true;
+    } catch (err) {
+        throw wrapFetchError(err, `Could not check skill "${name}"`);
     }
 }
 
@@ -533,9 +615,11 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
             }
         );
 
-        if (!response.ok) {
+        if (response.status === 404) {
             throw new Error(`Skill "${name}" not found`);
         }
+        // Rate limit (403/429), outage, … — say so instead of "not found".
+        if (!response.ok) await throwForGitHubError(response);
 
         const entries = (await response.json()) as GitHubFile[];
         const flatFiles = await flattenSkillFiles(`ecosystem/skills/${name}`);
@@ -586,26 +670,27 @@ export async function downloadSkill(
     try {
         const info = await getSkillInfo(skillName);
 
-        // Create target directory
-        await Bun.write(`${targetDir}/.gitkeep`, '');
-
+        // Download into a staging dir, then replace the target: an update
+        // never leaves stale files from the previous version behind, and a
+        // failed download never destroys the existing install. (Bun.write
+        // creates parent directories — no .gitkeep placeholders needed.)
+        const stagingDir = `${targetDir}.download`;
+        rmSync(stagingDir, { recursive: true, force: true });
         let filesDownloaded = 0;
-        for (const fileName of info.files) {
-            if (fileName === '.gitkeep') continue;
-            const sourcePath = `${info.path}/${fileName}`;
-            const destPath = `${targetDir}/${fileName}`;
-            // Ensure parent directory exists
-            const parentDir = destPath.substring(0, destPath.lastIndexOf('/'));
-            await Bun.write(`${parentDir}/.gitkeep`, '');
-            await downloadFile(sourcePath, destPath);
-            filesDownloaded++;
-        }
-
-        // Remove .gitkeep
         try {
-            unlinkSync(`${targetDir}/.gitkeep`);
-        } catch {
-            /* ignore */
+            for (const fileName of info.files) {
+                if (fileName === '.gitkeep') continue;
+                await downloadFile(
+                    `${info.path}/${fileName}`,
+                    `${stagingDir}/${fileName}`
+                );
+                filesDownloaded++;
+            }
+            rmSync(targetDir, { recursive: true, force: true });
+            mkdirSync(dirname(targetDir), { recursive: true });
+            renameSync(stagingDir, targetDir);
+        } finally {
+            rmSync(stagingDir, { recursive: true, force: true });
         }
 
         return filesDownloaded;

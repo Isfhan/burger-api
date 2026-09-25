@@ -55,10 +55,16 @@ afterEach(async () => {
 describe('list — stale cache fallback', () => {
     test('serves the cached component list and warns when GitHub is unreachable', async () => {
         await writeFile(
-            join(cacheDir, 'component-list.json'),
+            join(cacheDir, 'component-catalog.json'),
             JSON.stringify({
                 fetchedAt: Date.now() - 999_999_999, // long expired
-                data: [{ name: 'cached-hook', kind: 'hook' }],
+                data: [
+                    {
+                        name: 'cached-hook',
+                        kind: 'hook',
+                        description: 'A cached hook',
+                    },
+                ],
             })
         );
 
@@ -67,6 +73,9 @@ describe('list — stale cache fallback', () => {
         expect(exitCode).toBe(0);
         expect(stdout).toContain('cached list');
         expect(stdout).toContain('cached-hook');
+        expect(stdout).toContain('A cached hook');
+        // No success marker when the data is stale.
+        expect(stdout).not.toContain('Found available hooks and plugins');
     });
 
     test('with no cache at all, fails loud instead of showing an empty list', async () => {

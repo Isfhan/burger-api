@@ -5,7 +5,11 @@ import { describe, it, expect } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
+import {
+    scanApiRoutes,
+    scanAssetRoutes,
+    scanPageRoutes,
+} from '../src/utils/scanner';
 
 const fixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
 const parityFixturesDir = join(import.meta.dir, 'fixtures', 'parity-routes');
@@ -215,5 +219,38 @@ describe('scanPageRoutes', () => {
         await expect(
             scanPageRoutes(conflictFixturesDir, './pages-two-dynamic', '/')
         ).rejects.toThrow('Multiple dynamic page folders');
+    });
+});
+
+describe('scanAssetRoutes', () => {
+    function withAssets(): string {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-assets-'));
+        mkdirSync(join(root, 'pages', 'assets', 'css'), { recursive: true });
+        writeFileSync(join(root, 'pages', 'assets', 'css', 'style.css'), '');
+        return root;
+    }
+
+    it('pagePrefix "/" yields "/assets/..." (no double slash)', async () => {
+        const root = withAssets();
+        try {
+            const assets = await scanAssetRoutes(root, './pages', '/');
+            expect(assets.map((a) => a.routePath)).toEqual([
+                '/assets/css/style.css',
+            ]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('a custom pagePrefix is included exactly once', async () => {
+        const root = withAssets();
+        try {
+            const assets = await scanAssetRoutes(root, './pages', '/site');
+            expect(assets.map((a) => a.routePath)).toEqual([
+                '/site/assets/css/style.css',
+            ]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });

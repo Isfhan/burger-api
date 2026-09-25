@@ -10,6 +10,9 @@
  * This makes it easy to add new commands and provide helpful error messages.
  */
 
+// Must come first: sets NO_COLOR before @clack/prompts (imported below) is
+// evaluated on a non-TTY. See utils/tty-color.ts.
+import './utils/tty-color';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Command } from 'commander';

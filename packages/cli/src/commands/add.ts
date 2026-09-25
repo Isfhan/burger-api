@@ -9,7 +9,6 @@ import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
-import { generateHooksIndex } from '../utils/templates';
 import { detectEcosystemType, downloadComponent } from '../utils/github';
 import {
     spinner,
@@ -53,6 +52,48 @@ export function resolveExportName(mainFilePath: string, packageName: string): st
 }
 
 /**
+ * Copy-pasteable registration for each official package: the lifecycle
+ * stage its README recommends (hooks) and the minimal options it needs to
+ * typecheck and actually do something (plugins). Values that must come from
+ * the environment are read from `process.env`. Packages not listed here
+ * fall back to `<export>()` (hooks under `beforeRoute`).
+ */
+export const USAGE_HINTS: Record<
+    string,
+    { stage?: 'onRequest' | 'beforeRoute'; call: string }
+> = {
+    // CORS must answer OPTIONS preflights before routing.
+    cors: { stage: 'onRequest', call: 'cors()' },
+    // Rejects floods before any route work.
+    'rate-limiter': { stage: 'onRequest', call: 'rateLimit()' },
+    'body-size-limiter': { stage: 'beforeRoute', call: 'bodySizeLimiter()' },
+    cache: { stage: 'beforeRoute', call: 'cacheControl()' },
+    compression: { stage: 'beforeRoute', call: 'compress()' },
+    logger: { stage: 'beforeRoute', call: 'logger()' },
+    'security-headers': { stage: 'beforeRoute', call: 'securityHeaders()' },
+    timeout: { stage: 'beforeRoute', call: 'requestTimeout()' },
+    'api-key': {
+        call: "apiKey({ keys: (process.env.API_KEYS ?? '').split(',') })",
+    },
+    'basic-auth': {
+        call:
+            'basicAuth({\n' +
+            '    // Replace with a real user lookup.\n' +
+            '    validate: async (username, password) =>\n' +
+            "        username === 'admin' && password === process.env.ADMIN_PASSWORD\n" +
+            '            ? { id: username, username }\n' +
+            '            : null,\n' +
+            '})',
+    },
+    env: { call: 'env()' },
+    'jwt-auth': { call: 'jwtAuth({ secret: process.env.JWT_SECRET })' },
+    oidc: {
+        call: "oidc({ issuer: 'https://accounts.example.com', audience: 'my-client-id' })",
+    },
+    session: { call: 'session({ secret: process.env.SESSION_SECRET })' },
+};
+
+/**
  * Create the "add" command
  * Downloads ecosystem components (hooks/plugins) from GitHub into the project
  */
@@ -76,11 +117,6 @@ export const addCommand = new Command('add')
         const ecosystemDir = join(process.cwd(), 'ecosystem');
         const hooksDir = join(ecosystemDir, 'hooks');
         const pluginsDir = join(ecosystemDir, 'plugins');
-        if (!existsSync(hooksDir)) {
-            await Bun.write(join(hooksDir, 'index.ts'), generateHooksIndex());
-            info('Created ecosystem/hooks/ directory');
-            newline();
-        }
 
         const results = {
             success: [] as string[],
@@ -124,6 +160,14 @@ export const addCommand = new Command('add')
                 spin.update(`Downloading ${name} (${ecosystemType})...`);
                 if (existsSync(targetDir)) {
                     spin.stop();
+                    if (!process.stdin.isTTY) {
+                        // No terminal to answer the prompt — never hang.
+                        warning(
+                            `${name} already exists — skipped (run in a terminal to confirm overwriting).`
+                        );
+                        results.skipped.push(name);
+                        continue;
+                    }
                     // Ask if they want to overwrite
                     const shouldOverwrite = await clack.confirm({
                         message: `${name} already exists. Overwrite?`,
@@ -184,48 +228,61 @@ export const addCommand = new Command('add')
             newline();
 
             header('How to Use');
-            for (const name of results.success) {
-                const isPlugin = existsSync(join(pluginsDir, name));
-                const exportName = exportNames.get(name) ?? name;
-                if (isPlugin) {
-                    code(
-                        `import { ${exportName} } from "./ecosystem/plugins/${name}/${name}";`
-                    );
-                } else {
-                    code(
-                        `import { ${exportName} } from "./ecosystem/hooks/${name}/${name}";`
-                    );
-                }
-            }
-            newline();
-            const hasPlugins = results.success.some((n) =>
+            const plugins = results.success.filter((n) =>
                 existsSync(join(pluginsDir, n))
             );
-            if (hasPlugins) {
-                code('// Register plugins in src/plugins.ts:');
-                code('burger.usePlugin(');
-                results.success
-                    .filter((n) => existsSync(join(pluginsDir, n)))
-                    .forEach((name) => {
-                        const exportName = exportNames.get(name) ?? name;
-                        code(` ${exportName}(),`);
-                    });
-                code(');');
+            const hooks = results.success.filter(
+                (n) => !plugins.includes(n)
+            );
+            const call = (name: string) =>
+                USAGE_HINTS[name]?.call ?? `${exportNames.get(name) ?? name}()`;
+            // Import paths are relative to src/, where these lines go.
+            const isJs = existsSync('jsconfig.json');
+            if (plugins.length > 0) {
+                code(`// src/plugins.${isJs ? 'js' : 'ts'}`);
+                if (!isJs) {
+                    code("import type { PluginRegistrar } from 'burger-api';");
+                }
+                for (const name of plugins) {
+                    code(
+                        `import { ${exportNames.get(name) ?? name} } from '../ecosystem/plugins/${name}/${name}';`
+                    );
+                }
+                code('');
+                if (isJs) {
+                    code("/** @param {import('burger-api').PluginRegistrar} burger */");
+                    code('export default (burger) => {');
+                } else {
+                    code('export default (burger: PluginRegistrar) => {');
+                }
+                // usePlugin takes exactly one plugin per call.
+                for (const name of plugins) {
+                    const lines = `burger.usePlugin(${call(name)});`.split('\n');
+                    for (const line of lines) code(`    ${line}`);
+                }
+                code('};');
                 newline();
             }
-            const hasHooks = results.success.some((n) =>
-                existsSync(join(hooksDir, n))
-            );
-            if (hasHooks) {
-                code('// Register hooks in src/hooks.ts:');
-                code('export const onRequest = [');
-                results.success
-                    .filter((n) => existsSync(join(hooksDir, n)))
-                    .forEach((name) => {
-                        const exportName = exportNames.get(name) ?? name;
-                        code(` ${exportName}(),`);
-                    });
-                code('];');
+            if (hooks.length > 0) {
+                const byStage = { onRequest: [] as string[], beforeRoute: [] as string[] };
+                for (const name of hooks) {
+                    byStage[USAGE_HINTS[name]?.stage ?? 'beforeRoute'].push(name);
+                }
+                code(`// src/hooks.${isJs ? 'js' : 'ts'}`);
+                for (const name of hooks) {
+                    code(
+                        `import { ${exportNames.get(name) ?? name} } from '../ecosystem/hooks/${name}/${name}';`
+                    );
+                }
+                for (const stage of ['onRequest', 'beforeRoute'] as const) {
+                    if (byStage[stage].length === 0) continue;
+                    code('');
+                    code(`export const ${stage} = [`);
+                    for (const name of byStage[stage]) code(`    ${call(name)},`);
+                    code('];');
+                }
+                code('');
+                code('// (merge with any existing exports of the same name)');
                 newline();
             }
             info('See each package README for options:');
@@ -252,10 +309,16 @@ export const addCommand = new Command('add')
             newline();
         }
 
-        if (results.success.length > 0) {
+        if (results.failed.length > 0) {
+            clack.outro(
+                results.success.length > 0
+                    ? `Added ${results.success.length} package(s), ${results.failed.length} failed`
+                    : 'No packages were added'
+            );
+            process.exit(1);
+        } else if (results.success.length > 0) {
             clack.outro('Packages added successfully!');
         } else {
             clack.outro('No packages were added');
-            process.exit(1);
         }
     });

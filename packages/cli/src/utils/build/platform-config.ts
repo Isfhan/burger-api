@@ -5,14 +5,21 @@
  * own config.
  */
 
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import type { RuntimeTarget } from '../../types/index';
 import { getProjectName } from './project';
 import { info } from '../logger';
 
+/**
+ * Fixed, known-good Workers compatibility date. Today's date is rejected by
+ * any wrangler whose bundled runtime is older than today ("date in the
+ * future"); bump deliberately after verifying against current wrangler.
+ */
+export const WRANGLER_COMPATIBILITY_DATE = '2025-06-01';
+
 function wranglerToml(projectName: string, mainPath: string): string {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = WRANGLER_COMPATIBILITY_DATE;
     return (
         `name = "${projectName}"\n` +
         `main = "${mainPath}"\n` +
@@ -21,9 +28,35 @@ function wranglerToml(projectName: string, mainPath: string): string {
     );
 }
 
-function denoJson(): string {
+/**
+ * The `burger-api` range from the project's package.json, when it is a
+ * registry range (not link:/file:/workspace:). An unpinned `npm:burger-api`
+ * resolves the latest stable release on Deno Deploy, not the version the
+ * project was built and tested with.
+ */
+function projectBurgerApiRange(cwd: string): string | undefined {
+    try {
+        const pkg = JSON.parse(
+            readFileSync(resolve(cwd, 'package.json'), 'utf-8')
+        ) as { dependencies?: Record<string, string> };
+        const range = pkg.dependencies?.['burger-api'];
+        if (!range || /^(link|file|workspace|git|http)/.test(range)) {
+            return undefined;
+        }
+        return range;
+    } catch {
+        return undefined;
+    }
+}
+
+export function denoJson(cwd: string): string {
+    const range = projectBurgerApiRange(cwd);
     return JSON.stringify(
-        { imports: { 'burger-api': 'npm:burger-api' } },
+        {
+            imports: {
+                'burger-api': range ? `npm:burger-api@${range}` : 'npm:burger-api',
+            },
+        },
         null,
         2
     ) + '\n';
@@ -68,7 +101,7 @@ export function scaffoldPlatformConfig(
         target === 'cloudflare'
             ? wranglerToml(getProjectName(cwd), outfile.split('\\').join('/'))
             : target === 'deno'
-              ? denoJson()
+              ? denoJson(cwd)
               : vercelJson();
 
     writeFileSync(configPath, content, 'utf-8');

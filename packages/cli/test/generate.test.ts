@@ -10,7 +10,12 @@ import {
     generateHookTemplate,
     generatePluginTemplate,
     generateWsFiles,
+    toIdentifier,
 } from '../src/utils/templates';
+import {
+    validateComponentName,
+    validateRoutePath,
+} from '../src/commands/generate';
 
 const tmpDir = join(import.meta.dir, '__tmp_generate');
 
@@ -35,14 +40,14 @@ describe('generateRouteFiles', () => {
 
     it('route.ts contains GET handler', () => {
         const files = generateRouteFiles('users');
-        expect(files['route.ts']).toContain('export async function GET');
-        expect(files['route.ts']).toContain('BurgerContext');
+        expect(files['route.ts']).toContain('export const GET = defineRoute(');
+        expect(files['route.ts']).toContain('ctx.validated.query');
         expect(files['route.ts']).toContain('Response.json');
     });
 
     it('schema.ts contains Zod import and GET export', () => {
         const files = generateRouteFiles('users');
-        expect(files['schema.ts']).toContain("import { z } from 'zod/v4'");
+        expect(files['schema.ts']).toContain("import { z } from 'zod'");
         expect(files['schema.ts']).toContain('export const GET');
     });
 
@@ -99,7 +104,24 @@ describe('generateRouteFiles', () => {
     it('handles nested route paths like products/[id]', () => {
         const files = generateRouteFiles('products/[id]');
         expect(files['route.ts']).toBeDefined();
-        expect(files['openapi.ts']).toContain('tags: ["products/[id]"]');
+        // Tag is the resource, not the raw path.
+        expect(files['openapi.ts']).toContain('tags: ["products"]');
+        expect(files['openapi.ts']).toContain('summary: "Get products by id"');
+    });
+
+    it('dynamic segments get a params schema and typed ctx.validated.params', () => {
+        const files = generateRouteFiles('users/[id]');
+        expect(files['schema.ts']).toContain('params: z.object({');
+        expect(files['schema.ts']).toContain('id: z.string(),');
+        expect(files['route.ts']).toContain(
+            'const { id } = ctx.validated.params;'
+        );
+        const js = generateRouteFiles('orgs/[orgId]/users/[userId]', {}, 'js');
+        expect(js['schema.js']).toContain('orgId: z.string(),');
+        expect(js['schema.js']).toContain('userId: z.string(),');
+        expect(js['route.js']).toContain(
+            'const { orgId, userId } = ctx.validated.params;'
+        );
     });
 });
 
@@ -136,6 +158,55 @@ describe('generatePluginTemplate', () => {
     });
 });
 
+describe('toIdentifier', () => {
+    it('camelCases kebab/snake names and PascalCases on request', () => {
+        expect(toIdentifier('rate-limit')).toBe('rateLimit');
+        expect(toIdentifier('my_plugin')).toBe('myPlugin');
+        expect(toIdentifier('my-plugin', true)).toBe('MyPlugin');
+        expect(toIdentifier('2fa')).toBe('_2fa');
+    });
+
+    it('plugin template exports the same identifier generate prints', () => {
+        expect(generatePluginTemplate('my-plugin')).toContain(
+            'export const MyPlugin: Plugin'
+        );
+    });
+});
+
+describe('validateRoutePath / validateComponentName', () => {
+    it('accepts normal, dynamic, group and wildcard paths', () => {
+        for (const p of ['users', 'products/[id]', '(admin)/stats', 'files/[...]']) {
+            expect(validateRoutePath(p)).toBeUndefined();
+        }
+    });
+
+    it('rejects traversal, absolute paths and whitespace', () => {
+        expect(validateRoutePath('../../x')).toContain('..');
+        expect(validateRoutePath('a/../../b')).toContain('..');
+        expect(validateRoutePath('/abs')).toContain('relative');
+        expect(validateRoutePath('C:/abs')).toContain('relative');
+        expect(validateRoutePath('with space')).toContain('spaces');
+    });
+
+    it('rejects named wildcards with a pointer to [...]', () => {
+        const err = validateRoutePath('files/[...path]');
+        expect(err).toContain('[...]');
+        expect(err).toContain('not supported');
+    });
+
+    it('rejects non-identifier dynamic segments', () => {
+        expect(validateRoutePath('users/[user-id]')).toContain('identifier');
+    });
+
+    it('component names must be simple kebab/camel names', () => {
+        expect(validateComponentName('rate-limit')).toBeUndefined();
+        expect(validateComponentName('myHook')).toBeUndefined();
+        expect(validateComponentName('../../x')).toContain('Invalid name');
+        expect(validateComponentName('a/b')).toContain('Invalid name');
+        expect(validateComponentName('1abc')).toContain('Invalid name');
+    });
+});
+
 describe('generate route files to disk', () => {
     it('writes all files to the target directory', async () => {
         const targetDir = join(tmpDir, 'users');
@@ -157,7 +228,7 @@ describe('generate route files to disk', () => {
             join(targetDir, 'route.ts'),
             'utf-8'
         );
-        expect(routeContent).toContain('export async function GET');
+        expect(routeContent).toContain('export const GET = defineRoute(');
     });
 });
 
@@ -170,17 +241,26 @@ describe('generate — JavaScript (--lang js)', () => {
         expect(files['hooks.js']).toBeDefined();
         expect(files['config.js']).toBeDefined();
         expect(files['route.ts']).toBeUndefined();
-        expect(files['route.js']).toContain(
-            "@param {import('burger-api').BurgerContext} ctx"
-        );
+        expect(files['route.js']).toContain('defineRoute(GetSchema, (ctx) =>');
         expect(files['route.js']).not.toContain(': BurgerContext');
     });
 
-    it('generateHookTemplate is type-free for JS', () => {
+    it('generateHookTemplate is type-annotation-free for JS but JSDoc-types ctx', () => {
         const js = generateHookTemplate('cors', 'js');
         expect(js).toContain('export function cors()');
         expect(js).toContain('src/hooks.js');
-        expect(js).not.toContain('BurgerContext');
+        expect(js).not.toContain(': import(');
+        // checkJs + noImplicitAny: ctx must be typed via JSDoc.
+        expect(js).toContain("@param {import('burger-api').BurgerContext} ctx");
+    });
+
+    it('generateHookTemplate turns kebab-case names into valid identifiers', () => {
+        expect(generateHookTemplate('rate-limit')).toContain(
+            'export function rateLimit()'
+        );
+        expect(generateHookTemplate('rate-limit', 'js')).toContain(
+            'export function rateLimit()'
+        );
     });
 
     it('generatePluginTemplate uses JSDoc type for JS', () => {

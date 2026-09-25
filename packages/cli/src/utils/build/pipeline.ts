@@ -1,4 +1,5 @@
-import { resolveBuildConfig } from '../config';
+import { compareEntryAndBuildConfig, resolveBuildConfig } from '../config';
+import { warning } from '../logger';
 import {
     scanApiRoutes,
     scanAssetRoutes,
@@ -20,41 +21,68 @@ import {
     cleanupEntryOptionsModule,
     prepareEntryOptionsModule,
 } from '../entry-options';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { basename, dirname, relative, resolve } from 'path';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
 
 /**
- * Deno enforces spec-legal ES module specifiers — a bare absolute path like
- * `C:/Users/.../route.ts` (what the scanner emits, and what Bun/wrangler's
- * bundlers happily accept as a convenience) is rejected with "Unsupported
- * scheme". Rewriting every absolute-path import to a proper `file://` URL
- * is the fix; relative imports (the entry-options module) and bare package
- * specifiers (`burger-api`) are left untouched.
+ * Portable entries (cloudflare/deno/vercel) are bundled later by the
+ * platform's own tool, often on another machine (CI), so they must not
+ * embed this machine's absolute paths (`C:/Users/.../route.ts`). Every
+ * absolute import — and, with `sourceDir`, every relative import written
+ * for a file that lived in `sourceDir` — is rewritten relative to `outDir`.
+ * Relative specifiers are also spec-legal for Deno (bare absolute paths are
+ * rejected there). Bare package specifiers (`burger-api`) are untouched.
  */
-function rewriteAbsoluteImportsToFileUrls(source: string): string {
-    return source.replace(/from '([^']+)'/g, (match, spec: string) => {
-        if (/^[A-Za-z]:\//.test(spec)) return `from 'file:///${spec}'`;
-        if (spec.startsWith('/')) return `from 'file://${spec}'`;
-        return match;
-    });
+function rewriteImportsRelativeTo(
+    source: string,
+    outDir: string,
+    sourceDir?: string
+): string {
+    return source.replace(
+        /(from\s+|import\s+)'([^']+)'/g,
+        (match, lead: string, spec: string) => {
+            let abs: string | undefined;
+            if (/^[A-Za-z]:\//.test(spec) || spec.startsWith('/')) abs = spec;
+            else if (sourceDir && /^\.\.?\//.test(spec))
+                abs = resolve(sourceDir, spec);
+            if (!abs) return match;
+            let rel = relative(outDir, abs).split('\\').join('/');
+            if (!rel.startsWith('.')) rel = `./${rel}`;
+            return `${lead}'${rel}'`;
+        }
+    );
 }
 
-function scanAppConventions(cwd: string): AppConventionPaths | undefined {
-    const srcDir = resolve(cwd, 'src');
+/**
+ * App-level convention files live next to the entry file (like the
+ * runtime scanner): `hooks`, `plugins`, `providers`, `openapi.config` with
+ * `.ts`, `.js` or `.mjs` — a JS project's `src/hooks.js` must reach the
+ * production bundle just like `src/hooks.ts`. Two variants of one file
+ * fail loud.
+ */
+export function scanAppConventions(
+    appDir: string
+): AppConventionPaths | undefined {
     const paths: AppConventionPaths = {};
-    const hooksFile = resolve(srcDir, 'hooks.ts');
-    if (existsSync(hooksFile))
-        paths.hooksPath = hooksFile.split('\\').join('/');
-    const pluginsFile = resolve(srcDir, 'plugins.ts');
-    if (existsSync(pluginsFile))
-        paths.pluginsPath = pluginsFile.split('\\').join('/');
-    const providersFile = resolve(srcDir, 'providers.ts');
-    if (existsSync(providersFile))
-        paths.providersPath = providersFile.split('\\').join('/');
-    const openapiConfigFile = resolve(srcDir, 'openapi.config.ts');
-    if (existsSync(openapiConfigFile))
-        paths.openapiConfigPath = openapiConfigFile.split('\\').join('/');
+    const find = (stem: string): string | undefined => {
+        let found: string | undefined;
+        for (const ext of ['.ts', '.js', '.mjs']) {
+            const file = resolve(appDir, `${stem}${ext}`);
+            if (!existsSync(file)) continue;
+            if (found) {
+                throw new Error(
+                    `Conflicting convention files "${found}" and "${file}" — keep only one ${stem}.ts/.js/.mjs.`
+                );
+            }
+            found = file;
+        }
+        return found?.split('\\').join('/');
+    };
+    paths.hooksPath = find('hooks');
+    paths.pluginsPath = find('plugins');
+    paths.providersPath = find('providers');
+    paths.openapiConfigPath = find('openapi.config');
     return paths.hooksPath ||
         paths.pluginsPath ||
         paths.providersPath ||
@@ -66,6 +94,7 @@ function scanAppConventions(cwd: string): AppConventionPaths | undefined {
 export interface VirtualBuildResult {
     success: boolean;
     hasPages: boolean;
+    hasWs: boolean;
     outputs: { path: string; size: number }[];
 }
 
@@ -92,6 +121,15 @@ export async function runVirtualEntryBuild(options: {
     bytecode?: boolean;
 }): Promise<VirtualBuildResult> {
     const config = await resolveBuildConfig(options.cwd);
+    // dev/start read the entry file's options; the build reads burger.build.
+    // Never let the two disagree silently.
+    for (const msg of compareEntryAndBuildConfig(
+        options.cwd,
+        options.entryFile,
+        config
+    )) {
+        warning(msg);
+    }
     const platformTarget: RuntimeTarget = options.compile
         ? 'bun'
         : (options.platformTarget ?? config.target ?? 'bun');
@@ -146,7 +184,15 @@ export async function runVirtualEntryBuild(options: {
         }
     }
 
-    const appConventions = scanAppConventions(options.cwd);
+    let appConventions: AppConventionPaths | undefined;
+    try {
+        appConventions = scanAppConventions(
+            dirname(resolve(options.cwd, options.entryFile))
+        );
+    } catch (err) {
+        cleanupEntryOptionsModule(entryOptions.tempFilePath);
+        throw err;
+    }
 
     const source = generateVirtualEntrySource(
         config,
@@ -160,6 +206,7 @@ export async function runVirtualEntryBuild(options: {
         platformTarget
     );
     const hasPages = pageEntries.length > 0;
+    const hasWs = wsEntries.length > 0;
 
     try {
         if (
@@ -176,6 +223,16 @@ export async function runVirtualEntryBuild(options: {
             // the entry-options module, which the outer `finally` deletes.
             const outPath = resolve(options.cwd, options.outfile);
             const portableOutDir = dirname(outPath);
+            // Clean the target output dir first so files from an earlier
+            // build never ship alongside the new entry. Only `.build/**`
+            // is cleared wholesale — a custom --outfile may share its
+            // directory with unrelated user files.
+            const relOutDir = relative(options.cwd, portableOutDir)
+                .split('\\')
+                .join('/');
+            if (relOutDir === '.build' || relOutDir.startsWith('.build/')) {
+                rmSync(portableOutDir, { recursive: true, force: true });
+            }
             mkdirSync(portableOutDir, { recursive: true });
 
             let finalSource = source;
@@ -185,23 +242,32 @@ export async function runVirtualEntryBuild(options: {
             ) {
                 const optionsDest = resolve(
                     portableOutDir,
-                    '__burger_build_options__.ts'
+                    basename(entryOptions.tempFilePath)
                 );
-                copyFileSync(entryOptions.tempFilePath, optionsDest);
+                // The options module carries the entry file's prelude, whose
+                // relative imports were written for `src/` — re-point them.
+                writeFileSync(
+                    optionsDest,
+                    rewriteImportsRelativeTo(
+                        readFileSync(entryOptions.tempFilePath, 'utf-8'),
+                        portableOutDir,
+                        dirname(entryOptions.tempFilePath)
+                    ),
+                    'utf-8'
+                );
                 finalSource = finalSource.replace(
                     entryOptions.importPath!,
-                    './__burger_build_options__.ts'
+                    `./${basename(entryOptions.tempFilePath)}`
                 );
             }
-            if (platformTarget === 'deno') {
-                finalSource = rewriteAbsoluteImportsToFileUrls(finalSource);
-            }
+            finalSource = rewriteImportsRelativeTo(finalSource, portableOutDir);
 
             writeFileSync(outPath, finalSource, 'utf-8');
             scaffoldPlatformConfig(options.cwd, platformTarget, options.outfile);
             return {
                 success: true,
                 hasPages,
+                hasWs,
                 outputs: [
                     {
                         path: outPath,
@@ -251,7 +317,12 @@ export async function runVirtualEntryBuild(options: {
                 outDir,
                 compile: options.compile,
             });
-            return { success: result.success ?? false, hasPages, outputs };
+            return {
+                success: result.success ?? false,
+                hasPages,
+                hasWs,
+                outputs,
+            };
         } finally {
             cleanupVirtualEntry(virtualSourcePath);
         }

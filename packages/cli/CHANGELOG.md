@@ -77,9 +77,43 @@ installs this beta by default; pin an exact `0.9.x` version (e.g.
 - **Changed** – Scaffold pins `burger-api@^1.0.0-beta` (was `^1.0.0`, which
   excludes prereleases), so scaffolded projects resolve the beta and pick up
   later betas and the eventual stable `1.x`.
-- **Known limitation** – `add`/`list`/`skills install` default to GitHub's
-  `main` branch, which doesn't have this release's ecosystem content yet.
-  Set `BURGER_API_BRANCH=feat/burger-api-v1` until `main` is updated.
+- **Fixed** – Production builds could silently drop a route's `hooks` file
+  (bypassing auth) depending on the export syntax. The build now imports any
+  sibling `hooks`/`schema`/`openapi`/`config` file, whatever its exports look
+  like, and reads them at startup exactly like dev.
+- **Fixed** – `--pages` projects failed to build: the landing page's
+  root-absolute `{pagePrefix}/assets/...` URLs were handed to Bun's HTML
+  bundler. HTML pages are embedded as raw markup and served from the embedded
+  asset table, so custom `pagePrefix` values work in production too.
+- **Fixed** – The build entry no longer emits its own OPTIONS stub; the
+  framework's 204 + `Allow` OPTIONS handler now applies in production.
+- **Fixed** – Scaffolded `burger.build.*` files are typed
+  `Partial<BuildConfig>`, so a project without pages typechecks out of the box.
+- **Fixed** – App-level convention files (`hooks`/`plugins`/`providers`/
+  `openapi.config`) are resolved with `.ts`/`.js`/`.mjs` next to the entry in
+  production builds (JS builds used to lose them); conflicting extensions fail
+  loud. Portable targets write relative POSIX imports, a `.js` options module
+  for JS projects, pin `deno.json` to the project's `burger-api` range, and
+  clean their `.build/<target>/` output dir before writing.
+- **Fixed** – Non-TTY/CI output has no ANSI escapes or spinner frames;
+  `create` uses defaults with a notice instead of hanging when there is no TTY
+  and no `--yes`; reserved Windows names are rejected, `package.json`'s name
+  is lowercased, and a failed `create` removes its partial directory.
+- **Fixed** – `generate` sanitizes identifiers (`rate-limit` → `rateLimit`),
+  rejects names/paths that escape the project, and prints correct
+  `../ecosystem/...` import snippets with the identifier the file exports.
+- **Changed** – `doctor` uses `burger.build`'s `apiDir`, verifies `burger-api`
+  resolves in `node_modules`, fails on unloadable configs and broken route
+  modules (it imports them), reports optional files as info, and warns when
+  `src/index.*` and `burger.build.*` disagree.
+- **Changed** – `start` names the entry it runs and warns when the bundle is
+  older than `src/`; `dev`/`start` validate `--port` (1–65535); `dev` keeps
+  watching after a crash and waits for a killed child's port before respawning
+  on Windows.
+- **Changed** – `inspect` handles `.ts`/`.js`/`.mjs` convention files and
+  reports "found, no hooks registered" for empty hook files; `list` caches
+  descriptions and kinds (a warm cache makes zero GitHub calls) and warns when
+  showing stale data; GitHub 403s surface the status and a `GITHUB_TOKEN` hint.
 
 ## Version 0.10.0 - (July 24, 2026)
 

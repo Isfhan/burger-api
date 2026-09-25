@@ -8,11 +8,16 @@
  * when GitHub API is reachable (e.g. local dev) to assert full list paths.
  */
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
 
-async function runCli(args: string[]): Promise<{
+async function runCli(
+    args: string[],
+    cwd?: string
+): Promise<{
     exitCode: number;
     stdout: string;
     stderr: string;
@@ -23,6 +28,7 @@ async function runCli(args: string[]): Promise<{
         stdout: 'pipe',
         stderr: 'pipe',
         env: process.env,
+        cwd,
     });
     const [exitCode, stdout, stderr] = await Promise.all([
         proc.exited,
@@ -84,6 +90,35 @@ describe('CLI process exit', () => {
             expect(elapsedMs).toBeLessThan(18_000);
         }
     );
+
+    test('piped (non-TTY) output carries no ANSI escapes', async () => {
+        // picocolors (via @clack/prompts) enables ANSI on win32 regardless
+        // of TTY, so `skills list` outside a project is a cheap way to get
+        // clack's colored outro on the piped stream.
+        const dir = mkdtempSync(join(tmpdir(), 'burger-cli-notty-'));
+        try {
+            const { stdout, stderr } = await runCli(['skills', 'list'], dir);
+            expect(stdout + stderr).not.toContain('\x1b');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('create --help lists the non-interactive feature flags', async () => {
+        const { exitCode, stdout } = await runCli(['create', '--help']);
+
+        expect(exitCode).toBe(0);
+        for (const flag of [
+            '--pages',
+            '--ws',
+            '--no-skills',
+            '--api-dir',
+            '--api-prefix',
+            '--yes',
+        ]) {
+            expect(stdout).toContain(flag);
+        }
+    });
 
     test('burger-api skills exits 0 under time bound', async () => {
         const { exitCode, elapsedMs } = await runCli(['skills', '--help']);

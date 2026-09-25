@@ -40,7 +40,10 @@ beforeEach(async () => {
 
     await writeFile(
         join(projectDir, 'package.json'),
-        JSON.stringify({ name: 'hint-fixture' })
+        JSON.stringify({
+            name: 'hint-fixture',
+            dependencies: { 'burger-api': '^1.0.0-beta' },
+        })
     );
 
     // Pre-warm the cache with a known catalog entry — real components this

@@ -27,18 +27,6 @@ export interface AppConventionPaths {
     openapiConfigPath?: string;
 }
 
-/** Default methods to emit when entry has no methods; excludes OPTIONS so we add 204 only when hasPreflight. */
-const DEFAULT_EMIT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'];
-
-const PREFLIGHT_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
-
-function methodsToEmit(entry: ApiRouteScanEntry): string[] {
-    if (entry.methods && entry.methods.length > 0) {
-        return entry.methods;
-    }
-    return [...DEFAULT_EMIT_METHODS];
-}
-
 function pushImportLines(
     lines: string[],
     entries: { importPath: string }[],
@@ -143,7 +131,6 @@ export function generateVirtualEntrySource(
 
     // Import per-route convention files (schema, openapi, config) for
     // build-time merging. These are separate from route.ts.
-    const hasOpenapiEntry = apiEntries.some((e) => e.openapiPath);
     apiEntries.forEach((e, i) => {
         if (e.schemaPath) {
             lines.push(`import * as _s${i} from '${e.schemaPath}';`);
@@ -155,9 +142,41 @@ export function generateVirtualEntrySource(
             lines.push(`import * as _c${i} from '${e.configPath}';`);
         }
     });
-    if (hasOpenapiEntry) {
+    // Handlers and convention exports are read from the module namespaces
+    // at startup — never guessed from source text at build time — so every
+    // export style (`export const GET: Handler = ...`, `export { GET }`,
+    // `defineRoute(...)`, typed or destructured hooks) behaves as in dev
+    // (framework ModuleLoader: `mod.default ?? mod`, function-valued method
+    // exports). Optional exports are read through a helper parameter, so
+    // bundlers (wrangler, esbuild) don't warn about imports that are
+    // legitimately undefined.
+    if (apiEntries.length || wsEntries.length) {
         lines.push('');
+        lines.push('function __mod(mod) {');
+        lines.push(' return mod.default ?? mod;');
+        lines.push('}');
+        lines.push('function __get(mod, key) {');
+        lines.push(' return mod[key];');
+        lines.push('}');
+        lines.push('function __pick(mod, keys) {');
+        lines.push(' const out = {};');
+        lines.push(' for (const k of keys) {');
+        lines.push("  if (typeof mod[k] === 'function') out[k] = mod[k];");
+        lines.push(' }');
+        lines.push(' return out;');
+        lines.push('}');
+    }
+    if (apiEntries.length) {
+        // The framework adds its own OPTIONS handler (204 + Allow) to every
+        // route at compile time and skips beforeRoute for it — emitting one
+        // here would override that and bypass the router's preflight logic.
+        lines.push('function __handlers(mod) {');
+        lines.push(
+            " return __pick(mod, ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']);"
+        );
+        lines.push('}');
         lines.push('function __normOpenapi(mod) {');
+        lines.push(' if (!mod) return mod;');
         lines.push(' const out = {};');
         lines.push(' for (const k of Object.keys(mod)) {');
         lines.push(
@@ -165,6 +184,20 @@ export function generateVirtualEntrySource(
         );
         lines.push(' }');
         lines.push(' return out;');
+        lines.push('}');
+    }
+    // HTML pages are imported as raw strings (see bun.ts's `.html` text
+    // loader, matching dev's `?raw` import), but Bun.serve's routes map only
+    // accepts functions/HTMLBundles/Responses. Wrap non-function defaults
+    // into a text/html Response factory — exactly what the dev PageRouter
+    // does for string page modules.
+    if (pageEntries.length) {
+        lines.push('function __page(mod) {');
+        lines.push(' const h = mod.default;');
+        lines.push(" if (typeof h === 'function') return h;");
+        lines.push(
+            " return () => new Response(h, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });"
+        );
         lines.push('}');
     }
 
@@ -196,27 +229,21 @@ export function generateVirtualEntrySource(
     lines.push('const apiRoutes = [');
 
     apiEntries.forEach((e, i) => {
-        const methods = methodsToEmit(e);
-        const hasPreflight = PREFLIGHT_METHODS.some((m) => methods.includes(m));
-
         lines.push(' {');
         lines.push(` path: ${JSON.stringify(e.routePath)},`);
-        lines.push(' handlers: {');
-        for (const m of methods) {
-            lines.push(` ${m}: _r${i}.${m},`);
-        }
-        if (!methods.includes('OPTIONS') && hasPreflight) {
-            lines.push(` OPTIONS: () => new Response(null, { status: 204 }),`);
-        }
-        lines.push(' },');
-        lines.push(` schema: ${e.schemaPath ? `_s${i}` : `_r${i}.schema`},`);
+        lines.push(` handlers: __handlers(_r${i}),`);
         lines.push(
-            ` openapi: ${e.openapiPath ? `__normOpenapi(_o${i})` : `_r${i}.openapi`},`
+            ` schema: ${e.schemaPath ? `__mod(_s${i})` : `__get(_r${i}, 'schema')`},`
         );
         lines.push(
-            ` config: ${e.configPath ? `_c${i}.default ?? _c${i}` : `_r${i}.config`},`
+            ` openapi: ${e.openapiPath ? `__normOpenapi(__mod(_o${i}))` : `__get(_r${i}, 'openapi')`},`
         );
-        lines.push(` hooks: ${e.hooksPath ? `_h${i}` : `_r${i}.hooks`},`);
+        lines.push(
+            ` config: ${e.configPath ? `__mod(_c${i})` : `__get(_r${i}, 'config')`},`
+        );
+        lines.push(
+            ` hooks: ${e.hooksPath ? `__mod(_h${i})` : `__get(_r${i}, 'hooks')`},`
+        );
         lines.push(` isWildcard: ${e.isWildcard},`);
         lines.push(' },');
     });
@@ -227,11 +254,11 @@ export function generateVirtualEntrySource(
     lines.push('const pageRoutes = [');
     pageEntries.forEach((p, i) => {
         lines.push(
-            ` { path: ${JSON.stringify(p.routePath)}, handler: _p${i}.default },`
+            ` { path: ${JSON.stringify(p.routePath)}, handler: __page(_p${i}) },`
         );
         if (p.routePath !== '/' && !p.routePath.endsWith('/')) {
             lines.push(
-                ` { path: ${JSON.stringify(p.routePath + '/')}, handler: _p${i}.default },`
+                ` { path: ${JSON.stringify(p.routePath + '/')}, handler: __page(_p${i}) },`
             );
         }
     });
@@ -243,23 +270,16 @@ export function generateVirtualEntrySource(
         wsEntries.forEach((w, i) => {
             lines.push(' {');
             lines.push(` path: ${JSON.stringify(w.routePath)},`);
-            lines.push(' handlers: {');
-            lines.push(`  open: _w${i}.open,`);
-            lines.push(`  message: _w${i}.message,`);
-            lines.push(`  close: _w${i}.close,`);
-            lines.push(`  drain: _w${i}.drain,`);
-            lines.push(`  ping: _w${i}.ping,`);
-            lines.push(`  pong: _w${i}.pong,`);
-            lines.push(' },');
+            lines.push(
+                ` handlers: __pick(_w${i}, ['open', 'message', 'close', 'drain', 'ping', 'pong']),`
+            );
             if (w.hooksPath) {
-                lines.push(' hooks: {');
-                lines.push(`  onOpen: _wh${i}.onOpen,`);
-                lines.push(`  onMessage: _wh${i}.onMessage,`);
-                lines.push(`  onClose: _wh${i}.onClose,`);
-                lines.push(' },');
+                lines.push(
+                    ` hooks: __pick(_wh${i}, ['onOpen', 'onMessage', 'onClose']),`
+                );
             }
             if (w.configPath) {
-                lines.push(` config: _wc${i}.default ?? _wc${i},`);
+                lines.push(` config: __mod(_wc${i}),`);
             }
             lines.push(' },');
         });
@@ -278,10 +298,12 @@ export function generateVirtualEntrySource(
         // wins — object-literal keys resolve last-write-wins.
         lines.push(' adapter: new __BunAdapter(),');
     }
+    // Always explicit: an unbundled production entry (deno, vercel,
+    // wrangler dev) must never fall back to dev-mode error output. An
+    // explicit `debug` in the entry file's options still wins (spread last).
+    lines.push(` debug: ${config.debug === true},`);
     if (optionsImportPath) {
         lines.push(' ...__burgerOptions,');
-    } else {
-        lines.push(` debug: ${config.debug === true},`);
     }
     if (appConventions?.hooksPath) {
         lines.push(' globalHooks: __globalHooks,');

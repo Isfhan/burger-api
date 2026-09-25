@@ -96,6 +96,9 @@ describe('E2E build:exec', () => {
             const pkgPath = join(dir, 'package.json');
             const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
             pkg.dependencies['burger-api'] = `file:${LOCAL_BURGER_API_PATH}`;
+            // The CLI under test runs from source; the (unpublished) @burger-api/cli
+            // devDependency would make `bun install` fail offline.
+            delete pkg.devDependencies?.['@burger-api/cli'];
             await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
 
             const install = await run(['bun', 'install'], dir);

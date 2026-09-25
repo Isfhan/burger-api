@@ -17,6 +17,7 @@ import {
     scanWebSocketRoutes,
 } from '../utils/scanner';
 import { detectExportedHookNames } from '../utils/route-methods';
+import { PROJECT_HINT, projectError } from '../utils/build/project';
 import {
     success,
     info,
@@ -24,43 +25,41 @@ import {
     bullet,
     header,
     highlight,
+    dimText,
+    error as logError,
 } from '../utils/logger';
 
-const DIM = '\x1b[2m';
-const GRAY = '\x1b[90m';
-const RESET = '\x1b[0m';
-function dimText(text: string): string {
-    return `${GRAY}${DIM}${text}${RESET}`;
+const CONVENTION_EXTS = ['.ts', '.js', '.mjs'] as const;
+
+/** First existing `<dir>/<stem>.ts|js|mjs`, or undefined. */
+function findConvention(dir: string, stem: string): string | undefined {
+    for (const ext of CONVENTION_EXTS) {
+        const file = join(dir, `${stem}${ext}`);
+        if (existsSync(file)) return file;
+    }
+    return undefined;
 }
 
 /**
- * Count how many route entries have a sibling convention file.
+ * Detect exported hook names from src/hooks.(ts|js|mjs) (global).
+ * `file` is the path relative to cwd, or undefined when there is none.
  */
-function countConventionFiles(
-    entries: { importPath: string }[],
-    convention: string
-): number {
-    return entries.filter((e) => {
-        const dir = e.importPath.replace(/\/route\.[^.]+$/, '');
-        return existsSync(join(dir, convention));
-    }).length;
-}
-
-/**
- * Detect exported hook names from src/hooks.ts (global).
- */
-async function detectGlobalHooks(cwd: string): Promise<string[]> {
-    const hooksFile = join(cwd, 'src', 'hooks.ts');
-    if (!existsSync(hooksFile)) return [];
+async function detectGlobalHooks(
+    cwd: string
+): Promise<{ file?: string; names: string[] }> {
+    const hooksFile = findConvention(join(cwd, 'src'), 'hooks');
+    if (!hooksFile) return { names: [] };
     const names = await detectExportedHookNames(hooksFile);
-    return names ?? [];
+    return {
+        file: `src/${hooksFile.slice(join(cwd, 'src').length + 1)}`,
+        names: names ?? [],
+    };
 }
 
-/**
- * Check if src/plugins.ts exists and has content.
- */
-function hasPluginsFile(cwd: string): boolean {
-    return existsSync(join(cwd, 'src', 'plugins.ts'));
+/** src/plugins.(ts|js|mjs) relative to cwd, or undefined. */
+function findPluginsFile(cwd: string): string | undefined {
+    const file = findConvention(join(cwd, 'src'), 'plugins');
+    return file ? `src/${file.slice(join(cwd, 'src').length + 1)}` : undefined;
 }
 
 /**
@@ -99,10 +98,12 @@ export interface InspectResult {
         hasConfig: boolean;
     }[];
     hooks: {
+        /** Global hooks file relative to the project, when present. */
+        globalFile?: string;
         global: string[];
         routes: { routePath: string; importPath: string }[];
     };
-    plugins: { pluginsFileFound: boolean };
+    plugins: { pluginsFileFound: boolean; pluginsFile?: string };
     conventionFiles: {
         totalApiRoutes: number;
         schema: number;
@@ -130,6 +131,7 @@ async function buildInspectResult(cwd: string): Promise<InspectResult> {
         ? await scanWebSocketRoutes(cwd, config.wsDir)
         : [];
     const globalHooks = await detectGlobalHooks(cwd);
+    const pluginsFile = findPluginsFile(cwd);
     const routesWithHooks = apiEntries.filter((e) => e.hooksPath);
 
     return {
@@ -169,19 +171,22 @@ async function buildInspectResult(cwd: string): Promise<InspectResult> {
             hasConfig: !!e.configPath,
         })),
         hooks: {
-            global: globalHooks,
+            globalFile: globalHooks.file,
+            global: globalHooks.names,
             routes: routesWithHooks.map((e) => ({
                 routePath: e.routePath,
                 importPath: e.hooksPath!,
             })),
         },
-        plugins: { pluginsFileFound: hasPluginsFile(cwd) },
+        plugins: { pluginsFileFound: !!pluginsFile, pluginsFile },
+        // The scanner already resolves schema/openapi/config/hooks with
+        // any of .ts/.js/.mjs.
         conventionFiles: {
             totalApiRoutes: apiEntries.length,
-            schema: countConventionFiles(apiEntries, 'schema.ts'),
-            openapi: countConventionFiles(apiEntries, 'openapi.ts'),
-            config: countConventionFiles(apiEntries, 'config.ts'),
-            hooks: countConventionFiles(apiEntries, 'hooks.ts'),
+            schema: apiEntries.filter((e) => e.schemaPath).length,
+            openapi: apiEntries.filter((e) => e.openapiPath).length,
+            config: apiEntries.filter((e) => e.configPath).length,
+            hooks: apiEntries.filter((e) => e.hooksPath).length,
         },
     };
 }
@@ -193,15 +198,13 @@ export const inspectCommand = new Command('inspect')
         'Output a structured JSON result instead of formatted text (for tooling/agents)'
     )
     .action(async (options: { json?: boolean }) => {
-        if (!existsSync('package.json')) {
+        const problem = projectError();
+        if (problem) {
             if (options.json) {
-                console.log(
-                    JSON.stringify({
-                        error: 'Not in a BurgerAPI project directory.',
-                    })
-                );
+                console.log(JSON.stringify({ error: problem }));
             } else {
-                info('Not in a BurgerAPI project directory.');
+                logError(problem);
+                info(PROJECT_HINT);
             }
             process.exit(1);
         }
@@ -236,10 +239,14 @@ export const inspectCommand = new Command('inspect')
         if (apiEntries.length === 0) {
             info(' No API routes found.');
         } else {
+            const width = Math.max(
+                4,
+                ...apiEntries.map((e) => e.methods.join(', ').length)
+            );
             for (const entry of apiEntries) {
                 const methodStr = entry.methods.join(', ');
                 bullet(
-                    `${highlight(methodStr.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
+                    `${highlight(methodStr.padEnd(width))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
                 );
             }
         }
@@ -252,7 +259,7 @@ export const inspectCommand = new Command('inspect')
         } else {
             for (const entry of pageEntries) {
                 bullet(
-                    `${highlight('GET'.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
+                    `${highlight('GET'.padEnd(4))} ${entry.routePath} ${dimText(relTo(entry.importPath))}`
                 );
             }
         }
@@ -270,7 +277,7 @@ export const inspectCommand = new Command('inspect')
                 const featureStr =
                     features.length > 0 ? ` [${features.join(', ')}]` : '';
                 bullet(
-                    `${highlight('WS'.padEnd(30))} ${entry.routePath} ${dimText(relTo(entry.importPath) + featureStr)}`
+                    `${highlight('WS'.padEnd(4))} ${entry.routePath} ${dimText(relTo(entry.importPath) + featureStr)}`
                 );
             }
         }
@@ -278,10 +285,13 @@ export const inspectCommand = new Command('inspect')
         // Global hooks
         newline();
         header('Hooks');
-        if (result.hooks.global.length > 0) {
-            bullet(`Global: src/hooks.ts ( ${result.hooks.global.join(', ')} )`);
+        const globalFile = result.hooks.globalFile;
+        if (globalFile && result.hooks.global.length > 0) {
+            bullet(`Global: ${globalFile} (${result.hooks.global.join(', ')})`);
+        } else if (globalFile) {
+            bullet(`Global: ${globalFile} found, no hooks registered`);
         } else {
-            info(' Global: src/hooks.ts not found or no hooks exported.');
+            bullet('Global: no src/hooks file');
         }
 
         // Route hooks
@@ -292,10 +302,10 @@ export const inspectCommand = new Command('inspect')
         // Plugins
         newline();
         header('Plugins');
-        if (result.plugins.pluginsFileFound) {
-            bullet('src/plugins.ts found');
+        if (result.plugins.pluginsFile) {
+            bullet(`${result.plugins.pluginsFile} found`);
         } else {
-            info(' No src/plugins.ts found.');
+            bullet('No src/plugins file');
         }
 
         // Convention file stats
@@ -304,10 +314,10 @@ export const inspectCommand = new Command('inspect')
         const { totalApiRoutes, schema, openapi, config: withConfig, hooks: withHooks } =
             result.conventionFiles;
         if (totalApiRoutes > 0) {
-            bullet(`schema.ts: ${schema}/${totalApiRoutes} routes`);
-            bullet(`openapi.ts: ${openapi}/${totalApiRoutes} routes`);
-            bullet(`config.ts: ${withConfig}/${totalApiRoutes} routes`);
-            bullet(`hooks.ts: ${withHooks}/${totalApiRoutes} routes`);
+            bullet(`schema: ${schema}/${totalApiRoutes} routes`);
+            bullet(`openapi: ${openapi}/${totalApiRoutes} routes`);
+            bullet(`config: ${withConfig}/${totalApiRoutes} routes`);
+            bullet(`hooks: ${withHooks}/${totalApiRoutes} routes`);
         }
 
         newline();

@@ -9,10 +9,7 @@
 import { readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import * as path from 'path';
-import {
-    detectExportedMethods,
-    detectExportedHookNames,
-} from './route-methods';
+import { detectExportedMethods } from './route-methods';
 import { ROUTE_CONSTANTS, splitConventionName } from './route-conventions';
 import {
     filePathToApiRoutePath,
@@ -227,15 +224,14 @@ async function scanApiDir(
             scanEntry.methods = methods;
         }
         // Capture a sibling hooks file so the build entry can wire
-        // lifecycle hooks. Only when it actually exports hooks.
+        // lifecycle hooks. Always imported when present — the framework
+        // reads whatever it exports at startup. Guessing from source text
+        // (typed `export const beforeRoute: X = ...`, destructured
+        // `export const { beforeRoute } = ...`, `export { ... }`) once
+        // silently dropped auth hooks from production builds.
         const hooksFile = findConventionFile(dir, 'hooks');
         if (hooksFile) {
-            const hookNames = await detectExportedHookNames(hooksFile);
-            if (hookNames) {
-                scanEntry.hooksPath = hooksFile
-                    .split(path.sep)
-                    .join('/');
-            }
+            scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
         }
         // Capture sibling convention files for build entry merging
         const schemaFile = findConventionFile(dir, 'schema');
@@ -317,7 +313,9 @@ export async function scanAssetRoutes(
         return [];
     }
 
-    const cleanPrefix = pagePrefix ? `/${pagePrefix.replace(/^\/+|\/+$/g, '')}` : '';
+    // Default pagePrefix '/' must yield '/assets/...', not '//assets/...'.
+    const trimmedPrefix = (pagePrefix ?? '').replace(/^\/+|\/+$/g, '');
+    const cleanPrefix = trimmedPrefix ? `/${trimmedPrefix}` : '';
     const out: AssetRouteScanEntry[] = [];
     for (const entry of entries) {
         if (!entry.isFile()) continue;

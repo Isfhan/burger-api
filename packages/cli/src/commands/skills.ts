@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
 import {
@@ -41,7 +41,7 @@ function requireProject(): void {
 async function ensureSkillsDir(): Promise<void> {
     const dir = skillsDir();
     if (!existsSync(dir)) {
-        await Bun.write(join(dir, '.gitkeep'), '');
+        mkdirSync(dir, { recursive: true });
     }
 }
 
@@ -55,9 +55,13 @@ async function doInstall(skillName: string): Promise<void> {
     let exists: boolean;
     try {
         exists = await skillExists(skillName);
-    } catch {
-        spin.stop('Could not connect to GitHub', true);
-        logError('Please check your internet connection and try again.');
+    } catch (err) {
+        spin.stop('Could not check the skill on GitHub', true);
+        logError(
+            err instanceof Error
+                ? err.message
+                : 'Please check your internet connection and try again.'
+        );
         process.exit(1);
     }
 
@@ -71,6 +75,13 @@ async function doInstall(skillName: string): Promise<void> {
     const targetDir = join(skillsDir(), skillName);
     if (existsSync(targetDir)) {
         spin.stop();
+        if (!process.stdin.isTTY) {
+            // No terminal to answer the prompt (CI, pipes) — never hang.
+            logError(
+                `${skillName} is already installed at .agents/skills/${skillName}/ — run in a terminal to confirm overwriting, or remove that folder first.`
+            );
+            process.exit(1);
+        }
         const shouldOverwrite = await clack.confirm({
             message: `${skillName} already exists. Overwrite?`,
             initialValue: false,

@@ -10,10 +10,13 @@
  */
 
 import { Command } from 'commander';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import {
-    success,
+    DEFAULT_ENTRY_FILES,
+    validatePort,
+} from '../utils/build/project';
+import {
     error as logError,
     info,
     newline,
@@ -23,25 +26,40 @@ import {
 } from '../utils/logger';
 
 interface StartCommandOptions {
-    port: string;
-    file: string;
+    port?: string;
+    file?: string;
 }
+
+const BUNDLE = '.build/bundle/app.js';
 
 /**
  * Resolve the production entry file.
- * Priority: --file flag → .build/bundle/app.js → src/index.ts
+ * Priority: --file flag → .build/bundle/app.js → src/index.ts|js|mjs
  */
-function resolveEntryFile(fileFlag: string): string {
-    if (fileFlag !== 'src/index.ts') {
-        return fileFlag;
-    }
+export function resolveStartEntry(fileFlag: string | undefined): string {
+    if (fileFlag) return fileFlag;
+    if (existsSync(BUNDLE)) return BUNDLE;
+    return DEFAULT_ENTRY_FILES.find((f) => existsSync(f)) ?? 'src/index.ts';
+}
 
-    const buildOutput = join('.build', 'bundle', 'app.js');
-    if (existsSync(buildOutput)) {
-        return buildOutput;
+/** Newest modification time (ms) of any file under `dir`, or 0. */
+export function newestMtime(dir: string): number {
+    let newest = 0;
+    let entries;
+    try {
+        entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return 0;
     }
-
-    return 'src/index.ts';
+    for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+            newest = Math.max(newest, newestMtime(full));
+        } else if (entry.isFile()) {
+            newest = Math.max(newest, statSync(full).mtimeMs);
+        }
+    }
+    return newest;
 }
 
 /**
@@ -49,11 +67,26 @@ function resolveEntryFile(fileFlag: string): string {
  */
 export const startCommand = new Command('start')
     .description('Start production server (no hot reload)')
-    .option('-p, --port <port>', 'Port to run the server on', '4000')
-    .option('-f, --file <file>', 'Production entry file')
+    .option(
+        '-p, --port <port>',
+        'Port to run the server on (default: $PORT or 4000)'
+    )
+    .option(
+        '-f, --file <file>',
+        'Entry file (default: .build/bundle/app.js if built, else src/index.ts|js|mjs)'
+    )
     .action(async (options: StartCommandOptions) => {
-        const file = resolveEntryFile(options.file ?? 'src/index.ts');
-        const port = options.port;
+        const file = resolveStartEntry(options.file);
+        const portCheck = validatePort(options.port ?? process.env.PORT ?? '4000');
+        if ('error' in portCheck) {
+            logError(
+                options.port === undefined
+                    ? `${portCheck.error} (from $PORT)`
+                    : portCheck.error
+            );
+            process.exit(2);
+        }
+        const port = portCheck.port;
 
         if (!existsSync(file)) {
             logError(`Entry file not found: ${file}`);
@@ -66,9 +99,19 @@ export const startCommand = new Command('start')
         }
 
         newline();
-        info('Starting production server...');
-        newline();
-        success(`Server running on ${highlight(`http://localhost:${port}`)}`);
+        info(
+            `Starting production server on ${highlight(`http://localhost:${port}`)}`
+        );
+        if (file === BUNDLE) {
+            info(`Entry: ${file} (production build)`);
+            if (newestMtime('src') > statSync(BUNDLE).mtimeMs) {
+                warning(
+                    'The build is older than your source files in src/ — run "bun run build" (or "burger-api build") to include recent changes.'
+                );
+            }
+        } else {
+            info(`Entry: ${file} (no build found — running from source)`);
+        }
         info('Press Ctrl+C to stop');
         dim('No hot reload — production mode');
         newline();

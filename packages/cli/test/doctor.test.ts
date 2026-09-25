@@ -160,8 +160,8 @@ describe('runChecks (JavaScript projects)', () => {
         const byName = (name: string) =>
             results.find((r) => r.name === name);
 
-        expect(byName('src/index.ts')?.pass).toBe(true);
-        expect(byName('tsconfig.json')?.pass).toBe(true);
+        expect(byName('src/index.js')?.pass).toBe(true);
+        expect(byName('jsconfig.json')?.pass).toBe(true);
         expect(results.every((r) => r.pass)).toBe(true);
     });
 
@@ -179,8 +179,110 @@ describe('runChecks (JavaScript projects)', () => {
         const byName = (name: string) =>
             results.find((r) => r.name === name);
 
-        expect(byName('src/hooks.ts')?.message).toContain('Found');
-        expect(byName('src/plugins.ts')?.message).toContain('Found');
-        expect(byName('src/openapi.config.ts')?.message).toContain('Found');
+        expect(byName('src/hooks.js')?.message).toContain('Found');
+        expect(byName('src/plugins.js')?.message).toContain('Found');
+        expect(byName('src/openapi.config.js')?.message).toContain('Found');
+    });
+});
+
+describe('runChecks (real validation, not just file presence)', () => {
+    // Bun caches modules by path within a process, so every case gets its
+    // own directory (doctor imports burger.build.ts and route files).
+    let caseDir = '';
+    let caseNo = 0;
+    beforeEach(async () => {
+        caseDir = join(tmpDir, `case-${++caseNo}`);
+        await mkdir(caseDir, { recursive: true });
+    });
+    const put = (path: string, content: string) =>
+        Bun.write(join(caseDir, path), content);
+
+    const pkg = JSON.stringify({
+        name: 'test',
+        dependencies: { 'burger-api': '^1.0.0' },
+    });
+
+    it('uses the configured apiDir instead of hard-coding src/api', async () => {
+        await put('package.json', pkg);
+        await put(
+            'burger.build.ts',
+            "export default { apiDir: './src/routes' };"
+        );
+        await put('src/index.ts', 'export {};');
+        await put(
+            'src/routes/route.ts',
+            'export async function GET() { return new Response("ok"); }'
+        );
+        await put('tsconfig.json', '{}');
+
+        const results = await runChecks(caseDir);
+        const routes = results.find((r) => r.name === 'Route files');
+        expect(routes?.pass).toBe(true);
+        expect(routes?.message).toContain('src/routes/');
+        expect(results.filter((r) => !r.pass)).toEqual([]);
+    });
+
+    it('a missing default apiDir is info (pages-only app), not a failure', async () => {
+        await put('package.json', pkg);
+        await put('src/index.ts', 'export {};');
+        await put('tsconfig.json', '{}');
+
+        const results = await runChecks(caseDir);
+        const api = results.find((r) => r.name.startsWith('apiDir'));
+        expect(api?.pass).toBe(true);
+        expect(api?.severity).toBe('info');
+    });
+
+    it('fails when a route file has a syntax error', async () => {
+        await put('package.json', pkg);
+        await put('src/index.ts', 'export {};');
+        await put('src/api/route.ts', 'export async function GET( {');
+
+        const results = await runChecks(caseDir);
+        const routes = results.find((r) => r.name === 'Route files');
+        expect(routes?.pass).toBe(false);
+        expect(routes?.message).toContain('src/api/route.ts');
+    });
+
+    it('fails when burger.build.ts cannot be loaded', async () => {
+        await put('package.json', pkg);
+        await put('burger.build.ts', 'export default { apiDir: ;');
+        await put('src/index.ts', 'export {};');
+
+        const results = await runChecks(caseDir);
+        const build = results.find((r) => r.name === 'burger.build.ts');
+        expect(build?.pass).toBe(false);
+        expect(build?.message).toContain('Could not load');
+    });
+
+    it('warns when src/index.ts and burger.build.ts disagree', async () => {
+        await put('package.json', pkg);
+        await put(
+            'burger.build.ts',
+            "export default { apiDir: './src/api', apiPrefix: '/v2' };"
+        );
+        await put(
+            'src/index.ts',
+            "import { Burger } from 'burger-api';\nconst app = new Burger({ apiDir: './src/api', apiPrefix: '/api' });\n"
+        );
+        await put(
+            'src/api/route.ts',
+            'export async function GET() { return new Response("ok"); }'
+        );
+
+        const results = await runChecks(caseDir);
+        const sync = results.find((r) => r.name.includes('↔'));
+        expect(sync?.severity).toBe('warning');
+        expect(sync?.message).toContain('apiPrefix');
+    });
+
+    it('optional files are reported as info, not success', async () => {
+        await put('package.json', pkg);
+        await put('src/index.ts', 'export {};');
+
+        const results = await runChecks(caseDir);
+        const hooks = results.find((r) => r.name === 'src/hooks');
+        expect(hooks?.severity).toBe('info');
+        expect(hooks?.message).toContain('optional');
     });
 });

@@ -219,6 +219,9 @@ async function scaffoldProject(
     const pkgPath = join(dir, 'package.json');
     const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
     pkg.dependencies['burger-api'] = `file:${LOCAL_BURGER_API_PATH}`;
+    // The CLI under test runs from source; the (unpublished) @burger-api/cli
+    // devDependency would make `bun install` fail offline.
+    delete pkg.devDependencies?.['@burger-api/cli'];
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
 
     const install = await run(['bun', 'install'], dir);
@@ -366,19 +369,20 @@ describe('E2E scaffold — JavaScript (--lang js)', () => {
                 join(dir, 'src', 'api', 'route.js'),
                 'utf8'
             );
-            expect(route).toContain(
-                "@param {import('burger-api').BurgerContext} ctx"
-            );
+            // Schema-backed JS route uses defineRoute, so ctx.validated is
+            // typed from schema.js without a JSDoc annotation.
+            expect(route).toContain('defineRoute(GetSchema, (ctx) =>');
             expect(existsSync(join(dir, 'src', 'openapi.config.js'))).toBe(
                 true
             );
             expect(existsSync(join(dir, 'burger.build.js'))).toBe(true);
 
-            // Scripts point at the .js entry
+            // Scripts point at the .js entry (dev/start auto-detect it)
             const pkg = JSON.parse(
                 await readFile(join(dir, 'package.json'), 'utf8')
             );
-            expect(pkg.scripts.dev).toBe('burger-api dev -f src/index.js');
+            expect(pkg.scripts.dev).toBe('burger-api dev');
+            expect(pkg.scripts.start).toBe('burger-api start');
             expect(pkg.scripts.build).toBe('burger-api build src/index.js');
 
             // dev server boots and serves the .js route

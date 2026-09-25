@@ -8,7 +8,7 @@
  */
 
 import { Command } from 'commander';
-import { getCachedComponentList, getComponentInfo } from '../utils/github';
+import { getCachedComponentCatalog } from '../utils/github';
 import {
     header,
     withSpinner,
@@ -33,21 +33,16 @@ export const listCommand = new Command('list')
             await withSpinner(
                 'Fetching hooks and plugins list from GitHub...',
                 async (spin) => {
+                    // Names, kinds and descriptions are cached together: a
+                    // warm cache makes no GitHub calls at all.
                     const { data: components, stale } =
-                        await getCachedComponentList();
+                        await getCachedComponentCatalog();
 
-                    const componentDetails = await Promise.all(
-                        components.map(({ name, kind }) =>
-                            getComponentInfo(name, kind).catch(() => ({
-                                name,
-                                description: 'No description available',
-                                path: '',
-                                files: [],
-                            }))
-                        )
+                    // No success marker when GitHub was unreachable — the
+                    // warning below explains what is shown instead.
+                    spin.stop(
+                        stale ? undefined : 'Found available hooks and plugins!'
                     );
-
-                    spin.stop('Found available hooks and plugins!');
                     newline();
 
                     if (stale) {
@@ -60,9 +55,10 @@ export const listCommand = new Command('list')
                     header('Available Hooks and Plugins');
 
                     const tableData: string[][] = [
-                        ['Name', 'Description'],
-                        ...componentDetails.map((m) => [
+                        ['Name', 'Kind', 'Description'],
+                        ...components.map((m) => [
                             m.name,
+                            m.kind,
                             m.description.length > 60
                                 ? m.description.substring(0, 57) + '...'
                                 : m.description,

@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from 'fs';
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
 import { downloadSkill } from './github';
+import { reindent, isReindentable } from './reindent';
 
 /** Walks up from `startFile` to the nearest `package.json` and returns its dir. */
 function findPackageRoot(startFile: string): string | undefined {
@@ -57,24 +58,6 @@ function resolveMatchingZodVersion(): string {
 }
 
 /**
- * True when the installed CLI is a prerelease (`-beta.`, `-rc.`, `-alpha.`)
- * build — used to gate temporary beta-only messaging (e.g. the ecosystem
- * `BURGER_API_BRANCH` note in `create`'s success output) so it disappears
- * on its own once a stable version ships, with nothing to remember to undo.
- */
-export function isPrereleaseBuild(): boolean {
-    try {
-        const pkgPath = join(import.meta.dir, '..', '..', 'package.json');
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
-            version?: string;
-        };
-        return /-(?:beta|rc|alpha)\./.test(pkg.version ?? '');
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Resolve a local burger-api source override from the BURGER_API_SOURCE env
  * var (pre-release testing aid):
  * - unset  → null — generatePackageJson keeps the npm range (default)
@@ -100,6 +83,34 @@ export function burgerApiSourceOverride(): {
     };
 }
 
+/** The running CLI's own version (package.json next to src/). */
+function cliVersion(): string | undefined {
+    try {
+        const pkg = JSON.parse(
+            readFileSync(join(import.meta.dir, '..', '..', 'package.json'), 'utf-8')
+        ) as { version?: string };
+        return pkg.version;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * `@burger-api/cli` specifier for scaffolded devDependencies. Follows the
+ * same strategy as `burger-api`: BURGER_API_SOURCE=link → the bun link
+ * store; BURGER_API_SOURCE=<path to packages/burger-api> → the sibling
+ * `packages/cli` checkout when present; otherwise `^<this CLI's version>`.
+ */
+function cliSpecifier(): string {
+    const override = burgerApiSourceOverride();
+    if (override?.specifier === 'link:burger-api') return 'link:@burger-api/cli';
+    if (override?.specifier.startsWith('file:')) {
+        const sibling = resolve(override.specifier.slice(5), '..', 'cli');
+        if (existsSync(join(sibling, 'package.json'))) return `file:${sibling}`;
+    }
+    return `^${cliVersion() ?? '1.0.0-beta'}`;
+}
+
 /**
  * Generate package.json content for a new project
  * This includes the burger-api dependency and basic scripts
@@ -118,15 +129,16 @@ export function generatePackageJson(
     const burgerApiSpecifier =
         burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta';
     const packageJson = {
-        name: projectName,
+        // npm package names must be lowercase.
+        name: projectName.toLowerCase(),
         version: '0.1.0',
         type: 'module',
+        // dev/start/build auto-detect src/index.ts|js|mjs, so TS and JS
+        // scaffolds share the same scripts. `start` runs the production
+        // bundle when one exists (see `burger-api start`).
         scripts: {
-            dev: lang === 'js' ? 'burger-api dev -f src/index.js' : 'burger-api dev',
-            start:
-                lang === 'js'
-                    ? 'burger-api start -f src/index.js'
-                    : 'burger-api start',
+            dev: 'burger-api dev',
+            start: 'burger-api start',
             build: `burger-api build ${entry}`,
             // tsc reads tsconfig.json for TS projects; JS projects use
             // jsconfig.json (plain `tsc` would print help instead of checking).
@@ -139,7 +151,10 @@ export function generatePackageJson(
             'burger-api': burgerApiSpecifier,
             zod: resolveMatchingZodVersion(),
         },
+        // The scripts call `burger-api`, so the CLI must be installed with
+        // the project (CI/Docker have no global CLI).
         devDependencies: {
+            '@burger-api/cli': cliSpecifier(),
             '@types/bun': 'latest',
             typescript: '^5',
         },
@@ -279,6 +294,54 @@ export function generatePrettierConfig(): string {
  * @param options - Project configuration from user prompts
  * @returns index.ts content as a string
  */
+/**
+ * Scan dirs and prefixes written identically into src/index.* (read by
+ * dev/start) and burger.build.* (read by build/inspect/doctor), so the two
+ * files never disagree out of the box. Disabled features are omitted.
+ */
+/** Single-quoted JS string literal (scaffolds follow the shipped .prettierrc). */
+function sq(value: string): string {
+    return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+export function scaffoldScanOptions(
+    options: CreateOptions
+): [key: string, value: string, comment: string][] {
+    const entries: [string, string, string][] = [];
+    if (options.useApi) {
+        entries.push([
+            'apiDir',
+            `./src/${options.apiDir || 'api'}`,
+            'folder with API route files',
+        ]);
+        entries.push([
+            'apiPrefix',
+            options.apiPrefix || '/api',
+            'URL prefix for API routes',
+        ]);
+    }
+    if (options.usePages) {
+        entries.push([
+            'pageDir',
+            `./src/${options.pageDir || 'pages'}`,
+            'folder with HTML pages',
+        ]);
+        entries.push([
+            'pagePrefix',
+            options.pagePrefix || '/',
+            'URL prefix for pages',
+        ]);
+    }
+    if (options.useWs) {
+        entries.push([
+            'wsDir',
+            `./src/${options.wsDir || 'websocket'}`,
+            'folder with WebSocket route files',
+        ]);
+    }
+    return entries;
+}
+
 export function generateIndexFile(options: CreateOptions): string {
     const lines: string[] = [];
 
@@ -286,25 +349,12 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push("import { Burger } from 'burger-api';");
     lines.push('');
 
-    // Configuration object
+    // Configuration object — keep scan options in sync with burger.build.
+    lines.push('// Keep dirs/prefixes in sync with burger.build (used by the build).');
     lines.push('const app = new Burger({');
 
-    if (options.useApi) {
-        lines.push(` apiDir: './src/${options.apiDir || 'api'}',`);
-        if (options.apiPrefix && options.apiPrefix !== '/api') {
-            lines.push(` apiPrefix: ${JSON.stringify(options.apiPrefix)},`);
-        }
-    }
-
-    if (options.usePages) {
-        lines.push(` pageDir: './src/${options.pageDir || 'pages'}',`);
-        if (options.pagePrefix && options.pagePrefix !== '/') {
-            lines.push(` pagePrefix: ${JSON.stringify(options.pagePrefix)},`);
-        }
-    }
-
-    if (options.useWs) {
-        lines.push(` wsDir: './src/${options.wsDir || 'websocket'}',`);
+    for (const [key, value] of scaffoldScanOptions(options)) {
+        lines.push(` ${key}: ${sq(value)},`);
     }
 
     if (options.debug) {
@@ -319,6 +369,7 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('app.serve(port, () => {');
     lines.push(' console.log(`Server running on http://localhost:${port}`);');
     lines.push('});');
+    lines.push('');
 
     return lines.join('\n');
 }
@@ -331,33 +382,32 @@ export function generateIndexFile(options: CreateOptions): string {
  * @returns burger.build.ts content as a string
  */
 export function generateBurgerConfig(options: CreateOptions): string {
-    const apiDir = `./src/${options.apiDir || 'api'}`;
-    const pageDir = `./src/${options.pageDir || 'pages'}`;
-    const apiPrefix = options.apiPrefix || '/api';
-    const pagePrefix = options.pagePrefix || '/';
     const debug = Boolean(options.debug);
 
     const body = [
-        ` apiDir: ${JSON.stringify(apiDir)}, // folder with API route files`,
-        ` pageDir: ${JSON.stringify(pageDir)}, // folder with HTML pages`,
-        options.useWs
-            ? ` wsDir: ${JSON.stringify(`./src/${options.wsDir || 'websocket'}`)}, // folder with WebSocket route files`
-            : undefined,
-        ` apiPrefix: ${JSON.stringify(apiPrefix)}, // URL prefix for API routes`,
-        ` pagePrefix: ${JSON.stringify(pagePrefix)}, // URL prefix for pages`,
+        ...scaffoldScanOptions(options).map(
+            ([key, value, comment]) =>
+                ` ${key}: ${sq(value)}, // ${comment}`
+        ),
         ` debug: ${debug}, // extra logging when true`,
-    ]
-        .filter((line): line is string => line !== undefined)
-        .join('\n');
+    ].join('\n');
 
+    const header = [
+        '/**',
+        ' * BurgerAPI build config — read by the CLI only (build, inspect, doctor,',
+        ' * generate); not loaded at runtime. dev/start use the options in',
+        ' * src/index — keep dirs and prefixes identical in both files',
+        ' * (burger-api doctor warns when they differ).',
+        ' */',
+    ];
+
+    // `Partial<BuildConfig>`: a scaffold only writes the features it enabled
+    // (no pageDir when pages are off), and the CLI fills the rest from
+    // CONVENTION_DEFAULTS — every key is optional here by design.
     if (options.lang === 'js') {
         return [
-            '/**',
-            ' * BurgerAPI build and dev config.',
-            ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
-            ' * Edit these paths and prefixes to match your project.',
-            ' */',
-            "/** @type {import('burger-api').BuildConfig} */",
+            ...header,
+            "/** @type {Partial<import('burger-api').BuildConfig>} */",
             'export default {',
             body,
             '};',
@@ -365,16 +415,12 @@ export function generateBurgerConfig(options: CreateOptions): string {
         ].join('\n');
     }
     return [
-        '/**',
-        ' * BurgerAPI build and dev config.',
-        ' * Used by the CLI for build (burger-api build) and by your app if you load it.',
-        ' * Edit these paths and prefixes to match your project.',
-        ' */',
+        ...header,
         "import type { BuildConfig } from 'burger-api';",
         '',
         'export default {',
         body,
-        '} satisfies BuildConfig;',
+        '} satisfies Partial<BuildConfig>;',
         '',
     ].join('\n');
 }
@@ -720,18 +766,31 @@ export function generateIndexPage(options: CreateOptions): string {
     const pageDir = options.pageDir || 'pages';
     const apiDir = options.apiDir || 'api';
     const apiTryHref = escapeHtml(hrefFromApiPrefix(options.apiPrefix));
+    // Root-absolute asset URLs: relative `./assets/...` breaks as soon as the
+    // page is served at `/prefix` (no trailing slash) under a custom pagePrefix.
+    const trimmedPagePrefix = (options.pagePrefix ?? '/').replace(
+        /^\/+|\/+$/g,
+        ''
+    );
+    const assetBase = escapeHtml(
+        trimmedPagePrefix ? `/${trimmedPagePrefix}/assets` : '/assets'
+    );
+    const ext = options.lang === 'js' ? 'js' : 'ts';
 
     const pageHintPath = escapeHtml(`src/${pageDir}/index.html`);
-    const apiHintPath = escapeHtml(`src/${apiDir}/route.ts`);
+    const apiHintPath = escapeHtml(`src/${apiDir}/route.${ext}`);
 
     const editHintParagraphs = options.useApi
         ? `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>
  <p>Edit <code>${apiHintPath}</code> and save to reload the API endpoint.</p>`
         : `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>`;
 
-    const tryApiLink = options.useApi
-        ? `<a href="${apiTryHref}" class="link">Try API</a>`
-        : '';
+    // API docs exist only when the app has API routes.
+    const actionLinks = options.useApi
+        ? `<a href="/docs" class="link primary">API Docs</a>
+ <a href="${apiTryHref}" class="link">Try API</a>
+ <a href="/openapi.json" class="link">OpenAPI</a>`
+        : `<a href="https://burger-api.com/docs" class="link primary" target="_blank">Documentation</a>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -744,9 +803,9 @@ export function generateIndexPage(options: CreateOptions): string {
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
  <!-- Assets: Styles -->
- <link rel="stylesheet" href="./assets/css/style.css" />
+ <link rel="stylesheet" href="${assetBase}/css/style.css" />
  <!-- Assets: Scripts -->
- <script src="./assets/js/app.js" type="module"></script>
+ <script src="${assetBase}/js/app.js" type="module"></script>
 </head>
 <body>
  <!-- Hero Section -->
@@ -776,7 +835,7 @@ export function generateIndexPage(options: CreateOptions): string {
  </div>
  <div class="command">
  <span class="prefix">$</span>
- <span class="cmd">burger-api build src/index.ts</span>
+ <span class="cmd">bun run build</span>
  <span class="comment"># Build for production</span>
  </div>
  </div>
@@ -784,9 +843,7 @@ export function generateIndexPage(options: CreateOptions): string {
 
  <!-- Action Links -->
  <div class="links">
- <a href="/docs" class="link primary">API Docs</a>
- ${tryApiLink}
- <a href="/openapi.json" class="link">OpenAPI</a>
+ ${actionLinks}
  </div>
 
  <!-- Documentation Links -->
@@ -894,42 +951,6 @@ export default (burger: ProviderRegistrar) => {
 `;
 }
 
-export function generateHooksIndex(lang: 'ts' | 'js' = 'ts'): string {
-    if (lang === 'js') {
-        return `/**
- * Route Hooks
- * 
- * Define lifecycle hooks in hooks.js files. Example (api/hooks.js):
- * 
- * import { cors } from './cors/cors';
- * import { logger } from './logger/logger';
- * 
- * export const beforeRoute = [
- * logger(),
- * cors(),
- * ];
- */
-
-export const beforeRoute = [];
-`;
-    }
-    return `/**
- * Route Hooks
- * 
- * Define lifecycle hooks in hooks.ts files. Example (api/hooks.ts):
- * 
- * import { cors } from './cors/cors';
- * import { logger } from './logger/logger';
- * 
- * export const beforeRoute = [
- * logger(),
- * cors(),
- * ];
- */
-
-export const beforeRoute: unknown[] = [];
-`;
-}
 
 /**
  * Generate openapi.config.ts content
@@ -954,11 +975,12 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     );
     lines.push(` version: '1.0.0',`);
     lines.push('');
-    lines.push(' servers: [');
+    // No `servers` by default: Swagger/Scalar then call the same origin the
+    // docs are served from, whatever port the app runs on.
+    lines.push(' // Uncomment to list explicit servers (default: same origin as the docs):');
     lines.push(
-        ' { url: "http://localhost:4000", description: "Development" },'
+        ' // servers: [{ url: "https://api.example.com", description: "Production" }],'
     );
-    lines.push(' ],');
     lines.push('');
     lines.push(' // Uncomment to protect docs with basic auth:');
     lines.push(' // docsAuth: { username: "admin", password: "changeme" },');
@@ -993,59 +1015,62 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
 export async function createProject(
     targetDir: string,
     options: CreateOptions
-): Promise<void> {
+): Promise<CreateProjectResult> {
     const spin = spinner('Creating project structure...');
     const lang: 'ts' | 'js' = options.lang === 'js' ? 'js' : 'ts';
     const ext = lang === 'js' ? 'js' : 'ts';
+    // Normalize indentation of generated source (see reindent.ts).
+    const write = (path: string, content: string) =>
+        Bun.write(path, isReindentable(path) ? reindent(content) : content);
 
     try {
         // Create base files that every project needs
-        await Bun.write(
+        await write(
             join(targetDir, 'package.json'),
             generatePackageJson(options.name, lang)
         );
         if (lang === 'js') {
-            await Bun.write(
+            await write(
                 join(targetDir, 'jsconfig.json'),
                 generateJsConfig()
             );
         } else {
-            await Bun.write(
+            await write(
                 join(targetDir, 'tsconfig.json'),
                 generateTsConfig()
             );
         }
-        await Bun.write(join(targetDir, '.gitignore'), generateGitIgnore());
-        await Bun.write(
+        await write(join(targetDir, '.gitignore'), generateGitIgnore());
+        await write(
             join(targetDir, '.prettierrc'),
             generatePrettierConfig()
         );
-        await Bun.write(
+        await write(
             join(targetDir, `burger.build.${ext}`),
             generateBurgerConfig(options)
         );
 
         // Create src directory and index file
-        await Bun.write(
+        await write(
             join(targetDir, 'src', `index.${ext}`),
             generateIndexFile(options)
         );
 
         // Create openapi.config.ts in src/
-        await Bun.write(
+        await write(
             join(targetDir, 'src', `openapi.config.${ext}`),
             generateOpenAPIConfig(options)
         );
 
-        await Bun.write(
+        await write(
             join(targetDir, 'src', `hooks.${ext}`),
             generateHooksFile(lang)
         );
-        await Bun.write(
+        await write(
             join(targetDir, 'src', `plugins.${ext}`),
             generatePluginsFile(lang)
         );
-        await Bun.write(
+        await write(
             join(targetDir, 'src', `providers.${ext}`),
             generateProvidersFile(lang)
         );
@@ -1064,14 +1089,14 @@ export async function createProject(
                 lang
             );
             for (const [name, content] of Object.entries(routeFiles)) {
-                await Bun.write(join(apiDir, name), content);
+                await write(join(apiDir, name), content);
             }
         }
 
         // Create Pages directory and files if requested
         if (options.usePages) {
             const pagesDir = join(targetDir, 'src', options.pageDir || 'pages');
-            await Bun.write(
+            await write(
                 join(pagesDir, 'index.html'),
                 generateIndexPage(options)
             );
@@ -1080,11 +1105,11 @@ export async function createProject(
         // Create sample assets inside pages directory (so they're served by page router)
         if (options.usePages) {
             const pagesDir = join(targetDir, 'src', options.pageDir || 'pages');
-            await Bun.write(
+            await write(
                 join(pagesDir, 'assets', 'css', 'style.css'),
                 generateSampleCss()
             );
-            await Bun.write(
+            await write(
                 join(pagesDir, 'assets', 'js', 'app.js'),
                 generateSampleJs()
             );
@@ -1103,39 +1128,44 @@ export async function createProject(
             );
             const wsFiles = generateWsFiles('echo', {}, lang);
             for (const [name, content] of Object.entries(wsFiles)) {
-                await Bun.write(join(wsRouteDir, name), content);
+                await write(join(wsRouteDir, name), content);
             }
         }
 
-        // Create ecosystem/hooks directory for installed hooks
-        const ecosystemHooksDir = join(targetDir, 'ecosystem', 'hooks');
-        await Bun.write(
-            join(ecosystemHooksDir, `index.${ext}`),
-            generateHooksIndex(lang)
-        );
+        // (No ecosystem/ stub: `burger-api add` creates ecosystem/hooks/ and
+        // ecosystem/plugins/ on demand, and nothing imports an index file.)
 
-        // Download AI agent skills if requested
-        if (options.addSkills) {
-            const skillTarget = join(
-                targetDir,
-                '.agents',
-                'skills',
-                'burger-api'
-            );
-            try {
-                await downloadSkill('burger-api', skillTarget);
-            } catch (err) {
-                console.warn(
-                    `Warning: Could not download AI agent skills: ${err instanceof Error ? err.message : 'Unknown error'}`
-                );
-            }
-        }
-
-        spin.stop('Project created successfully!');
+        spin.stop('Project files created');
     } catch (err) {
         spin.stop('Failed to create project', true);
         throw err;
     }
+
+    // Download AI agent skills if requested. A failure never fails the
+    // scaffold, but it is reported so `create` doesn't claim success.
+    const result: CreateProjectResult = {};
+    if (options.addSkills) {
+        const skillSpin = spinner('Downloading AI agent skills...');
+        const skillTarget = join(targetDir, '.agents', 'skills', 'burger-api');
+        try {
+            await downloadSkill('burger-api', skillTarget);
+            skillSpin.stop('AI agent skills installed');
+            result.skillsInstalled = true;
+        } catch (err) {
+            skillSpin.stop('Could not download AI agent skills', true);
+            result.skillsInstalled = false;
+            result.skillsError =
+                err instanceof Error ? err.message : 'Unknown error';
+        }
+    }
+    return result;
+}
+
+/** Outcome of the optional steps in {@link createProject}. */
+export interface CreateProjectResult {
+    /** undefined when skills were not requested. */
+    skillsInstalled?: boolean;
+    skillsError?: string;
 }
 
 /**
@@ -1202,15 +1232,53 @@ export function generateRouteFiles(
     const files: Record<string, string> = {};
     const ext = lang === 'js' ? 'js' : 'ts';
 
-    if (lang === 'js') {
+    // `users/[id]` → params ['id']; tag = first static segment ("users"),
+    // skipping `(group)` folders and the wildcard.
+    const segments = routeName.split('/').filter(Boolean);
+    const params = segments
+        .map((s) => /^\[([A-Za-z_$][\w$]*)\]$/.exec(s)?.[1])
+        .filter((p): p is string => !!p);
+    const tag =
+        segments.find((s) => !/^[[(]/.test(s)) ?? segments[0] ?? routeName;
+    const summary =
+        params.length > 0
+            ? `Get ${tag} by ${params.join(', ')}`
+            : `${tag} endpoint`;
+
+    // With a schema, the starter handler shows the core idea end to end:
+    // `defineRoute` types `ctx.validated` straight from schema.ts.
+    if (options.schema !== false && params.length > 0) {
+        files[`route.${ext}`] = [
+            "import { defineRoute } from 'burger-api';",
+            "import { GET as GetSchema } from './schema';",
+            '',
+            '// ctx.validated.params is typed from schema.ts.',
+            'export const GET = defineRoute(GetSchema, (ctx) => {',
+            `const { ${params.join(', ')} } = ctx.validated.params;`,
+            `return Response.json({ ${params.join(', ')} });`,
+            '});',
+            '',
+        ].join('\n');
+    } else if (options.schema !== false) {
+        files[`route.${ext}`] = [
+            "import { defineRoute } from 'burger-api';",
+            "import { GET as GetSchema } from './schema';",
+            '',
+            '// ctx.validated.query is typed from schema.ts. Try: ?name=Burger',
+            'export const GET = defineRoute(GetSchema, (ctx) => {',
+            'const { name } = ctx.validated.query;',
+            'return Response.json({ message: `Hello, ${name}!` });',
+            '});',
+            '',
+        ].join('\n');
+    } else if (lang === 'js') {
         files['route.js'] = [
             '/**',
-            ' * GET /{your-route}',
-            ' * @param {import(\'burger-api\').BurgerContext} ctx',
-            ' * @returns {Promise<Response>}',
+            " * @param {import('burger-api').BurgerContext} ctx",
+            ' * @returns {Response}',
             ' */',
-            'export async function GET(ctx) {',
-            ' return Response.json({ ok: true });',
+            'export function GET(ctx) {',
+            'return Response.json({ ok: true });',
             '}',
             '',
         ].join('\n');
@@ -1218,31 +1286,45 @@ export function generateRouteFiles(
         files['route.ts'] = [
             "import type { BurgerContext } from 'burger-api';",
             '',
-            'export async function GET(ctx: BurgerContext): Promise<Response> {',
-            ' return Response.json({ ok: true });',
+            'export function GET(ctx: BurgerContext): Response {',
+            'return Response.json({ ok: true });',
             '}',
             '',
         ].join('\n');
     }
 
     if (options.schema !== false) {
+        const schemaBody =
+            params.length > 0
+                ? [
+                      'export const GET = {',
+                      'params: z.object({',
+                      ...params.map((p) => `${p}: z.string(),`),
+                      '}),',
+                  ]
+                : [
+                      'export const GET = {',
+                      'query: z.object({',
+                      "name: z.string().default('world'),",
+                      '}),',
+                  ];
         if (lang === 'js') {
             files['schema.js'] = [
-                "import { z } from 'zod/v4';",
+                "import { z } from 'zod';",
                 '',
-                "/** @type {import('burger-api').MethodSchema} */",
-                'export const GET = {',
-                ' query: z.object({}),',
+                // @satisfies (not @type) keeps the literal type, so
+                // defineRoute can infer ctx.validated from it.
+                "/** @satisfies {import('burger-api').MethodSchema} */",
+                ...schemaBody,
                 '};',
                 '',
             ].join('\n');
         } else {
             files['schema.ts'] = [
-                "import { z } from 'zod/v4';",
+                "import { z } from 'zod';",
                 "import type { MethodSchema } from 'burger-api';",
                 '',
-                'export const GET = {',
-                ' query: z.object({}),',
+                ...schemaBody,
                 '} satisfies MethodSchema;',
                 '',
             ].join('\n');
@@ -1254,8 +1336,8 @@ export function generateRouteFiles(
             files['openapi.js'] = [
                 "/** @type {import('burger-api').OpenAPIMeta} */",
                 `export const GET = {`,
-                ` summary: ${JSON.stringify(`${routeName} endpoint`)},`,
-                ` tags: [${JSON.stringify(routeName)}],`,
+                ` summary: ${JSON.stringify(summary)},`,
+                ` tags: [${JSON.stringify(tag)}],`,
                 `};`,
                 '',
             ].join('\n');
@@ -1264,8 +1346,8 @@ export function generateRouteFiles(
                 "import type { OpenAPIMeta } from 'burger-api';",
                 '',
                 `export const GET = {`,
-                ` summary: ${JSON.stringify(`${routeName} endpoint`)},`,
-                ` tags: [${JSON.stringify(routeName)}],`,
+                ` summary: ${JSON.stringify(summary)},`,
+                ` tags: [${JSON.stringify(tag)}],`,
                 `} satisfies OpenAPIMeta;`,
                 '',
             ].join('\n');
@@ -1321,12 +1403,26 @@ export function generateRouteFiles(
 }
 
 /**
+ * JS identifier for a hook/plugin name: `rate-limit` → `rateLimit`
+ * (`RateLimit` with `pascal`). Anything else non-identifier becomes `_`, and
+ * a leading digit gets a `_` prefix, so any accepted name yields valid code.
+ */
+export function toIdentifier(name: string, pascal = false): string {
+    let id = name
+        .replace(/[-_\s]+([A-Za-z0-9])/g, (_, c: string) => c.toUpperCase())
+        .replace(/[^A-Za-z0-9_$]/g, '_');
+    if (/^[0-9]/.test(id)) id = `_${id}`;
+    return pascal ? id.charAt(0).toUpperCase() + id.slice(1) : id;
+}
+
+/**
  * Generate a hook factory template for `burger-api generate hook <name>`.
  */
 export function generateHookTemplate(
-    hookName: string,
+    rawHookName: string,
     lang: 'ts' | 'js' = 'ts'
 ): string {
+    const hookName = toIdentifier(rawHookName);
     if (lang === 'js') {
         return [
             `/**`,
@@ -1334,6 +1430,7 @@ export function generateHookTemplate(
             ` * Import and register in src/hooks.js.`,
             ` */`,
             `export function ${hookName}() {`,
+            ` /** @param {import('burger-api').BurgerContext} ctx */`,
             ` return async (ctx) => {`,
             ` // hook logic`,
             ` };`,
@@ -1364,9 +1461,7 @@ export function generatePluginTemplate(
 ): string {
     // The name doubles as a JS identifier — sanitize so arbitrary plugin
     // names (spaces, quotes, dashes) still produce parseable code.
-    const className = (
-        pluginName.charAt(0).toUpperCase() + pluginName.slice(1)
-    ).replace(/[^a-zA-Z0-9_$]/g, '_');
+    const className = toIdentifier(pluginName, true);
     if (lang === 'js') {
         return [
             `/**`,
@@ -1423,19 +1518,26 @@ export function generateWsFiles(
 
     if (lang === 'js') {
         files['ws.js'] = [
-            '/**',
-            ' * @param {import(\'burger-api\').BurgerWS} ws',
-            ' */',
+            '/** @param {import(\'burger-api\').BurgerWS} ws */',
             'export function open(ws) {',
             ' // Handle new connection',
             ' ws.send(JSON.stringify({ type: "connected" }));',
             '}',
             '',
+            '/**',
+            ' * @param {import(\'burger-api\').BurgerWS} ws',
+            ' * @param {string | Buffer} message',
+            ' */',
             'export function message(ws, message) {',
-            ' // Handle incoming message',
-            ' // ws.send(message); // echo back',
+            ' // Echo every message back to the sender',
+            ' ws.send(message);',
             '}',
             '',
+            '/**',
+            ' * @param {import(\'burger-api\').BurgerWS} ws',
+            ' * @param {number} code',
+            ' * @param {string} reason',
+            ' */',
             'export function close(ws, code, reason) {',
             ' // Handle connection close',
             '}',
@@ -1451,8 +1553,8 @@ export function generateWsFiles(
             '}',
             '',
             'export function message(ws: BurgerWS, message: string | Buffer) {',
-            ' // Handle incoming message',
-            ' // ws.send(message); // echo back',
+            ' // Echo every message back to the sender',
+            ' ws.send(message);',
             '}',
             '',
             'export function close(ws: BurgerWS, code: number, reason: string) {',
@@ -1465,17 +1567,24 @@ export function generateWsFiles(
     if (options.hooks !== false) {
         if (lang === 'js') {
             files['hooks.js'] = [
-                '/**',
-                ' * @param {import(\'burger-api\').BurgerWS} ws',
-                ' */',
+                '/** @param {import(\'burger-api\').BurgerWS} ws */',
                 'export function onOpen(ws) {',
                 ' // Runs before open handler',
                 '}',
                 '',
+                '/**',
+                ' * @param {import(\'burger-api\').BurgerWS} ws',
+                ' * @param {string | Buffer} message',
+                ' */',
                 'export function onMessage(ws, message) {',
                 ' // Runs before message handler',
                 '}',
                 '',
+                '/**',
+                ' * @param {import(\'burger-api\').BurgerWS} ws',
+                ' * @param {number} code',
+                ' * @param {string} reason',
+                ' */',
                 'export function onClose(ws, code, reason) {',
                 ' // Runs before close handler',
                 '}',

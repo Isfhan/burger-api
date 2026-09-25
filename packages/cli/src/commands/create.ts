@@ -7,16 +7,15 @@
  * We use @clack/prompts for beautiful, user-friendly interactive prompts.
  */
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import * as clack from '@clack/prompts';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import type { CreateOptions } from '../types/index';
 import {
     createProject,
     installDependencies,
     burgerApiSourceOverride,
-    isPrereleaseBuild,
 } from '../utils/templates';
 import {
     success,
@@ -29,6 +28,9 @@ import {
     warning,
 } from '../utils/logger';
 
+/** Windows reserved device names — invalid as directory names there. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
 /**
  * Create the "create" command
  * This is what runs when users type: burger-api create <projectName>
@@ -38,7 +40,7 @@ import {
  * @param name - Project name to validate
  * @returns Error message if invalid, undefined if valid
  */
-function validateProjectName(name: string): string | undefined {
+export function validateProjectName(name: string): string | undefined {
     if (!name) return 'Project name is required';
     if (name.length > 100)
         return 'Project name is too long (max 100 characters)';
@@ -48,6 +50,12 @@ function validateProjectName(name: string): string | undefined {
         return 'Project name contains invalid characters';
     }
     if (/\s/.test(name)) return 'Project name cannot contain spaces';
+    if (WINDOWS_RESERVED.test(name)) {
+        return `"${name}" is a reserved device name on Windows`;
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(name)) {
+        return 'Project name may only contain letters, digits, "-", "_", "." and "~"';
+    }
     return undefined;
 }
 
@@ -74,16 +82,33 @@ function validateDirUnderSrc(
 export const createCommand = new Command('create')
     .description('Create a new Burger API project')
     .argument('<project-name>', 'Name of your project')
+    .option('-l, --lang <lang>', 'Project language: ts or js', 'ts')
     .option(
-        '-l, --lang <lang>',
-        'Project language: ts or js (default: ts)',
-        'ts'
+        '-y, --yes',
+        'Use default answers for all prompts (non-interactive, alias: --defaults)'
     )
-    .option(
-        '-y, --yes, --defaults',
-        'Use default answers for all prompts (non-interactive)'
+    // Commander accepts one short + one long flag per option, so `--defaults`
+    // is registered separately (hidden) and folded into `yes` below.
+    .addOption(new Option('--defaults').hideHelp())
+    .option('--pages', 'Include page routes (src/pages)')
+    .option('--ws', 'Include file-based WebSocket routes (src/websocket)')
+    .option('--no-api', 'Skip API routes')
+    .option('--api-dir <dir>', 'API routes directory under src/ (default: api)')
+    .option('--api-prefix <prefix>', 'URL prefix for API routes (default: /api)')
+    .option('--no-skills', 'Skip downloading AI agent skills')
+    .addHelpText(
+        'after',
+        '\nFeature flags imply --yes (no prompts). Without a TTY (CI, pipes)\n' +
+            'create never prompts: it uses the defaults plus any flags.\n\n' +
+            'Examples:\n' +
+            '  burger-api create my-api --yes\n' +
+            '  burger-api create my-app --pages --ws --lang js\n' +
+            '  burger-api create my-api --api-prefix /v1 --no-skills'
     )
-    .action(async (projectName: string, options: { lang: string; yes?: boolean }) => {
+    .action(async (
+        projectName: string,
+        options: CreateCommandOptions
+    ) => {
         // Start with a nice intro
         clack.intro('Create a new BurgerAPI project');
 
@@ -110,10 +135,26 @@ export const createCommand = new Command('create')
                 process.exit(1);
             }
 
-            // Ask user questions to configure the project
-            const answered = options.yes
-                ? defaultOptions(projectName)
-                : await askQuestions(projectName);
+            // Ask user questions to configure the project. Feature flags
+            // or a missing TTY mean non-interactive (prompts would hang).
+            const hasFeatureFlags =
+                options.pages !== undefined ||
+                options.ws !== undefined ||
+                options.api === false ||
+                options.apiDir !== undefined ||
+                options.apiPrefix !== undefined ||
+                options.skills === false;
+            const interactive =
+                !options.yes &&
+                !options.defaults &&
+                !hasFeatureFlags &&
+                Boolean(process.stdin.isTTY);
+            if (!options.yes && !options.defaults && !hasFeatureFlags && !interactive) {
+                info('No interactive terminal detected — using default answers (pass --yes to silence this).');
+            }
+            const answered = interactive
+                ? await askQuestions(projectName)
+                : applyFlags(defaultOptions(projectName), options);
 
             // User cancelled
             if (clack.isCancel(answered)) {
@@ -192,11 +233,16 @@ export const createCommand = new Command('create')
                 newline();
             }
 
-            // Create the project
-            await createProject(targetDir, optionsWithLang);
-
-            // Install dependencies
-            await installDependencies(targetDir);
+            // Create the project. On failure, remove the partial directory
+            // so re-running with the same name works.
+            let created;
+            try {
+                created = await createProject(targetDir, optionsWithLang);
+                await installDependencies(targetDir);
+            } catch (err) {
+                rmSync(targetDir, { recursive: true, force: true });
+                throw err;
+            }
 
             // Success! Show them what to do next
             clack.outro('Project created successfully!');
@@ -208,30 +254,43 @@ export const createCommand = new Command('create')
             console.log(` 2. Start the development server:`);
             command('bun run dev');
             newline();
-            console.log(` 3. Edit config if needed:`);
-            command(
-                `burger.build.${optionsWithLang.lang === 'js' ? 'js' : 'ts'}`
-            );
+            // Only print URLs the fresh scaffold actually serves — `/` is a
+            // 404 unless pages are enabled.
+            const ext = optionsWithLang.lang === 'js' ? 'js' : 'ts';
+            const base = 'http://localhost:4000';
+            console.log(` 3. Open in your browser:`);
+            if (optionsWithLang.usePages) {
+                console.log(`    ${highlight(`${base}${optionsWithLang.pagePrefix}`)}  your pages`);
+            }
+            if (optionsWithLang.useApi) {
+                console.log(`    ${highlight(`${base}${optionsWithLang.apiPrefix}`)}  your first API route`);
+                console.log(`    ${highlight(`${base}/docs`)}  interactive API docs`);
+            }
             newline();
-            console.log(` 4. Open your browser:`);
-            console.log(` ${highlight('http://localhost:4000')}`);
+            console.log(` 4. Start editing:`);
+            if (optionsWithLang.useApi) {
+                console.log(
+                    `    ${highlight(`src/${optionsWithLang.apiDir}/route.${ext}`)}  routes are folders under src/${optionsWithLang.apiDir}/`
+                );
+            }
+            console.log(`    ${highlight(`burger.build.${ext}`)}  build settings (dirs, prefixes)`);
             newline();
             console.log(` 5. Add hooks and plugins (optional):`);
             command('burger-api add cors logger');
             newline();
-            if (optionsWithLang.addSkills) {
+            if (created.skillsInstalled) {
                 console.log(` 6. AI skills installed at`);
-                console.log(` ${highlight('.agents/skills/burger-api/')}`);
+                console.log(`    ${highlight('.agents/skills/burger-api/')}`);
+            } else if (created.skillsInstalled === false) {
+                console.log(` 6. AI skills could not be downloaded — install them later:`);
+                command('burger-api skills install');
             } else {
                 console.log(` 6. Add AI skills (optional):`);
                 command('burger-api skills install');
             }
             newline();
-            if (isPrereleaseBuild()) {
-                warning(
-                    'Beta note: burger-api add/list/skills install need BURGER_API_BRANCH=feat/burger-api-v1 ' +
-                        'until the ecosystem content lands on the main branch.'
-                );
+            if (created.skillsInstalled === false) {
+                warning(`AI skills download failed: ${created.skillsError}`);
                 newline();
             }
             success('Happy coding!');
@@ -241,6 +300,39 @@ export const createCommand = new Command('create')
             process.exit(1);
         }
     });
+
+interface CreateCommandOptions {
+    lang: string;
+    yes?: boolean;
+    defaults?: boolean;
+    pages?: boolean;
+    ws?: boolean;
+    /** false with --no-api */
+    api?: boolean;
+    apiDir?: string;
+    apiPrefix?: string;
+    /** false with --no-skills */
+    skills?: boolean;
+}
+
+/** Apply the non-interactive feature flags on top of the defaults. */
+export function applyFlags(
+    base: CreateOptions,
+    flags: Omit<CreateCommandOptions, 'lang'>
+): CreateOptions {
+    const out = { ...base };
+    if (flags.pages) out.usePages = true;
+    if (flags.ws) out.useWs = true;
+    if (flags.api === false) out.useApi = false;
+    if (flags.apiDir !== undefined) out.apiDir = flags.apiDir;
+    if (flags.apiPrefix !== undefined) {
+        out.apiPrefix = flags.apiPrefix.startsWith('/')
+            ? flags.apiPrefix
+            : `/${flags.apiPrefix}`;
+    }
+    if (flags.skills === false) out.addSkills = false;
+    return out;
+}
 
 /**
  * Default project options for non-interactive mode (`--yes`).
