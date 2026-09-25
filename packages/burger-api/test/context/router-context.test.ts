@@ -89,7 +89,7 @@ describe('Router integration: BurgerContext threading', () => {
         expect(await res.json()).toEqual({
             path: '/health',
             pattern: '/health',
-            params: undefined,
+            params: {},
         });
     });
 

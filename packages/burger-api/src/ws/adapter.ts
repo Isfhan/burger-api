@@ -10,6 +10,7 @@ import type {
     WebSocketConfig,
 } from './types.js';
 import { BurgerWSContext } from './types.js';
+import { HTTPError, renderHTTPError } from '../errors/http-error.js';
 import { BurgerContext } from '../context/context.js';
 import type {
     BurgerEnv,
@@ -28,6 +29,14 @@ import {
     type WsUpgradeOutcome,
 } from './platform.js';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../runtime/capabilities.js';
+
+/** Internal socket-data slot holding the route matched at upgrade. */
+const WS_ROUTE = Symbol('burger-api.ws.route');
+
+interface WsMatch {
+    route: CompiledWebSocketRoute;
+    params: Record<string, string>;
+}
 
 /**
  * WebSocket adapter options
@@ -109,6 +118,9 @@ export class WebSocketAdapter {
     /** One context per connection, so `ws.data` mutations persist. */
     private wsContexts = new WeakMap<object, BurgerWS>();
 
+    /** Matched route per connection (see `getMatch`). */
+    private wsMatches = new WeakMap<object, WsMatch>();
+
     constructor(options: WebSocketAdapterOptions) {
         this.router = options.router;
         this.config = options.config ?? {};
@@ -169,9 +181,9 @@ export class WebSocketAdapter {
     private async handleOpen(ws: any): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) {
-            if (this.debug) {
-                console.log('[WebSocket] No route found for connection');
-            }
+            console.warn(
+                '[burger-api] WebSocket connection has no matched route (socket data missing) — handlers will not run.'
+            );
             return;
         }
 
@@ -405,9 +417,14 @@ export class WebSocketAdapter {
             return { ok: false, response: authResult.response };
         }
 
-        const data: Record<string, unknown> = {
-            route: { ...match.route, params: match.params },
-        };
+        // The matched route rides in a non-enumerable symbol slot: internal
+        // (never visible in `ws.data` copies/JSON), but carried by every
+        // platform that attaches `data` to the socket.
+        const data: Record<string, unknown> = {};
+        Object.defineProperty(data, WS_ROUTE, {
+            value: { route: match.route, params: match.params },
+            enumerable: false,
+        });
         if (authResult.user !== undefined) {
             data.user = authResult.user;
         }
@@ -591,7 +608,29 @@ export class WebSocketAdapter {
      * Get route from WebSocket data
      */
     private getRouteFromWs(ws: any): CompiledWebSocketRoute | null {
-        return ws.data?.route ?? null;
+        return this.getMatch(ws)?.route ?? null;
+    }
+
+    /**
+     * The route + params matched at upgrade. Read from the socket's data
+     * slot once, then cached per socket — so a handler replacing `ws.data`
+     * cannot orphan the connection from its route.
+     */
+    private getMatch(ws: any): WsMatch | undefined {
+        let match = this.wsMatches.get(ws);
+        if (!match) {
+            match = ws?.data?.[WS_ROUTE] as WsMatch | undefined;
+            // Hand-wired sockets (custom bridges, tests) may still carry the
+            // legacy `data.route` shape.
+            const legacy = ws?.data?.route as
+                | (CompiledWebSocketRoute & { params?: Record<string, string> })
+                | undefined;
+            if (!match && legacy?.handlers) {
+                match = { route: legacy, params: legacy.params ?? {} };
+            }
+            if (match) this.wsMatches.set(ws, match);
+        }
+        return match;
     }
 
     /**
@@ -602,7 +641,11 @@ export class WebSocketAdapter {
     private createBurgerWS(ws: any): BurgerWS {
         let burgerWs = this.wsContexts.get(ws);
         if (!burgerWs) {
-            burgerWs = new BurgerWSContext(ws, this.providers);
+            burgerWs = new BurgerWSContext(
+                ws,
+                this.providers,
+                this.getMatch(ws)?.params ?? {}
+            );
             this.wsContexts.set(ws, burgerWs);
         }
         return burgerWs;
@@ -671,19 +714,9 @@ export class WebSocketAdapter {
             // If auth is required but no user was attached, reject
             if (authConfig?.required && !user) {
                 return {
-                    response: new Response(
-                        JSON.stringify({
-                            type: 'https://burger-api.com/errors/unauthorized',
-                            title: 'Unauthorized',
-                            status: 401,
-                            detail: 'Authentication required',
-                        }),
-                        {
-                            status: 401,
-                            headers: {
-                                'Content-Type': 'application/problem+json',
-                            },
-                        }
+                    response: renderHTTPError(
+                        new HTTPError(401, 'Authentication required'),
+                        false
                     ),
                 };
             }
@@ -693,19 +726,9 @@ export class WebSocketAdapter {
             if (authConfig?.roles && authConfig.roles.length > 0) {
                 if (!hasAnyRole(user, authConfig.roles)) {
                     return {
-                        response: new Response(
-                            JSON.stringify({
-                                type: 'https://burger-api.com/errors/forbidden',
-                                title: 'Forbidden',
-                                status: 403,
-                                detail: 'Insufficient permissions',
-                            }),
-                            {
-                                status: 403,
-                                headers: {
-                                    'Content-Type': 'application/problem+json',
-                                },
-                            }
+                        response: renderHTTPError(
+                            new HTTPError(403, 'Insufficient permissions'),
+                            false
                         ),
                     };
                 }
@@ -717,27 +740,17 @@ export class WebSocketAdapter {
             if (this.debug) {
                 console.error('[WebSocket] Auth hook error:', error);
             }
+            // Same RFC 9457 shape as HTTP errors (status-phrase title).
             const status = (error as any)?.status ?? 401;
-            const title = status === 403 ? 'Forbidden' : 'Unauthorized';
-            const type =
-                status === 403
-                    ? 'https://burger-api.com/errors/forbidden'
-                    : 'https://burger-api.com/errors/unauthorized';
             return {
-                response: new Response(
-                    JSON.stringify({
-                        type,
-                        title,
+                response: renderHTTPError(
+                    new HTTPError(
                         status,
-                        detail:
-                            error instanceof Error
-                                ? error.message
-                                : 'Authentication failed',
-                    }),
-                    {
-                        status,
-                        headers: { 'Content-Type': 'application/problem+json' },
-                    }
+                        error instanceof Error
+                            ? error.message
+                            : 'Authentication failed'
+                    ),
+                    false
                 ),
             };
         }

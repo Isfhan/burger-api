@@ -1,14 +1,5 @@
 // Import stuff from Zod 4.x
-import {
-    toJSONSchema,
-    ZodArray,
-    ZodBoolean,
-    ZodNumber,
-    ZodObject,
-    ZodOptional,
-    ZodString,
-    ZodType,
-} from 'zod';
+import { toJSONSchema, ZodObject, ZodType } from 'zod';
 
 // Import types
 import type {
@@ -24,53 +15,41 @@ import type {
 import type { SchemaInput } from '../validation/types.js';
 
 /**
- * Maps a Zod type to an OpenAPI schema type.
- */
-function mapZodTypeToOpenAPIType(zodType: ZodType<unknown, unknown>): string {
-    if (zodType instanceof ZodOptional) {
-        return mapZodTypeToOpenAPIType(
-            zodType.unwrap() as ZodType<unknown, unknown>
-        );
-    }
-    if (zodType instanceof ZodString) return 'string';
-    if (zodType instanceof ZodNumber) return 'number';
-    if (zodType instanceof ZodBoolean) return 'boolean';
-    if (zodType instanceof ZodArray) return 'array';
-    if (zodType instanceof ZodObject) return 'object';
-    return 'string';
-}
-
-/**
- * Builds an array of OpenAPI 3.0 parameters from a Zod schema.
+ * Builds an array of OpenAPI 3.0 parameters from a Zod object schema.
+ *
+ * Uses Zod's own JSON Schema conversion on the *input* side, so a field
+ * with `.default()` or `.optional()` is not required (the client may omit
+ * it), and each parameter keeps its enum / format / default / min / max.
  */
 function buildParameters(
     zodSchema: unknown,
     location: 'path' | 'query' | 'header' | 'cookie'
 ): any[] {
-    const parameters: any[] = [];
-    if (isZodObjectSchema(zodSchema)) {
-        const shape: Record<
-            string,
-            ZodType<unknown, unknown>
-        > = zodSchema.shape;
+    if (!isZodObjectSchema(zodSchema)) return [];
 
-        for (const key in shape) {
-            const fieldDef = shape[key]!;
-            const isOptional = fieldDef instanceof ZodOptional;
-            const type = mapZodTypeToOpenAPIType(fieldDef) as
-                'string' | 'number' | 'boolean' | 'array' | 'object';
+    const json = toJSONSchema(zodSchema, {
+        io: 'input',
+        unrepresentable: 'any',
+    }) as {
+        properties?: Record<string, Record<string, unknown>>;
+        required?: string[];
+    };
+    const required = new Set(json.required ?? []);
 
-            parameters.push({
-                name: key,
-                in: location,
-                required: !isOptional,
-                schema: { type },
-                description: `${location} parameter ${key}`,
-            });
-        }
-    }
-
-    return parameters;
+    return Object.entries(json.properties ?? {}).map(([name, schema]) => {
+        const { description, ...rest } = schema;
+        return {
+            name,
+            in: location,
+            // OpenAPI requires path parameters to be marked required.
+            required: location === 'path' || required.has(name),
+            schema: rest,
+            description:
+                typeof description === 'string'
+                    ? description
+                    : `${location} parameter ${name}`,
+        };
+    });
 }
 
 function isZodObjectSchema(value: unknown): value is ZodObject<any, any> {
@@ -80,13 +59,22 @@ function isZodObjectSchema(value: unknown): value is ZodObject<any, any> {
 /**
  * Converts a SchemaInput to JSON Schema for OpenAPI.
  * Uses the configured converter when available, falls back to Zod's toJSONSchema.
+ *
+ * `io`: request bodies describe what the client SENDS (`'input'` — fields
+ * with `.default()` are optional, plain objects are not closed with
+ * `additionalProperties: false`); responses describe what the server
+ * returns (`'output'`).
  */
 function schemaToJsonSchema(
     schema: SchemaInput,
-    mapJsonSchema?: Record<string, JsonSchemaConverter>
+    mapJsonSchema?: Record<string, JsonSchemaConverter>,
+    io: 'input' | 'output' = 'output'
 ): Record<string, unknown> | undefined {
     if (schema instanceof ZodType) {
-        const jsonSchema = toJSONSchema(schema) as Record<string, unknown>;
+        const jsonSchema = toJSONSchema(schema, { io }) as Record<
+            string,
+            unknown
+        >;
         // Zod emits `$schema: "https://json-schema.org/draft/2020-12/schema"`.
         // Valid JSON Schema, but illegal inside an OpenAPI `schema` object
         // (OAS defines its own dialect) — Redocly struct rule rejects it.
@@ -117,7 +105,8 @@ function buildRequestBody(
         return undefined;
     const jsonSchema = schemaToJsonSchema(
         zodSchema as SchemaInput,
-        mapJsonSchema
+        mapJsonSchema,
+        'input'
     );
     if (!jsonSchema) return undefined;
     return {
@@ -269,6 +258,11 @@ export function generateOpenAPIDocument(
             >;
 
             if (typeof handlers[method] !== 'function') continue;
+            // The framework's auto-generated OPTIONS (CORS preflight) is not
+            // a documented operation.
+            if ((handlers[method] as { isAutoOptions?: boolean }).isAutoOptions) {
+                continue;
+            }
             const lowerMethod = method.toLowerCase();
 
             const methodMeta = openapiMeta[lowerMethod] || {};

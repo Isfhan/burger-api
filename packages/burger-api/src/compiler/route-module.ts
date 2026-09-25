@@ -97,6 +97,12 @@ export interface ScanResult {
      * Extracted by the ModuleLoader during `load()`.
      */
     globalOnRequest?: Hook[];
+    /**
+     * The rest of the global `src/hooks.ts` (everything but `onRequest`).
+     * Compiled once with scope 'global' — never merged into route hooks.
+     * Set by the ModuleLoader during `load()`.
+     */
+    globalRouteHooks?: RouteHooks;
     /** Absolute path to `openapi.config.ts` (sibling of entry point), or undefined. */
     openAPIConfigPath?: string;
     /** Absolute path to `plugins.ts` (sibling of index.ts), or undefined. */

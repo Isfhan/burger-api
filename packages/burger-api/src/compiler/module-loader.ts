@@ -1,6 +1,9 @@
 import { HTTP_METHODS } from '../utils/routing.js';
 import type { HTTPMethod } from '../utils/routing.js';
-import { createAutoOptionsHandler } from '../utils/response.js';
+import {
+    warnUnknownHookExports,
+    warnUnknownRouteExports,
+} from './conventions.js';
 import type {
     openapi,
     OpenAPIConfig,
@@ -99,6 +102,7 @@ export class ModuleLoader {
                   scanned.globalHooks
               )
             : undefined;
+        warnUnknownHookExports(globalHooks, scanned.globalHooks ?? '', 'global');
 
         // Extract onRequest from global hooks — these run before routing
         // (pre-routing, app-level) and must NOT be merged per-route.
@@ -116,8 +120,13 @@ export class ModuleLoader {
             }
         }
 
+        // The remaining global hooks are compiled with scope 'global' by the
+        // router compiler (NOT merged into each route's hooks), so response
+        // and error hooks run nearest-first (route → global).
+        scanned.globalRouteHooks = globalHooks as RouteHooks | undefined;
+
         for (const route of scanned.routes) {
-            const mod = await this.loadOne(route, globalHooks);
+            const mod = await this.loadOne(route);
             if (seenPaths.has(mod.path)) {
                 throw new Error(
                     `Duplicate route path registered: "${mod.path}". ` +
@@ -130,12 +139,10 @@ export class ModuleLoader {
         return modules;
     }
 
-    private async loadOne(
-        route: ScannedRoute,
-        globalHooks?: Record<string, unknown>
-    ): Promise<RouteModule> {
+    private async loadOne(route: ScannedRoute): Promise<RouteModule> {
         // 1. Import route.ts (handlers + any inline convention exports).
         const routeMod = await import(route.localFiles.route!);
+        warnUnknownRouteExports(routeMod, route.localFiles.route!, HTTP_METHODS);
         const handlers = this.extractHandlers(routeMod);
 
         // 2. Load convention files from this route's own directory only.
@@ -150,6 +157,7 @@ export class ModuleLoader {
         const hooks = await this.loadOptional<Record<string, unknown>>(
             route.localFiles.hooks
         );
+        warnUnknownHookExports(hooks, route.localFiles.hooks ?? '', 'route');
         const config = await this.loadOptional<Record<string, unknown>>(
             route.localFiles.config
         );
@@ -158,13 +166,10 @@ export class ModuleLoader {
         // over separate files.
         const finalSchema = (routeMod.schema as RouteSchema) ?? schema;
         const finalOpenapi = (routeMod.openapi as openapi) ?? openapi;
-        const routeHooks = this.mergeHookObjects(
+        const finalHooks = this.mergeHookObjects(
             hooks,
             routeMod.hooks as Record<string, unknown> | undefined
         );
-        // 4. Merge global hooks with route-specific hooks.
-        // Global hooks run first, then route hooks (execution priority).
-        const finalHooks = this.mergeHookObjects(globalHooks, routeHooks);
 
         const sourceFiles = { ...route.localFiles };
 
@@ -181,9 +186,9 @@ export class ModuleLoader {
     }
 
     /**
-     * Extracts HTTP method handlers from a `route.ts` module. Auto-injects a
-     * minimal `OPTIONS` handler for preflight-triggering methods when the
-     * module does not define one (ported from core/api-router.ts).
+     * Extracts HTTP method handlers from a `route.ts` module. (The router
+     * compiler adds the framework OPTIONS handler to every route that does
+     * not define one.)
      */
     private extractHandlers(mod: Record<string, unknown>): Partial<
         Record<HTTPMethod, RequestHandler>
@@ -195,16 +200,6 @@ export class ModuleLoader {
             }
         }
 
-        const PREFLIGHT: HTTPMethod[] = ['POST', 'PUT', 'DELETE', 'PATCH'];
-        const hasPreflight = PREFLIGHT.some((m) => handlers[m]);
-        if (hasPreflight && typeof handlers.OPTIONS !== 'function') {
-            // Advertise the route's explicitly defined methods (HEAD is
-            // derived, not advertised — mirrors the 405 Allow computation).
-            const allowMethods = Object.keys(handlers).filter(
-                (m) => m !== 'HEAD'
-            );
-            handlers.OPTIONS = createAutoOptionsHandler(allowMethods);
-        }
         return handlers;
     }
 

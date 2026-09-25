@@ -130,7 +130,9 @@ describe('WebSocketAdapter', () => {
         // Should call upgrade
         expect(upgradeCalled).toBe(true);
         expect(upgradeOptions).toBeDefined();
-        expect(upgradeOptions.data.route.path).toBe(route.path);
+        // The matched route rides in an internal slot, not in ws.data.
+        expect(upgradeOptions.data.route).toBeUndefined();
+        expect(JSON.stringify(upgradeOptions.data)).toBe('{}');
     });
 
     it('should call open handler when connection opens', () => {

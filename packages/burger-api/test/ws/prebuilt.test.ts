@@ -112,14 +112,8 @@ describe('WebSocket prebuilt routes (production path)', () => {
                     path: '/rooms/:roomId',
                     handlers: {
                         message(ws: BurgerWS, message: string | Buffer) {
-                            // ws.data is typed via WebSocketData augmentation;
-                            // the runtime-seeded `route` key is not declared,
-                            // so access it through a cast.
-                            const roomId = (
-                                (ws.data as Record<string, unknown>).route as
-                                    | { params?: Record<string, string> }
-                                    | undefined
-                            )?.params?.roomId;
+                            // Decoded route params live on ws.params.
+                            const roomId = ws.params.roomId;
                             ws.send(
                                 JSON.stringify({
                                     type: 'room',

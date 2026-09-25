@@ -28,6 +28,8 @@ export interface AdapterStartOptions {
     hostname?: string;
     /** Debug flag, forwarded for error rendering. */
     debug?: boolean;
+    /** Maximum request body size in bytes (runtime default when unset). */
+    maxRequestBodySize?: number;
     /** Optional callback invoked once the server is listening. */
     onListen?: () => void;
 }

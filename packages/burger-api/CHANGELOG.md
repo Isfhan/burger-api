@@ -133,6 +133,96 @@ need the previous stable line.
   AOT/WinterCG entry point by construction (a separate production-only
   entry, or build-time conditional exports) — out of scope for this pass;
   documented as a required `wrangler.toml` setting instead.
+- AOT/production builds now apply **every** global hook from `src/hooks.ts`
+  (`transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`), not
+  just `onRequest` — on every target. Dev and AOT compile global hooks the
+  same way (scope `global`), so ordering is identical.
+- Response hooks now run nearest-first as documented: `afterRoute` /
+  `mapResponse` / `onError` go Route → Global → Plugin → Framework (they
+  ran Global → Route). User hook arrays are never mutated (the old
+  `onError` `.reverse()` flipped the order on every recompile).
+- JIT (default) and interpreter now agree on a `beforeRoute` short-circuit:
+  collected mappers, response validation, `afterRoute` and `mapResponse`
+  still run on the short-circuit response.
+- Dynamic routes served by Bun's native router keep the `onRequest` context
+  (state seeded pre-routing reaches the handler).
+- A handler returning a non-`Response` now fails loud: 500
+  (`"GET /api/x returned object; route handlers must return a Response"` in
+  dev, generic in production) instead of Bun's "Welcome to Bun!" 200.
+- Unhandled errors that produce a 5xx are logged server-side (method, path,
+  error + stack) in dev and production.
+- `ctx.json()` can be called after body validation (the parsed body is
+  cached); malformed JSON read via `ctx.json()` is a 400 Problem Details,
+  not a 500.
+- Plugin factories are resolved before deduplication — two anonymous
+  factories are no longer collapsed into one; deduplicated registrations
+  warn.
+- Trailing slashes: `/api/products/1/` matches `/api/products/:id`; a
+  `:param` never binds an empty segment (`/api/products/` is not
+  `:id = ""`). Same for WebSocket routes, whose params are now URL-decoded.
+- Global/plugin `onRequest` hooks now run for pages, static assets,
+  `/openapi.json` and `/docs` too. An `onRequest` short-circuit keeps the
+  mappers of earlier `onRequest` hooks (e.g. `cors()` + `rateLimit()` → the
+  429 has CORS headers); all mappers apply in onion order.
+- Every route answers `OPTIONS` (204 + `Allow`), and the auto handler skips
+  `beforeRoute`, so auth hooks no longer reject CORS preflights. The auto
+  handler is not documented in OpenAPI.
+- Auto-`HEAD` reports the `GET` response's `Content-Length`.
+- OpenAPI: request bodies are documented input-side (`.default()` fields
+  optional, no `additionalProperties: false` on plain objects); AOT routes
+  whose `schema.ts` / `openapi.ts` namespaces use `GET`/`POST` keys keep
+  their parameters, bodies and metadata.
+- `responseValidation: 'enforce'` answers a generic `application/problem+json`
+  500 in production (issues only in dev), logs the mismatch, and still runs
+  `afterRoute` / `mapResponse`.
+- Problem Details `title` is the HTTP status phrase (`"Not Found"`), also
+  for thrown `{ status }` objects and WebSocket 401/403 responses.
+- `apiPrefix: ''` mounts API routes at `/` (it silently became `api`).
+- `toFetchHandler` only matches exact static paths directly (native pattern
+  keys such as `/api/items/:id` are never matched literally), and now also
+  serves prebuilt page routes and embedded assets (Bun-only HTML bundles /
+  dynamic pages log one warning instead of silently 404ing).
+- WebSocket: push platforms (Deno, Cloudflare) now deliver `open`/`message`
+  (the upgrade data was never attached to the socket); app-level WS hooks
+  (`onOpen`/`onMessage`/`onClose`) apply to prebuilt and programmatic
+  routes; a malformed handshake is 400 (was 500); a WS route shadowed by an
+  HTTP route on the same path warns at startup.
+- `serve()` on a busy port prints one line (`Port 4000 is already in use…`)
+  and exits 1 instead of a stack trace; invalid ports throw a clear error.
+- `createNodeWsBridge()` called too early says exactly what to call first.
+- An empty `src/api` explains the expected layout instead of "No routes
+  configured".
+
+**Changed**
+- A declared body schema now rejects non-JSON bodies (`text/plain`, forms)
+  with **415 Unsupported Media Type** instead of skipping validation
+  (`application/*+json` counts as JSON). `ctx.validated.body` is therefore
+  non-optional in the inferred type when the schema declares `body`.
+- `ctx.params` is always an object (`{}` when the route has none) and
+  `ctx.wildcardParams` always an array, typed non-optional.
+- New `ctx.ip`: the socket peer address (Bun `serve()`); `undefined` on
+  WinterCG `fetch` entries. Forwarded headers are never trusted. Adapters
+  can supply it via `setRequestIP(request, ip)`.
+- WebSocket: decoded route params on `ws.params`; the matched compiled route
+  is no longer exposed on `ws.data`.
+- `defineHooks(schema, hooks)`: hooks run for every method of a route, so
+  each `ctx.validated` slot is typed possibly `undefined` (`HookContext`);
+  `transform`/`onError` also see `ctx.validated` itself as possibly
+  `undefined`. After validation `ctx.validated` is always an object.
+- `ErrorHook` may be async (`Promise<Response | void>`).
+- Filesystem mode: unset `apiDir` / `pageDir` / `wsDir` default to
+  `src/api` / `src/pages` / `src/websocket` when those directories exist
+  (same defaults as the CLI build).
+- `config.ts`: core honors a per-route `responseValidation` override; other
+  keys (`auth`, `cache`, `timeout`, …) are data for plugins/hooks (now
+  documented as such).
+- Unknown exports in convention files warn with the file and the valid
+  names (typos in `hooks.ts`, `onRequest` in a route `hooks.ts`, lowercase
+  `get` in `route.ts`).
+- Query/header coercion (opt-in) wraps single values for `z.array(...)`
+  fields, coerces array elements, and accepts `"1"`/`"0"` booleans.
+- New `ServerOptions.maxRequestBodySize` (forwarded to `Bun.serve`).
+- `usePlugin()` accepts a plugin factory in its type (`PluginFactory`).
 
 **Removed**
 - `burger.macro()` / `MacroFn` — confirmed zero real usage anywhere in the
@@ -142,10 +232,10 @@ need the previous stable line.
   form. Use `burger.usePlugin(...)` instead.
 
 **Known limitations in this beta**
-- **Pages (`src/pages/`) are Bun-only** — no page routing support on any
-  WinterCG target (Cloudflare Workers, Vercel, Deno Deploy, Node), not
-  even via AOT-compiled `pageRoutes`. API routes are fully portable; pages
-  are not, in this release.
+- **Pages are mostly Bun-only** — on WinterCG targets `toFetchHandler`
+  serves prebuilt function page routes and embedded assets, but Bun
+  HTML-import bundles and dynamic (`[param]`) pages are served only by
+  `serve()` on Bun (a startup warning lists them).
 - `burger-api add` / `list` / `skills install` resolve ecosystem content
   from GitHub's `main` branch by default, which does not yet have this
   release's hooks/plugins/skills. Set `BURGER_API_BRANCH=feat/burger-api-v1`

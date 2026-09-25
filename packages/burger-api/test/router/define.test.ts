@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { defineHooks, defineRoute } from '../../src/router/define';
+import type { HookContext } from '../../src/router/define';
 import type { BurgerContext } from '../../src/context/context';
 import type { InferValidated } from '../../src/types/inference';
 
@@ -39,10 +40,9 @@ describe('defineRoute', () => {
         expect(capturedQ).toBeUndefined();
     });
 
-    it('keeps body optional even when declared (JSON-only validation gate)', () => {
+    it('types a declared body as always present (non-JSON bodies get 415)', () => {
         const bodySchema = { body: z.object({ name: z.string() }) };
         defineRoute(bodySchema, (ctx) => {
-            // @ts-expect-error body is validated only for JSON requests
             const name: string = ctx.validated.body.name;
             return new Response(name);
         });
@@ -63,16 +63,17 @@ describe('defineHooks', () => {
     it('types beforeRoute/afterRoute ctx from the same schema', () => {
         const hooks = defineHooks(schema, {
             beforeRoute: (ctx) => {
+                // Hooks run for every method: each slot may be undefined.
                 type Got = typeof ctx.validated.params;
-                type Want = InferValidated<typeof schema>['params'];
+                type Want = InferValidated<typeof schema>['params'] | undefined;
                 type _check = Expect<Equal<Got, Want>>;
                 const check: _check = true;
                 expect(check).toBe(true);
             },
             afterRoute: (ctx) => {
-                // `ctx` here is BurgerContext<typeof schema>, not a plain one.
+                // `ctx` here is HookContext<typeof schema>, not a plain one.
                 type _isTyped = Expect<
-                    Equal<typeof ctx, BurgerContext<typeof schema>>
+                    Equal<typeof ctx, HookContext<typeof schema>>
                 >;
                 const isTyped: _isTyped = true;
                 expect(isTyped).toBe(true);
@@ -80,6 +81,16 @@ describe('defineHooks', () => {
         });
 
         expect(typeof hooks.beforeRoute).toBe('function');
+
+        // Hooks run for every method (a POST has no GET query): unguarded
+        // slot access is a compile error; after validation the bag exists.
+        defineHooks(schema, {
+            beforeRoute: (ctx) => {
+                // @ts-expect-error query may be undefined on another method
+                void ctx.validated.query.q;
+                void ctx.validated.query?.q;
+            },
+        });
         expect(typeof hooks.afterRoute).toBe('function');
     });
 });

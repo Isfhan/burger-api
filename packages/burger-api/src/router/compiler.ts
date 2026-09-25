@@ -7,7 +7,9 @@ import { createValidationHook } from '../validation/validator.js';
 import {
     methodNotAllowed,
     applySet,
+    createAutoOptionsHandler,
 } from '../utils/response.js';
+import { HTTPError } from '../errors/http-error.js';
 import { executeHookPlan } from '../lifecycle/executor.js';
 import { compileJitHookPlan } from '../lifecycle/jit.js';
 import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types.js';
@@ -61,7 +63,8 @@ export class RouterCompiler {
         defs: RouteDefinition[],
         plugins?: ResolvedPlugin[],
         providers?: Map<string, unknown>,
-        onRequestHooksCount: number = 0
+        onRequestHooksCount: number = 0,
+        globalHooks?: RouteHooks
     ): CompiledRouter {
         const staticMap = new StaticMap();
         const trie = new Trie();
@@ -80,15 +83,33 @@ export class RouterCompiler {
 
         for (const def of defs) {
             const path = def.path;
-            const handlers = def.handlers;
 
             // Allow header: the route's explicitly defined methods (HEAD is not
             // listed unless the user defined it — auto-HEAD is derived, not advertised).
-            const allowMethods = Object.keys(handlers).filter(
+            const allowMethods = Object.keys(def.handlers).filter(
                 (m) => m !== 'HEAD'
             );
             const allow = allowCache.compute(allowMethods);
             allowCache.set(path, allow);
+
+            // Every handler is checked to return a `Response`. Every route
+            // also answers OPTIONS: when none is declared the framework adds
+            // one (204 + Allow) that skips beforeRoute, so auth hooks never
+            // reject CORS preflights (onRequest still runs).
+            const handlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
+            for (const m of Object.keys(def.handlers) as HTTPMethod[]) {
+                const h = def.handlers[m];
+                if (typeof h !== 'function') continue;
+                handlers[m] = (h as { isAutoOptions?: boolean }).isAutoOptions
+                    ? h
+                    : requireResponse(h, m, path);
+            }
+            if (!handlers.OPTIONS) {
+                handlers.OPTIONS = createAutoOptionsHandler([
+                    ...allowMethods,
+                    'OPTIONS',
+                ]);
+            }
 
             const hasSchema = !!def.schema;
             let routeValidators:
@@ -116,33 +137,14 @@ export class RouterCompiler {
                 });
                 routeValidators = validators;
             }
-            chain.addStage(
-                'beforeRoute',
-                toHookArray(routeHooks?.beforeRoute),
-                'local',
-                path
-            );
-            chain.addStage(
-                'afterRoute',
-                toHookArray(routeHooks?.afterRoute),
-                'local',
-                path
-            );
-            chain.addStage(
-                'mapResponse',
-                toHookArray(routeHooks?.mapResponse),
-                'local',
-                path
-            );
-            // onError: reverse because ModuleLoader merges global→route but
-            // onError needs route→global (nearest-first). The flattener orders
-            // local → global, so reversed local nodes execute route-first.
-            chain.addStage(
-                'onError',
-                toHookArray(routeHooks?.onError).reverse(),
-                'local',
-                path
-            );
+            // App-level hooks (`src/hooks.ts` / `globalHooks`) are staged with
+            // scope 'global' and route hooks with scope 'local', so the
+            // flattener owns the ordering: request hooks run
+            // Plugin → Global → Route, response + error hooks run
+            // Route → Global → Plugin (nearest-first). Declared order is kept
+            // within a scope. User arrays are never mutated.
+            addHookStages(chain, globalHooks, 'global', 'app');
+            addHookStages(chain, routeHooks, 'local', path);
 
             // compose plugin hooks into the chain.
             // Plugin hooks are scoped (plugin by default) and the flattener
@@ -152,11 +154,12 @@ export class RouterCompiler {
             }
 
             const plan = flatten(chain, path);
-            // Merge transform from route hooks and plugins. Route transform takes
-            // precedence over plugin transform on key collision.
+            // Merge transform from plugins, global hooks and route hooks (in
+            // that precedence order — route wins on key collision).
             plan.transform = mergeTransformRecords(
                 routeHooks?.transform,
-                plugins
+                plugins,
+                globalHooks?.transform
             );
 
             // Attach compiled validators for response validation post-handler.
@@ -167,8 +170,15 @@ export class RouterCompiler {
             // Thread debug flag for error rendering.
             plan.debug = this.debug;
 
-            // Thread global validation config for response validation.
-            plan.validatorConfig = this.config;
+            // Thread global validation config for response validation. A
+            // route's `config.ts` may override `responseValidation`.
+            const routeMode = def.config?.responseValidation;
+            plan.validatorConfig =
+                routeMode === 'off' ||
+                routeMode === 'dev' ||
+                routeMode === 'enforce'
+                    ? { ...this.config, responseValidation: routeMode }
+                    : this.config;
 
             // Optional, compile-time-only route field analysis. The result is
             // baked into `meta` but is unused at runtime, so it can
@@ -192,7 +202,7 @@ export class RouterCompiler {
             // When a schema exists, also retain the precompiled validators so
             // the validation orchestrator runs them at request time.
             compiledRoutes.set(path, {
-                def,
+                def: { ...def, handlers },
                 handler: compiled,
                 methods: allowMethods,
                 allow,
@@ -216,7 +226,7 @@ export class RouterCompiler {
                 // Router.fetch, so it never shadows a `:param` empty-value match.)
                 registerNativeOptions(
                     path,
-                    def,
+                    { ...def, handlers },
                     hasSchema,
                     onRequestHooksCount
                 );
@@ -289,6 +299,49 @@ function toRouteDefinition(mod: RouteModule): RouteDefinition {
 function toHookArray<T>(h: T | T[] | undefined): T[] {
     if (h === undefined) return [];
     return Array.isArray(h) ? h : [h];
+}
+
+/** Stages one hook object's beforeRoute/afterRoute/mapResponse/onError. */
+function addHookStages(
+    chain: HookChain,
+    hooks: RouteHooks | undefined,
+    scope: 'global' | 'local',
+    owner: string
+): void {
+    if (!hooks) return;
+    chain.addStage('beforeRoute', toHookArray(hooks.beforeRoute), scope, owner);
+    chain.addStage('afterRoute', toHookArray(hooks.afterRoute), scope, owner);
+    chain.addStage('mapResponse', toHookArray(hooks.mapResponse), scope, owner);
+    chain.addStage('onError', toHookArray(hooks.onError), scope, owner);
+}
+
+/**
+ * Wraps a route handler so a non-`Response` return value fails loud with a
+ * clear 500 (message visible in dev, generic in production, always logged)
+ * instead of leaking to the runtime (Bun answers "Welcome to Bun!" 200).
+ */
+function requireResponse(
+    handler: RequestHandler,
+    method: string,
+    path: string
+): RequestHandler {
+    const check = (result: unknown): Response => {
+        if (result instanceof Response) return result;
+        const kind =
+            result === null
+                ? 'null'
+                : Array.isArray(result)
+                  ? 'array'
+                  : typeof result;
+        throw new HTTPError(
+            500,
+            `${method} ${path} returned ${kind}; route handlers must return a Response`
+        );
+    };
+    return (ctx: BurgerContext) => {
+        const result: unknown = handler(ctx);
+        return result instanceof Promise ? result.then(check) : check(result);
+    };
 }
 
 /**
@@ -388,15 +441,29 @@ function buildCompiledHandler(
             const mutated = ctx.hasSet()
                 ? applySet(response, ctx.set)
                 : response;
+            // Report GET's Content-Length: runtimes answer a null body with
+            // `content-length: 0` unless the header is explicit.
+            const headers = new Headers(mutated.headers);
+            if (!headers.has('content-length') && mutated.body) {
+                const size = (await mutated.arrayBuffer()).byteLength;
+                headers.set('content-length', String(size));
+            }
             return new Response(null, {
                 status: mutated.status,
                 statusText: mutated.statusText,
-                headers: mutated.headers,
+                headers,
             });
         }
 
         if (!handler) {
             return methodNotAllowed(allow);
+        }
+
+        // The framework's auto OPTIONS answers directly: no beforeRoute
+        // (auth hooks must not reject CORS preflights). onRequest hooks
+        // already ran in the router, so CORS hooks still apply.
+        if ((handler as { isAutoOptions?: boolean }).isAutoOptions) {
+            return handler(ctx);
         }
 
         const response = await runPlan(ctx, handler, request);
@@ -410,7 +477,8 @@ function buildCompiledHandler(
  */
 function mergeTransformRecords(
     routeTransform: TransformMap | undefined,
-    plugins?: ResolvedPlugin[]
+    plugins?: ResolvedPlugin[],
+    globalTransform?: TransformMap
 ): TransformMap | undefined {
     const merged: TransformMap = {};
     if (plugins) {
@@ -420,6 +488,11 @@ function mergeTransformRecords(
                     merged[k] = p.hooks.transform[k]!;
                 }
             }
+        }
+    }
+    if (globalTransform) {
+        for (const k of Object.keys(globalTransform)) {
+            merged[k] = globalTransform[k]!;
         }
     }
     if (routeTransform) {

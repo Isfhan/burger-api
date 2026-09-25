@@ -12,6 +12,8 @@ export interface ResolvedPlugin {
     name: string;
     hooks: GlobalHooks;
     scope: Scope;
+    /** Disambiguation seed from `usePlugin(plugin, scope, seed)`. */
+    seed?: string;
 }
 
 export interface PluginEntry {

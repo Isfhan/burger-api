@@ -1,5 +1,8 @@
 import { serve } from 'bun';
-import { renderHTTPError } from '../../errors/http-error.js';
+import {
+    renderHTTPError,
+    logUnhandledError,
+} from '../../errors/http-error.js';
 import type {
     RuntimeAdapter,
     ServerHandle,
@@ -32,7 +35,11 @@ export class BunAdapter implements RuntimeAdapter {
                     // within dispatchOnError; this catches edge cases.
                     const isDev =
                         opts.debug ?? process.env.NODE_ENV !== 'production';
-                    return renderHTTPError(error, isDev);
+                    const response = renderHTTPError(error, isDev);
+                    if (response.status >= 500) {
+                        logUnhandledError(request.method, request.url, error);
+                    }
+                    return response;
                 }
             },
             error(error: Error) {
@@ -47,13 +54,29 @@ export class BunAdapter implements RuntimeAdapter {
             },
             port: opts.port,
         };
+        if (opts.maxRequestBodySize !== undefined) {
+            serverOptions.maxRequestBodySize = opts.maxRequestBodySize;
+        }
 
         // Add WebSocket handlers if provided
         if (opts.websocket) {
             serverOptions.websocket = opts.websocket;
         }
 
-        const server = serve(serverOptions as Parameters<typeof serve>[0]);
+        let server: ReturnType<typeof serve>;
+        try {
+            server = serve(serverOptions as Parameters<typeof serve>[0]);
+        } catch (error) {
+            // A busy port is an operator problem, not a framework crash:
+            // one clean line instead of a stack trace.
+            if ((error as { code?: string })?.code === 'EADDRINUSE') {
+                console.error(
+                    `Port ${opts.port} is already in use. Stop the other process or set PORT / --port.`
+                );
+                process.exit(1);
+            }
+            throw error;
+        }
 
         if (opts.onListen) {
             opts.onListen();

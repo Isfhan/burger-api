@@ -267,11 +267,10 @@ describe('ctx.validated definedness follows the schema generic', () => {
         expect(typeof read).toBe('function');
     });
 
-    it('keeps body optional even when declared (JSON-only gate)', () => {
+    it('types a declared body as always present (non-JSON bodies get 415)', () => {
         const read = (
             c: BurgerContext<{ body: z.ZodObject<{ n: z.ZodNumber }> }>
         ) => {
-            // @ts-expect-error body is validated only for JSON requests
             const n: number = c.validated.body.n;
             return n;
         };

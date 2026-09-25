@@ -147,7 +147,7 @@ describe('WebSocket integration', () => {
             open(ws: BurgerWS) {
                 ws.send(
                     JSON.stringify({
-                        room: (ws as any).data?.route?.params?.roomName,
+                        room: ws.params.roomName,
                     })
                 );
             },

@@ -76,7 +76,7 @@ describe('acceptWsUpgrade — bun', () => {
         expect(outcome).toBeUndefined();
     });
 
-    it('produces a 500 response when the runtime refuses the handoff', () => {
+    it('answers 400 when the runtime refuses a malformed handshake', () => {
         const outcome = acceptWsUpgrade({
             platform: 'bun',
             request: upgradeRequest(),
@@ -84,7 +84,7 @@ describe('acceptWsUpgrade — bun', () => {
             data: {},
             events: sink,
         }) as unknown as Response;
-        expect(outcome.status).toBe(500);
+        expect(outcome.status).toBe(400);
     });
 });
 
@@ -174,6 +174,45 @@ describe('acceptWsUpgrade — deno', () => {
         expect(response).toBe(protocolResponse);
         (listeners.get('message') as Function)({ data: 'hi' });
         expect(messages[0]).toBe('hi');
+    });
+});
+
+describe('push platforms deliver events to the matched route (Deno / Workers)', () => {
+    it('attaches the upgrade data to the socket so open/message handlers run', async () => {
+        const listeners = new Map<string, Function>();
+        const socket: Record<string, unknown> = {
+            addEventListener(type: string, fn: Function) {
+                listeners.set(type, fn);
+            },
+        };
+        (globalThis as Record<string, unknown>).Deno = {
+            upgradeWebSocket(_req: Request) {
+                return { response: new Response(null, { status: 101 }), socket };
+            },
+        };
+        const events: string[] = [];
+        const router = new WebSocketRouter();
+        router.addRoute({
+            path: '/ws',
+            handlers: {
+                open: () => {
+                    events.push('open');
+                },
+                message: (_ws, message) => {
+                    events.push(`message:${String(message)}`);
+                },
+            },
+            config: {},
+        });
+        const adapter = new WebSocketAdapter({ router, runtimeTarget: 'deno' });
+        const outcome = await adapter.handleUpgrade(upgradeRequest('/ws'));
+        expect(outcome.handled).toBe(true);
+        // Route internals are not exposed on the socket's public data.
+        expect((socket.data as { route?: unknown })?.route).toBeUndefined();
+        await (listeners.get('open') as Function)({});
+        await (listeners.get('message') as Function)({ data: 'hi' });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(events).toEqual(['open', 'message:hi']);
     });
 });
 

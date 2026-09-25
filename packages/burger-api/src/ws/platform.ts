@@ -157,11 +157,16 @@ export function acceptWsUpgrade(options: {
                 options: { data: Record<string, unknown> }
             ) => boolean;
         };
-        const upgraded =
-            typeof upgrade?.upgrade === 'function' &&
-            upgrade.upgrade(request, { data });
-        if (!upgraded) {
+        if (typeof upgrade?.upgrade !== 'function') {
             return new Response('WebSocket upgrade failed', { status: 500 });
+        }
+        // Bun refuses malformed handshakes (e.g. no Sec-WebSocket-Key):
+        // a client error, not a server failure.
+        if (!upgrade.upgrade(request, { data })) {
+            return new Response(
+                'Bad Request: invalid WebSocket upgrade request',
+                { status: 400 }
+            );
         }
         // Socket handed off — the runtime owns the connection from here.
         return undefined;
@@ -181,7 +186,7 @@ export function acceptWsUpgrade(options: {
                 }) => void
             ): void;
         };
-        wirePushListeners(serverSide, events);
+        wirePushListeners(serverSide, data, events);
         serverSide.accept();
         // `webSocket` is the standard Workers/Deno response member; the
         // base TS lib's ResponseInit does not model it yet.
@@ -196,7 +201,7 @@ export function acceptWsUpgrade(options: {
             upgradeWebSocket: (request: Request) => DenoUpgradeResult;
         };
         const { response, socket } = deno.upgradeWebSocket(request);
-        wirePushListeners(socket, events);
+        wirePushListeners(socket, data, events);
         return response;
     }
 
@@ -222,7 +227,15 @@ interface PushSocket {
     ): void;
 }
 
-function wirePushListeners(socket: PushSocket, events: WsEventSink): void {
+function wirePushListeners(
+    socket: PushSocket,
+    data: Record<string, unknown>,
+    events: WsEventSink
+): void {
+    // Bun attaches `data` natively via `server.upgrade(request, { data })`;
+    // push-style sockets (Workers / Deno) need it attached explicitly, or
+    // the adapter cannot find the matched route (open/message never fire).
+    (socket as PushSocket & { data?: unknown }).data = data;
     socket.addEventListener('open', () => {
         void events.onOpen(socket);
     });

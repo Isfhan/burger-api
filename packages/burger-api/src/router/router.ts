@@ -1,4 +1,4 @@
-import { renderHTTPError } from '../errors/http-error.js';
+import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import type { ContextInit } from '../context/types.js';
 import { notFound, methodNotAllowed } from '../utils/response.js';
 import { normalizePath } from '../utils/index.js';
@@ -16,7 +16,11 @@ import type { CompiledHandler, CompiledRoute, RouterConfig } from './types.js';
 import type { ValidatorConfig } from '../validation/types.js';
 import type { ResolvedPlugin } from '../plugin/types.js';
 import type { Hook } from '../lifecycle/types.js';
-import { BurgerContext } from '../context/context.js';
+import {
+    BurgerContext,
+    isRequestIPSource,
+    setRequestIP,
+} from '../context/context.js';
 
 interface OnRequestOutcome {
     shortCircuit: Response | undefined;
@@ -40,7 +44,7 @@ interface OnRequestOutcome {
  * the compiled handler self-extracts `params` / `wildcardParams` from the
  * URL. This removes the `fetch` fallback hop for the common dynamic case.
  * - The `fetch` fallback (the `Bun.serve` fallback) still runs for unmatched,
- * loose-trailing-slash, and empty-param-trailing-slash requests, consulting
+ * and trailing-slash requests (`/foo/` ≡ `/foo`), consulting
  * the internal trie so behavior is fully preserved.
  *
  * Both paths execute exactly the same compiled handler, so method dispatch,
@@ -93,13 +97,15 @@ export class Router {
         defs: import('../types/index.js').RouteDefinition[],
         plugins?: ResolvedPlugin[],
         providers?: Map<string, unknown>,
-        onRequestHooks?: Hook[]
+        onRequestHooks?: Hook[],
+        globalHooks?: import('../lifecycle/types.js').RouteHooks
     ): void {
         const result = this.compiler.compile(
             defs,
             plugins,
             providers,
-            this.onRequestHooks.length
+            onRequestHooks?.length ?? 0,
+            globalHooks
         );
         this.staticMap = result.staticMap;
         this.trie = result.trie;
@@ -200,40 +206,82 @@ export class Router {
     ): CompiledHandler {
         return async (
             request: Request,
-            ctxInit?: ContextInit,
+            serverOrCtxInit?: ContextInit,
             prebuilt?: BurgerContext,
             env?: import('../context/context.js').BurgerEnv,
             executionCtx?: import('../context/context.js').BurgerExecutionContext
         ) => {
+            // Bun's native routes pass the server as the 2nd argument.
+            if (isRequestIPSource(serverOrCtxInit)) {
+                setRequestIP(request, serverOrCtxInit);
+            }
             let outcome: OnRequestOutcome | undefined;
             if (hasOnRequest) {
                 outcome = await this.runOnRequest(request, env, executionCtx);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
             }
             try {
-                const result = route
-                    ? await handler(
-                          request,
-                          { ...ctxInit, route },
-                          prebuilt ?? outcome?.ctx,
-                          env,
-                          executionCtx
-                      )
-                    : await handler(
-                          request,
-                          undefined,
-                          undefined,
-                          env,
-                          executionCtx
-                      );
+                // The onRequest context (if any) is bound by the route in
+                // both branches, so state seeded pre-routing survives. The
+                // incoming second argument is never a ContextInit here (Bun's
+                // native routes pass the server object): dynamic routes
+                // derive params from the URL.
+                const result = await handler(
+                    request,
+                    route ? { route } : undefined,
+                    prebuilt ?? outcome?.ctx,
+                    env,
+                    executionCtx
+                );
                 const mappers = outcome?.mappers;
                 return mappers && mappers.length > 0
                     ? this.applyMappers(result, mappers)
                     : result;
             } catch (error) {
-                return renderHTTPError(error, this.debug);
+                return this.renderUnhandled(request, error);
             }
         };
+    }
+
+    /**
+     * Wraps a non-API handler registered on the native routes map (pages,
+     * static assets, `/openapi.json`, `/docs`) so global/plugin `onRequest`
+     * hooks (CORS, logging, auth, rate limiting) apply to it exactly like
+     * API routes. Returned unchanged when no `onRequest` hooks exist.
+     */
+    wrapWithOnRequest<T extends (request: Request) => unknown>(handler: T): T {
+        if (this.onRequestHooks.length === 0) return handler;
+        const wrapped = async (
+            request: Request,
+            serverOrCtxInit?: unknown,
+            _prebuilt?: BurgerContext,
+            env?: import('../context/context.js').BurgerEnv,
+            executionCtx?: import('../context/context.js').BurgerExecutionContext
+        ): Promise<Response> => {
+            if (isRequestIPSource(serverOrCtxInit)) {
+                setRequestIP(request, serverOrCtxInit);
+            }
+            const outcome = await this.runOnRequest(request, env, executionCtx);
+            if (outcome.shortCircuit) return outcome.shortCircuit;
+            try {
+                const result = (await handler(request)) as Response;
+                return outcome.mappers.length > 0
+                    ? this.applyMappers(result, outcome.mappers)
+                    : result;
+            } catch (error) {
+                return this.renderUnhandled(request, error);
+            }
+        };
+        return wrapped as unknown as T;
+    }
+
+    /** Renders an error that escaped the pipeline; logs it when 5xx. */
+    private renderUnhandled(request: Request, error: unknown): Response {
+        const response = renderHTTPError(error, this.debug);
+        if (response.status >= 500) {
+            logUnhandledError(request.method, request.url, error);
+        }
+        return response;
     }
 
     /**
@@ -278,7 +326,13 @@ export class Router {
                     ctx
                 );
                 if (result instanceof Response) {
-                    outcome.shortCircuit = result;
+                    // Mappers from earlier hooks still wrap the short-circuit
+                    // (e.g. cors() then rateLimit(): the 429 keeps CORS
+                    // headers) — same contract as beforeRoute.
+                    outcome.shortCircuit = await this.applyMappers(
+                        result,
+                        outcome.mappers
+                    );
                     return outcome;
                 }
                 if (typeof result === 'function') {
@@ -289,20 +343,44 @@ export class Router {
                     );
                 }
             } catch (error) {
-                outcome.shortCircuit = renderHTTPError(error, this.debug);
+                outcome.shortCircuit = await this.applyMappers(
+                    this.renderUnhandled(request, error),
+                    outcome.mappers
+                );
                 return outcome;
             }
         }
         return outcome;
     }
 
+    /**
+     * Dynamic / wildcard lookup: the RegExp matcher first (when compiled),
+     * then the radix trie. Both produce identical match shapes (params,
+     * wildcard segments, methods) — verified by the parity test suite.
+     * A match that binds a `:param` to an empty segment is rejected.
+     */
+    private matchDynamic(
+        path: string
+    ): RegexMatch | import('./trie.js').TrieMatch | null {
+        let match: RegexMatch | import('./trie.js').TrieMatch | null = null;
+        if (this.regexMatcher) match = this.regexMatcher(path);
+        if (!match) match = this.trie.match(path);
+        if (match && hasEmptyParam(match.params)) return null;
+        return match;
+    }
+
+    /**
+     * Applies collected after-mappers in onion order (last registered runs
+     * first, the first hook's mapper wraps outermost) — identical to
+     * `runHooks` and the JIT for beforeRoute.
+     */
     private async applyMappers(
         response: Response,
         mappers: ((res: Response) => Response | Promise<Response>)[]
     ): Promise<Response> {
         let res = response;
-        for (const mapper of mappers) {
-            res = await mapper(res);
+        for (let i = mappers.length - 1; i >= 0; i--) {
+            res = await mappers[i]!(res);
         }
         return res;
     }
@@ -336,8 +414,8 @@ export class Router {
                 ? (res: Response) => this.applyMappers(res, outcome.mappers)
                 : (res: Response) => res;
         const raw = extractPathnameFromUrl(request.url);
-        // Collapse repeated slashes but PRESERVE a single trailing slash so that
-        // `:param` routes can capture an empty value (e.g. `/users/` → `:id === ""`).
+        // Collapse repeated slashes but PRESERVE a single trailing slash (the
+        // exact form is tried first; the slash-less form is the fallback).
         const path = raw.replace(/\/+/g, '/');
 
         // 1. Exact static route (slash-preserving — Bun already serves the exact
@@ -352,46 +430,14 @@ export class Router {
             );
         }
 
-        // 2. Dynamic / wildcard routes: the RegExp matcher first (when
-        // compiled), then the radix trie. Both produce identical match
-        // shapes (params, wildcard segments, methods) — verified by the
-        // parity test suite.
-        let dynamicMatch:
-            | RegexMatch
-            | import('./trie.js').TrieMatch
-            | null = null;
-        if (this.regexMatcher) {
-            dynamicMatch = this.regexMatcher(path);
-        }
-        if (!dynamicMatch) {
-            dynamicMatch = this.trie.match(path);
-        }
-        const match = dynamicMatch;
-        if (match) {
-            // Auto-HEAD: a GET route implies HEAD is allowed.
-            const method = request.method;
-            const headAllowed = method === 'HEAD' && match.methods.has('GET');
-            if (!match.methods.has(method) && !headAllowed) {
-                const allow =
-                    this.allowCache.get(path) ?? [...match.methods].join(', ');
-                return methodNotAllowed(allow);
-            }
-
-            // Seed `ctxInit`: `route` is always present; `params` /
-            // `wildcardParams` are added only when the route has them.
-            const ctxInit: ContextInit = {
-                route: { path, pattern: match.pattern },
-                params: match.params,
-                wildcardParams: match.wildcardParams,
-            };
-            return apply(
-                await match.handler(request, ctxInit, outcome.ctx, env, executionCtx)
-            );
-        }
-
-        // 3. Loose trailing-slash fallback for static routes: `/foo/` ≡ `/foo`.
+        // 2. Dynamic / wildcard routes (see matchDynamic). A `:param` never
+        // matches an empty segment (`/users/` is not `/users/:id` with id "");
+        // a trailing slash is retried without it, so `/users/1/` ≡ `/users/1`.
+        let routePath = path;
+        let match = this.matchDynamic(path);
         const normalized = normalizePath(raw);
-        if (normalized !== path) {
+        if (!match && normalized !== path) {
+            // 3. Loose trailing-slash fallback: `/foo/` ≡ `/foo`.
             const loose =
                 this.staticMap.get(normalized) ??
                 this.staticMap.get(normalized + '/');
@@ -403,10 +449,41 @@ export class Router {
                     await loose(request, ctxInit, outcome.ctx, env, executionCtx)
                 );
             }
+            match = this.matchDynamic(normalized);
+            routePath = normalized;
+        }
+        if (match) {
+            // Auto-HEAD: a GET route implies HEAD is allowed.
+            const method = request.method;
+            const headAllowed = method === 'HEAD' && match.methods.has('GET');
+            if (!match.methods.has(method) && !headAllowed) {
+                const allow =
+                    this.allowCache.get(match.pattern) ??
+                    [...match.methods].join(', ');
+                return methodNotAllowed(allow);
+            }
+
+            // Seed `ctxInit`: `route` is always present; `params` /
+            // `wildcardParams` are added only when the route has them.
+            const ctxInit: ContextInit = {
+                route: { path: routePath, pattern: match.pattern },
+                params: match.params,
+                wildcardParams: match.wildcardParams,
+            };
+            return apply(
+                await match.handler(request, ctxInit, outcome.ctx, env, executionCtx)
+            );
         }
 
         return apply(notFound());
     };
+}
+
+/** True when any matched `:param` captured an empty segment. */
+function hasEmptyParam(params: Record<string, string> | undefined): boolean {
+    if (!params) return false;
+    for (const k in params) if (params[k] === '') return true;
+    return false;
 }
 
 /**

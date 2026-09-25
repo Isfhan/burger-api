@@ -176,6 +176,12 @@ export interface ServerOptions {
     hostname?: string;
 
     /**
+     * Maximum request body size in bytes for `serve()` (Bun's default is
+     * 128 MB). Larger bodies are rejected by the runtime with 413.
+     */
+    maxRequestBodySize?: number;
+
+    /**
      * Optional runtime adapter override (test/embed seam). Defaults to the Bun
      * adapter, loaded lazily on first `serve()` so non-Bun bundles never
      * import it.
@@ -288,8 +294,11 @@ export interface RouteDefinition {
 
     /**
      * Route-specific configuration from `config.ts`. Available as `ctx.config`
-     * at runtime. Used by hooks/plugins to read route-level settings (auth,
-     * cache, timeout, responseValidation, …).
+     * at runtime. Core reads only `responseValidation` ('off' | 'dev' |
+     * 'enforce' — overrides `ServerOptions.validation.responseValidation`
+     * for this route). Every other key (auth, cache, timeout, …) is plain
+     * data that core never acts on — hooks and plugins (e.g. an auth plugin
+     * reading `ctx.config.auth`) give it meaning.
      */
     config?: Record<string, unknown>;
 }
@@ -395,6 +404,9 @@ export interface BuildConfig {
  *
  * Without augmentation, `ctx.config` is typed as the empty `RouteConfig`,
  * so unknown keys fail at compile time. Augment to unlock them.
+ *
+ * Core itself only honors `responseValidation`; keys such as `auth`,
+ * `cache` or `timeout` do nothing unless a plugin or hook reads them.
  */
 export interface RouteConfig {}
 
@@ -426,6 +438,7 @@ export type {
 export type {
     OpenAPIConfig,
     DocsProvider,
+    DocsProviderOptions,
     OpenAPIObject,
     JsonSchemaConverter,
     DocsAuth,

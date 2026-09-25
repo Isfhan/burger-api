@@ -125,8 +125,13 @@ describe('toFetchHandler — dynamic and wildcard routes (trie)', () => {
 });
 
 describe('toFetchHandler — OpenAPI and docs', () => {
-    it('serves the OpenAPI spec', async () => {
-        const res = await handler(req('/openapi.json'));
+    it('protects the OpenAPI spec with docsAuth too', async () => {
+        expect((await handler(req('/openapi.json'))).status).toBe(401);
+        const res = await handler(
+            req('/openapi.json', {
+                headers: { authorization: 'Basic ' + btoa('admin:secret') },
+            })
+        );
         expect(res.status).toBe(200);
         const spec = await res.json();
         expect(spec.paths['/api/products']).toBeDefined();

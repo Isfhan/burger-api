@@ -70,8 +70,8 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
             return Number.isNaN(n) ? raw : n;
         }
         case 'boolean': {
-            if (raw === 'true') return true;
-            if (raw === 'false') return false;
+            if (raw === 'true' || raw === '1') return true;
+            if (raw === 'false' || raw === '0') return false;
             // Unknown boolean string -> leave as-is; the validator will reject.
             return raw;
         }
@@ -137,13 +137,22 @@ export function buildPlan(
     if (!shape || typeof shape !== 'object') return undefined;
 
     const fields: Record<string, CoercionOp> = {};
+    const arrays: Record<string, CoercionOp> = {};
     for (const key of Object.keys(shape)) {
+        // `z.array(x)`: repeated keys (`?tag=a&tag=b`) already arrive as an
+        // array; a single occurrence is wrapped. Elements use x's op.
+        const inner = unwrap(shape[key]) as any;
+        if (inner?.constructor?.name === 'ZodArray') {
+            arrays[key] = opForZodField(inner._zod?.def?.element);
+            continue;
+        }
         const op = opForZodField(shape[key]);
         if (op !== 'none') fields[key] = op;
     }
 
-    if (Object.keys(fields).length === 0) return undefined;
-    return { slot, fields };
+    const hasArrays = Object.keys(arrays).length > 0;
+    if (Object.keys(fields).length === 0 && !hasArrays) return undefined;
+    return hasArrays ? { slot, fields, arrays } : { slot, fields };
 }
 
 /**
@@ -159,6 +168,15 @@ export function apply(
     for (const key of Object.keys(raw)) {
         const op = plan.fields[key];
         const value = raw[key];
+        const elementOp = plan.arrays?.[key];
+        if (elementOp !== undefined) {
+            const list = Array.isArray(value) ? value : [value as string];
+            out[key] =
+                elementOp === 'none'
+                    ? list
+                    : list.map((v) => coerceValue(elementOp, v));
+            continue;
+        }
         if (!op) {
             out[key] = value;
             continue;

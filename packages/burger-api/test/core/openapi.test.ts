@@ -386,11 +386,29 @@ describe('Docs providers', () => {
         info: { title: 'Test API', version: '1.0.0' },
         paths: {},
     };
+    const opts = { specUrl: '/openapi.json' };
+
+    it('every provider loads the spec from the configured specUrl', () => {
+        for (const provider of [scalarDocs(), swaggerDocs(), redocDocs()]) {
+            const html = provider(mockSpec, { specUrl: '/v2/spec.json' });
+            expect(html).toContain('/v2/spec.json');
+            expect(html).not.toContain('/openapi.json');
+        }
+    });
+
+    it('escapes the spec title', () => {
+        const html = swaggerDocs()(
+            { ...mockSpec, info: { title: '</title><script>x</script>' } },
+            opts
+        );
+        expect(html).not.toContain('<script>x</script>');
+        expect(html).toContain('&lt;/title&gt;');
+    });
 
     describe('scalarDocs', () => {
         it('returns HTML containing Scalar api-reference', () => {
             const provider = scalarDocs();
-            const html = provider(mockSpec);
+            const html = provider(mockSpec, opts);
             expect(typeof html).toBe('string');
             expect(html).toContain('api-reference');
             expect(html).toContain(
@@ -400,7 +418,7 @@ describe('Docs providers', () => {
 
         it('includes the spec title in the HTML', () => {
             const provider = scalarDocs();
-            const html = provider(mockSpec);
+            const html = provider(mockSpec, opts);
             expect(html).toContain('Test API');
         });
     });
@@ -408,7 +426,7 @@ describe('Docs providers', () => {
     describe('swaggerDocs', () => {
         it('returns HTML containing Swagger UI elements', () => {
             const provider = swaggerDocs();
-            const html = provider(mockSpec);
+            const html = provider(mockSpec, opts);
             expect(typeof html).toBe('string');
             expect(html).toContain('swagger-ui');
             expect(html).toContain('SwaggerUIBundle');
@@ -418,7 +436,7 @@ describe('Docs providers', () => {
     describe('redocDocs', () => {
         it('returns HTML containing ReDoc elements', () => {
             const provider = redocDocs();
-            const html = provider(mockSpec);
+            const html = provider(mockSpec, opts);
             expect(typeof html).toBe('string');
             expect(html).toContain('redoc');
             expect(html).toContain('redoc.standalone.js');

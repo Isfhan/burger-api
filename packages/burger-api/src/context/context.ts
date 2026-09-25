@@ -9,6 +9,7 @@ import { parseCookies } from './cookie-parser.js';
 import type { InferValidated } from '../types/inference.js';
 import type { RouteMethodSchema } from '../types/inference.js';
 import type { RouteConfig } from '../types/index.js';
+import { HTTPError } from '../errors/http-error.js';
 
 /**
  * Empty interface for module augmentation. Users extend this to type
@@ -72,6 +73,40 @@ export interface BurgerEnv {}
  */
 export interface BurgerExecutionContext {
     waitUntil(promise: Promise<unknown>): void;
+}
+
+/** A server handle that can report a request's peer address (Bun's `Server`). */
+interface RequestIPSource {
+    requestIP(request: Request): { address: string } | null | undefined;
+}
+
+/**
+ * Per-request client address sources, keyed by the raw `Request`. Set by the
+ * serving layer (Bun adapter / router — or a Node adapter via
+ * {@link setRequestIP}); read lazily by `ctx.ip`.
+ */
+const requestIPs = new WeakMap<Request, string | RequestIPSource>();
+
+/**
+ * Records the client (socket peer) address for a request so `ctx.ip` can
+ * report it. Pass the address string (e.g. a Node adapter's
+ * `socket.remoteAddress`) or a server with `requestIP(request)` (Bun),
+ * resolved lazily on first read. Adapter-facing; apps read `ctx.ip`.
+ */
+export function setRequestIP(
+    request: Request,
+    source: string | RequestIPSource
+): void {
+    requestIPs.set(request, source);
+}
+
+/** True when `value` looks like a server that can resolve peer addresses. */
+export function isRequestIPSource(value: unknown): value is RequestIPSource {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as RequestIPSource).requestIP === 'function'
+    );
 }
 
 /**
@@ -151,6 +186,13 @@ export class BurgerContext<TRoute = unknown> {
 
     /** Cached parsed cookies (lazy). `undefined` until first access. */
     private _cookies?: Record<string, string>;
+
+    /**
+     * Cached `json()` result. `undefined` until the body is parsed (JSON
+     * never parses to `undefined`). Lets `ctx.json()` be called again —
+     * e.g. in a handler after body validation already read the stream.
+     */
+    private _json?: Promise<unknown>;
 
     /**
      * Validated data attached by the validation hook. Mutable instance
@@ -257,6 +299,7 @@ export class BurgerContext<TRoute = unknown> {
         ctx._ctxInit = ctxInit ?? {};
         ctx._query = undefined;
         ctx._cookies = undefined;
+        ctx._json = undefined;
         ctx.validated = undefined;
         ctx._set = undefined;
         ctx.services = (
@@ -328,19 +371,38 @@ export class BurgerContext<TRoute = unknown> {
         return this._cookies;
     }
 
+    /**
+     * The client's address as seen by the server socket (never a forwarded
+     * header — `X-Forwarded-For` / `CF-Connecting-IP` are client-controlled
+     * unless a trusted proxy sets them). `undefined` when the runtime does
+     * not expose it (WinterCG `fetch` entries).
+     */
+    get ip(): string | undefined {
+        const source = requestIPs.get(this._raw);
+        if (source === undefined) return undefined;
+        if (typeof source === 'string') return source;
+        return source.requestIP(this._raw)?.address ?? undefined;
+    }
+
     /** The underlying raw `Request`. */
     get request(): Request {
         return this._raw;
     }
 
-    /** Route path params (seeded from `ctxInit`). Undefined for non-param routes. */
-    get params(): Record<string, string> | undefined {
-        return this._ctxInit.params;
+    /**
+     * Route path params (seeded from `ctxInit`). Always an object — empty
+     * for routes without `[param]` segments — so `ctx.params.id` compiles.
+     */
+    get params(): Record<string, string> {
+        return (this._ctxInit.params ??= {});
     }
 
-    /** Wildcard segments (seeded from `ctxInit`). Undefined for non-wildcard routes. */
-    get wildcardParams(): string[] | undefined {
-        return this._ctxInit.wildcardParams;
+    /**
+     * Wildcard segments (seeded from `ctxInit`). Always an array — empty
+     * for non-wildcard routes.
+     */
+    get wildcardParams(): string[] {
+        return (this._ctxInit.wildcardParams ??= []);
     }
 
     /** The matched-route identity (seeded from `ctxInit`). Always present. */
@@ -408,7 +470,20 @@ export class BurgerContext<TRoute = unknown> {
      * ```
      */
     json<T = any>(): Promise<T> {
-        return this._raw.json();
+        // Parsed once and cached (body validation reads it first). Malformed
+        // JSON is a client error: 400 Problem Details, not a 500.
+        this._json ??= this._raw.json().catch((error: unknown) => {
+            // A parse failure stays cached (a re-read reports the same 400);
+            // any other failure (stream already used, …) is not cached.
+            if (error instanceof SyntaxError) {
+                throw new HTTPError(400, `Malformed JSON body: ${error.message}`, {
+                    cause: error,
+                });
+            }
+            this._json = undefined;
+            throw error;
+        });
+        return this._json as Promise<T>;
     }
 
     text(): Promise<string> {
@@ -482,8 +557,9 @@ for (const name of Object.getOwnPropertyNames(Request.prototype)) {
  * non-configurable so a handler cannot replace them on the shared prototype and
  * leak state across requests. The delegation **methods** (incl. `json`, `text`,
  * `arrayBuffer`, `blob`, `formData`, `clone`) are intentionally left
- * writable/configurable so the framework can reassign `req.json` per instance
- * (validator.ts) and user hooks can attach custom properties.
+ * writable/configurable so user hooks can attach custom properties.
+ * (`json()` caches its parsed result per instance, so body validation and
+ * the handler can both call it.)
  * Freezing only getters preserves the safety goal and the documented
  * mutability contract without breaking existing validation behavior.
  */

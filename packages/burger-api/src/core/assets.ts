@@ -97,32 +97,6 @@ export function diskAssetHandler(route: DiskAssetRoute): RequestHandler {
     };
 }
 
-/** A static asset with its contents base64-embedded (production AOT). */
-export interface EmbeddedAsset {
-    /** Route path including the prefix (e.g. `/assets/style.css`). */
-    path: string;
-    contentType: string;
-    /** File contents encoded as standard base64. */
-    data: string;
-}
-
-/**
- * Handler for an embedded asset: decodes the base64 payload per request.
- * Text assets decode as UTF-8; anything else is served as bytes.
- */
-export function embeddedAssetHandler(asset: EmbeddedAsset): RequestHandler {
-    const isText = asset.contentType.includes('text/') ||
-        asset.contentType.startsWith('application/json') ||
-        asset.contentType.startsWith('image/svg');
-    return () => {
-        const bytes = Buffer.from(asset.data, 'base64');
-        if (isText) {
-            return new Response(bytes.toString('utf-8'), {
-                headers: { 'Content-Type': asset.contentType },
-            });
-        }
-        return new Response(new Uint8Array(bytes), {
-            headers: { 'Content-Type': asset.contentType },
-        });
-    };
-}
+// Embedded assets live in a module without `node:fs` (portable bundles).
+export { embeddedAssetHandler } from './embedded-assets.js';
+export type { EmbeddedAsset } from './embedded-assets.js';

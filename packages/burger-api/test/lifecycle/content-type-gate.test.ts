@@ -1,6 +1,6 @@
 /**
  * Body validation content-type gate: media-type parsing, casing tolerance,
- * missing-header rejection.
+ * missing-header rejection, 415 for non-JSON bodies.
  */
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
@@ -56,10 +56,22 @@ describe('body validation content-type gate', () => {
         expect(res.status).toBe(422);
     });
 
-    it('skips body validation for non-JSON media types', async () => {
-        const res = await postBody('name=alice', {
-            'Content-Type': 'application/x-www-form-urlencoded',
+    it('rejects non-JSON media types with 415 (never skips validation)', async () => {
+        for (const type of ['application/x-www-form-urlencoded', 'text/plain']) {
+            const res = await postBody('name=alice', { 'Content-Type': type });
+            expect(res.status).toBe(415);
+            expect(res.headers.get('content-type')).toBe(
+                'application/problem+json'
+            );
+            const data = (await res.json()) as { title: string };
+            expect(data.title).toBe('Unsupported Media Type');
+        }
+    });
+
+    it('accepts structured-syntax JSON media types (application/*+json)', async () => {
+        const ok = await postBody('{"name": "alice"}', {
+            'Content-Type': 'application/merge-patch+json',
         });
-        expect(res.status).toBe(200);
+        expect(ok.status).toBe(200);
     });
 });

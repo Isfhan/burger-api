@@ -11,9 +11,20 @@
  * for the documentation UI.
  *
  * Built-in providers: `scalarDocs()`, `swaggerDocs()`, `redocDocs()`.
- * Users can pass any custom function.
+ * Users can pass any custom function. `options.specUrl` is the path the
+ * spec is served at (`OpenAPIConfig.path`, default `/openapi.json`) — load
+ * the spec from there rather than hardcoding it.
  */
-export type DocsProvider = (spec: OpenAPIObject) => string | Response;
+export type DocsProvider = (
+    spec: OpenAPIObject,
+    options: DocsProviderOptions
+) => string | Response;
+
+/** Runtime details passed to a {@link DocsProvider}. */
+export interface DocsProviderOptions {
+    /** URL path of the OpenAPI JSON spec, e.g. `/openapi.json`. */
+    specUrl: string;
+}
 
 /**
  * Minimal OpenAPI 3.0 document shape used by the docs provider.

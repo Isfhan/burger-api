@@ -147,7 +147,7 @@ describe('renderHTTPError', () => {
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
-        expect(body.title).toBe('NotFoundError');
+        expect(body.title).toBe('Not Found');
         expect(body.status).toBe(404);
         expect(body.detail).toBe('User 42 not found');
         expect(body.stack).toBeUndefined();
@@ -161,7 +161,7 @@ describe('renderHTTPError', () => {
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
-        expect(body.title).toBe('ForbiddenError');
+        expect(body.title).toBe('Forbidden');
         expect(body.status).toBe(403);
         expect(body.detail).toBe('Nope');
         expect(body.stack).toBeDefined();
@@ -177,7 +177,7 @@ describe('renderHTTPError', () => {
 
         const body = await res.json();
         expect(body.type).toBe('about:blank');
-        expect(body.title).toBe('HTTPError');
+        expect(body.title).toBe('Internal Server Error');
         expect(body.status).toBe(500);
         expect(body.detail).toBe('Internal Server Error');
         expect(body.stack).toBeUndefined();

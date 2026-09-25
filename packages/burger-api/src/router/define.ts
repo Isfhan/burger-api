@@ -17,7 +17,11 @@
  * ```
  */
 
-import type { BurgerContext } from '../context/context.js';
+import type {
+    BurgerContext,
+    BurgerValidated,
+} from '../context/context.js';
+import type { InferValidated } from '../types/inference.js';
 import type { MethodSchema, RequestHandler } from '../types/index.js';
 import type {
     ErrorHook,
@@ -34,30 +38,53 @@ export function defineRoute<T extends MethodSchema>(
     return handler as RequestHandler;
 }
 
+/**
+ * The `ctx` a {@link defineHooks} hook receives. Unlike a handler (which
+ * belongs to ONE method), route hooks run for EVERY method of the route, so
+ * each `ctx.validated` slot is typed as possibly `undefined` (`POST`'s
+ * `body` is absent on a `GET`). After validation `ctx.validated` itself is
+ * always an object, so `ctx.validated.query?.q` needs no extra guard.
+ */
+export type HookContext<T> = Omit<BurgerContext<T>, 'validated'> & {
+    validated: Partial<InferValidated<T>> & BurgerValidated;
+};
+
+/**
+ * `transform` and `onError` may run before validation (`onError` also for
+ * a validation failure), so `ctx.validated` itself may be `undefined`.
+ */
+export type PreValidationHookContext<T> = Omit<
+    BurgerContext<T>,
+    'validated'
+> & {
+    validated: (Partial<InferValidated<T>> & BurgerValidated) | undefined;
+};
+
 type TypedForwardHook<T> = (
-    ctx: BurgerContext<T>
+    ctx: HookContext<T>
 ) => ForwardHookResult | Promise<ForwardHookResult>;
 
 type TypedResponseHook<T> = (
-    ctx: BurgerContext<T>
+    ctx: HookContext<T>
 ) => ResponseHookResult | Promise<ResponseHookResult>;
 
 type TypedErrorHook<T> = (
     error: Error,
-    ctx: BurgerContext<T>
+    ctx: PreValidationHookContext<T>
 ) => ReturnType<ErrorHook>;
 
 /**
  * The `hooks.ts` counterpart to {@link defineRoute}'s handler typing —
  * same field shapes as {@link RouteHooks}, with `ctx` bound to the route's
- * schema instead of a plain `BurgerContext`.
+ * schema instead of a plain `BurgerContext` (every validated slot possibly
+ * `undefined` — see {@link HookContext}).
  */
 export interface TypedRouteHooks<T> {
     beforeRoute?: TypedForwardHook<T> | TypedForwardHook<T>[];
     afterRoute?: TypedResponseHook<T> | TypedResponseHook<T>[];
     mapResponse?: TypedResponseHook<T> | TypedResponseHook<T>[];
     onError?: TypedErrorHook<T> | TypedErrorHook<T>[];
-    transform?: Record<string, (ctx: BurgerContext<T>) => unknown>;
+    transform?: Record<string, (ctx: PreValidationHookContext<T>) => unknown>;
 }
 
 /** Identity wrapper: infers every hook's `ctx` from `schema`, returns `hooks` unchanged. */

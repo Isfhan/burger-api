@@ -62,9 +62,11 @@ interface JitDeps {
  *   → afterRoute* → mapResponse*
  *   any throw → dispatchOnError (nearest-first onError chain)
  *
- * - Forward hooks: `Response` short-circuits; a function return is an
- *   after-mapper applied to the handler's response in REVERSE collection
- *   order; anything else continues.
+ * - Forward hooks: `Response` short-circuits the remaining beforeRoute hooks
+ *   and the handler (the response still flows through the collected
+ *   mappers, response validation, afterRoute and mapResponse); a function
+ *   return is an after-mapper applied in REVERSE collection order; anything
+ *   else continues.
  * - Response hooks: `Response` replaces; `(res)=>Response` transforms.
  * - Cold/rare stages (transform, validation, response validation, error
  *   dispatch) delegate to the SAME shared functions the interpreter uses,
@@ -110,13 +112,19 @@ export function compileJitHookPlan(
     if (bLen === 0) {
         L.push('let res=await H(ctx);');
     } else {
-        L.push(`const M=new Array(${bLen});let mc=0;`);
+        // A `Response` short-circuit skips the remaining beforeRoute hooks
+        // and the handler, but — exactly like `runHooks` — the mappers
+        // collected so far still apply, and the response then continues
+        // through response validation → afterRoute → mapResponse.
+        L.push(`const M=new Array(${bLen});let mc=0;let res;`);
+        L.push('sc:{');
         for (let i = 0; i < bLen; i++) {
             L.push(`const h${i}=await D.b[${i}](ctx);`);
-            L.push(`if(h${i} instanceof Response){return h${i};}`);
+            L.push(`if(h${i} instanceof Response){res=h${i};break sc;}`);
             L.push(`if(typeof h${i}==='function'){M[mc++]=h${i};}`);
         }
-        L.push('let res=await H(ctx);');
+        L.push('res=await H(ctx);');
+        L.push('}');
         L.push('for(let i=mc-1;i>=0;i--){res=await M[i](res);}');
     }
 
@@ -130,7 +138,7 @@ export function compileJitHookPlan(
                 // uppercase key silently misses and skips enforcement.
                 'const out=VR(D.rv,METHOD.toLowerCase(),res.status,body,' +
                 'D.vc||{},D.dbg);' +
-                'if(!out.ok&&out.errorResponse){return out.errorResponse;} } }catch(_sv){}'
+                'if(!out.ok&&out.errorResponse){res=out.errorResponse;} } }catch(_sv){}'
         );
     }
 

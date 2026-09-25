@@ -24,22 +24,21 @@ type Equal<A, B> =
         ? true
         : false;
 
-// Declared params/query/headers/cookies slots are non-optional; body stays
-// optional. Asserted via mutual assignability (the Equal trick cannot see
+// Declared slots (params/query/headers/cookies/body) are non-optional. Asserted via mutual assignability (the Equal trick cannot see
 // through intersections of single-key mapped types with optional members).
 type _check1 = Expect<V extends {
     params: { id: string };
     query: { q?: string };
     headers: { authorization: string };
     cookies: { session: string };
-    body?: { name: string; age: number };
+    body: { name: string; age: number };
 } ? true : false>;
 type _check2 = Expect<{
     params: { id: string };
     query: { q?: string };
     headers: { authorization: string };
     cookies: { session: string };
-    body?: { name: string; age: number };
+    body: { name: string; age: number };
 } extends V ? true : false>;
 
 describe('InferValidated', () => {
@@ -102,7 +101,7 @@ describe('InferValidated', () => {
         type Ctx = BurgerContext<typeof schema>;
         type V2 = NonNullable<Ctx['validated']>;
         type E = Expect<
-            Equal<V2['body'], { name: string; age: number } | undefined>
+            Equal<V2['body'], { name: string; age: number }>
         >;
         const e: E = true;
         expect(e).toBe(true);

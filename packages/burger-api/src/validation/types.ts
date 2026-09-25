@@ -110,6 +110,11 @@ export type CoercionOp = 'number' | 'boolean' | 'date' | 'none';
 export interface CoercionPlan {
     slot: 'query' | 'params' | 'headers' | 'cookies';
     fields: Record<string, CoercionOp>;
+    /**
+     * Array fields (`z.array(...)`) → element op. A single value is wrapped
+     * into a one-element array; each element is coerced with the op.
+     */
+    arrays?: Record<string, CoercionOp>;
 }
 
 /**

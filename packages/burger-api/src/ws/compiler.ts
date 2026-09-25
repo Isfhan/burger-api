@@ -169,34 +169,48 @@ export class WebSocketCompiler {
         global?: WebSocketHooks,
         route?: WebSocketHooks
     ): WebSocketHooks | undefined {
-        if (!global && !route) return undefined;
-
-        const merged: WebSocketHooks = {};
-
-        // onOpen: global runs first, then route
-        if (global?.onOpen || route?.onOpen) {
-            merged.onOpen = async (ws) => {
-                if (global?.onOpen) await global.onOpen(ws);
-                if (route?.onOpen) await route.onOpen(ws);
-            };
-        }
-
-        // onMessage: global runs first, then route
-        if (global?.onMessage || route?.onMessage) {
-            merged.onMessage = async (ws, message) => {
-                if (global?.onMessage) await global.onMessage(ws, message);
-                if (route?.onMessage) await route.onMessage(ws, message);
-            };
-        }
-
-        // onClose: global runs first, then route
-        if (global?.onClose || route?.onClose) {
-            merged.onClose = async (ws, code, reason) => {
-                if (global?.onClose) await global.onClose(ws, code, reason);
-                if (route?.onClose) await route.onClose(ws, code, reason);
-            };
-        }
-
-        return merged;
+        return mergeWsHooks(global, route);
     }
+}
+
+/**
+ * Merges app-level (`src/hooks.ts` onOpen/onMessage/onClose) and route WS
+ * hooks — global runs first, then route. Shared by file-based, prebuilt
+ * (AOT) and programmatic WebSocket routes.
+ */
+export function mergeWsHooks(
+    global?: WebSocketHooks,
+    route?: WebSocketHooks
+): WebSocketHooks | undefined {
+    if (!global?.onOpen && !global?.onMessage && !global?.onClose) {
+        return route;
+    }
+
+    const merged: WebSocketHooks = {};
+
+    // onOpen: global runs first, then route
+    if (global?.onOpen || route?.onOpen) {
+        merged.onOpen = async (ws) => {
+            if (global?.onOpen) await global.onOpen(ws);
+            if (route?.onOpen) await route.onOpen(ws);
+        };
+    }
+
+    // onMessage: global runs first, then route
+    if (global?.onMessage || route?.onMessage) {
+        merged.onMessage = async (ws, message) => {
+            if (global?.onMessage) await global.onMessage(ws, message);
+            if (route?.onMessage) await route.onMessage(ws, message);
+        };
+    }
+
+    // onClose: global runs first, then route
+    if (global?.onClose || route?.onClose) {
+        merged.onClose = async (ws, code, reason) => {
+            if (global?.onClose) await global.onClose(ws, code, reason);
+            if (route?.onClose) await route.onClose(ws, code, reason);
+        };
+    }
+
+    return merged;
 }

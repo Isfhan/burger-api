@@ -19,6 +19,7 @@ import type {
     ValidatorConfig,
 } from './types.js';
 import { renderValidationError } from './error.js';
+import { HTTPError, renderHTTPError } from '../errors/http-error.js';
 
 /** Resolves the response validator for a status (exact, then class). */
 function selectResponseValidator(
@@ -90,13 +91,35 @@ export function validateResponse(
         return { ok: true };
     }
 
-    // enforce: return a safe error response. Never leak schema internals.
+    // enforce: the handler broke its own contract — a server bug. Always
+    // log it; answer with RFC 9457 Problem Details: issue details in dev,
+    // a generic 500 in production (never leak schema internals).
     const enforceStatus = status === 422 ? 422 : 500;
-    const errorResponse = renderValidationError(result, {
-        status: enforceStatus,
-        isDev,
-        slot: 'response',
-        config,
-    });
+    console.error(
+        `[burger-api] Response validation failed (status ${status}):`,
+        result.issues
+    );
+    if (config.errorRenderer) {
+        return {
+            ok: false,
+            errorResponse: renderValidationError(result, {
+                status: enforceStatus,
+                isDev,
+                slot: 'response',
+                config,
+            }),
+        };
+    }
+    // No stack: the synthetic error's trace is noise. Dev adds the issues.
+    const errorResponse = renderHTTPError(
+        new HTTPError(enforceStatus, 'Response validation failed'),
+        false,
+        isDev
+            ? {
+                  detail: 'Response validation failed',
+                  errors: { response: result.issues },
+              }
+            : undefined
+    );
     return { ok: false, errorResponse };
 }

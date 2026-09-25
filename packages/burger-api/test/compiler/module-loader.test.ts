@@ -9,7 +9,7 @@ import { RouteTree } from '../../src/compiler/route-tree';
 /**
  * Tests for the Module Loader + Route Tree: assembles RouteModule from the
  * scanner inventory. Each route directory is self-contained — no group
- * inheritance merging. Auto-injects OPTIONS, fails fast on duplicate paths.
+ * inheritance merging. Fails fast on duplicate paths.
  */
 
 function makeTree(): string {
@@ -58,9 +58,9 @@ describe('ModuleLoader — assembly (self-contained routes)', () => {
         expect(typeof users.handlers.POST).toBe('function');
     });
 
-    it('auto-injects OPTIONS for preflight methods', () => {
+    it('leaves OPTIONS to the router compiler (added for every route there)', () => {
         const users = modules.find((m) => m.path === '/api/users')!;
-        expect(typeof users.handlers.OPTIONS).toBe('function');
+        expect(users.handlers.OPTIONS).toBeUndefined();
     });
 
     it('loads route-local hooks (no group inheritance)', () => {

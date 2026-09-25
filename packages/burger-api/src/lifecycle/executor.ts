@@ -8,7 +8,7 @@ import type {
 import { runHooks } from './hook-runner.js';
 import { methodNotAllowed } from '../utils/response.js';
 import { applyTransform } from './transform.js';
-import { HTTPError, renderHTTPError } from '../errors/http-error.js';
+import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import { ValidationError } from '../validation/error.js';
 import { validateResponse } from '../validation/response.js';
 import { isNotProductionEnv } from '../utils/env.js';
@@ -73,8 +73,10 @@ export async function executeHookPlan(
                         plan.validatorConfig ?? {},
                         plan.debug ?? isNotProductionEnv()
                     );
+                    // Enforce failure replaces the response; afterRoute /
+                    // mapResponse still run on it (e.g. CORS headers).
                     if (!outcome.ok && outcome.errorResponse) {
-                        return outcome.errorResponse;
+                        response = outcome.errorResponse;
                     }
                 }
             } catch {
@@ -142,7 +144,13 @@ export async function dispatchOnError(
     }
 
     // All other HTTPError subclasses and unknown errors → RFC 9457.
-    return renderHTTPError(error, isDev);
+    const response = renderHTTPError(error, isDev);
+    // No user onError handled a server-side failure: log it, or it would
+    // vanish (the client only sees a generic 500 in production).
+    if (response.status >= 500) {
+        logUnhandledError(ctx.method, ctx.url, error);
+    }
+    return response;
 }
 
 /**

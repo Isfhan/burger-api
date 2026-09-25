@@ -234,7 +234,7 @@ describe('Router — Hybrid Router dispatch', () => {
             expect(await res.text()).toBe('bar');
         });
 
-        it('routes a trailing-slash dynamic path to the param route (empty value)', async () => {
+        it('never binds a :param to an empty segment (/api/users/ ≡ /api/users)', async () => {
             const r = new Router();
             r.compile([
                 route('/api/users', { GET: () => new Response('list') }),
@@ -245,7 +245,9 @@ describe('Router — Hybrid Router dispatch', () => {
             ]);
             const res = await r.fetch(req('/api/users/'));
             expect(res.status).toBe(200);
-            expect(await res.text()).toBe('id=');
+            expect(await res.text()).toBe('list');
+            const one = await r.fetch(req('/api/users/7/'));
+            expect(await one.text()).toBe('id=7');
         });
     });
 

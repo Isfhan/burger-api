@@ -52,6 +52,8 @@ export class Server {
             ...opts,
             hostname: opts.hostname ?? this.options.hostname,
             debug: opts.debug ?? this.options.debug,
+            maxRequestBodySize:
+                opts.maxRequestBodySize ?? this.options.maxRequestBodySize,
         });
     }
 

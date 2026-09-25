@@ -202,6 +202,12 @@ export interface BurgerWS {
     data: WebSocketData;
 
     /**
+     * URL-decoded route params of the matched WebSocket route (e.g.
+     * `{ room: 'lobby' }` for `/chat/:room`). Empty object when none.
+     */
+    readonly params: Record<string, string>;
+
+    /**
      * Injected application services (same as `ctx.services` in HTTP handlers).
      * Populated by `burger.provide()`. Typed via module augmentation of `BurgerServices`.
      *
@@ -385,13 +391,19 @@ export class BurgerWSContext implements BurgerWS {
     // genuinely does not exist (e.g. pub/sub off Bun).
     private _raw: any;
     private _data: WebSocketData = {};
+    private _params: Record<string, string>;
     private _services: BurgerServices = Object.create(null) as BurgerServices;
 
     // The raw socket is the platform's server-side WebSocket (see `_raw`
     // above); the provider map mirrors `BurgerContext.create`'s providers
     // parameter.
-    constructor(rawWebSocket: any, providers?: Map<string, unknown>) {
+    constructor(
+        rawWebSocket: any,
+        providers?: Map<string, unknown>,
+        params: Record<string, string> = {}
+    ) {
         this._raw = rawWebSocket;
+        this._params = params;
         // Copy data from raw WebSocket (typed via the WebSocketData
         // augmentation interface users extend).
         if (rawWebSocket.data) {
@@ -413,6 +425,10 @@ export class BurgerWSContext implements BurgerWS {
         if (this._raw) {
             this._raw.data = value;
         }
+    }
+
+    get params(): Record<string, string> {
+        return this._params;
     }
 
     get services(): BurgerServices {

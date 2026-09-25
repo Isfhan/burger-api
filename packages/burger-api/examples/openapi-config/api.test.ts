@@ -27,8 +27,13 @@ describe('openapi-config example', () => {
         expect(data.products.length).toBeGreaterThan(0);
     });
 
-    it('serves openapi.json with custom metadata', async () => {
-        const res = await fetch(`${server!.baseUrl}/openapi.json`);
+    it('serves openapi.json with custom metadata (behind docsAuth)', async () => {
+        const noAuth = await fetch(`${server!.baseUrl}/openapi.json`);
+        expect(noAuth.status).toBe(401);
+
+        const res = await fetch(`${server!.baseUrl}/openapi.json`, {
+            headers: { Authorization: 'Basic ' + btoa('admin:secret') },
+        });
         expect(res.status).toBe(200);
         const spec = await res.json();
         expect(spec.info.title).toBe('Product API');

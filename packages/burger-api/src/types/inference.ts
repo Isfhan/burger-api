@@ -68,7 +68,9 @@ type SlotOutput<T> = T extends SchemaInput ? InferSchemaOutput<T> : unknown;
 /**
  * A slot that is ALWAYS populated after validation when the route declares
  * it: `query`, `headers`, `cookies` are validated on every request (even an
- * empty query), and `params` whenever the route has `[param]` segments. The
+ * empty query), `params` whenever the route has `[param]` segments, and
+ * `body` on every request that reaches the handler (a non-JSON or missing
+ * body is rejected with 415 / 422 before the handler runs). The
  * declared slot is therefore non-optional — `ctx.validated.query.q` compiles
  * without optional chaining. Undeclared slots stay optional (`unknown`):
  * at runtime they are never set.
@@ -78,19 +80,10 @@ type AlwaysSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRo
     : { [P in K]?: unknown };
 
 /**
- * A slot that may be absent even when declared: `body` is only validated for
- * JSON requests (`content-type: application/json`), so it stays optional.
- */
-type MaybeSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
-    ? { [P in K]?: SlotOutput<TRoute[K]> }
-    : { [P in K]?: unknown };
-
-/**
  * Map a `RouteMethodSchema` to its inferred `ctx.validated` shape.
  *
- * Declared `params`/`query`/`headers`/`cookies` slots are non-optional
- * (always populated after validation); `body` stays optional (JSON-only
- * gate); undeclared slots are optional `unknown`.
+ * Declared slots are non-optional (always populated after validation);
+ * undeclared slots are optional `unknown`.
  */
 export type InferValidated<TRoute> = TRoute extends object
     ? TRoute extends RouteMethodSchema
@@ -98,6 +91,6 @@ export type InferValidated<TRoute> = TRoute extends object
               AlwaysSlot<TRoute, 'query'> &
               AlwaysSlot<TRoute, 'headers'> &
               AlwaysSlot<TRoute, 'cookies'> &
-              MaybeSlot<TRoute, 'body'>
+              AlwaysSlot<TRoute, 'body'>
         : DefaultValidated
     : DefaultValidated;

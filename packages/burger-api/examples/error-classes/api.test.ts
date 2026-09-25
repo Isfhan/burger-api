@@ -37,7 +37,7 @@ describe('error-classes example', () => {
         const res = await fetch(`${server!.baseUrl}/api/users/999`);
         expect(res.status).toBe(404);
         const data = await res.json();
-        expect(data.title).toBe('NotFoundError');
+        expect(data.title).toBe('Not Found');
         expect(data.status).toBe(404);
     });
 
@@ -45,7 +45,7 @@ describe('error-classes example', () => {
         const res = await fetch(`${server!.baseUrl}/api/admin`);
         expect(res.status).toBe(401);
         const data = await res.json();
-        expect(data.title).toBe('UnauthorizedError');
+        expect(data.title).toBe('Unauthorized');
         expect(data.status).toBe(401);
     });
 
@@ -55,7 +55,7 @@ describe('error-classes example', () => {
         });
         expect(res.status).toBe(403);
         const data = await res.json();
-        expect(data.title).toBe('ForbiddenError');
+        expect(data.title).toBe('Forbidden');
         expect(data.status).toBe(403);
     });
 

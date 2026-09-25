@@ -65,7 +65,7 @@ describe('onError', () => {
         );
         const data = await res.json();
         expect(data).toHaveProperty('type');
-        expect(data).toHaveProperty('title', 'HTTPError');
+        expect(data).toHaveProperty('title', 'Internal Server Error');
         expect(data).toHaveProperty('status', 500);
     });
 

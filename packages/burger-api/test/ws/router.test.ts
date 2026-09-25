@@ -176,11 +176,16 @@ describe('WebSocketRouter', () => {
         expect(match2?.params.userId).toBe('123');
     });
 
-    it('should handle trailing slash mismatch', () => {
+    it('ignores a trailing slash like HTTP routing', () => {
         const route = createRoute('/chat');
         router.addRoute(route);
 
-        const match = router.match('/chat/');
-        expect(match).toBeNull();
+        expect(router.match('/chat/')?.route).toBe(route);
+    });
+
+    it('decodes params and never matches an empty segment', () => {
+        router.addRoute(createRoute('/rooms/:room'));
+        expect(router.match('/rooms/a%20b')?.params).toEqual({ room: 'a b' });
+        expect(router.match('/rooms/')).toBeNull();
     });
 });

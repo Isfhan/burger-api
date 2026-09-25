@@ -51,3 +51,23 @@ export function resolveScanDir(dir: string, label: string, option: string): stri
             : message + ` Run via "burger-api dev" to enable the src/ fallback.`
     );
 }
+
+/**
+ * Convention default for a scan root the app did not configure
+ * (`src/api`, `src/pages`, `src/websocket`) — mirrors the CLI build's
+ * defaults so dev and production mount the same directories. Returns the
+ * path only when the directory exists: `./src/<name>` under the project
+ * root, else `<BURGER_API_APP_DIR>/<name>` (the entry file's directory).
+ */
+export function resolveConventionDir(
+    name: 'api' | 'pages' | 'websocket'
+): string | undefined {
+    const rel = `./src/${name}`;
+    if (existsSync(rel)) return rel;
+    const appDir = process.env.BURGER_API_APP_DIR;
+    if (appDir) {
+        const candidate = join(appDir, name);
+        if (existsSync(candidate)) return candidate;
+    }
+    return undefined;
+}

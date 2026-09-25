@@ -11,7 +11,9 @@
  * Behavior:
  * - skips work when `ctx.validated` is already set,
  * - validates params/query/headers/cookies/body with the same checks,
- * - throws a `ValidationError` (422, RFC 9457 problem details) on failure.
+ * - throws a `ValidationError` (422, RFC 9457 problem details) on failure,
+ * - throws `HTTPError(415)` when a body schema is declared but the request
+ *   body is not JSON (never skips validation).
  */
 
 import type { BurgerContext } from '../context/context.js';
@@ -25,6 +27,7 @@ import type {
 } from './types.js';
 import { apply as applyCoercion } from './coerce.js';
 import { ValidationError } from './error.js';
+import { HTTPError } from '../errors/http-error.js';
 
 /**
  * Splits a `Cookie` header into `name=value` pairs, honoring RFC 6265 quoted
@@ -127,6 +130,9 @@ export function createValidationHook(
             methodValidators = validators.methods['get'];
         }
         if (!methodValidators) {
+            // Methods without a schema still get an (empty) validated bag, so
+            // route hooks typed via `defineHooks` can read slots safely.
+            ctx.validated = {};
             return undefined;
         }
 
@@ -213,7 +219,11 @@ export function createValidationHook(
         if (methodValidators.body && method !== 'head') {
             const rawContentType = ctx.headers.get('content-type') ?? '';
             const mediaType = rawContentType.split(';')[0]!.trim().toLowerCase();
-            if (mediaType === 'application/json') {
+            if (
+                mediaType === 'application/json' ||
+                (mediaType.startsWith('application/') &&
+                    mediaType.endsWith('+json'))
+            ) {
                 try {
                     const bodyData = await ctx.json();
                     const result = methodValidators.body.validate(bodyData);
@@ -241,9 +251,15 @@ export function createValidationHook(
                             'Content-Type header required for body validation',
                     },
                 ];
+            } else {
+                // A body schema is declared but the body is not JSON (form,
+                // text, …). Never let unvalidated data reach the handler:
+                // 415 Unsupported Media Type (RFC 9457 via onError).
+                throw new HTTPError(
+                    415,
+                    `Unsupported Media Type "${mediaType}" — this endpoint expects application/json`
+                );
             }
-            // Any other (non-JSON) media type skips body validation as
-            // before — the body is not JSON.
         }
 
         if (errorsBySlot) {

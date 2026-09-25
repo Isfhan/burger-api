@@ -16,12 +16,12 @@ describe('BurgerContext (prototype-based request)', () => {
         expect(ctx.route).toEqual({ path: '/p', pattern: '/u/:id' });
     });
 
-    it('leaves params/wildcardParams undefined when ctxInit omits them', () => {
+    it('defaults params to {} and wildcardParams to [] when ctxInit omits them', () => {
         const ctx = BurgerContext.create(new Request('http://h/'), {
             route: { path: '/', pattern: '/' },
         });
-        expect(ctx.params).toBeUndefined();
-        expect(ctx.wildcardParams).toBeUndefined();
+        expect(ctx.params).toEqual({});
+        expect(ctx.wildcardParams).toEqual([]);
         // route is always present in for matched routes.
         expect(ctx.route).toEqual({ path: '/', pattern: '/' });
     });

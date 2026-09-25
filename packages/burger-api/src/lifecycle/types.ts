@@ -76,13 +76,17 @@ export type Hook = ForwardHook | ResponseHook;
  * so a route-level onError can handle its own errors before a global fallback.
  *
  * Returns a `Response` to handle the error, or `undefined`/`void` to let the
- * next onError in the chain try. If no onError handles it, the error re-throws
- * to the adapter fallback (`errorResponse`).
+ * next onError in the chain try. If no onError handles it, the framework
+ * renders an RFC 9457 response (and logs 5xx errors server-side). May be async.
  */
 export type ErrorHook = (
     error: Error,
     ctx: BurgerContext
-) => Response | void | undefined;
+) =>
+    | Response
+    | void
+    | undefined
+    | Promise<Response | void | undefined>;
 
 /**
  * The frozen, per-route hook plan. Composed ONCE at compile time

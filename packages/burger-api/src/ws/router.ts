@@ -49,6 +49,11 @@ export class WebSocketRouter {
         route: CompiledWebSocketRoute;
         params: Record<string, string>;
     } | null {
+        // A trailing slash is ignored, like HTTP routing (`/chat/` ≡ `/chat`).
+        if (path.length > 1 && path.endsWith('/')) {
+            path = path.replace(/\/+$/, '') || '/';
+        }
+
         // Try static routes first (fastest)
         const staticRoute = this.staticRoutes.get(path);
         if (staticRoute) {
@@ -109,9 +114,14 @@ export class WebSocketRouter {
             const pathPart = pathParts[i]!;
 
             if (patternPart.startsWith(':')) {
-                // Parameter
+                // Parameter: never matches an empty segment; URL-decoded.
+                if (pathPart === '') return null;
                 const paramName = patternPart.slice(1);
-                params[paramName] = pathPart;
+                try {
+                    params[paramName] = decodeURIComponent(pathPart);
+                } catch {
+                    params[paramName] = pathPart;
+                }
             } else if (patternPart !== pathPart) {
                 // Static mismatch
                 return null;

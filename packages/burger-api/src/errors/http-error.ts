@@ -21,6 +21,65 @@ export class HTTPError extends Error {
 }
 
 /**
+ * HTTP status reason phrases (RFC 9110) used as the Problem Details `title`.
+ * Unlisted codes fall back to the error class name.
+ */
+const STATUS_TITLES: Record<number, string> = {
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    402: 'Payment Required',
+    403: 'Forbidden',
+    404: 'Not Found',
+    405: 'Method Not Allowed',
+    406: 'Not Acceptable',
+    408: 'Request Timeout',
+    409: 'Conflict',
+    410: 'Gone',
+    411: 'Length Required',
+    412: 'Precondition Failed',
+    413: 'Content Too Large',
+    414: 'URI Too Long',
+    415: 'Unsupported Media Type',
+    416: 'Range Not Satisfiable',
+    417: 'Expectation Failed',
+    418: "I'm a teapot",
+    422: 'Unprocessable Content',
+    423: 'Locked',
+    424: 'Failed Dependency',
+    425: 'Too Early',
+    426: 'Upgrade Required',
+    428: 'Precondition Required',
+    429: 'Too Many Requests',
+    431: 'Request Header Fields Too Large',
+    451: 'Unavailable For Legal Reasons',
+    500: 'Internal Server Error',
+    501: 'Not Implemented',
+    502: 'Bad Gateway',
+    503: 'Service Unavailable',
+    504: 'Gateway Timeout',
+    505: 'HTTP Version Not Supported',
+};
+
+/**
+ * Logs an error that produced a 5xx response and was not handled by any
+ * user `onError` hook — server-side only (clients get a generic body in
+ * production). One line of context plus the error (with its stack).
+ */
+export function logUnhandledError(
+    method: string,
+    url: string,
+    error: unknown
+): void {
+    let path = url;
+    try {
+        path = new URL(url).pathname;
+    } catch {
+        // Not an absolute URL — log it verbatim.
+    }
+    console.error(`[burger-api] Unhandled error in ${method} ${path}:`, error);
+}
+
+/**
  * Renders any `HTTPError` (or subclass) into an RFC 9457 Problem Details
  * response (`application/problem+json`).
  *
@@ -66,7 +125,8 @@ export function renderHTTPError(
 
     const problem: Record<string, unknown> = {
         type: 'about:blank',
-        title: httpError.name,
+        // RFC 9457: the title is the status phrase, not the class name.
+        title: STATUS_TITLES[status] ?? httpError.name ?? 'Error',
         status,
         // Server-side failures never echo the thrown message to clients.
         detail:
