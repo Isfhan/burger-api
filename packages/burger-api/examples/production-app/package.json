@@ -1,0 +1,7 @@
+{
+    "name": "production-app-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

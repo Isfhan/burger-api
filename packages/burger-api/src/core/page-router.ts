@@ -1,6 +1,12 @@
 // Import stuff from node
-import { readdirSync } from 'fs';
-import * as path from 'path';
+// NOTE: Bun has no native recursive directory walker, so we use Node's
+// `fs/promises` via Bun's Node compatibility layer (AGENTS Rule 12 exception:
+// no `Bun.*` equivalent exists for directory traversal). The original
+// `readdirSync` has been replaced with the async `readdir`. `node:path` is
+// only used for OS-agnostic path string joining (`pathConversion.ts` relies
+// on `path.sep`); no other Node-specific APIs are used.
+import { readdir } from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Import utils
 import {
@@ -8,11 +14,12 @@ import {
     normalizePath,
     compareRoutes,
     ROUTE_CONSTANTS,
-} from '../utils/index';
-import { filePathToPageRoutePath } from '../utils/pathConversion';
+} from '../utils/index.js';
+import { resolveScanDir } from '../utils/fs.js';
+import { filePathToPageRoutePath } from '../utils/pathConversion.js';
 
 // Import types
-import type { PageDefinition } from '../types/index';
+import type { PageDefinition, RequestHandler } from '../types/index.js';
 
 /**
  * PageRouter class for handling file-based page routing.
@@ -37,7 +44,7 @@ export class PageRouter {
         }
 
         // Normalize the pagesDir path
-        this.pagesDir = path.normalize(pagesDir);
+        this.pagesDir = path.normalize(resolveScanDir(pagesDir, 'Pages', 'pageDir'));
 
         // Normalize the prefix if provided
         if (prefix) {
@@ -80,12 +87,25 @@ export class PageRouter {
         let dynamicFolderFound = false;
 
         try {
-            const entries = readdirSync(dir, { withFileTypes: true });
+            const entries = await readdir(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const entryPath = path.join(dir, entry.name);
                 const relativePath = path.join(basePath, entry.name);
 
                 if (entry.isDirectory()) {
+                    // Named wildcard folders (`[...slug]`) can never match a
+                    // page route — fail loud instead of silently dropping them.
+                    if (
+                        entry.name.startsWith(
+                            ROUTE_CONSTANTS.WILDCARD_START
+                        ) &&
+                        entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+                    ) {
+                        throw new Error(
+                            `Named wildcard folder '${entry.name}' is not supported — ` +
+                                `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
+                        );
+                    }
                     if (entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START)) {
                         continue;
                     }
@@ -117,45 +137,53 @@ export class PageRouter {
                         this.prefix
                     );
 
-                    // Get the module path
-                    const modulePath = path.resolve(entryPath);
+                    // Import the module. `.html` files are imported as raw
+                    // markup — Bun's default `.html` import yields an
+                    // HTMLBundle object that only Bun.serve understands
+                    // (it would crash on `toFetchHandler`).
+                    const isHtmlPage = entry.name.endsWith('.html');
+                    const modulePath = path.resolve(
+                        isHtmlPage ? entryPath + '?raw' : entryPath
+                    );
 
-                    try {
-                        // Import the module
-                        const pageModule = await import(modulePath);
+                    // Import the module
+                    const pageModule = await import(modulePath);
 
-                        // Get the default export as the page handler
-                        if (
-                            entry.name.endsWith('.tsx') &&
-                            typeof pageModule.default !== 'function'
-                        ) {
-                            throw new Error(
-                                `Page at ${entryPath} must export a default function as its handler.`
-                            );
-                        }
-
-                        // Create page definition
-                        const pageDefWithSlash: PageDefinition = {
-                            path: cleanedRoutePath + '/',
-                            handler: pageModule.default,
-                            middleware: pageModule.middleware,
-                        };
-
-                        // Create page definition
-                        const pageDef: PageDefinition = {
-                            path: cleanedRoutePath,
-                            handler: pageModule.default,
-                            middleware: pageModule.middleware,
-                        };
-
-                        // Add the page definition to the pages array
-                        this.pages.push(pageDefWithSlash, pageDef);
-                    } catch (importError) {
-                        console.error(
-                            `Failed to import module at ${modulePath}:`,
-                            importError
+                    // Get the default export as the page handler. `.tsx`
+                    // pages must export a function; `.html` pages export
+                    // the raw markup string — wrap it so both Bun and
+                    // WinterCG serve it as text/html.
+                    let handler: RequestHandler;
+                    if (typeof pageModule.default === 'function') {
+                        handler = pageModule.default;
+                    } else if (typeof pageModule.default === 'string') {
+                        handler = () =>
+                            new Response(pageModule.default, {
+                                headers: {
+                                    'Content-Type':
+                                        'text/html; charset=utf-8',
+                                },
+                            });
+                    } else {
+                        throw new Error(
+                            `Page at ${entryPath} must export a default function or an HTML string as its handler.`
                         );
                     }
+
+                    // Create page definition
+                    const pageDefWithSlash: PageDefinition = {
+                        path: cleanedRoutePath + '/',
+                        handler,
+                    };
+
+                    // Create page definition
+                    const pageDef: PageDefinition = {
+                        path: cleanedRoutePath,
+                        handler,
+                    };
+
+                    // Add the page definition to the pages array
+                    this.pages.push(pageDefWithSlash, pageDef);
                 }
             }
         } catch (error) {
@@ -212,14 +240,20 @@ export class PageRouter {
 
         const params: Record<string, string> = {};
         for (let i = 0; i < reqSegments.length; i++) {
-            const pSegment = pageSegments[i];
-            const reqSegment = reqSegments[i];
+            const pSegment = pageSegments[i]!;
+            const reqSegment = reqSegments[i]!;
 
             if (pSegment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
                 const paramName = pSegment.slice(
                     ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length
                 );
-                params[paramName] = reqSegment;
+                // Percent-decode the captured value (`caf%C3%A9` → `café`);
+                // fall back to the raw segment on malformed encoding.
+                try {
+                    params[paramName] = decodeURIComponent(reqSegment);
+                } catch {
+                    params[paramName] = reqSegment;
+                }
             } else if (pSegment !== reqSegment) {
                 return null;
             }

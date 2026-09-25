@@ -1,14 +1,43 @@
 {
   "name": "burger-api",
-  "version": "0.9.7",
+  "version": "1.0.0-beta",
   "author": "Isfhan Ahmed",
   "type": "module",
+  "sideEffects": false,
   "module": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
+    },
+    "./validation": {
+      "import": "./dist/src/validation/index.js",
+      "types": "./dist/src/validation/index.d.ts"
+    },
+    "./compiler": {
+      "import": "./dist/src/compiler/index.js",
+      "types": "./dist/src/compiler/index.d.ts"
+    },
+    "./openapi": {
+      "import": "./dist/src/core/openapi.js",
+      "types": "./dist/src/core/openapi.d.ts"
+    },
+    "./ws": {
+      "import": "./dist/src/ws/index.js",
+      "types": "./dist/src/ws/index.d.ts"
+    },
+    "./adapter": {
+      "import": "./dist/src/adapter/index.js",
+      "types": "./dist/src/adapter/index.d.ts"
+    },
+    "./adapter/web-standard": {
+      "import": "./dist/src/adapter/web-standard/index.js",
+      "types": "./dist/src/adapter/web-standard/index.d.ts"
+    },
+    "./adapter/bun": {
+      "import": "./dist/src/adapter/bun/index.js",
+      "types": "./dist/src/adapter/bun/index.d.ts"
     }
   },
   "files": [
@@ -16,12 +45,25 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --project tsconfig.build.json",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun run test:examples && bun run test:ecosystem",
+    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:validation && bun run test:compiler && bun run test:adapter && bun run test:provider && bun run test:smoke && bun run test:ws",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
-    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
-    "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
+    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-smoke.test.ts",
+    "test:lifecycle": "bun test --timeout 30000 test/lifecycle/**/*.test.ts",
+    "test:context": "bun test --timeout 30000 test/context/**/*.test.ts",
+    "test:chain": "bun test --timeout 30000 test/chain/**/*.test.ts",
+    "test:plugin": "bun test --timeout 30000 test/plugin/**/*.test.ts",
+    "test:router": "bun test --timeout 30000 test/router/**/*.test.ts",
+    "test:core": "bun test --timeout 30000 test/core/**/*.test.ts",
+    "test:errors": "bun test --timeout 30000 test/errors/**/*.test.ts",
+    "test:smoke": "bun test --timeout 30000 test/plugin-macro-smoke.test.ts",
+    "test:ws": "bun test --timeout 30000 test/ws/**/*.test.ts",
+    "test:validation": "bun test --timeout 30000 test/validation/**/*.test.ts",
+    "test:compiler": "bun test --timeout 30000 test/compiler/**/*.test.ts",
+    "test:adapter": "bun test --timeout 30000 test/adapter/**/*.test.ts",
+    "test:provider": "bun test --timeout 30000 test/provider/**/*.test.ts",
+    "dev": "bun run examples/basic/src/index.ts"
   },
   "keywords": [
     "burger-api",
@@ -86,13 +128,15 @@
   },
   "homepage": "https://burger-api.com",
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.3.0",
+    "node": ">=24"
   },
   "dependencies": {
-    "zod": "^4.0.17"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "valibot": "^1.4.2"
   },
   "peerDependencies": {
     "typescript": "^5"

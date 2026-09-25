@@ -2,8 +2,14 @@
  * Parity tests: CLI scanner produces same route paths as framework conventions.
  */
 import { describe, it, expect } from 'bun:test';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
-import { scanApiRoutes, scanPageRoutes } from '../src/utils/scanner';
+import {
+    scanApiRoutes,
+    scanAssetRoutes,
+    scanPageRoutes,
+} from '../src/utils/scanner';
 
 const fixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
 const parityFixturesDir = join(import.meta.dir, 'fixtures', 'parity-routes');
@@ -18,6 +24,7 @@ const routeMethodsFixturesDir = join(
     'fixtures',
     'route-methods'
 );
+const jsRoutesFixturesDir = join(import.meta.dir, 'fixtures', 'js-routes');
 
 describe('scanApiRoutes', () => {
     it('converts file paths to route paths matching framework (static, dynamic, group)', async () => {
@@ -35,13 +42,15 @@ describe('scanApiRoutes', () => {
         expect(dynamic?.isWildcard).toBe(false);
     });
 
-    it('returns empty array when apiDir does not exist', async () => {
-        const entries = await scanApiRoutes(
-            fixturesDir,
-            './nonexistent',
-            '/api'
+    it('fails loud when a custom apiDir does not exist', async () => {
+        await expect(
+            scanApiRoutes(fixturesDir, './nonexistent', '/api')
+        ).rejects.toThrow(
+            'Routes directory "./nonexistent" does not exist'
         );
-        expect(entries).toEqual([]);
+        await expect(
+            scanApiRoutes(fixturesDir, './nonexistent', '/api')
+        ).rejects.toThrow('Check the apiDir option in burger.build.ts');
     });
 
     it('normalizes prefix and supports grouping + wildcard segments', async () => {
@@ -60,10 +69,14 @@ describe('scanApiRoutes', () => {
         ]);
     });
 
-    it('throws when dynamic and wildcard folders are mixed at same level', async () => {
-        await expect(
-            scanApiRoutes(conflictFixturesDir, './api-mixed', '/api')
-        ).rejects.toThrow('Cannot mix');
+    it('allows dynamic and wildcard folders to coexist at same level (trie priority)', async () => {
+        const entries = await scanApiRoutes(
+            conflictFixturesDir,
+            './api-mixed',
+            '/api'
+        );
+        const paths = entries.map((e) => e.routePath).sort();
+        expect(paths).toEqual(['/api/*', '/api/:id']);
     });
 
     it('throws when multiple dynamic folders exist at same level', async () => {
@@ -110,10 +123,62 @@ describe('scanApiRoutes', () => {
     });
 });
 
+describe('scanApiRoutes — JavaScript (.js / .mjs)', () => {
+    it('discovers route.js with .js convention siblings', async () => {
+        const entries = await scanApiRoutes(
+            jsRoutesFixturesDir,
+            './api',
+            '/api'
+        );
+        const users = entries.find((e) => e.routePath === '/api/users');
+        expect(users).toBeDefined();
+        expect(users?.importPath).toContain('route.js');
+        expect(users?.schemaPath).toContain('schema.js');
+        expect(users?.configPath).toContain('config.js');
+        expect(users?.methods).toEqual(['GET']);
+    });
+
+    it('discovers route.mjs with .mjs convention siblings', async () => {
+        const entries = await scanApiRoutes(
+            jsRoutesFixturesDir,
+            './api',
+            '/api'
+        );
+        const files = entries.find((e) => e.routePath === '/api/files');
+        expect(files).toBeDefined();
+        expect(files?.importPath).toContain('route.mjs');
+        expect(files?.openapiPath).toContain('openapi.mjs');
+    });
+
+    it('throws when route.ts and route.js coexist', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
+        try {
+            mkdirSync(join(root, 'api', 'users'), { recursive: true });
+            writeFileSync(join(root, 'api', 'users', 'route.ts'), 'export {};');
+            writeFileSync(join(root, 'api', 'users', 'route.js'), 'export {};');
+            await expect(
+                scanApiRoutes(root, './api', '/api')
+            ).rejects.toThrow(/Conflicting convention files/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
+
 describe('scanPageRoutes', () => {
-    it('returns empty array when pageDir does not exist', async () => {
-        const entries = await scanPageRoutes(fixturesDir, './pages', '/');
+    it('stays silent for the default pageDir when missing (no pages app)', async () => {
+        const entries = await scanPageRoutes(
+            fixturesDir,
+            './src/pages',
+            '/'
+        );
         expect(entries).toEqual([]);
+    });
+
+    it('fails loud for a custom pageDir that does not exist', async () => {
+        await expect(
+            scanPageRoutes(fixturesDir, './pages', '/')
+        ).rejects.toThrow('Pages directory "./pages" does not exist');
     });
 
     it('converts page paths for index, dynamic, extension stripping, and grouping', async () => {
@@ -154,5 +219,38 @@ describe('scanPageRoutes', () => {
         await expect(
             scanPageRoutes(conflictFixturesDir, './pages-two-dynamic', '/')
         ).rejects.toThrow('Multiple dynamic page folders');
+    });
+});
+
+describe('scanAssetRoutes', () => {
+    function withAssets(): string {
+        const root = mkdtempSync(join(tmpdir(), 'burger-cli-assets-'));
+        mkdirSync(join(root, 'pages', 'assets', 'css'), { recursive: true });
+        writeFileSync(join(root, 'pages', 'assets', 'css', 'style.css'), '');
+        return root;
+    }
+
+    it('pagePrefix "/" yields "/assets/..." (no double slash)', async () => {
+        const root = withAssets();
+        try {
+            const assets = await scanAssetRoutes(root, './pages', '/');
+            expect(assets.map((a) => a.routePath)).toEqual([
+                '/assets/css/style.css',
+            ]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('a custom pagePrefix is included exactly once', async () => {
+        const root = withAssets();
+        try {
+            const assets = await scanAssetRoutes(root, './pages', '/site');
+            expect(assets.map((a) => a.routePath)).toEqual([
+                '/site/assets/css/style.css',
+            ]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });

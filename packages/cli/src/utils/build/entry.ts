@@ -16,7 +16,10 @@ export function prepareVirtualEntry(options: {
         : outDir;
     mkdirSync(virtualEntryDir, { recursive: true });
 
-    const virtualSourcePath = resolve(virtualEntryDir, '__burger_build_entry__.ts');
+    const virtualSourcePath = resolve(
+        virtualEntryDir,
+        '__burger_build_entry__.ts'
+    );
     const virtualPath = virtualSourcePath.split('\\').join('/');
     writeFileSync(virtualSourcePath, options.source, 'utf-8');
 

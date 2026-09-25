@@ -3,7 +3,8 @@
   "author": "Isfhan Ahmed",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "ecosystem/plugins/*"
   ],
   "type": "module",
   "scripts": {

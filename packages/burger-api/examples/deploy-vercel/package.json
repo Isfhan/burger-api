@@ -1,0 +1,7 @@
+{
+    "name": "example-deploy-vercel",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

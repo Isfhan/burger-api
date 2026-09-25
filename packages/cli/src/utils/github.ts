@@ -5,13 +5,19 @@
  * No extra packages needed - we use the native fetch API that comes with Bun!
  *
  * This module handles all communication with GitHub to:
- * - Get lists of available middleware
+ * - Get lists of available hooks and plugins
  * - Download template files
- * - Download middleware code
+ * - Download ecosystem component code
  */
 
-import type { GitHubFile, MiddlewareInfo, SkillInfo } from '../types/index';
-import { unlinkSync } from 'fs';
+import type {
+    GitHubFile,
+    EcosystemComponentInfo,
+    SkillInfo,
+} from '../types/index';
+import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync } from 'fs';
+import { dirname, join } from 'path';
+import { withEcosystemCache } from './ecosystem-cache';
 
 /**
  * Configuration for GitHub repository.
@@ -19,11 +25,46 @@ import { unlinkSync } from 'fs';
  */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
 const REPO_NAME = process.env.BURGER_API_REPO_NAME ?? 'burger-api';
-const BRANCH = process.env.BURGER_API_BRANCH ?? 'main';
+/** Injected at build time when compiling to executable (--define CLI_VERSION). */
+declare const CLI_VERSION: string | undefined;
+
+/**
+ * True when the installed CLI is a prerelease (`1.0.0-beta`, `-rc.1`, …).
+ * Prerelease CLIs read ecosystem content from the 1.0 development branch,
+ * because `main` does not carry 1.0 content until the stable release — so
+ * this switches back to `main` on its own once a stable version ships.
+ */
+export function isPrereleaseBuild(): boolean {
+    let version = typeof CLI_VERSION !== 'undefined' ? CLI_VERSION : '';
+    if (!version) {
+        try {
+            const pkgPath = join(import.meta.dir, '..', '..', 'package.json');
+            version =
+                (JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+                    version?: string;
+                }).version ?? '';
+        } catch {
+            return false;
+        }
+    }
+    return /-(?:beta|rc|alpha)(?:[.-]|$)/.test(version);
+}
+
+/** Ecosystem branch for prerelease CLIs (see {@link isPrereleaseBuild}). */
+export const PRERELEASE_BRANCH = 'feat/burger-api-v1';
+
+const BRANCH =
+    process.env.BURGER_API_BRANCH ??
+    (isPrereleaseBuild() ? PRERELEASE_BRANCH : 'main');
 
 // Build the URLs we'll use to access GitHub
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
+
+// Contents API needs an explicit ref; the default branch is stale until
+// feat/burger-api-v1 merges, so list/add/skills would return empty results.
+const contentsUrl = (path: string): string =>
+    `${API_URL}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`;
 
 const FETCH_TIMEOUT_MS = 20_000;
 
@@ -48,6 +89,42 @@ async function fetchWithTimeout(
     }
 }
 
+/**
+ * Headers for GitHub API requests. Uses GITHUB_TOKEN (if set) for
+ * authenticated requests — unauthenticated requests share a low rate limit.
+ */
+function githubHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'burger-api-cli',
+    };
+    if (process.env.GITHUB_TOKEN) {
+        headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+    return headers;
+}
+
+/**
+ * Throw a descriptive error for a non-OK GitHub response (rate limit,
+ * missing branch, ...). Never swallow these — silent empty results made
+ * failures look like "not found".
+ */
+async function throwForGitHubError(response: Response): Promise<never> {
+    let detail = '';
+    try {
+        const body = (await response.json()) as { message?: string };
+        if (body?.message) detail = ` — ${body.message}`;
+    } catch {
+        // Non-JSON error body — fall back to the bare status.
+    }
+    throw new Error(
+        `GitHub request failed (HTTP ${response.status}${detail}).` +
+            (response.status === 403 || response.status === 429
+                ? ' GitHub API rate limit likely exceeded — set GITHUB_TOKEN to raise it, or retry later.'
+                : '')
+    );
+}
+
 function wrapFetchError(err: unknown, fallbackMessage: string): Error {
     if (err instanceof Error && err.name === 'AbortError') {
         return new Error(
@@ -58,76 +135,143 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 }
 
 /**
- * Get list of available middleware from GitHub
- * This scans the ecosystem/middlewares folder and returns what's available
+ * Get the list of available ecosystem components from GitHub.
+ * This scans the ecosystem/hooks and ecosystem/plugins folders.
  *
- * @returns Promise with array of middleware names
+ * @returns Promise with array of `{ name, kind }` entries
  * @throws Error if GitHub is unreachable or request fails
  * @example
- * const middleware = await getMiddlewareList();
- * // ['cors', 'logger', 'rate-limiter', ...]
+ * const components = await getComponentList();
+ * // [{ name: 'cors', kind: 'hook' }, { name: 'jwt-auth', kind: 'plugin' }, ...]
  */
-export async function getMiddlewareList(): Promise<string[]> {
+export async function getComponentList(): Promise<
+    Array<{ name: string; kind: 'hook' | 'plugin' }>
+> {
     try {
-        // Use Bun's native fetch - no node-fetch package needed!
-        const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares`,
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
+        // Fetch both hooks and plugins from ecosystem
+        const [hooksRes, pluginsRes] = await Promise.all([
+            fetchWithTimeout(contentsUrl('ecosystem/hooks'), {
+                headers: githubHeaders(),
+            }),
+            fetchWithTimeout(contentsUrl('ecosystem/plugins'), {
+                headers: githubHeaders(),
+            }),
+        ]);
 
-        // Check if the request was successful
-        if (!response.ok) {
-            throw new Error(`GitHub returned status ${response.status}`);
-        }
+        // Fail loud on HTTP errors (403 rate limit, 404 branch, ...) instead
+        // of silently rendering an empty list.
+        if (!hooksRes.ok) await throwForGitHubError(hooksRes);
+        if (!pluginsRes.ok) await throwForGitHubError(pluginsRes);
 
-        // Parse the JSON response
-        const files = (await response.json()) as GitHubFile[];
-
-        // Filter to only show directories (each middleware is in its own folder)
-        // Sort alphabetically to make it easier to find things
-        return files
+        const hooks = ((await hooksRes.json()) as GitHubFile[])
             .filter((f) => f.type === 'dir')
-            .map((f) => f.name)
-            .sort();
+            .map((f) => ({ name: f.name, kind: 'hook' as const }));
+        const plugins = ((await pluginsRes.json()) as GitHubFile[])
+            .filter((f) => f.type === 'dir')
+            .map((f) => ({ name: f.name, kind: 'plugin' as const }));
+
+        return [...hooks, ...plugins].sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
     } catch (err) {
         throw wrapFetchError(
             err,
-            'Could not get middleware list from GitHub. Please check your internet connection.'
+            'Could not get the ecosystem list from GitHub. Please check your internet connection.'
         );
     }
 }
 
 /**
- * Get detailed information about a specific middleware
- * This reads the README file to get the description
+ * Cached wrapper around {@link getComponentList} — see `ecosystem-cache.ts`
+ * for the caching contract (fresh: served from disk; stale: refreshed,
+ * falling back to the stale copy on a failed refresh; cold + failing
+ * fetch: throws, same as the uncached function).
+ */
+export async function getCachedComponentList(): Promise<{
+    data: Array<{ name: string; kind: 'hook' | 'plugin' }>;
+    stale: boolean;
+}> {
+    return withEcosystemCache('component-list', getComponentList);
+}
+
+/** First non-heading, non-empty README line — the package's one-line description. */
+function readmeDescription(readme: string): string {
+    for (const line of readme.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) return trimmed;
+    }
+    return 'No description available';
+}
+
+/** A catalog entry for `burger-api list`. */
+export interface ComponentCatalogEntry {
+    name: string;
+    kind: 'hook' | 'plugin';
+    description: string;
+}
+
+/**
+ * The component list plus each README's description, cached together so a
+ * warm `burger-api list` makes no network calls at all. A cold fetch costs
+ * 2 Contents API calls (the rate-limited API); descriptions come from raw
+ * README files, which don't count against the API rate limit.
+ */
+export async function getCachedComponentCatalog(): Promise<{
+    data: ComponentCatalogEntry[];
+    stale: boolean;
+}> {
+    return withEcosystemCache('component-catalog', async () => {
+        const list = await getComponentList();
+        return Promise.all(
+            list.map(async ({ name, kind }) => {
+                const dir = kind === 'plugin' ? 'plugins' : 'hooks';
+                let description = 'No description available';
+                try {
+                    const res = await fetchWithTimeout(
+                        `${RAW_URL}/ecosystem/${dir}/${name}/README.md`
+                    );
+                    if (res.ok) description = readmeDescription(await res.text());
+                } catch {
+                    // Description is cosmetic — keep the entry.
+                }
+                return { name, kind, description };
+            })
+        );
+    });
+}
+
+/**
+ * Get detailed information about a specific ecosystem component.
+ * This reads the README file to get the description.
  *
- * @param name - Name of the middleware (e.g., 'cors')
- * @returns Promise with middleware information
+ * @param name - Name of the component (e.g., 'cors')
+ * @param kind - Whether the component is a hook or a plugin
+ * @returns Promise with component information
  * @example
- * const info = await getMiddlewareInfo('cors');
+ * const info = await getComponentInfo('cors', 'hook');
  * console.log(info.description);
  */
-export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
+export async function getComponentInfo(
+    name: string,
+    kind: 'hook' | 'plugin'
+): Promise<EcosystemComponentInfo> {
+    const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
     try {
-        // Get list of files in the middleware directory
+        // Get list of files in the component directory
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares/${name}`,
+            contentsUrl(`${dir}/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );
 
-        if (!response.ok) {
-            throw new Error(`Middleware "${name}" not found`);
+        if (response.status === 404) {
+            throw new Error(`Component "${name}" not found`);
         }
+        // Rate limit (403/429), outage, … — say so instead of "not found".
+        if (!response.ok) await throwForGitHubError(response);
 
         const files = (await response.json()) as GitHubFile[];
 
@@ -161,13 +305,13 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
         return {
             name,
             description,
-            path: `ecosystem/middlewares/${name}`,
+            path: `${dir}/${name}`,
             files: files.map((f) => f.name),
         };
     } catch (err) {
         throw wrapFetchError(
             err,
-            `Could not get info for middleware "${name}"`
+            `Could not get info for component "${name}"`
         );
     }
 }
@@ -175,12 +319,12 @@ export async function getMiddlewareInfo(name: string): Promise<MiddlewareInfo> {
 /**
  * Download a file from GitHub
  *
- * @param path - Path in the repo (e.g., 'ecosystem/middlewares/cors/cors.ts')
+ * @param path - Path in the repo (e.g., 'ecosystem/hooks/cors/cors.ts')
  * @param destination - Where to save it on your computer
  * @returns Promise that resolves when download is complete
  * @throws Error if download fails
  * @example
- * await downloadFile('ecosystem/middlewares/cors/cors.ts', './middleware/cors.ts');
+ * await downloadFile('ecosystem/hooks/cors/cors.ts', './ecosystem/hooks/cors/cors.ts');
  */
 export async function downloadFile(
     path: string,
@@ -213,22 +357,24 @@ export async function downloadFile(
 }
 
 /**
- * Download all files for a specific middleware
+ * Download all files for a specific ecosystem component
  *
- * @param middlewareName - Name of the middleware to download
+ * @param componentName - Name of the component to download
  * @param targetDir - Directory to save files in
+ * @param kind - Whether the component is a hook or a plugin
  * @returns Promise with number of files downloaded
  * @example
- * const count = await downloadMiddleware('cors', './middleware');
+ * const count = await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
  * console.log(`Downloaded ${count} files`);
  */
-export async function downloadMiddleware(
-    middlewareName: string,
-    targetDir: string
+export async function downloadComponent(
+    componentName: string,
+    targetDir: string,
+    kind: 'hook' | 'plugin'
 ): Promise<number> {
     try {
-        // Get information about the middleware
-        const info = await getMiddlewareInfo(middlewareName);
+        // Get information about the component
+        const info = await getComponentInfo(componentName, kind);
 
         // Create target directory if it doesn't exist
         await Bun.write(`${targetDir}/.gitkeep`, ''); // Creates dir
@@ -259,7 +405,7 @@ export async function downloadMiddleware(
         return filesDownloaded;
     } catch (err) {
         throw new Error(
-            `Failed to download middleware "${middlewareName}": ${
+            `Failed to download component "${componentName}": ${
                 err instanceof Error ? err.message : 'Unknown error'
             }`
         );
@@ -267,32 +413,64 @@ export async function downloadMiddleware(
 }
 
 /**
- * Check if a middleware exists on GitHub
+ * Check if a hook exists on GitHub under ecosystem/hooks/.
  * This is useful before trying to download something
  *
- * @param name - Name of the middleware to check
+ * @param name - Name of the hook to check
  * @returns Promise with true if it exists, false otherwise
  * @example
- * if (await middlewareExists('cors')) {
- *   await downloadMiddleware('cors', './middleware');
+ * if (await hookExists('cors')) {
+ * await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
  * }
  */
-export async function middlewareExists(name: string): Promise<boolean> {
+export async function hookExists(name: string): Promise<boolean> {
+    return existsInEcosystem('hooks', name);
+}
+
+/**
+ * Check if a plugin exists on GitHub under ecosystem/plugins/.
+ */
+export async function pluginExists(name: string): Promise<boolean> {
+    return existsInEcosystem('plugins', name);
+}
+
+/**
+ * Shared exists-check: 404 means genuinely absent; any other failure
+ * (rate limit, network) throws so callers never report a false "not found".
+ */
+async function existsInEcosystem(
+    kind: 'hooks' | 'plugins',
+    name: string
+): Promise<boolean> {
+    let response: Response;
     try {
-        const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/middlewares/${name}`,
+        response = await fetchWithTimeout(
+            contentsUrl(`ecosystem/${kind}/${name}`),
             {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
+                headers: githubHeaders(),
             }
         );
-
-        return response.ok;
-    } catch {
-        return false;
+    } catch (err) {
+        throw wrapFetchError(
+            err,
+            'Could not reach GitHub. Please check your internet connection.'
+        );
     }
+    if (response.status === 404) return false;
+    if (!response.ok) await throwForGitHubError(response);
+    return true;
+}
+
+/**
+ * Detect whether a package is a hook or plugin on GitHub.
+ * Returns 'hook' | 'plugin' | null.
+ */
+export async function detectEcosystemType(
+    name: string
+): Promise<'hook' | 'plugin' | null> {
+    if (await hookExists(name)) return 'hook';
+    if (await pluginExists(name)) return 'plugin';
+    return null;
 }
 
 /**
@@ -303,33 +481,36 @@ export async function middlewareExists(name: string): Promise<boolean> {
  * @throws Error if GitHub is unreachable or request fails
  */
 export async function getSkillList(): Promise<string[]> {
+    let response: Response;
     try {
-        const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills`,
-            {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`GitHub returned status ${response.status}`);
-        }
-
-        const files = (await response.json()) as GitHubFile[];
-
-        return files
-            .filter((f) => f.type === 'dir')
-            .map((f) => f.name)
-            .sort();
+        response = await fetchWithTimeout(contentsUrl('ecosystem/skills'), {
+            headers: githubHeaders(),
+        });
     } catch (err) {
         throw wrapFetchError(
             err,
             'Could not get skill list from GitHub. Please check your internet connection.'
         );
     }
+
+    if (!response.ok) await throwForGitHubError(response);
+
+    const files = (await response.json()) as GitHubFile[];
+
+    return files
+        .filter((f) => f.type === 'dir')
+        .map((f) => f.name)
+        .sort();
+}
+
+/**
+ * Cached wrapper around {@link getSkillList} — see {@link getCachedComponentList}.
+ */
+export async function getCachedSkillList(): Promise<{
+    data: string[];
+    stale: boolean;
+}> {
+    return withEcosystemCache('skill-list', getSkillList);
 }
 
 /**
@@ -339,15 +520,11 @@ export async function flattenSkillFiles(
     basePath: string,
     prefix: string = ''
 ): Promise<string[]> {
-    const response = await fetchWithTimeout(
-        `${API_URL}/contents/${basePath}`,
-        {
-            headers: {
-                Accept: 'application/vnd.github.v3+json',
-                'User-Agent': 'burger-api-cli',
-            },
-        }
-    );
+    const response = await fetchWithTimeout(contentsUrl(basePath), {
+        headers: {
+            ...githubHeaders(),
+        },
+    });
 
     if (!response.ok) return [];
 
@@ -374,14 +551,23 @@ export async function flattenSkillFiles(
  * Parse a description line from SKILL.md YAML frontmatter.
  * Extracted as a separate function for testability.
  */
-export function parseSkillDescription(raw: string): { description: string; version?: string } {
+export function parseSkillDescription(raw: string): {
+    description: string;
+    version?: string;
+} {
     const descLine = raw.split('\n').find((l) => l.startsWith('description:'));
     const verLine = raw.split('\n').find((l) => l.startsWith('version:'));
     const description = descLine
-        ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+        ? descLine
+              .slice('description:'.length)
+              .trim()
+              .replace(/^['"]|['"]$/g, '')
         : '(no description)';
     const version = verLine
-        ? verLine.slice('version:'.length).trim().replace(/^['"]|['"]$/g, '')
+        ? verLine
+              .slice('version:'.length)
+              .trim()
+              .replace(/^['"]|['"]$/g, '')
         : undefined;
     return { description, version };
 }
@@ -395,18 +581,20 @@ export function parseSkillDescription(raw: string): { description: string; versi
 export async function skillExists(name: string): Promise<boolean> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills/${name}`,
+            contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );
 
-        return response.ok;
-    } catch {
-        return false;
+        if (response.status === 404) return false;
+        // Rate limit / outage: surface it instead of a false "not found".
+        if (!response.ok) await throwForGitHubError(response);
+        return true;
+    } catch (err) {
+        throw wrapFetchError(err, `Could not check skill "${name}"`);
     }
 }
 
@@ -419,18 +607,19 @@ export async function skillExists(name: string): Promise<boolean> {
 export async function getSkillInfo(name: string): Promise<SkillInfo> {
     try {
         const response = await fetchWithTimeout(
-            `${API_URL}/contents/ecosystem/skills/${name}`,
+            contentsUrl(`ecosystem/skills/${name}`),
             {
                 headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'burger-api-cli',
+                    ...githubHeaders(),
                 },
             }
         );
 
-        if (!response.ok) {
+        if (response.status === 404) {
             throw new Error(`Skill "${name}" not found`);
         }
+        // Rate limit (403/429), outage, … — say so instead of "not found".
+        if (!response.ok) await throwForGitHubError(response);
 
         const entries = (await response.json()) as GitHubFile[];
         const flatFiles = await flattenSkillFiles(`ecosystem/skills/${name}`);
@@ -442,7 +631,9 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
 
         if (skillMd?.download_url) {
             try {
-                const raw = await (await fetchWithTimeout(skillMd.download_url)).text();
+                const raw = await (
+                    await fetchWithTimeout(skillMd.download_url)
+                ).text();
                 const parsed = parseSkillDescription(raw);
                 if (parsed.description !== '(no description)') {
                     description = parsed.description;
@@ -461,10 +652,7 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
             files: flatFiles,
         };
     } catch (err) {
-        throw wrapFetchError(
-            err,
-            `Could not get info for skill "${name}"`
-        );
+        throw wrapFetchError(err, `Could not get info for skill "${name}"`);
     }
 }
 
@@ -482,23 +670,28 @@ export async function downloadSkill(
     try {
         const info = await getSkillInfo(skillName);
 
-        // Create target directory
-        await Bun.write(`${targetDir}/.gitkeep`, '');
-
+        // Download into a staging dir, then replace the target: an update
+        // never leaves stale files from the previous version behind, and a
+        // failed download never destroys the existing install. (Bun.write
+        // creates parent directories — no .gitkeep placeholders needed.)
+        const stagingDir = `${targetDir}.download`;
+        rmSync(stagingDir, { recursive: true, force: true });
         let filesDownloaded = 0;
-        for (const fileName of info.files) {
-            if (fileName === '.gitkeep') continue;
-            const sourcePath = `${info.path}/${fileName}`;
-            const destPath = `${targetDir}/${fileName}`;
-            // Ensure parent directory exists
-            const parentDir = destPath.substring(0, destPath.lastIndexOf('/'));
-            await Bun.write(`${parentDir}/.gitkeep`, '');
-            await downloadFile(sourcePath, destPath);
-            filesDownloaded++;
+        try {
+            for (const fileName of info.files) {
+                if (fileName === '.gitkeep') continue;
+                await downloadFile(
+                    `${info.path}/${fileName}`,
+                    `${stagingDir}/${fileName}`
+                );
+                filesDownloaded++;
+            }
+            rmSync(targetDir, { recursive: true, force: true });
+            mkdirSync(dirname(targetDir), { recursive: true });
+            renameSync(stagingDir, targetDir);
+        } finally {
+            rmSync(stagingDir, { recursive: true, force: true });
         }
-
-        // Remove .gitkeep
-        try { unlinkSync(`${targetDir}/.gitkeep`); } catch { /* ignore */ }
 
         return filesDownloaded;
     } catch (err) {

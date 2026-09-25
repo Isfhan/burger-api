@@ -7,7 +7,9 @@ import { resolveBuildConfig } from '../src/utils/config';
 
 describe('resolveBuildConfig', () => {
     it('returns convention defaults when no config file exists', async () => {
-        const config = await resolveBuildConfig(join(import.meta.dir, 'fixtures', 'simple-api'));
+        const config = await resolveBuildConfig(
+            join(import.meta.dir, 'fixtures', 'simple-api')
+        );
         expect(config.apiDir).toBe('./src/api');
         expect(config.pageDir).toBe('./src/pages');
         expect(config.apiPrefix).toBe('/api');

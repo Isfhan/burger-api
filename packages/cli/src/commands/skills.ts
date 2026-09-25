@@ -1,8 +1,13 @@
 import { Command } from 'commander';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
-import { skillExists, downloadSkill, getSkillList, getSkillInfo } from '../utils/github';
+import {
+    skillExists,
+    downloadSkill,
+    getCachedSkillList,
+    getSkillInfo,
+} from '../utils/github';
 import {
     spinner,
     success,
@@ -14,6 +19,7 @@ import {
     table,
     withSpinner,
     command,
+    warning,
 } from '../utils/logger';
 
 /** Path to .agents/skills/ relative to project root */
@@ -35,7 +41,7 @@ function requireProject(): void {
 async function ensureSkillsDir(): Promise<void> {
     const dir = skillsDir();
     if (!existsSync(dir)) {
-        await Bun.write(join(dir, '.gitkeep'), '');
+        mkdirSync(dir, { recursive: true });
     }
 }
 
@@ -49,9 +55,13 @@ async function doInstall(skillName: string): Promise<void> {
     let exists: boolean;
     try {
         exists = await skillExists(skillName);
-    } catch {
-        spin.stop('Could not connect to GitHub', true);
-        logError('Please check your internet connection and try again.');
+    } catch (err) {
+        spin.stop('Could not check the skill on GitHub', true);
+        logError(
+            err instanceof Error
+                ? err.message
+                : 'Please check your internet connection and try again.'
+        );
         process.exit(1);
     }
 
@@ -65,6 +75,13 @@ async function doInstall(skillName: string): Promise<void> {
     const targetDir = join(skillsDir(), skillName);
     if (existsSync(targetDir)) {
         spin.stop();
+        if (!process.stdin.isTTY) {
+            // No terminal to answer the prompt (CI, pipes) — never hang.
+            logError(
+                `${skillName} is already installed at .agents/skills/${skillName}/ — run in a terminal to confirm overwriting, or remove that folder first.`
+            );
+            process.exit(1);
+        }
         const shouldOverwrite = await clack.confirm({
             message: `${skillName} already exists. Overwrite?`,
             initialValue: false,
@@ -135,7 +152,7 @@ const listCommand = new Command('list')
             info('No skills installed yet.');
             newline();
             info('Install the default skill:');
-            info('  burger-api skills install');
+            info(' burger-api skills install');
             clack.outro('Done');
             process.exit(0);
         }
@@ -147,11 +164,14 @@ const listCommand = new Command('list')
                 const skillPath = join(dir, e.name, 'SKILL.md');
                 if (!existsSync(skillPath)) return null;
                 const raw = readFileSync(skillPath, 'utf-8');
-                const descLine = raw.split('\n').find((l) =>
-                    l.startsWith('description:')
-                );
+                const descLine = raw
+                    .split('\n')
+                    .find((l) => l.startsWith('description:'));
                 const description = descLine
-                    ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+                    ? descLine
+                          .slice('description:'.length)
+                          .trim()
+                          .replace(/^['"]|['"]$/g, '')
                     : '(no description)';
                 return { name: e.name, description };
             })
@@ -162,10 +182,10 @@ const listCommand = new Command('list')
             info('No valid skills found in .agents/skills/.');
             newline();
             info('Install the default skill:');
-            info('  burger-api skills install');
+            info(' burger-api skills install');
         } else {
             for (const s of skills) {
-                info(`  ${s.name} — ${s.description}`);
+                info(` ${s.name} — ${s.description}`);
             }
             newline();
             header('Discovery');
@@ -183,14 +203,26 @@ const availableCommand = new Command('available')
         clack.intro('Available skills');
 
         let list: string[];
+        let stale = false;
         try {
-            list = await withSpinner(
+            ({ data: list, stale } = await withSpinner(
                 'Fetching available skills...',
-                () => getSkillList()
+                () => getCachedSkillList()
+            ));
+        } catch (err) {
+            logError(
+                err instanceof Error
+                    ? err.message
+                    : 'Could not fetch skill list from GitHub.'
             );
-        } catch {
-            logError('Could not fetch skill list from GitHub.');
             process.exit(1);
+        }
+
+        if (stale) {
+            warning(
+                'GitHub is unreachable — showing a cached list, which may be out of date.'
+            );
+            newline();
         }
 
         if (list.length === 0) {

@@ -1,0 +1,7 @@
+{
+    "name": "build-config-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

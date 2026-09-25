@@ -25,6 +25,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'router',
+        cmd: ['bun', 'test', 'test/router.test.ts'],
+        kind: 'tests',
+    },
+    {
         label: 'framework',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:examples'],
         kind: 'tests',
@@ -37,6 +42,71 @@ const suites: Suite[] = [
     {
         label: 'cli',
         cmd: ['bun', 'run', '--filter', '@burger-api/cli', 'test'],
+        kind: 'tests',
+    },
+    {
+        label: 'lifecycle',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:lifecycle'],
+        kind: 'tests',
+    },
+    {
+        label: 'context',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:context'],
+        kind: 'tests',
+    },
+    {
+        label: 'router-unit',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:router'],
+        kind: 'tests',
+    },
+    {
+        label: 'smoke',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:smoke'],
+        kind: 'tests',
+    },
+    {
+        label: 'chain',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:chain'],
+        kind: 'tests',
+    },
+    {
+        label: 'plugin',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:plugin'],
+        kind: 'tests',
+    },
+    {
+        label: 'core',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:core'],
+        kind: 'tests',
+    },
+    {
+        label: 'errors',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:errors'],
+        kind: 'tests',
+    },
+    {
+        label: 'validation',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:validation'],
+        kind: 'tests',
+    },
+    {
+        label: 'compiler',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:compiler'],
+        kind: 'tests',
+    },
+    {
+        label: 'adapter',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:adapter'],
+        kind: 'tests',
+    },
+    {
+        label: 'provider',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:provider'],
+        kind: 'tests',
+    },
+    {
+        label: 'ws',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:ws'],
         kind: 'tests',
     },
     {

@@ -31,7 +31,7 @@ describe('prepareEntryOptionsModule', () => {
             entryPath,
             `
 import { Burger } from 'burger-api';
-import { globalMiddleware } from './middleware';
+import { hostname } from './settings';
 
 const title = 'My API';
 
@@ -39,8 +39,7 @@ const app = new Burger({
   title,
   description: 'desc',
   version: '1.2.3',
-  hostname: '0.0.0.0',
-  globalMiddleware,
+  hostname,
 });
 
 app.serve(4000);
@@ -60,11 +59,11 @@ app.serve(4000);
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain("import { Burger } from 'burger-api';");
         expect(tempSource).toContain(
-            "import { globalMiddleware } from './middleware';"
+            "import { hostname } from './settings';"
         );
         expect(tempSource).toContain("const title = 'My API';");
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('globalMiddleware');
+        expect(tempSource).toContain('hostname');
         expect(tempSource).not.toContain('const app =');
 
         cleanupEntryOptionsModule(result.tempFilePath);
@@ -242,7 +241,7 @@ app.serve(4000, () => { return 1; });
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain("hostname: '0.0.0.0'");
         expect(tempSource).toContain('nested');
         expect(tempSource).toContain('text');
         expect(tempSource).toContain('`');
@@ -280,7 +279,7 @@ app.serve(4000, () => { return 1; });
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
+        expect(tempSource).toContain("hostname: '0.0.0.0'");
         expect(tempSource).toContain('a');
         expect(tempSource).toContain('b');
         expect(tempSource).toContain('c');

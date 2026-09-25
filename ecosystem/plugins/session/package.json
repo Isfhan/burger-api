@@ -1,0 +1,23 @@
+{
+  "name": "@burger-api/plugin-session",
+  "version": "0.1.0",
+  "description": "Session management plugin for BurgerAPI",
+  "main": "session.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=1.0.0"
+  },
+  "keywords": [
+    "burger-api",
+    "session",
+    "cookie",
+    "auth",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/plugins/session"
+  }
+}

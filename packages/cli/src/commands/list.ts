@@ -1,14 +1,14 @@
 /**
  * List Command
  *
- * Shows users all available middleware they can add to their project.
+ * Shows users all available hooks and plugins they can add to their project.
  * Fetches the list from GitHub and displays it in a nice table format.
  *
  * Example: burger-api list
  */
 
 import { Command } from 'commander';
-import { getMiddlewareList, getMiddlewareInfo } from '../utils/github';
+import { getCachedComponentCatalog } from '../utils/github';
 import {
     header,
     withSpinner,
@@ -18,42 +18,47 @@ import {
     info,
     dim,
     command,
+    warning,
 } from '../utils/logger';
 
 /**
  * Create the "list" command
- * This shows all available middleware from the ecosystem
+ * This shows all available hooks and plugins from the ecosystem
  */
 export const listCommand = new Command('list')
-    .description('Show available middleware from the ecosystem')
+    .description('Show available hooks and plugins from the ecosystem')
     .alias('ls') // Allow users to type "burger-api ls" too
     .action(async () => {
         try {
             await withSpinner(
-                'Fetching middleware list from GitHub...',
+                'Fetching hooks and plugins list from GitHub...',
                 async (spin) => {
-                    const middlewareNames = await getMiddlewareList();
+                    // Names, kinds and descriptions are cached together: a
+                    // warm cache makes no GitHub calls at all.
+                    const { data: components, stale } =
+                        await getCachedComponentCatalog();
 
-                    const middlewareDetails = await Promise.all(
-                        middlewareNames.map((name) =>
-                            getMiddlewareInfo(name).catch(() => ({
-                                name,
-                                description: 'No description available',
-                                path: '',
-                                files: [],
-                            }))
-                        )
+                    // No success marker when GitHub was unreachable — the
+                    // warning below explains what is shown instead.
+                    spin.stop(
+                        stale ? undefined : 'Found available hooks and plugins!'
                     );
-
-                    spin.stop('Found available middleware!');
                     newline();
 
-                    header('Available Middleware');
+                    if (stale) {
+                        warning(
+                            'GitHub is unreachable — showing a cached list, which may be out of date.'
+                        );
+                        newline();
+                    }
+
+                    header('Available Hooks and Plugins');
 
                     const tableData: string[][] = [
-                        ['Name', 'Description'],
-                        ...middlewareDetails.map((m) => [
+                        ['Name', 'Kind', 'Description'],
+                        ...components.map((m) => [
                             m.name,
+                            m.kind,
                             m.description.length > 60
                                 ? m.description.substring(0, 57) + '...'
                                 : m.description,
@@ -63,8 +68,8 @@ export const listCommand = new Command('list')
                     table(tableData);
                     newline();
 
-                    info('To add middleware to your project, run:');
-                    command('burger-api add <middleware-name>');
+                    info('To add a hook or plugin to your project, run:');
+                    command('burger-api add <name>');
                     newline();
                     dim('Example: burger-api add cors logger rate-limiter');
                     newline();

@@ -1,4 +1,4 @@
-import type { PageDefinition, RouteDefinition, TrieNode } from '../types/index';
+import type { PageDefinition, RouteDefinition, TrieNode } from '../types/index.js';
 
 /**
  * Constants for route handling.
@@ -22,7 +22,8 @@ export const ROUTE_CONSTANTS = {
 };
 
 /**
- * Supported HTTP methods
+ * Supported HTTP methods, as a literal tuple so the method names can be
+ * reused as a type union (`HTTPMethod`) across the public API.
  */
 export const HTTP_METHODS = [
     'GET',
@@ -32,24 +33,47 @@ export const HTTP_METHODS = [
     'PATCH',
     'HEAD',
     'OPTIONS',
-];
+] as const;
+
+/**
+ * The closed set of HTTP methods a route can handle, in the uppercase form
+ * used by `RouteDefinition.handlers` keys and `request.method` at runtime.
+ */
+export type HTTPMethod = (typeof HTTP_METHODS)[number];
+
+/**
+ * Lowercase form of `HTTPMethod`, used by the lowercase-keyed maps
+ * (`RouteSchema`, `openapi`, compiled validators) at runtime.
+ */
+export type LowercaseHTTPMethod = Lowercase<HTTPMethod>;
 
 /**
  * Calculates the specificity of a route path based on the number of static segments.
- * Static segments increase the score, while dynamic segments (:param) do not.
- * Wildcard segments (*) have the lowest specificity (highest penalty).
+ * Static segments increase the score, dynamic segments (`:param`, `[param]`)
+ * do not, and wildcard segments (`*`, `[...]`) get a penalty — so higher
+ * always means more static, and sorting by this score puts static routes
+ * first, dynamic second, wildcard last.
  * @param path The route path to evaluate.
- * @returns The specificity score (higher means more static segments, lower priority for wildcard).
+ * @returns The specificity score (higher means more static segments).
  */
 export const getRouteSpecificity = (path: string): number => {
     const segments = path.split('/').filter(Boolean);
     return segments.reduce((score, segment) => {
-        if (segment.startsWith(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX)) {
-            return score + 1000; // Wildcard routes get highest penalty (lowest priority)
+        if (
+            segment.startsWith(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX) ||
+            (segment.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
+                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END))
+        ) {
+            return score - 1; // Wildcard routes get the penalty (lowest priority)
         }
-        return segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)
-            ? score + 100 // Dynamic routes get medium penalty
-            : score + 1; // Static routes get minimal penalty
+        if (
+            segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX) ||
+            (segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
+                segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END))
+        ) {
+            return score; // Dynamic routes get no static credit
+        }
+        return score + 1; // Static routes get the credit (highest priority)
     }, 0);
 };
 
@@ -112,4 +136,22 @@ export function collectRoutes(
     }
 
     return routes;
+}
+
+/**
+ * Returns a copy of a per-method map (`schema.ts` / `openapi.ts` exports)
+ * with uppercase method keys (`GET`) lowercased (`get`) — the form the
+ * validation compiler and OpenAPI generator read. Non-method keys (e.g.
+ * `coerce`) pass through. Never mutates the input (module namespaces are
+ * frozen).
+ */
+export function lowercaseMethodKeys(
+    raw: Record<string, unknown> | object
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(raw)) {
+        const isMethod = (HTTP_METHODS as readonly string[]).includes(key);
+        out[isMethod ? key.toLowerCase() : key] = value;
+    }
+    return out;
 }

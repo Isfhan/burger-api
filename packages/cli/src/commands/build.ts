@@ -2,14 +2,14 @@
  * Build Commands
  *
  * Two commands for packaging your Burger API project:
- * 1. `burger-api build <file>`      — Bundle to .build/bundle/
+ * 1. `burger-api build <file>` — Bundle to .build/bundle/
  * 2. `burger-api build:exec <file>` — Compile to .build/executable/
  *
  * Both use build-time (AOT) route discovery — no filesystem scanning at runtime.
  */
 
 import { Command } from 'commander';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import { dirname, resolve } from 'path';
 import type { Spinner } from '../utils/logger';
 import {
@@ -20,12 +20,54 @@ import {
     newline,
     formatSize,
     dim,
+    warning,
 } from '../utils/logger';
 import {
     runVirtualEntryBuild,
     type VirtualBuildResult,
 } from '../utils/build/pipeline';
-import { getProjectName } from '../utils/build/project';
+import { getProjectName, resolveEntryFile } from '../utils/build/project';
+import { ensureAppDirEnv } from '../utils/scanner';
+import { VALID_TARGETS } from '../utils/config';
+import type { RuntimeTarget } from '../types/index';
+
+/** Where each target's bundle lands by default, absent an explicit `--outfile`. */
+function defaultOutfile(
+    target: RuntimeTarget,
+    compile: boolean,
+    cwd: string
+): string {
+    if (compile) {
+        const projectName = getProjectName(cwd);
+        return process.platform === 'win32'
+            ? `.build/executable/${projectName}.exe`
+            : `.build/executable/${projectName}`;
+    }
+    if (target === 'vercel') {
+        // Vercel's zero-config detection requires the entry at this path.
+        return 'api/index.ts';
+    }
+    if (target === 'cloudflare' || target === 'deno') {
+        return `.build/${target}/index.ts`;
+    }
+    return '.build/bundle/app.js';
+}
+
+/**
+ * Validates `--target`. `'browser'` is accepted as a legacy escape hatch
+ * (raw `Bun.build({ target: 'browser' })` passthrough for bundling
+ * client-side code) and is not a deployment platform — it never reaches
+ * `RUNTIME_CAPABILITIES` or the codegen branch, so it isn't included in the
+ * error's list of real targets.
+ */
+function validatePlatformTarget(raw: string | undefined): RuntimeTarget {
+    if (!raw) return 'bun';
+    if ((VALID_TARGETS as string[]).includes(raw)) return raw as RuntimeTarget;
+    logError(
+        `Unknown --target "${raw}". Valid targets: ${VALID_TARGETS.join(', ')} (or "browser" to bundle client-side code as-is).`
+    );
+    process.exit(1);
+}
 
 function ensureEntryFileExists(cwd: string, file: string): void {
     const entryPath = resolve(cwd, file);
@@ -34,6 +76,9 @@ function ensureEntryFileExists(cwd: string, file: string): void {
         info('Make sure you are in the project directory.');
         process.exit(1);
     }
+    // Entry-relative path fallback for scan dirs (apiDir/pageDir/wsDir),
+    // matching what `burger-api dev` provides at runtime.
+    ensureAppDirEnv(file);
 }
 
 async function runBuildWithSpinner(params: {
@@ -70,10 +115,12 @@ async function runBuildWithSpinner(params: {
  * Options for the `build` command.
  */
 interface BuildCommandOptions {
-    outfile: string;
+    outfile?: string;
     minify?: boolean;
     sourcemap?: string;
     target?: string;
+    compile?: boolean;
+    bytecode?: boolean;
 }
 
 /**
@@ -92,59 +139,162 @@ interface BuildExecutableOptions {
  * Bundles your project into .build/bundle/ using AOT route discovery.
  *
  * Output:
- *   .build/bundle/
- *     app.js             — Bun server (run with: bun .build/bundle/app.js)
- *     index.html         — HTML pages (flat, one per page route)
- *     style-[hash].css   — CSS assets (flat)
- *     app-[hash].js      — JS chunks (flat)
+ * .build/bundle/
+ * app.js — Bun server (run with: bun .build/bundle/app.js)
+ * index.html — HTML pages (flat, one per page route)
+ * style-[hash].css — CSS assets (flat)
+ * app-[hash].js — JS chunks (flat)
  *
  * API-only projects: app.js is a self-contained single file.
  * Projects with HTML pages: deploy the entire .build/bundle/ directory.
  */
 export const buildCommand = new Command('build')
-    .description('Bundle your project into .build/bundle/')
+    .description('Build your project for a deployment target')
     .argument(
-        '<file>',
-        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+        '[file]',
+        'Entry file (default: src/index.ts|js|mjs); its Burger options are kept, routes come from burger.build.ts'
     )
-    .option('--outfile <path>', 'Output bundle path', '.build/bundle/app.js')
-    .option('--minify', 'Minify the output')
+    .option(
+        '--outfile <path>',
+        'Output path (default depends on --target — see docs/cli/build)'
+    )
+    .option('--minify', 'Minify the output (bun/node targets only)')
     .option(
         '--sourcemap <type>',
-        'Generate sourcemaps (inline, linked, or none)'
+        'Generate sourcemaps (inline, linked, or none — bun/node targets only)'
     )
-    .option('--target <env>', 'Target environment (default: bun)')
-    .action(async (file: string, options: BuildCommandOptions) => {
+    .option(
+        '--target <platform>',
+        `Deployment target: ${VALID_TARGETS.join(', ')} (default: bun), or browser (bundle client-side code as-is)`
+    )
+    .option(
+        '--compile',
+        'Compile to a standalone executable instead of bundling (bun target only)'
+    )
+    .option('--no-bytecode', 'Disable bytecode compilation (--compile only)')
+    .action(async (fileArg: string | undefined, options: BuildCommandOptions) => {
         const cwd = process.cwd();
+        const file = resolveEntryFile(fileArg, cwd);
+        const platformTarget = validatePlatformTarget(
+            options.target === 'browser' ? undefined : options.target
+        );
+        const isBrowserPassthrough = options.target === 'browser';
+
+        if (options.compile && platformTarget !== 'bun') {
+            logError(
+                `--compile only supports --target=bun (got --target=${options.target}). ` +
+                    'Compiling to a standalone binary is Bun-only.'
+            );
+            process.exit(1);
+        }
+        if (options.compile && isBrowserPassthrough) {
+            logError('--compile cannot be combined with --target=browser.');
+            process.exit(1);
+        }
+
+        const outfile =
+            options.outfile ??
+            defaultOutfile(platformTarget, Boolean(options.compile), cwd);
+
+        // bun and node builds share the default .build/bundle/ — clear it so
+        // stale pages/chunks from an earlier build never ship. Only the
+        // default location: a custom --outfile directory may hold anything.
+        if (!options.outfile && !options.compile && !isBrowserPassthrough &&
+            (platformTarget === 'bun' || platformTarget === 'node')) {
+            rmSync(resolve(cwd, '.build', 'bundle'), {
+                recursive: true,
+                force: true,
+            });
+        }
+
         await runBuildWithSpinner({
             file,
             cwd,
-            spinMessage: 'Building project...',
-            failMessage: 'Build failed',
+            spinMessage: options.compile
+                ? 'Compiling to executable...'
+                : 'Building project...',
+            failMessage: options.compile ? 'Compilation failed' : 'Build failed',
             buildOptions: {
                 cwd,
                 entryFile: file,
-                outfile: options.outfile,
-                target: options.target || 'bun',
+                outfile,
+                target: isBrowserPassthrough ? 'browser' : undefined,
+                platformTarget,
                 minify: options.minify,
                 sourcemap: options.sourcemap,
+                compile: options.compile,
+                bytecode: options.bytecode !== false,
+            },
+            onBeforeBuild: (spin) => {
+                if (options.compile) {
+                    spin.update('Compiling... (this may take a minute)');
+                }
             },
             onSuccess: (result, spin) => {
-                const size = Bun.file(options.outfile).size;
-                const bundleDir = dirname(options.outfile);
+                if (options.compile) {
+                    const size = existsSync(outfile)
+                        ? Bun.file(outfile).size
+                        : (result.outputs[0]?.size ?? 0);
+                    spin.stop('Compilation completed successfully!');
+                    newline();
+                    success(`Executable: ${outfile}`);
+                    if (size > 0) info(`Size: ${formatSize(size)}`);
+                    newline();
+                    info(
+                        'Standalone binary — copy it anywhere, no Bun required on the target.'
+                    );
+                    newline();
+                    if (process.platform !== 'win32') {
+                        dim(`Make executable: chmod +x ${outfile}`);
+                        dim(`Run: ./${outfile}`);
+                    } else {
+                        dim(`Run: ${outfile}`);
+                    }
+                    newline();
+                    return;
+                }
+
                 spin.stop('Build completed successfully!');
                 newline();
-                success(`Bundle:  ${options.outfile}  (${formatSize(size)})`);
+                const size = existsSync(outfile) ? Bun.file(outfile).size : 0;
+                success(`Output: ${outfile}${size ? ` (${formatSize(size)})` : ''}`);
                 newline();
-                if (result.hasPages) {
+
+                if (platformTarget === 'cloudflare') {
+                    info('Cloudflare Workers — bundled by wrangler, not this CLI.');
+                    dim(`Run: wrangler dev`);
+                    dim(`Deploy: wrangler deploy`);
+                } else if (platformTarget === 'deno') {
+                    info('Deno Deploy — bundled by deno, not this CLI.');
+                    dim(`Run: deno serve --port 4000 ${outfile}`);
+                } else if (platformTarget === 'vercel') {
+                    info('Vercel — bundled by vercel, not this CLI.');
+                    dim('Deploy: vercel deploy');
+                } else if (platformTarget === 'node') {
+                    if (result.hasPages) {
+                        info(`Node.js — pages and assets are in: ${dirname(outfile)}/`);
+                        dim('Deploy the entire directory.');
+                        warning(
+                            'HTML page routes are served by the Bun adapter; check the runtime compatibility docs before relying on them under Node.'
+                        );
+                    } else {
+                        info('Node.js — self-contained single file.');
+                    }
+                    dim(`Run: node ${outfile}`);
+                } else if (result.hasPages) {
+                    const bundleDir = dirname(outfile);
                     info(`Pages and assets are in: ${bundleDir}/`);
                     dim(
                         'Deploy the entire directory — HTML pages depend on their chunks.'
                     );
-                    dim(`Run: bun ${options.outfile}`);
+                    dim(`Run: bun ${outfile}`);
                 } else {
-                    info('API-only bundle — self-contained single file.');
-                    dim(`Run anywhere: bun ${options.outfile}`);
+                    info(
+                        result.hasWs
+                            ? 'Self-contained single file (API + WebSocket routes).'
+                            : 'API-only bundle — self-contained single file.'
+                    );
+                    dim(`Run anywhere: bun ${outfile}`);
                 }
                 newline();
             },
@@ -163,8 +313,8 @@ export const buildExecutableCommand = new Command('build:exec')
         'Compile your project to a standalone executable in .build/executable/'
     )
     .argument(
-        '<file>',
-        'Entry file (used for compatibility; config from burger.config.ts or conventions)'
+        '[file]',
+        'Entry file (default: src/index.ts|js|mjs); its Burger options are kept, routes come from burger.build.ts'
     )
     .option('--outfile <path>', 'Output executable path')
     .option(
@@ -173,8 +323,9 @@ export const buildExecutableCommand = new Command('build:exec')
     )
     .option('--minify', 'Minify the output (enabled by default)', true)
     .option('--no-bytecode', 'Disable bytecode compilation')
-    .action(async (file: string, options: BuildExecutableOptions) => {
+    .action(async (fileArg: string | undefined, options: BuildExecutableOptions) => {
         const cwd = process.cwd();
+        const file = resolveEntryFile(fileArg, cwd);
         let outfile = options.outfile;
         if (!outfile) {
             const projectName = getProjectName(cwd);

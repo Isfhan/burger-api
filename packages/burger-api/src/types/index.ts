@@ -1,21 +1,36 @@
-import type { BunRequest, Server } from 'bun';
-import type { serve } from 'bun';
+import type {
+    BurgerContext,
+    BurgerEnv,
+    BurgerExecutionContext,
+} from '../context/context.js';
+import type { SchemaInput, ValidatorConfig } from '../validation/types.js';
+import type {
+    RouteHooks,
+    TransformMap,
+    ForwardHookResult,
+} from '../lifecycle/types.js';
+export type { RouteHooks, GlobalHooks, TransformMap } from '../lifecycle/types.js';
+import type { OpenAPIConfig } from './openapi-config.js';
+import type { RuntimeAdapter } from '../adapter/types.js';
+import type { WebSocketRouteDefinition } from '../ws/types.js';
+import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing.js';
+import type { RuntimeTarget } from '../runtime/capabilities.js';
 
-/** Options type for Bun.serve(); use this instead of deprecated ServeOptions. */
-type BunServerOptions = Parameters<typeof serve>[0];
-import { z } from 'zod';
+/**
+ * Minimal structural view of the running server exposed to `fetch` handlers.
+ * The web-standard surface: upgrade a WebSocket upgrade request (Bun) or stop
+ * the server. Never references Bun types.
+ */
+export interface ServerInfo {
+    upgrade(request: Request, options?: Record<string, unknown>): boolean;
+    stop(): void;
+}
 
-export interface ServerOptions extends Omit<
-    BunServerOptions,
-    | 'fetch'
-    | 'port'
-    | 'reusePort'
-    | 'ipv6Only'
-    | 'unix'
-    | 'error'
-    | 'id'
-    | 'development'
-> {
+/**
+ * Framework-level server options. Deliberately Web-Standard: no Bun types.
+ * Bun-specific tuning lives on the adapter (`BunAdapterStartOptions`).
+ */
+export interface ServerOptions {
     /**
      * The title of the API. This is an optional property that can be used
      * to specify a custom title for the API documentation.
@@ -54,9 +69,10 @@ export interface ServerOptions extends Omit<
     pagePrefix?: string;
 
     /**
-     * Global middleware to be executed before each request.
+     * The directory path to load WebSocket routes from.
+     * If not specified, no WebSocket routes are loaded.
      */
-    globalMiddleware?: Middleware[];
+    wsDir?: string;
 
     /**
      * The version of the API. This is an optional property that can be used
@@ -82,99 +98,152 @@ export interface ServerOptions extends Omit<
      * and no runtime filesystem scanning is performed. Used for bundled/executable builds.
      */
     pageRoutes?: PageDefinition[];
-}
-
-type DefaultRequestProperties = {
-    params?: Record<string, unknown>;
-    query?: Record<string, unknown>;
-    body?: Record<string, unknown>;
-};
-
-export interface BurgerRequest<
-    RequestValidatedProperties extends DefaultRequestProperties =
-        DefaultRequestProperties,
-> extends Omit<BunRequest<string>, 'params'> {
-    /**
-     * Contains URL parameters extracted from the request path.
-     * This property is only present if the request path matches a route
-     * with dynamic parameters.
-     *
-     * For example, if the route is `/users/:id`, and the request path is
-     * `/users/123`, then the `params` property will be `{ id: '123' }`.
-     */
-    params?: Record<string, string>;
 
     /**
-     * Contains validated data for the request.
-     * This is an optional property that will only be present if
-     * a middleware has validated the request data and attached the
-     * validated data to the request.
-     *
-     * Properties:
-     * - `params`: Validated URL parameters.
-     * - `query`: Validated query string parameters.
-     * - `body`: Validated request body (if JSON).
+     * Pre-built static asset routes from the CLI build (files under
+     * `<pageDir>/assets/` embedded as base64). When present, assets are
+     * served from the embedded table; otherwise dev reads them from disk
+     * under `pageDir`.
      */
-    validated: RequestValidatedProperties;
+    assetRoutes?: import('../core/assets.js').EmbeddedAsset[];
 
     /**
-     * Contains the wildcard parameters.
-     * This is an optional property that will only be present if
-     * the request path matches a route with a wildcard parameter.
-     * For example, if the route is `/users/[...]`, and the request path is
-     * `/users/123/456`, then the `wildcardParams` property will be `['123', '456']`.
+     * Pre-built WebSocket routes (e.g. from CLI build). When provided, wsDir is
+     * ignored and no runtime filesystem scanning is performed. Wired through
+     * both `serve()` (Bun) and `fetchHandler()`/`toFetchHandler()` (the
+     * WinterCG entry) — see `ws/platform.ts` for per-runtime upgrade support.
+     * Used for bundled/executable builds.
      */
-    wildcardParams?: string[];
+    wsRoutes?: WebSocketRouteDefinition[];
+
+    /**
+     * Validation configuration: coercion, response-validation mode, and error
+     * rendering.
+     */
+    validation?: ValidatorConfig;
+
+    /**
+     * JIT-compile each route's HookPlan into a single async function
+     * (Fastify-style codegen). ON by default (+3% measured on hook-carrying
+     * routes, burger-api-benchmarks `optimize/hooks-*`). Capability-probed
+     * at startup: runtimes that forbid dynamic code generation (Cloudflare
+     * Workers) silently keep the interpreter. Set `false` to opt out.
+     */
+    jit?: boolean;
+
+    /**
+     * Dynamic-route dispatch engine for the fetch-fallback path.
+     * `'auto'` (default) and `'trie'` use the radix trie — the measured
+     * winner (burger-api-benchmarks `optimize/many-*`). `'regex'` opts into
+     * the Hono-style compiled alternation matcher. Static dispatch is
+     * unaffected.
+     */
+    engine?: 'auto' | 'regex' | 'trie';
+
+    /**
+     * OpenAPI configuration for production builds. When using pre-built
+     * `apiRoutes`, the convention file cannot be discovered from the filesystem,
+     * so the config must be passed here. In dev mode, `openapi.config.ts` is
+     * auto-discovered and this field is ignored.
+     */
+    openapi?: OpenAPIConfig;
+
+    /**
+     * Pre-resolved global hooks module (e.g. from `src/hooks.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/hooks.ts` is auto-discovered and this field is ignored.
+     */
+    globalHooks?: Record<string, unknown>;
+
+    /**
+     * Pre-resolved plugins module (e.g. from `src/plugins.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/plugins.ts` is auto-discovered and this field is ignored.
+     */
+    pluginsModule?: Record<string, unknown>;
+
+    /**
+     * Pre-resolved providers module (e.g. from `src/providers.ts`).
+     * Only used in production builds (when `apiRoutes` is provided).
+     * In dev mode, `src/providers.ts` is auto-discovered and this field is ignored.
+     */
+    providersModule?: Record<string, unknown>;
+
+    /**
+     * Optional hostname to bind for `serve()`. Web-standard; forwarded to the
+     * adapter.
+     */
+    hostname?: string;
+
+    /**
+     * Maximum request body size in bytes for `serve()` (Bun's default is
+     * 128 MB). Larger bodies are rejected by the runtime with 413.
+     */
+    maxRequestBodySize?: number;
+
+    /**
+     * Optional runtime adapter override (test/embed seam). Defaults to the Bun
+     * adapter, loaded lazily on first `serve()` so non-Bun bundles never
+     * import it.
+     */
+    adapter?: RuntimeAdapter;
+
+    /**
+     * The deployment target this build was produced for — set automatically
+     * by `burger-api build --target=<platform>`. When present, WebSocket
+     * upgrade handling trusts this over live runtime detection: some targets
+     * (Node, Vercel) are structurally indistinguishable via `globalThis`
+     * alone, so a declared target resolves the ambiguity that live
+     * detection cannot. See `runtime/capabilities.ts`.
+     */
+    runtimeTarget?: RuntimeTarget;
 }
 
 /**
- * Represents what a middleware can return to control the request flow:
+ * @deprecated Use {@link ForwardHookResult} (same shape) instead — kept only
+ * so existing imports keep resolving. Represents what a forward hook can
+ * return to control the request flow:
  * - Response: Stop here, send this response back to the client
  * - Function(Response): Continue processing, but transform the final response after handler runs
- * - undefined: I'm done, continue to the next middleware or handler
+ * - undefined: I'm done, continue to the next hook or handler
  */
-export type BurgerNext =
-    | Response
-    | ((response: Response) => Promise<Response>)
-    | undefined;
-
-/**
- * A middleware function that processes HTTP requests.
- *
- * What middleware can do:
- * - Check if the request is valid (auth, validation, etc.)
- * - Stop the request by returning a Response
- * - Let the request continue by returning undefined
- * - Transform the final response by returning a function
- *
- * @param request - The HTTP request with Burger framework enhancements
- * @returns One of three things:
- *          - Response: Stop here, send this response back
- *          - Function: Transform the final response after handler runs
- *          - undefined: Continue to the next middleware or handler
- */
-export type Middleware =
-    | ((request: BurgerRequest) => Promise<BurgerNext>)
-    | ((request: BurgerRequest) => BurgerNext);
+export type BurgerNext = ForwardHookResult;
 
 /**
  * A request handler function that processes incoming HTTP requests.
- * @param request - The BurgerRequest object containing request object.
+ * @param ctx - The BurgerContext object containing request data and services.
  * @returns A Response object or a Promise that resolves to a Response object.
  */
 export type RequestHandler = (
-    request: BurgerRequest
+    ctx: BurgerContext
 ) => Promise<Response> | Response;
 
 /**
  * A fetch handler function that can be used to handle a request.
  * This can be a function that returns a Promise of a Response,
  * or a function that returns a Response.
+ *
+ * `server` is an optional structural view of the running server (upgrade/stop)
+ * — Web-Standard, never Bun-specific.
  */
 export type FetchHandler = (
     request: Request,
-    server?: Server<{}>
+    server?: ServerInfo,
+    env?: BurgerEnv,
+    executionCtx?: BurgerExecutionContext
 ) => Promise<Response> | Response;
+
+/**
+ * The handler returned by `burger.fetchHandler()` and wrapped by
+ * `toFetchHandler(burger)`: a Web-Standard dispatch entry that accepts the
+ * platform bindings (`env`, `executionCtx`) supplied by WinterCG runtimes
+ * (Cloudflare Workers, Vercel, Deno, Node 24+). On Bun both are `undefined`.
+ */
+export type EnvFetchHandler = (
+    request: Request,
+    env?: BurgerEnv,
+    executionCtx?: BurgerExecutionContext
+) => Promise<Response>;
 
 export interface RouteDefinition {
     /**
@@ -183,15 +252,21 @@ export interface RouteDefinition {
     path: string;
     /**
      * An object containing the request handlers for each HTTP method.
-     * The keys are the HTTP method names (e.g. "GET", "POST", etc.).
+     * The keys are the HTTP method names (e.g. "GET", "POST", etc.);
+     * only the methods in the {@link HTTPMethod} union are accepted —
+     * anything else fails at compile time and would 405 at runtime.
      * The values are the request handlers for that method.
      */
-    handlers: { [method: string]: RequestHandler };
+    handlers: Partial<Record<HTTPMethod, RequestHandler>>;
     /**
-     * An array of middleware functions to run before the request handler.
-     * The middleware functions will be run in the order they are specified.
+     * Lifecycle hooks declared in `hooks.ts`. Carried raw from the
+     * compiler and compiled into a frozen `HookPlan` by RouterCompiler. Mapped
+     * onto the single pipeline: `beforeRoute` (global → route) runs before
+     * the handler; `afterRoute` / `mapResponse` are response hooks.
+     * `route.ts` contains handlers only — there is no
+     * per-route `hooks` export.
      */
-    middleware?: Middleware[];
+    hooks?: RouteHooks;
 
     /**
      * An optional route schema to validate the request data against.
@@ -216,53 +291,128 @@ export interface RouteDefinition {
      * This property is used internally to identify wildcard routes.
      */
     isWildcard?: boolean;
+
+    /**
+     * Route-specific configuration from `config.ts`. Available as `ctx.config`
+     * at runtime. Core reads only `responseValidation` ('off' | 'dev' |
+     * 'enforce' — overrides `ServerOptions.validation.responseValidation`
+     * for this route). Every other key (auth, cache, timeout, …) is plain
+     * data that core never acts on — hooks and plugins (e.g. an auth plugin
+     * reading `ctx.config.auth`) give it meaning.
+     */
+    config?: Record<string, unknown>;
+}
+
+/**
+ * The per-method body of a route schema. For each HTTP method you can
+ * optionally define:
+ * - params: for URL parameters,
+ * - query: for query string parameters,
+ * - headers / cookies / body: for the corresponding request data,
+ * - response: per-status response schemas validated after the handler.
+ */
+export interface MethodSchema {
+    params?: SchemaInput;
+    query?: SchemaInput;
+    headers?: SchemaInput;
+    cookies?: SchemaInput;
+    body?: SchemaInput;
+    /** Per-route opt-in override for coercion. */
+    coerce?: boolean;
+    /** Per-status-code response schemas, validated after the handler. */
+    response?: Record<string, SchemaInput>;
 }
 
 /**
  * Define a type for the route schema.
- * For each HTTP method (in lowercase), you can optionally define:
- * - params: for URL parameters,
- * - query: for query string parameters,
- * - body: for the request body.
+ *
+ * Keys are HTTP method names; both lowercase (canonical, matching the
+ * compiled form) and uppercase (accepted by the compiler for programmatic
+ * routes) are legal at runtime, so both are accepted here. Anything else
+ * fails at compile time.
  */
-export type RouteSchema = {
-    [method: string]: {
-        params?: z.ZodTypeAny;
-        query?: z.ZodTypeAny;
-        body?: z.ZodTypeAny;
+export type RouteSchema = Partial<
+    Record<LowercaseHTTPMethod | HTTPMethod, MethodSchema>
+>;
+
+/**
+ * Per-method OpenAPI metadata. Each key is an HTTP method name in lowercase
+ * (the compiled form the OpenAPI generator reads); uppercase keys are a
+ * silent no-op at runtime, so they are rejected at compile time.
+ */
+export interface OpenAPIMeta {
+    summary?: string;
+    description?: string;
+    tags?: string[];
+    operationId?: string;
+    deprecated?: boolean;
+    responses?: Record<string, Record<string, unknown>>;
+    externalDocs?: {
+        description?: string;
+        url?: string;
     };
-};
+}
 
 /**
  * Optional OpenAPI metadata to generate documentation for the route.
- * Each key is an HTTP method name (in lowercase) and the value is an object
- * containing the OpenAPI metadata for that method.
+ * Keyed by lowercase HTTP method; see {@link OpenAPIMeta}.
  *
  * If the `openapi` property is not defined, the route will not be included in
  * the generated OpenAPI documentation.
- *
- * See the OpenAPI specification for the possible properties and their
- * descriptions.
  */
-export type openapi = {
-    [method: string]: {
-        summary?: string;
-        description?: string;
-        tags?: string[];
-        operationId?: string;
-        deprecated?: boolean;
-        responses?: Record<string, any>;
-        externalDocs?: {
-            description?: string;
-            url?: string;
-        };
-    };
-};
+export type openapi = Partial<Record<LowercaseHTTPMethod, OpenAPIMeta>>;
+
+/**
+ * The shape of a `burger.build.ts` export — build-time settings read by the
+ * CLI (dirs, prefixes, debug). The dir/prefix fields are always present in
+ * a scaffolded file (convention defaults apply otherwise). Build-time only;
+ * runtime options belong in `new Burger({...})` (`ServerOptions`).
+ */
+export interface BuildConfig {
+    /** Directory with API route files (e.g. `./src/api`). */
+    apiDir: string;
+    /** Directory with HTML page files (e.g. `./src/pages`). */
+    pageDir: string;
+    /** URL prefix for API routes (default `/api`). */
+    apiPrefix: string;
+    /** URL prefix for page routes (default `/`). */
+    pagePrefix: string;
+    /** Directory with WebSocket route files (e.g. `./src/websocket`). */
+    wsDir?: string;
+    /** Extra logging when true. */
+    debug?: boolean;
+    /**
+     * Deployment target for `burger-api build --target=<platform>`.
+     * Defaults to `'bun'`. See `RUNTIME_CAPABILITIES` for what each target
+     * supports.
+     */
+    target?: RuntimeTarget;
+}
+
+/**
+ * Empty interface for module augmentation. Extend this to type the route's
+ * `config.ts` options, so `ctx.config` is typed for hooks and plugins:
+ *
+ * ```ts
+ * declare module "burger-api" {
+ *     interface RouteConfig {
+ *         auth: boolean;
+ *         timeout: number;
+ *     }
+ * }
+ * ```
+ *
+ * Without augmentation, `ctx.config` is typed as the empty `RouteConfig`,
+ * so unknown keys fail at compile time. Augment to unlock them.
+ *
+ * Core itself only honors `responseValidation`; keys such as `auth`,
+ * `cache` or `timeout` do nothing unless a plugin or hook reads them.
+ */
+export interface RouteConfig {}
 
 export interface PageDefinition {
     path: string;
     handler: RequestHandler;
-    middleware?: Middleware[];
 }
 
 export interface TrieNode {
@@ -273,3 +423,27 @@ export interface TrieNode {
     isWildcard?: boolean; // True for wildcard routes [...]
     route?: RouteDefinition; // Route definition at leaf node
 }
+
+// Re-export the public-facing context types so consumers can reference
+// them from the package root (e.g. `RouteMeta`, `ContextSet`).
+export type {
+    ContextField,
+    ContextInit,
+    ContextSet,
+    RouteAccessInfo,
+    RouteMeta,
+} from '../context/types.js';
+
+// Re-export OpenAPI config types
+export type {
+    OpenAPIConfig,
+    DocsProvider,
+    DocsProviderOptions,
+    OpenAPIObject,
+    JsonSchemaConverter,
+    DocsAuth,
+    OpenAPIServer,
+    OpenAPIContact,
+    OpenAPILicense,
+    OpenAPIExternalDocs,
+} from './openapi-config.js';

@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/cli",
-  "version": "0.9.9",
+  "version": "1.0.0-beta",
   "description": "Simple command-line tool for Burger API projects",
   "module": "src/index.ts",
   "type": "module",
@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun test --timeout 30000 ./test",
+    "typecheck": "tsc --noEmit",
     "test:build": "bun test test/scanner.test.ts test/virtual-entry.test.ts test/entry-options.test.ts test/build-preserve-options.test.ts",
     "build:win": "bun run scripts/build-executable.ts win",
     "build:linux": "bun run scripts/build-executable.ts linux",
@@ -28,11 +29,11 @@
   },
   "dependencies": {
     "commander": "^11.1.0",
-    "@clack/prompts": "^0.7.0"
+    "@clack/prompts": "^0.7.0",
+    "burger-api": "^1.0.0-beta"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "burger-api": "workspace:*"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

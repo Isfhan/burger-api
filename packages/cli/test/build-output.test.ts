@@ -1,8 +1,8 @@
 /**
  * Validates that built bundle runs and responds (no runtime fs scan).
- * Run after building the file-base-api-routing example:
- *   cd packages/burger-api/examples/file-base-api-routing
- *   bun run ../../../cli/src/index.ts build index.ts --outfile .build/bundle/app.js
+ * Run after building the production-app example:
+ *   cd packages/burger-api/examples/production-app
+ *   bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
  *   bun test ../../../cli/test/build-output.test.ts
  *
  * Or run from repo root with BUILD_BUNDLE_PATH set to the app.js path.
@@ -24,7 +24,7 @@ const BUNDLE_PATH =
         '..',
         'burger-api',
         'examples',
-        'file-base-api-routing',
+        'production-app',
         '.build',
         'bundle',
         'app.js'
@@ -72,16 +72,16 @@ afterAll(() => {
 });
 
 describe('Build output (AOT routes)', () => {
-    it('responds to GET /api/products without runtime filesystem scan', async () => {
+    it('responds to GET /api without runtime filesystem scan', async () => {
         const bundlePath = join(BUNDLE_PATH);
         if (!existsSync(bundlePath)) {
             // Local convenience mode only; CI path fails in beforeAll.
             expect(REQUIRE_BUNDLE).toBe(false);
             return;
         }
-        const res = await fetch(`${baseUrl}/api/products`);
+        const res = await fetch(`${baseUrl}/api`);
         expect(res.status).toBe(200);
         const data = await res.json();
-        expect(data).toHaveProperty('name');
+        expect(data).toHaveProperty('message');
     });
 });

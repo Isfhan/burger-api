@@ -42,7 +42,7 @@ bun test test/scanner.test.ts
 - `build-output.test.ts`
   - Checks built bundle can run and respond.
 - `build-preserve-options.test.ts`
-  - Integration test that builds a fixture app and verifies global middleware is preserved in production bundle output.
+  - Integration test that builds a fixture app and verifies global hooks are preserved in production bundle output.
 
 ## Optional environment variables
 
@@ -66,8 +66,8 @@ bun test test/scanner.test.ts
 Example:
 
 ```bash
-cd packages/burger-api/examples/file-base-api-routing
-bun run ../../../cli/src/index.ts build index.ts --outfile .build/bundle/app.js
+cd packages/burger-api/examples/production-app
+bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
 cd ../../../cli
 bun test test/build-output.test.ts
 ```

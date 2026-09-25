@@ -1,0 +1,576 @@
+import type { RouteDefinition, RequestHandler } from '../types/index.js';
+import type { HTTPMethod } from '../utils/routing.js';
+import type { RouteModule } from '../compiler/route-module.js';
+import type { ContextInit, RouteAccessInfo } from '../context/types.js';
+import { compileRouteSchema } from '../validation/compiler.js';
+import { createValidationHook } from '../validation/validator.js';
+import {
+    methodNotAllowed,
+    applySet,
+    createAutoOptionsHandler,
+} from '../utils/response.js';
+import { HTTPError } from '../errors/http-error.js';
+import { executeHookPlan } from '../lifecycle/executor.js';
+import { compileJitHookPlan } from '../lifecycle/jit.js';
+import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types.js';
+import { HookChain } from '../chain/chain.js';
+import { flatten } from '../chain/flattener.js';
+import { composePluginHooks } from '../plugin/composer.js';
+import type { ResolvedPlugin } from '../plugin/types.js';
+import { BurgerContext } from '../context/context.js';
+import { analyzeRouteAccess } from '../analysis/route-access-analyzer.js';
+import { AllowCache } from './allow-cache.js';
+import { StaticMap } from './static-map.js';
+import { Trie } from './trie.js';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
+import { extractCtxInit } from './param-extract.js';
+import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types.js';
+import type {
+    CompiledRouteValidators,
+    ValidatorConfig,
+} from '../validation/types.js';
+
+/**
+ * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
+ *
+ * Responsibilities:
+ * - Build the optimized `CompiledHandler` per route (method dispatch + 405/Allow
+ * + auto-HEAD + hook pipeline delegation).
+ * - Classify each route as static (→ `StaticMap`) or dynamic/wildcard (→ `Trie`).
+ * - Populate the `AllowCache`.
+ * - Optionally run the `RouteAccessAnalyzer` once per route (compile-time only;
+ * its output is baked into `meta` but never read at runtime ).
+ * - Fail fast on duplicate or ambiguous routes (compile-time error).
+ * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
+ */
+export class RouterCompiler {
+    private debug?: boolean;
+    private config: ValidatorConfig;
+    /** JIT HookPlan compilation (capability-gated, default off). */
+    private jit: boolean;
+
+    constructor(
+        debug?: boolean,
+        config: ValidatorConfig = {},
+        jit = false
+    ) {
+        this.debug = debug;
+        this.config = config;
+        this.jit = jit;
+    }
+
+    compile(
+        defs: RouteDefinition[],
+        plugins?: ResolvedPlugin[],
+        providers?: Map<string, unknown>,
+        onRequestHooksCount: number = 0,
+        globalHooks?: RouteHooks
+    ): CompiledRouter {
+        const staticMap = new StaticMap();
+        const trie = new Trie();
+        const allowCache = new AllowCache();
+        // Native dispatch table: `:param` / `*` routes keyed by their Bun-native
+        // pattern (e.g. `/users/:id`). These are handed to Bun's `routes` map so
+        // dynamic routes dispatch without the `fetch` fallback hop. The compiled
+        // handler self-extracts params (see param-extract.ts), so behavior is
+        // identical to the trie path. The trie is retained for the `fetch`
+        // fallback (unmatched / loose-slash / empty-param trailing slash).
+        const nativeRoutes = new Map<string, CompiledHandler>();
+        const registeredPaths = new Set<string>();
+        // Retained metadata per route (RouteAccessInfo + RouteMeta). Build-time
+        // only; never read on the request hot path.
+        const compiledRoutes = new Map<string, CompiledRoute>();
+
+        for (const def of defs) {
+            const path = def.path;
+
+            // Allow header: the route's explicitly defined methods (HEAD is not
+            // listed unless the user defined it — auto-HEAD is derived, not advertised).
+            const allowMethods = Object.keys(def.handlers).filter(
+                (m) => m !== 'HEAD'
+            );
+            const allow = allowCache.compute(allowMethods);
+            allowCache.set(path, allow);
+
+            // Every handler is checked to return a `Response`. Every route
+            // also answers OPTIONS: when none is declared the framework adds
+            // one (204 + Allow) that skips beforeRoute, so auth hooks never
+            // reject CORS preflights (onRequest still runs).
+            const handlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
+            for (const m of Object.keys(def.handlers) as HTTPMethod[]) {
+                const h = def.handlers[m];
+                if (typeof h !== 'function') continue;
+                handlers[m] = (h as { isAutoOptions?: boolean }).isAutoOptions
+                    ? h
+                    : requireResponse(h, m, path);
+            }
+            if (!handlers.OPTIONS) {
+                handlers.OPTIONS = createAutoOptionsHandler([
+                    ...allowMethods,
+                    'OPTIONS',
+                ]);
+            }
+
+            const hasSchema = !!def.schema;
+            let routeValidators:
+                | import('../validation/types.js').CompiledRouteValidators
+                | undefined;
+
+            // Compose the frozen `HookPlan` once at compile time.
+            // The HookChain collects ChainNodes tagged with scope + owner; the
+            // flattener produces the per-hook-point arrays with correct ordering
+            // (global → local for forward hooks, local → global for onError).
+            // Validation is added as global scope so it pins at index 0.
+            const routeHooks = def.hooks;
+            const chain = new HookChain();
+            if (hasSchema) {
+                const validators = compileRouteSchema(def.schema!, this.config);
+                chain.add({
+                    stage: 'validation',
+                    fn: createValidationHook(
+                        validators,
+                        this.config,
+                        this.debug === true
+                    ),
+                    scope: 'global',
+                    owner: 'framework',
+                });
+                routeValidators = validators;
+            }
+            // App-level hooks (`src/hooks.ts` / `globalHooks`) are staged with
+            // scope 'global' and route hooks with scope 'local', so the
+            // flattener owns the ordering: request hooks run
+            // Plugin → Global → Route, response + error hooks run
+            // Route → Global → Plugin (nearest-first). Declared order is kept
+            // within a scope. User arrays are never mutated.
+            addHookStages(chain, globalHooks, 'global', 'app');
+            addHookStages(chain, routeHooks, 'local', path);
+
+            // compose plugin hooks into the chain.
+            // Plugin hooks are scoped (plugin by default) and the flattener
+            // orders them between global (validation) and local (route).
+            if (plugins) {
+                composePluginHooks(chain, plugins, path);
+            }
+
+            const plan = flatten(chain, path);
+            // Merge transform from plugins, global hooks and route hooks (in
+            // that precedence order — route wins on key collision).
+            plan.transform = mergeTransformRecords(
+                routeHooks?.transform,
+                plugins,
+                globalHooks?.transform
+            );
+
+            // Attach compiled validators for response validation post-handler.
+            if (routeValidators) {
+                plan.validators = routeValidators;
+            }
+
+            // Thread debug flag for error rendering.
+            plan.debug = this.debug;
+
+            // Thread global validation config for response validation. A
+            // route's `config.ts` may override `responseValidation`.
+            const routeMode = def.config?.responseValidation;
+            plan.validatorConfig =
+                routeMode === 'off' ||
+                routeMode === 'dev' ||
+                routeMode === 'enforce'
+                    ? { ...this.config, responseValidation: routeMode }
+                    : this.config;
+
+            // Optional, compile-time-only route field analysis. The result is
+            // baked into `meta` but is unused at runtime, so it can
+            // never affect request correctness.
+            const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
+
+            const isWildcard = def.isWildcard === true;
+            const compiled = buildCompiledHandler(
+                handlers,
+                plan,
+                allow,
+                meta,
+                path,
+                isWildcard,
+                providers,
+                def.config,
+                this.jit
+            );
+
+            // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
+            // When a schema exists, also retain the precompiled validators so
+            // the validation orchestrator runs them at request time.
+            compiledRoutes.set(path, {
+                def: { ...def, handlers },
+                handler: compiled,
+                methods: allowMethods,
+                allow,
+                route: { path, pattern: path },
+                meta,
+                validators: routeValidators,
+            });
+
+            if (isStaticPath(path)) {
+                if (registeredPaths.has(path)) {
+                    throw new Error(
+                        `Duplicate static route registered: "${path}". ` +
+                            `Each path may be defined by exactly one route.ts.`
+                    );
+                }
+                registeredPaths.add(path);
+                staticMap.set(path, compiled);
+
+                // Optional: cache provably-constant OPTIONS responses natively.
+                // (Loose trailing-slash equivalence is resolved at lookup time in
+                // Router.fetch, so it never shadows a `:param` empty-value match.)
+                registerNativeOptions(
+                    path,
+                    { ...def, handlers },
+                    hasSchema,
+                    onRequestHooksCount
+                );
+            } else {
+                if (registeredPaths.has(path)) {
+                    throw new Error(
+                        `Duplicate route registered: "${path}". ` +
+                            `Each path may be defined by exactly one route.ts.`
+                    );
+                }
+                registeredPaths.add(path);
+                const methods = new Set(
+                    Object.keys(handlers).map((m) => m.toUpperCase())
+                );
+                trie.insert(path, compiled, methods, isWildcard);
+                // Register on Bun's native router (no `fetch` hop). The handler
+                // carries the route pattern + wildcard flag so it can derive
+                // `params` / `wildcardParams` from the URL itself.
+                nativeRoutes.set(path, compiled);
+            }
+        }
+
+        return {
+            staticMap,
+            trie,
+            allowCache,
+            nativeRoutes,
+            routes: compiledRoutes,
+        };
+    }
+
+    /**
+     * Compiles a `RouteModule[]` (the canonical output of the Module Loader)
+     * into the dispatch structures. This is the compiler entry point
+     * for the file-based discovery pipeline
+     * (Directory Scanner → Module Loader → `RouteModule` → Compiler).
+     *
+     * Each `RouteModule` is normalized to the existing `RouteDefinition` shape
+     * (the stable contract shared with the prod prebuilt path), then compiled
+     * through {@link compile}. Convention data not yet compiled in * (`hooks`) is carried for downstream compilation. `config` is attached for runtime use.
+     */
+    compileModules(modules: RouteModule[]): CompiledRouter {
+        return this.compile(modules.map(toRouteDefinition));
+    }
+}
+
+/**
+ * Normalizes a `RouteModule` (compiler's intermediate) into the existing
+ * `RouteDefinition` (the normalized form between the compiler and the runtime).
+ *
+ * Convention data not yet compiled in (`hooks`) is carried on the
+ * `RouteDefinition` for downstream compilation. `config` is attached for runtime use.
+ */
+function toRouteDefinition(mod: RouteModule): RouteDefinition {
+    return {
+        path: mod.path,
+        handlers: mod.handlers,
+        schema: mod.schema,
+        openapi: mod.openapi,
+        hooks: mod.hooks,
+        isWildcard: mod.isWildcard,
+        config: mod.config,
+    };
+}
+
+/**
+ * Normalizes a single hook value (function or array) into an array.
+ * Generic so it works for both `Hook` and `ErrorHook`.
+ */
+function toHookArray<T>(h: T | T[] | undefined): T[] {
+    if (h === undefined) return [];
+    return Array.isArray(h) ? h : [h];
+}
+
+/** Stages one hook object's beforeRoute/afterRoute/mapResponse/onError. */
+function addHookStages(
+    chain: HookChain,
+    hooks: RouteHooks | undefined,
+    scope: 'global' | 'local',
+    owner: string
+): void {
+    if (!hooks) return;
+    chain.addStage('beforeRoute', toHookArray(hooks.beforeRoute), scope, owner);
+    chain.addStage('afterRoute', toHookArray(hooks.afterRoute), scope, owner);
+    chain.addStage('mapResponse', toHookArray(hooks.mapResponse), scope, owner);
+    chain.addStage('onError', toHookArray(hooks.onError), scope, owner);
+}
+
+/**
+ * Wraps a route handler so a non-`Response` return value fails loud with a
+ * clear 500 (message visible in dev, generic in production, always logged)
+ * instead of leaking to the runtime (Bun answers "Welcome to Bun!" 200).
+ */
+function requireResponse(
+    handler: RequestHandler,
+    method: string,
+    path: string
+): RequestHandler {
+    const check = (result: unknown): Response => {
+        if (result instanceof Response) return result;
+        const kind =
+            result === null
+                ? 'null'
+                : Array.isArray(result)
+                  ? 'array'
+                  : typeof result;
+        throw new HTTPError(
+            500,
+            `${method} ${path} returned ${kind}; route handlers must return a Response`
+        );
+    };
+    return (ctx: BurgerContext) => {
+        const result: unknown = handler(ctx);
+        return result instanceof Promise ? result.then(check) : check(result);
+    };
+}
+
+/**
+ * Builds a compiled handler that performs method dispatch, 405+Allow,
+ * auto-HEAD, creates the single `BurgerContext`, delegates to the hook
+ * pipeline, and merges `ctx.set` into the response via `applySet`.
+ */
+function buildCompiledHandler(
+    handlers: Partial<Record<HTTPMethod, RequestHandler>>,
+    plan: HookPlan,
+    allow: string,
+    meta: RouteAccessInfo,
+    pattern: string = '',
+    isWildcard: boolean = false,
+    providers?: Map<string, unknown>,
+    config?: Record<string, unknown>,
+    jit = false
+): CompiledHandler {
+    // JIT state: undefined = not yet attempted, null = unavailable/not
+    // worth it, otherwise the compiled dispatcher (lazily built on first
+    // hit so unused routes pay no startup cost).
+    let jitFn:
+        | ((
+              ctx: BurgerContext,
+              handler: RequestHandler,
+              method: string
+          ) => Promise<Response>)
+        | null
+        | undefined;
+    const runPlan = (
+        ctx: BurgerContext,
+        handler: RequestHandler,
+        request: Request
+    ): Promise<Response> => {
+        if (jit) {
+            if (jitFn === undefined) {
+                jitFn = compileJitHookPlan(plan, plan.debug);
+            }
+            const f = jitFn;
+            if (f) return f(ctx, handler, request.method);
+        }
+        return executeHookPlan(ctx, plan, handlers, request);
+    };
+    return async (
+        request: Request,
+        ctxInit?: ContextInit,
+        prebuilt?: BurgerContext,
+        env?: import('../context/context.js').BurgerEnv,
+        executionCtx?: import('../context/context.js').BurgerExecutionContext
+    ): Promise<Response> => {
+        const method = request.method;
+        // `request.method` is a runtime string; the handler map only accepts
+        // the HTTPMethod union. Any non-union method cannot be a defined
+        // handler key, so indexing is safe.
+        let handler = (handlers as Record<string, RequestHandler | undefined>)[
+            method
+        ];
+
+        // When dispatched natively (Bun's `routes` map), no `ctxInit` is
+        // provided, so derive params / wildcardParams / route from the URL.
+        // When dispatched via the `fetch` fallback (trie) or a static wrapper,
+        // `ctxInit` is already populated.
+        const resolvedCtxInit =
+            ctxInit ?? extractCtxInit(request, pattern, isWildcard);
+
+        // Create the one `BurgerContext` for this request. When the router
+        // already created one (for `onRequest` hooks), bind that instance to
+        // this route instead — state seeded pre-routing survives, and there
+        // is still exactly ONE context per request. `meta` is accepted but
+        // ignored at runtime.
+        const ctx = prebuilt
+            ? prebuilt.bind(
+                  request,
+                  resolvedCtxInit,
+                  meta,
+                  providers,
+                  config,
+                  env,
+                  executionCtx
+              )
+            : BurgerContext.create(
+                  request,
+                  resolvedCtxInit,
+                  meta,
+                  providers,
+                  config,
+                  env,
+                  executionCtx
+              );
+
+        // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
+        if (!handler && method === 'HEAD' && handlers.GET) {
+            handler = handlers.GET;
+            const response = await runPlan(ctx, handler, request);
+            // Uniform response mutation: apply `ctx.set`,
+            // then strip the body from the mutated response.
+            const mutated = ctx.hasSet()
+                ? applySet(response, ctx.set)
+                : response;
+            // Report GET's Content-Length: runtimes answer a null body with
+            // `content-length: 0` unless the header is explicit.
+            const headers = new Headers(mutated.headers);
+            if (!headers.has('content-length') && mutated.body) {
+                const size = (await mutated.arrayBuffer()).byteLength;
+                headers.set('content-length', String(size));
+            }
+            return new Response(null, {
+                status: mutated.status,
+                statusText: mutated.statusText,
+                headers,
+            });
+        }
+
+        if (!handler) {
+            return methodNotAllowed(allow);
+        }
+
+        // The framework's auto OPTIONS answers directly: no beforeRoute
+        // (auth hooks must not reject CORS preflights). onRequest hooks
+        // already ran in the router, so CORS hooks still apply.
+        if ((handler as { isAutoOptions?: boolean }).isAutoOptions) {
+            return handler(ctx);
+        }
+
+        const response = await runPlan(ctx, handler, request);
+        return ctx.hasSet() ? applySet(response, ctx.set) : response;
+    };
+}
+
+/**
+ * Merges transform records from route hooks and plugins. Plugin transform records
+ * are applied first, then route-level transform overrides on key collision.
+ */
+function mergeTransformRecords(
+    routeTransform: TransformMap | undefined,
+    plugins?: ResolvedPlugin[],
+    globalTransform?: TransformMap
+): TransformMap | undefined {
+    const merged: TransformMap = {};
+    if (plugins) {
+        for (const p of plugins) {
+            if (p.hooks.transform) {
+                for (const k of Object.keys(p.hooks.transform)) {
+                    merged[k] = p.hooks.transform[k]!;
+                }
+            }
+        }
+    }
+    if (globalTransform) {
+        for (const k of Object.keys(globalTransform)) {
+            merged[k] = globalTransform[k]!;
+        }
+    }
+    if (routeTransform) {
+        for (const k of Object.keys(routeTransform)) {
+            merged[k] = routeTransform[k]!;
+        }
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/**
+ * A path is static when it contains no `:param` or `*` segment.
+ */
+function isStaticPath(path: string): boolean {
+    return (
+        !path.includes(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX) &&
+        !path.includes(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX)
+    );
+}
+
+/**
+ * Optionally registers a provably-constant `OPTIONS` (204) response via
+ * `Bun.nativeStaticResponse`. Only safe when the route has no hooks,
+ * no schema, and uses the framework's auto-generated OPTIONS handler — so the
+ * response is identical for every request. The pipeline works correctly without
+ * this; it is a pure performance optimization.
+ */
+function registerNativeOptions(
+    path: string,
+    def: RouteDefinition,
+    hasSchema: boolean,
+    onRequestHooksCount: number = 0
+): void {
+    // Skip native OPTIONS when onRequest hooks exist — they may need to
+    // intercept OPTIONS preflight (e.g. CORS hook).
+    if (onRequestHooksCount > 0) {
+        return;
+    }
+    // Optional optimization: `Bun.nativeStaticResponse` may not exist in all
+    // Bun versions, and `Bun` is undefined on non-Bun runtimes (WinterCG
+    // targets). Detect both at runtime; the pipeline works without it.
+    type NativeStaticResponse = (
+        method: string,
+        path: string,
+        response: Response
+    ) => void;
+    const nativeStaticResponse = (
+        typeof Bun === 'undefined'
+            ? undefined
+            : (Bun as { nativeStaticResponse?: NativeStaticResponse })
+                  .nativeStaticResponse
+    );
+    if (typeof nativeStaticResponse !== 'function') {
+        return;
+    }
+    if (hasSchema) {
+        return;
+    }
+    const opt = def.handlers['OPTIONS'] as
+        | (typeof def.handlers)['OPTIONS']
+        | undefined;
+    if (opt && (opt as { isAutoOptions?: boolean }).isAutoOptions === true) {
+        try {
+            nativeStaticResponse(
+                'OPTIONS',
+                path,
+                new Response(null, {
+                    status: 204,
+                    headers: {
+                        Allow:
+                            (opt as { allowHeader?: string }).allowHeader ??
+                            '',
+                    },
+                })
+            );
+        } catch {
+            // Native static response not available for this path; the compiled
+            // handler still serves OPTIONS correctly, so ignore.
+        }
+    }
+}

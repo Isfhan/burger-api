@@ -1,0 +1,7 @@
+{
+    "name": "example-error-handling",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

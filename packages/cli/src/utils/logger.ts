@@ -51,7 +51,7 @@ function supportsUnicode(): boolean {
  * ANSI color codes for terminal output
  * These are special character sequences that tell the terminal to change colors
  */
-const colors = {
+const ansiColors = {
     reset: '\x1b[0m', // Reset to default color
     bright: '\x1b[1m', // Make text bright/bold
     dim: '\x1b[2m', // Make text dim
@@ -72,6 +72,17 @@ const colors = {
     bgYellow: '\x1b[43m',
     bgBlue: '\x1b[44m',
 };
+
+/**
+ * Colors only on a terminal (and never with NO_COLOR); FORCE_COLOR opts
+ * back in. Piped/CI output stays plain text.
+ */
+const useColor =
+    Boolean(process.env.FORCE_COLOR) ||
+    (Boolean(process.stdout.isTTY) && !process.env.NO_COLOR);
+const colors = Object.fromEntries(
+    Object.entries(ansiColors).map(([k, v]) => [k, useColor ? v : ''])
+) as typeof ansiColors;
 
 /**
  * Unicode symbols for modern terminals
@@ -105,6 +116,21 @@ const asciiSymbols = {
  */
 const symbols = supportsUnicode() ? unicodeSymbols : asciiSymbols;
 
+/** Animated output (spinner frames, cursor control) only on a real terminal. */
+const isTTY = Boolean(process.stdout.isTTY);
+
+/** The spinner currently drawing on the last line, if any. */
+let activeSpinner: Spinner | null = null;
+
+/**
+ * Clear the spinner's line before printing a message, so log lines written
+ * while a spinner runs (e.g. build warnings) start on a clean line. The
+ * spinner redraws itself on its next frame.
+ */
+function clearSpinnerLine(): void {
+    if (activeSpinner && isTTY) process.stdout.write('\r\x1B[K');
+}
+
 /**
  * Show a success message (green with checkmark)
  * Use this when something completes successfully
@@ -114,6 +140,7 @@ const symbols = supportsUnicode() ? unicodeSymbols : asciiSymbols;
  * success('Project created successfully!')
  */
 export function success(message: string): void {
+    clearSpinnerLine();
     console.log(`${colors.green}${symbols.success}${colors.reset} ${message}`);
 }
 
@@ -126,6 +153,7 @@ export function success(message: string): void {
  * error('Failed to download file')
  */
 export function error(message: string): void {
+    clearSpinnerLine();
     console.log(`${colors.red}${symbols.error}${colors.reset} ${message}`);
 }
 
@@ -138,6 +166,7 @@ export function error(message: string): void {
  * info('Downloading templates...')
  */
 export function info(message: string): void {
+    clearSpinnerLine();
     console.log(`${colors.blue}${symbols.info}${colors.reset} ${message}`);
 }
 
@@ -150,6 +179,7 @@ export function info(message: string): void {
  * warning('This will overwrite existing files')
  */
 export function warning(message: string): void {
+    clearSpinnerLine();
     console.log(`${colors.yellow}${symbols.warning}${colors.reset} ${message}`);
 }
 
@@ -178,6 +208,11 @@ export function highlight(message: string): string {
     return `${colors.bright}${message}${colors.reset}`;
 }
 
+/** Return a dimmed (gray) string — plain text when colors are off. */
+export function dimText(message: string): string {
+    return `${colors.gray}${colors.dim}${message}${colors.reset}`;
+}
+
 /**
  * Show a dimmed message (gray and dim)
  * Use this for less important information
@@ -187,6 +222,7 @@ export function highlight(message: string): string {
  * dim('You can skip this step if you want')
  */
 export function dim(message: string): void {
+    clearSpinnerLine();
     console.log(`${colors.gray}${colors.dim}${message}${colors.reset}`);
 }
 
@@ -196,10 +232,10 @@ export function dim(message: string): void {
  *
  * @param message - The message to display
  * @example
- * bullet('CORS middleware')
+ * bullet('CORS hook')
  */
 export function bullet(message: string): void {
-    console.log(`  ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
+    console.log(` ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
 }
 
 /**
@@ -232,7 +268,7 @@ export function separator(): void {
  *
  * @param title - The header title
  * @example
- * header('Available Middleware')
+ * header('Available Hooks and Plugins')
  */
 export function header(title: string): void {
     newline();
@@ -251,7 +287,7 @@ export function header(title: string): void {
  */
 export function command(command: string): void {
     console.log(
-        `  ${colors.dim}$${colors.reset} ${colors.cyan}${command}${colors.reset}`
+        ` ${colors.dim}$${colors.reset} ${colors.cyan}${command}${colors.reset}`
     );
 }
 
@@ -264,7 +300,7 @@ export function command(command: string): void {
  * code('import { Burger } from "burger-api"')
  */
 export function code(code: string): void {
-    console.log(`  ${colors.gray}${code}${colors.reset}`);
+    console.log(` ${colors.gray}${code}${colors.reset}`);
 }
 
 /**
@@ -298,6 +334,11 @@ export class Spinner {
      * Start the spinner animation
      */
     private start(): void {
+        activeSpinner = this;
+        // Not a terminal (CI, pipes, tests): no frames or cursor control —
+        // just the message once, and the final message on stop().
+        if (!isTTY) return;
+
         // Hide cursor
         process.stdout.write('\x1B[?25l');
 
@@ -315,6 +356,7 @@ export class Spinner {
      * Render the current frame
      */
     private render(): void {
+        if (!isTTY) return;
         // Clear the line and move cursor to beginning
         process.stdout.write('\r\x1B[K');
         // Write the spinner and message
@@ -346,12 +388,15 @@ export class Spinner {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
+        if (activeSpinner === this) activeSpinner = null;
 
-        // Clear the spinner line
-        process.stdout.write('\r\x1B[K');
+        if (isTTY) {
+            // Clear the spinner line
+            process.stdout.write('\r\x1B[K');
 
-        // Show cursor again
-        process.stdout.write('\x1B[?25h');
+            // Show cursor again
+            process.stdout.write('\x1B[?25h');
+        }
 
         // Show final message if provided
         if (finalMessage) {
@@ -393,7 +438,9 @@ export async function withSpinner<T>(
 ): Promise<T> {
     const spin = new Spinner(message);
     try {
-        return await fn(spin);
+        const result = await fn(spin);
+        spin.stop();
+        return result;
     } catch (err) {
         spin.stop(message.replace(/\s*\.\.\.\s*$/, '') + ' failed', true);
         throw err;
@@ -423,8 +470,8 @@ const LOGO_TEXT = `
  ╚██╗  ██████╦╝██║   ██║██████╔╝██║  ██╗ █████╗  ██████╔╝███████║██████╔╝██║
  ██╔╝  ██╔══██╗██║   ██║██╔══██╗██║  ╚██╗██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║
 ██╔╝   ██████╦╝╚██████╔╝██║  ██║╚██████╔╝███████╗██║  ██║██║  ██║██║     ██║
-╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═╝╚═╝   ╚═╝╚═╝     ╚═╝
-`.trim();
+╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
+`.replace(/^\n+|\n+$/g, '');
 
 /**
  * Show ASCII art banner for BurgerAPI CLI
@@ -433,9 +480,9 @@ const LOGO_TEXT = `
  * @param version - CLI version (e.g. from package.json); defaults to '0.0.0'
  */
 export function showBanner(version: string = '0.0.0'): void {
-    const bannerColor = '\x1b[38;2;255;204;153m'; // Warm orange color
+    const bannerColor = useColor ? '\x1b[38;2;255;204;153m' : ''; // Warm orange color
 
-    const reset = '\x1b[0m';
+    const reset = colors.reset;
     const tagline = `CLI tool for BurgerAPI projects - v${version}`;
 
     // Unicode banner for modern terminals
@@ -451,9 +498,9 @@ ${reset}`);
  * @param rows - Array of row data
  * @example
  * table([
- *   ['Name', 'Version'],
- *   ['burger-api', '0.6.6'],
- *   ['bun', '1.3.1']
+ * ['Name', 'Version'],
+ * ['burger-api', '0.6.6'],
+ * ['bun', '1.3.1']
  * ]);
  */
 export function table(rows: string[][]): void {

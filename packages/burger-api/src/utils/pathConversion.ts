@@ -1,6 +1,6 @@
-import * as path from 'path';
-import { cleanPrefix } from './index';
-import { ROUTE_CONSTANTS } from './routing';
+import * as path from 'node:path';
+import { cleanPrefix } from './index.js';
+import { ROUTE_CONSTANTS } from './routing.js';
 
 /**
  * Converts a file path to an API route path.
@@ -12,8 +12,11 @@ export function filePathToApiRoutePath(
     filePath: string,
     prefix: string
 ): string {
-    if (filePath.endsWith('route.ts')) {
-        filePath = filePath.slice(0, -'route.ts'.length);
+    for (const ext of ['.ts', '.js', '.mjs']) {
+        if (filePath.endsWith(`route${ext}`)) {
+            filePath = filePath.slice(0, -`route${ext}`.length);
+            break;
+        }
     }
 
     const segments = filePath.split(path.sep);
@@ -76,10 +79,13 @@ export function filePathToPageRoutePath(
         }
         if (
             segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
-            segment.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
+            segment.includes(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
         ) {
+            // Page dynamic segments are FILENAMES (`[name].tsx`) — the
+            // extension trails the closing bracket, so match on `includes`.
+            const end = segment.indexOf(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END);
             resultSegments.push(
-                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + segment.slice(1, -1)
+                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + segment.slice(1, end)
             );
         } else {
             resultSegments.push(segment);

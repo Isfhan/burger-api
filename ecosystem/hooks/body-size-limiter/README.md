@@ -1,0 +1,522 @@
+# Body Size Limiter Hooks
+
+Request body size limiting hook factory for burger-api framework. Hooks are code that runs around your handler — before and/or after it. This hook factory prevents large payload attacks by rejecting requests that exceed a specified size limit.
+
+## Features
+
+- ✅ Configurable size limits
+- ✅ Fast header-based checking
+- ✅ Accurate stream-based checking
+- ✅ Preset configurations
+- ✅ Custom error responses
+- ✅ Protection against DoS attacks
+- ✅ 413 Payload Too Large status code
+
+## Installation
+
+Copy this hook factory into your project following the standardized ecosystem structure:
+
+```bash
+# Copy the entire ecosystem folder to your project
+cp -r burger-api/ecosystem ./
+
+# Or install via the CLI
+burger-api add body-size-limiter
+```
+
+## Usage
+
+### Basic Usage (1MB limit)
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+export const onRequest = [bodySizeLimiter()];
+```
+
+A `POST`/`PUT`/`PATCH` whose `Content-Length` exceeds the limit gets
+`413 Payload Too Large`; a body sent without `Content-Length` (chunked)
+gets `411` in the default `header` mode.
+
+**Recommended stage:** `onRequest`. It runs before routing and — more
+importantly — before schema **body validation**, which reads the whole body
+between `transform` and `beforeRoute`. In `beforeRoute`, `mode: 'header'`
+still works, but `mode: 'stream'` would run after the body was already
+buffered (the hook then logs a one-time warning and lets the request
+through). A route's `hooks.ts` has no `onRequest`, so per-route limits must
+use `beforeRoute` with the default `header` mode.
+
+Stream mode measures a **clone** of the body (the request itself is never
+replaced), so validation and the handler still read the original body.
+
+### Custom Size Limit
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [bodySizeLimiter({
+    maxSize: 10 * 1024 * 1024 // 10MB limit
+})];
+```
+
+### Using Presets
+
+```typescript
+// src/hooks.ts
+import {
+    smallPayloadLimit,
+    mediumPayloadLimit,
+    largePayloadLimit,
+    extraLargePayloadLimit
+} from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+// Choose one:
+export const beforeRoute = [smallPayloadLimit()]; // 100KB - for text-based APIs
+// export const beforeRoute = [mediumPayloadLimit()]; // 1MB - default
+// export const beforeRoute = [largePayloadLimit()]; // 10MB - for file uploads
+// export const beforeRoute = [extraLargePayloadLimit()]; // 50MB - for large uploads
+```
+
+### Custom Error Response
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter, formatBytes } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 5 * 1024 * 1024,
+        onError: (size, max) => {
+            return Response.json(
+                {
+                    error: 'File too large',
+                    message: `Your upload of ${formatBytes(size)} exceeds the ${formatBytes(max)} limit`,
+                    suggestion: 'Please compress your file or split it into smaller parts'
+                },
+                { status: 413 }
+            );
+        }
+    })
+];
+```
+
+### Route-Specific Limits
+
+```typescript
+// src/api/upload/hooks.ts
+import { bodySizeLimiter } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+// Higher limit for file upload endpoint
+export const beforeRoute = [bodySizeLimiter({
+    maxSize: 50 * 1024 * 1024 // 50MB
+})];
+```
+
+## Configuration Options
+
+### `maxSize`
+
+- **Type**: `number`
+- **Default**: `1048576` (1MB)
+
+Maximum allowed body size in bytes.
+
+**Common sizes:**
+- 100KB: `102400`
+- 1MB: `1048576`
+- 10MB: `10485760`
+- 50MB: `52428800`
+- 100MB: `104857600`
+
+### `mode`
+
+- **Type**: `'header' | 'stream'`
+- **Default**: `'header'`
+
+Checking mode:
+- `header`: Fast, checks Content-Length header only
+- `stream`: Accurate, actually reads and measures body (slower)
+
+### `onError`
+
+- **Type**: `(size: number, maxSize: number) => Response`
+- **Default**: Returns 413 with JSON error
+
+Custom error handler for oversized requests.
+
+### `includeLimit`
+
+- **Type**: `boolean`
+- **Default**: `true`
+
+Whether to include size information in error response.
+
+## Preset Configurations
+
+### `smallPayloadLimit()` - 100KB
+
+For text-based APIs (JSON, form data):
+
+```typescript
+smallPayloadLimit()
+// maxSize: 100KB
+```
+
+### `mediumPayloadLimit()` - 1MB
+
+Default, good for most APIs:
+
+```typescript
+mediumPayloadLimit()
+// maxSize: 1MB
+```
+
+### `largePayloadLimit()` - 10MB
+
+For file uploads (images, documents):
+
+```typescript
+largePayloadLimit()
+// maxSize: 10MB
+```
+
+### `extraLargePayloadLimit()` - 50MB
+
+For large file uploads (videos, archives):
+
+```typescript
+extraLargePayloadLimit()
+// maxSize: 50MB
+```
+
+## Advanced Examples
+
+### Different Limits per Route
+
+```typescript
+// src/hooks.ts (global)
+import { smallPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [smallPayloadLimit()];
+
+// src/api/upload/hooks.ts (route-specific, runs AFTER the global hook)
+import { largePayloadLimit } from '../../../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [largePayloadLimit()];
+// Note: hooks don't override each other — global runs first, so a smaller
+// global limit still rejects first. Put the SMALL limit on specific routes
+// and keep the global limit as the largest one you accept.
+```
+
+### Conditional Limits Based on User
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+function userBasedLimit() {
+    return (ctx: BurgerContext) => {
+        // Get user from JWT/session plugin
+        const user = (ctx as { user?: { tier?: string } }).user;
+
+        // Different limits based on user tier
+        let maxSize: number;
+        if (user?.tier === 'premium') {
+            maxSize = 50 * 1024 * 1024; // 50MB
+        } else if (user?.tier === 'pro') {
+            maxSize = 10 * 1024 * 1024; // 10MB
+        } else {
+            maxSize = 1 * 1024 * 1024; // 1MB
+        }
+
+        return bodySizeLimiter({ maxSize })(ctx);
+    };
+}
+
+export const beforeRoute = [userBasedLimit()];
+```
+
+### With File Type Validation
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 10 * 1024 * 1024,
+        onError: (size, max) => {
+            return Response.json({
+                error: 'Upload rejected',
+                size: `${(size / 1024 / 1024).toFixed(2)}MB`,
+                limit: `${(max / 1024 / 1024).toFixed(2)}MB`
+            }, { status: 413 });
+        }
+    })
+];
+
+// Then in route.ts
+export async function POST(ctx: BurgerContext) {
+    const contentType = ctx.headers.get('Content-Type');
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(contentType)) {
+        return Response.json(
+            { error: 'Invalid file type' },
+            { status: 415 }
+        );
+    }
+
+    // Process upload...
+}
+```
+
+### Logging Rejected Requests
+
+```typescript
+// src/hooks.ts
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+export const beforeRoute = [
+    bodySizeLimiter({
+        maxSize: 5 * 1024 * 1024,
+        onError: (size, max) => {
+            // Log rejected upload
+            console.warn('Rejected oversized request:', {
+                size: `${(size / 1024 / 1024).toFixed(2)}MB`,
+                limit: `${(max / 1024 / 1024).toFixed(2)}MB`,
+                timestamp: new Date().toISOString()
+            });
+
+            return Response.json({
+                error: 'Payload too large'
+            }, { status: 413 });
+        }
+    })
+];
+```
+
+## Modes Comparison
+
+### Header Mode (Fast)
+
+- ✅ Very fast (no body reading)
+- ✅ Low memory usage
+- ❌ Relies on Content-Length header
+- ❌ Client can lie about size
+- ✅ Recommended for most cases
+
+```typescript
+bodySizeLimiter({
+    maxSize: 1024 * 1024,
+    mode: 'header' // Default
+})
+```
+
+### Stream Mode (Accurate)
+
+- ✅ Accurate measurement
+- ✅ Can't be bypassed
+- ❌ Slower (reads body)
+- ❌ Higher memory usage
+- ✅ Use for critical endpoints
+
+```typescript
+bodySizeLimiter({
+    maxSize: 1024 * 1024,
+    mode: 'stream' // More secure
+})
+```
+
+## Best Practices
+
+### 1. Set Global Limits
+
+```typescript
+// src/hooks.ts — start with a safe global limit
+import { mediumPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const onRequest = [mediumPayloadLimit()];
+```
+
+### 2. Override for Specific Routes
+
+```typescript
+// src/api/login/hooks.ts — tighter limit for a small-payload endpoint
+// (route hooks run after global hooks, so they can only be stricter)
+import { smallPayloadLimit } from '../../../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [smallPayloadLimit()];
+```
+
+### 3. Combine with Rate Limiting
+
+```typescript
+// src/hooks.ts
+import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
+import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
+
+// Prevent abuse with both limits
+export const beforeRoute = [
+    rateLimit({ windowMs: 60000, maxRequests: 100 }),
+    bodySizeLimiter({ maxSize: 1024 * 1024 })
+];
+```
+
+### 4. Provide Clear Error Messages
+
+```typescript
+bodySizeLimiter({
+    maxSize: 5 * 1024 * 1024,
+    onError: (size, max) => Response.json({
+        error: 'File too large',
+        current: formatBytes(size),
+        maximum: formatBytes(max),
+        suggestion: 'Please use files smaller than 5MB'
+    }, { status: 413 })
+})
+```
+
+### 5. Consider User Experience
+
+```typescript
+// Client-side validation before upload
+// Check file size on client before sending
+const file = fileInput.files[0];
+const maxSize = 5 * 1024 * 1024; // 5MB
+
+if (file.size > maxSize) {
+    alert(`File too large. Maximum size is ${formatBytes(maxSize)}`);
+    return;
+}
+
+// Then send to server...
+```
+
+## Common Use Cases
+
+### JSON API
+
+```typescript
+smallPayloadLimit() // 100KB - JSON payloads
+```
+
+### Form Submissions
+
+```typescript
+mediumPayloadLimit() // 1MB - forms with some data
+```
+
+### Image Uploads
+
+```typescript
+largePayloadLimit() // 10MB - images
+```
+
+### Video/Large File Uploads
+
+```typescript
+extraLargePayloadLimit() // 50MB - videos
+```
+
+### Multipart Uploads
+
+For very large files, use chunked uploads:
+
+```typescript
+// Each chunk limited to 10MB
+largePayloadLimit()
+
+// Client sends file in 10MB chunks
+// Server reassembles chunks
+```
+
+## Error Responses
+
+### Default Error (1MB limit exceeded)
+
+```json
+{
+    "error": "Payload Too Large",
+    "message": "Request body exceeds maximum allowed size",
+    "received": "2.50MB",
+    "maximum": "1.00MB"
+}
+```
+
+### Custom Error
+
+```json
+{
+    "error": "Upload too large",
+    "size": "15MB",
+    "limit": "10MB",
+    "suggestion": "Please compress or split your file"
+}
+```
+
+## Security Considerations
+
+### 1. Always Set Limits
+
+Without limits, attackers can:
+- Exhaust server memory
+- Cause disk space issues
+- Trigger DoS conditions
+
+### 2. Use Header Mode Carefully
+
+Header mode trusts Content-Length. For critical endpoints, use stream mode:
+
+```typescript
+bodySizeLimiter({
+    mode: 'stream' // More secure
+})
+```
+
+### 3. Combine with Other Security
+
+```typescript
+// src/hooks.ts
+export const beforeRoute = [
+    rateLimit(), // Prevent rapid requests
+    bodySizeLimiter(), // Limit size
+    requestTimeout({ ms: 30000 }) // Prevent slow uploads
+];
+```
+
+## Testing
+
+### Test with curl
+
+```bash
+# Generate large file
+dd if=/dev/zero of=large.dat bs=1M count=2  # 2MB file
+
+# Test upload
+curl -X POST http://localhost:4000/api/upload \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @large.dat
+
+# Should return 413 if over limit
+```
+
+### Test Content-Length
+
+```bash
+# Fake large Content-Length
+curl -X POST http://localhost:4000/api/upload \
+  -H "Content-Length: 10485760" \
+  -d "small data"
+
+# Should be rejected in header mode
+```
+
+## Performance Impact
+
+- **Header Mode**: Negligible overhead (~1ms)
+- **Stream Mode**: Proportional to body size
+
+## References
+
+- [MDN: 413 Payload Too Large](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/413)
+- [RFC 7231: HTTP/1.1 Semantics](https://tools.ietf.org/html/rfc7231)
+

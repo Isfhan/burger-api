@@ -25,21 +25,27 @@ export interface CreateOptions {
     pageDir?: string;
     /** Prefix for Page routes (e.g., '/') */
     pagePrefix?: string;
+    /** Whether to include file-based WebSocket routes */
+    useWs?: boolean;
+    /** Directory for WebSocket routes (e.g., 'websocket') */
+    wsDir?: string;
     /** Whether to add AI agent skills */
     addSkills?: boolean;
+    /** Project language — `ts` (default) or `js` (JavaScript with JSDoc) */
+    lang?: 'ts' | 'js';
 }
 
 /**
- * Information about a middleware/feature from GitHub
+ * Information about an ecosystem component (hook or plugin) from GitHub
  */
-export interface MiddlewareInfo {
-    /** Name of the middleware (e.g., 'cors') */
+export interface EcosystemComponentInfo {
+    /** Name of the component (e.g., 'cors') */
     name: string;
     /** Short description of what it does */
     description: string;
     /** Path in the GitHub repo */
     path: string;
-    /** Files that are part of this middleware */
+    /** Files that are part of this component */
     files: string[];
 }
 
@@ -71,13 +77,15 @@ export interface GitHubFile {
 }
 
 /**
- * Build-time configuration for Burger API (conventions or burger.config.ts).
+ * Build-time configuration for Burger API (conventions or burger.build.ts).
  * Used by the CLI when generating the virtual entry and scanning routes.
+ * Single source of truth: the consumer-facing type exported from `burger-api`.
  */
-export interface BuildConfig {
-    apiDir: string;
-    pageDir: string;
-    apiPrefix: string;
-    pagePrefix: string;
-    debug?: boolean;
-}
+export type { BuildConfig } from 'burger-api';
+
+/**
+ * The five `--target` platforms `burger-api build` supports, and what each
+ * one is capable of. Single source of truth: exported from `burger-api`.
+ */
+export type { RuntimeTarget, RuntimeCapability } from 'burger-api';
+export { RUNTIME_CAPABILITIES } from 'burger-api';
