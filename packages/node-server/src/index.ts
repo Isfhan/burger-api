@@ -1,7 +1,7 @@
 import http from 'node:http';
 import type { Server } from 'node:http';
 import { WebSocketServer } from 'ws';
-import { toFetchHandler } from 'burger-api';
+import { toFetchHandler, setRequestIP } from 'burger-api';
 import type { Burger } from 'burger-api';
 import { sendWebResponse, toWebRequest } from './bridge.js';
 
@@ -45,6 +45,10 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
         void (async () => {
             try {
                 const request = toWebRequest(req);
+                // Expose the peer address as ctx.ip (Bun does this natively).
+                if (req.socket.remoteAddress) {
+                    setRequestIP(request, req.socket.remoteAddress);
+                }
                 const response = await fetchHandler(request);
                 await sendWebResponse(res, response);
             } catch (err) {
