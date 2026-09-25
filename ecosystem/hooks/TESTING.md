@@ -367,8 +367,10 @@ curl -i http://localhost:4000/api/slow
 - Slow route: 408 Request Timeout
 
 > Note: `requestTimeout` detects timeouts after the handler completes — the
-> handler still runs to completion. For hard enforcement that stops handlers
-> mid-execution, use `AbortSignal` inside the handler.
+> handler still runs to completion. To answer **at the deadline** with
+> `504 Gateway Timeout`, wrap the handler with `withTimeout(handler, { ms })`
+> instead; the handler receives an `AbortSignal` and keeps running unless it
+> observes it.
 
 ---
 

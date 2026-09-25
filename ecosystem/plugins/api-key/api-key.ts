@@ -20,6 +20,13 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, timingSafeEqual } from "burger-api";
 
+declare module "burger-api" {
+  interface BurgerContext {
+    /** The validated API key, set by the api-key plugin. */
+    apiKey?: string;
+  }
+}
+
 /**
  * API key plugin configuration options
  */
@@ -108,6 +115,15 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     attachToContext = true,
   } = options;
 
+  // Without keys or a validator every request would fail with 401 — that is
+  // a misconfiguration, not an auth policy. Fail loud at startup.
+  if (keys.length === 0 && typeof validate !== "function") {
+    throw new Error(
+      "[burger-api/plugin-api-key] apiKey() requires a non-empty `keys` array " +
+        "or a `validate(key)` function, e.g. apiKey({ keys: ['...'] })."
+    );
+  }
+
   // SHA-256 digests of the static keys, computed lazily. Comparison happens
   // on fixed-length digests with timingSafeEqual, so neither the match
   // position nor the key length is observable.
@@ -168,8 +184,7 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
         }
 
         // Check if API key was already validated in transform
-        const apiKey = (ctx as { apiKey?: string }).apiKey;
-        if (apiKey) {
+        if (ctx.apiKey) {
           return;
         }
 
@@ -189,7 +204,7 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
 
           // Attach to context if enabled
           if (attachToContext) {
-            (ctx as { apiKey?: string }).apiKey = keyToValidate;
+            ctx.apiKey = keyToValidate;
           }
         } else {
           // No validation function - already checked static list

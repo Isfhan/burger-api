@@ -19,7 +19,29 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError } from "burger-api";
+import { HTTPError, UnauthorizedError } from "burger-api";
+
+// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
+// each declares the SAME property type and merges its fields into
+// `BurgerAuthUser`, so several can be installed without type conflicts.
+declare module "burger-api" {
+  interface BurgerContext {
+    /** Verified token claims, set by the oidc plugin after verification. */
+    user?: BurgerAuthUser & Record<string, unknown>;
+  }
+  interface BurgerAuthUser {
+    /** Subject (user ID) */
+    sub?: string;
+    /** Issuer */
+    iss?: string;
+    /** Audience */
+    aud?: string | string[];
+    /** Expiration time (seconds since epoch) */
+    exp?: number;
+    /** User roles */
+    roles?: string[];
+  }
+}
 
 /**
  * OIDC plugin configuration options
@@ -361,8 +383,14 @@ export function oidc(options: OidcOptions): Plugin {
             }
           }
           keys = await getJwks(discovery.jwks_uri);
-        } catch {
-          throw new UnauthorizedError("Unable to validate token");
+        } catch (error) {
+          // The provider (not the token) failed: log it server-side and tell
+          // the client to retry — an unreachable IdP is not a bad token.
+          console.error(
+            `[burger-api/plugin-oidc] Failed to load discovery/JWKS for issuer "${issuer}":`,
+            error
+          );
+          throw new HTTPError(503, "Authentication provider unavailable");
         }
 
         const isValid = await verifyToken(token, keys, algorithms);

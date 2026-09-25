@@ -9,6 +9,8 @@ Official OpenID Connect authentication plugin for BurgerAPI. Parses OIDC token, 
 - Automatic JWKS caching
 - Configurable issuer and audience validation
 - Clock tolerance for distributed systems
+- Provider failures are logged server-side and answered with `503`, so an
+  outage never masquerades as a bad token (`401`)
 
 ## Installation
 
@@ -70,6 +72,12 @@ export default function (burger: PluginRegistrar) {
 | `prefix` | `string` | `"Bearer"` | Token prefix |
 | `clockTolerance` | `number` | `0` | Clock tolerance in seconds |
 | `jwksCacheTtl` | `number` | `3600` | JWKS cache TTL in seconds |
+| `algorithms` | `string[]` | `["RS256", "ES256"]` | Allowed token `alg` values |
+| `requireExpiration` | `boolean` | `true` | Reject tokens without an `exp` claim |
+
+Tokens are verified in the plugin's `beforeRoute` hook, so `401`/`503`
+responses are produced before the route handler runs. Routes with
+`auth: false` skip verification entirely.
 
 ## Route configuration
 
@@ -95,18 +103,25 @@ export default {
 
 ## Context properties
 
-After successful validation, the decoded token payload is available as `ctx.user`:
+After successful validation, the verified token claims are available as
+`ctx.user` (typed by the plugin's `declare module "burger-api"`
+augmentation — no cast needed):
 
 ```typescript
+import type { BurgerContext } from "burger-api";
+
 export async function GET(ctx: BurgerContext) {
-  const user = ctx.user as Record<string, unknown>;
-  return Response.json({ userId: user.sub });
+  return Response.json({ userId: ctx.user?.sub });
 }
 ```
 
 ## Error responses
 
-- **401 Unauthorized** — Missing token, invalid token, expired token, invalid issuer/audience
+- **401 Unauthorized** — Missing token, invalid signature, expired token,
+  invalid issuer/audience
+- **503 Service Unavailable** — OIDC discovery or JWKS could not be reached.
+  The failure is logged with `console.error`; the client should retry (the
+  token itself was not evaluated).
 
 ## Security notes
 

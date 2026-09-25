@@ -21,6 +21,17 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, timingSafeEqual } from "burger-api";
 
+declare module "burger-api" {
+  interface BurgerContext {
+    /**
+     * Session data (set by the session plugin). `undefined` until a session
+     * exists; assign an object with at least one key to create one (e.g. on
+     * login), assign `undefined` to destroy it (logout).
+     */
+    session?: Record<string, unknown>;
+  }
+}
+
 /**
  * Session store interface
  */
@@ -326,83 +337,97 @@ export function session(options: SessionOptions = {}): Plugin {
           return;
         }
 
-        // Get session from transform
-        const session = (ctx as { session?: Record<string, unknown> }).session;
-        if (!session) {
-          // No session - auth required
+        // Routes require an existing session unless `auth: false`. This
+        // only proves the client holds a valid session cookie — NOT that a
+        // user is logged in. Check a field your login handler sets (e.g.
+        // `ctx.session?.userId`) to require an authenticated user.
+        if (!ctx.session) {
           throw new UnauthorizedError("Session required");
         }
       },
 
       mapResponse: (ctx: BurgerContext): ((response: Response) => Promise<Response>) => {
         // 1.0 contract: response hooks return a transform function;
-        // the framework applies it to the response. (Legacy two-arg form is
-        // not supported by the pipeline.)
+        // the framework applies it to the response.
         return async (response: Response): Promise<Response> => {
           const sessionCtx = ctx as unknown as {
             _sessionId?: string;
             _sessionSnapshot?: Record<string, unknown>;
-            session?: Record<string, unknown>;
           };
           const sessionId = sessionCtx._sessionId;
+          const current = ctx.session;
 
-          // Create a new session if none exists: persist an empty session in
-          // the store so the ID is valid on the next request.
+          // No session on this request. Sessions are created LAZILY: only
+          // when the handler put data in `ctx.session` (e.g. on login) is a
+          // store entry written and a cookie issued. Requests that never
+          // touch the session allocate nothing.
           if (!sessionId) {
-            const newSessionId = generateSessionId();
-            const signedId = secret
-              ? await signSessionId(newSessionId, secret)
-              : newSessionId;
-            await store.set(newSessionId, {}, maxAge);
-
-            // Set cookie
-            const newResponse = new Response(response.body, {
-              status: response.status,
-              statusText: response.statusText,
-              headers: response.headers,
-            });
-            newResponse.headers.append(
-              "Set-Cookie",
-              buildCookieHeader(cookie, signedId, cookieOpts)
-            );
-
-            return newResponse;
-          }
-
-          // Regenerate the session ID when the session data changed during
-          // this request (login/logout/data write), migrating the data to the
-          // new ID so the session survives. Unchanged sessions keep their ID.
-          if (regenerateOnAuth) {
-            const current = sessionCtx.session;
-            if (dataChanged(sessionCtx._sessionSnapshot, current)) {
-              const newSessionId = generateSessionId();
-              const signedId = secret
-                ? await signSessionId(newSessionId, secret)
-                : newSessionId;
-
-              await store.set(newSessionId, current ?? {}, maxAge);
-              await store.destroy(sessionId);
-
-              // Set cookie with new ID
-              const newResponse = new Response(response.body, {
-                status: response.status,
-                statusText: response.statusText,
-                headers: response.headers,
-              });
-              newResponse.headers.append(
-                "Set-Cookie",
-                buildCookieHeader(cookie, signedId, cookieOpts)
-              );
-
-              return newResponse;
+            if (!isNonEmptySession(current)) {
+              return response;
             }
+            return issueSession(response, current);
           }
 
+          // Handler cleared the session (`ctx.session = undefined`, e.g. on
+          // logout): destroy it and expire the cookie.
+          if (!current) {
+            await store.destroy(sessionId);
+            return withCookie(
+              response,
+              buildCookieHeader(cookie, "", { ...cookieOpts, maxAge: 0 })
+            );
+          }
+
+          if (!dataChanged(sessionCtx._sessionSnapshot, current)) {
+            return response;
+          }
+
+          // Session data changed (login/logout/data write). Rotate the ID
+          // (default) — migrating the data so the session survives — or
+          // write it back under the same ID.
+          if (regenerateOnAuth) {
+            await store.destroy(sessionId);
+            return issueSession(response, current);
+          }
+          await store.set(sessionId, current, maxAge);
           return response;
         };
       },
     },
   };
+
+  /** Store `data` under a fresh ID and attach its cookie to the response. */
+  async function issueSession(
+    response: Response,
+    data: Record<string, unknown>
+  ): Promise<Response> {
+    const newSessionId = generateSessionId();
+    const signedId = secret
+      ? await signSessionId(newSessionId, secret)
+      : newSessionId;
+    await store.set(newSessionId, data, maxAge);
+    return withCookie(response, buildCookieHeader(cookie, signedId, cookieOpts));
+  }
+}
+
+/** True when the handler put at least one value in the session. */
+function isNonEmptySession(
+  value: Record<string, unknown> | undefined
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" && value !== null && Object.keys(value).length > 0
+  );
+}
+
+/** Copy the response with an extra `Set-Cookie` header. */
+function withCookie(response: Response, setCookie: string): Response {
+  const newResponse = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+  newResponse.headers.append("Set-Cookie", setCookie);
+  return newResponse;
 }
 
 // Re-export store for users

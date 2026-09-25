@@ -11,6 +11,7 @@ Official JWT authentication plugin for BurgerAPI. Parses JWT from Authorization 
 - Configurable issuer and audience validation
 - Role-based access control support
 - Clock tolerance for expiration checks
+- Short HMAC secrets (under 32 bytes) are rejected at startup with a fix hint
 
 ## Installation
 
@@ -34,10 +35,14 @@ import { jwtAuth } from "../ecosystem/plugins/jwt-auth/jwt-auth";
 
 export default function (burger: PluginRegistrar) {
   burger.usePlugin(jwtAuth({
-    secret: process.env.JWT_SECRET,
+    secret: process.env.JWT_SECRET, // >= 32 bytes, e.g. `openssl rand -base64 32`
   }));
 }
 ```
+
+`jwtAuth()` without a secret or `publicKey` throws at startup, and an HMAC
+secret shorter than 32 bytes throws with the exact byte count plus the
+`openssl rand -base64 32` hint — a weak secret is never accepted silently.
 
 ### RS256 (Asymmetric)
 
@@ -84,6 +89,25 @@ export default function (burger: PluginRegistrar) {
 | `issuer` | `string` | - | Required issuer claim |
 | `audience` | `string` | - | Required audience claim |
 | `clockTolerance` | `number` | `0` | Clock tolerance in seconds |
+| `requireExpiration` | `boolean` | `true` | Reject tokens that have no `exp` claim |
+
+### `requireExpiration`
+
+By default every token must carry an `exp` claim (and it must be in the
+future) — a token without an expiration would otherwise be valid forever.
+Set `requireExpiration: false` only when your tokens are intentionally
+expiration-less:
+
+```typescript
+burger.usePlugin(jwtAuth({
+  secret: process.env.JWT_SECRET,
+  requireExpiration: false,
+}));
+```
+
+The token is verified in the plugin's `beforeRoute` hook, so `401`/`403`
+responses are produced before the route handler runs. Routes with
+`auth: false` skip verification entirely.
 
 ## Route configuration
 
@@ -110,18 +134,22 @@ export default {
 
 ## Context properties
 
-After successful authentication, the decoded JWT payload is available as `ctx.user`:
+After successful authentication, the verified JWT claims are available as
+`ctx.user` (typed by the plugin's `declare module "burger-api"`
+augmentation — no cast needed):
 
 ```typescript
+import type { BurgerContext } from "burger-api";
+
 export async function GET(ctx: BurgerContext) {
-  const user = ctx.user as JwtPayload;
-  return Response.json({ userId: user.sub });
+  return Response.json({ userId: ctx.user?.sub });
 }
 ```
 
 ## Error responses
 
-- **401 Unauthorized** — Missing token, invalid token, expired token
+- **401 Unauthorized** — Missing token, invalid token, expired token, token
+  without `exp` (when `requireExpiration` is enabled)
 - **403 Forbidden** — Authenticated but insufficient permissions
 
 ## Security notes

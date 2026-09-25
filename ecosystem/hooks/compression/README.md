@@ -1,10 +1,10 @@
 # Compression Hook
 
-HTTP compression hook factory for burger-api framework. Hook factories are code that runs around your handler — before and/or after it. This hook compresses response bodies using gzip, deflate, or brotli compression to reduce bandwidth usage and improve load times.
+HTTP compression hook factory for burger-api framework. Hook factories are code that runs around your handler — before and/or after it. This hook compresses response bodies using gzip or deflate compression to reduce bandwidth usage and improve load times.
 
 ## Features
 
-- ✅ Multiple compression algorithms (gzip, deflate, brotli)
+- ✅ gzip and deflate compression (brotli requests are skipped — see the note below)
 - ✅ Automatic client capability detection
 - ✅ Configurable compression threshold
 - ✅ Smart content-type filtering
@@ -47,6 +47,10 @@ const app = new Burger({
 app.serve(4000);
 ```
 
+**Recommended stage:** `beforeRoute` — the hook returns a response
+transform, so it runs after the handler and can compress its response.
+Global (`src/hooks.ts`) or route-level (`hooks.ts`) both work.
+
 ### Custom Threshold
 
 ```typescript
@@ -62,7 +66,12 @@ export const beforeRoute = [
 
 ### Note: Brotli Support in Bun
 
-**Important**: Bun's `CompressionStream` currently supports `gzip` and `deflate` only. Brotli (`br`) is not yet supported and will be skipped if specified.
+**Important**: the hook does not implement Brotli. If the client sends
+`Accept-Encoding: br` and `'br'` is in `encodings`, compression is skipped
+with a `console.warn` and the response is sent uncompressed (with no
+`Content-Encoding` header). Because the hook picks the first encoding both
+sides support, putting `'br'` first would also shadow `gzip`/`deflate` for
+browsers — list only `gzip` and `deflate`:
 
 ```typescript
 // src/hooks.ts
@@ -70,7 +79,7 @@ import { compress } from '../ecosystem/hooks/compression/compression';
 
 export const beforeRoute = [
     compress({
-        encodings: ['gzip', 'deflate'] // Bun supports these
+        encodings: ['gzip', 'deflate']
     })
 ];
 ```
@@ -148,12 +157,14 @@ Minimum response size in bytes to compress. Responses smaller than this will not
 - **Type**: `('gzip' | 'deflate' | 'br')[]`
 - **Default**: `['gzip', 'deflate']`
 
-Compression algorithms to support, in order of preference. The hook will use the first encoding that the client supports.
+Compression algorithms to support, in order of preference. The hook picks
+the first entry the client's `Accept-Encoding` allows.
 
 **Encoding comparison:**
-- **gzip**: Best compatibility, good compression ✅ Supported in Bun
-- **deflate**: Similar to gzip, slightly less common ✅ Supported in Bun
-- **br** (brotli): Best compression, modern clients only ❌ Not yet supported in Bun
+- **gzip**: Best compatibility, good compression ✅ Implemented
+- **deflate**: Similar to gzip, slightly less common ✅ Implemented
+- **br** (brotli): ❌ Skipped with a warning (see the Brotli note above) —
+  including it shadows any `gzip`/`deflate` entry that follows it
 
 ### `contentTypes`
 
@@ -216,7 +227,7 @@ import { compress } from '../ecosystem/hooks/compression/compression';
 export const beforeRoute = [
     compress({
         threshold: 1024,
-        encodings: ['br', 'gzip', 'deflate'],
+        encodings: ['gzip', 'deflate'],
         contentTypes: /^(text\/|application\/(json|javascript|xml))/,
         excludeContentTypes: [
             'image/',
@@ -255,7 +266,7 @@ import { compress } from '../../ecosystem/hooks/compression/compression';
 export const beforeRoute = [
     compress({
         threshold: 0, // Compress everything
-        encodings: ['br', 'gzip'] // Prefer maximum compression
+        encodings: ['gzip', 'deflate']
     })
 ];
 ```
@@ -288,7 +299,7 @@ Typical compression ratios for different content types:
 Compression uses CPU to save bandwidth. Consider:
 
 - **High CPU costs**: Use higher threshold, fewer encodings
-- **High bandwidth costs**: Use lower threshold, prefer brotli
+- **High bandwidth costs**: Use lower threshold, keep gzip enabled
 - **CDN in front**: Let CDN handle compression
 
 ### Recommendations
@@ -297,7 +308,7 @@ Compression uses CPU to save bandwidth. Consider:
 // Low-traffic, bandwidth-sensitive
 compress({
     threshold: 256,
-    encodings: ['br', 'gzip']
+    encodings: ['gzip', 'deflate']
 })
 
 // High-traffic, CPU-sensitive
@@ -365,7 +376,7 @@ Content-Length: 1234
 ```typescript
 compress({
     threshold: 0, // Lower threshold for testing
-    encodings: ['gzip', 'deflate', 'br']
+    encodings: ['gzip', 'deflate']
 })
 ```
 
@@ -393,7 +404,7 @@ Test compression with curl:
 # Request with gzip
 curl -H "Accept-Encoding: gzip" http://localhost:4000/api/data -v
 
-# Request with brotli
+# Request with brotli — stays uncompressed (unsupported; warning logged)
 curl -H "Accept-Encoding: br" http://localhost:4000/api/data -v
 
 # Request without compression

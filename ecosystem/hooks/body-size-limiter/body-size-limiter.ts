@@ -80,6 +80,9 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
         includeLimit = true,
     } = options;
 
+    // Warn once per limiter when stream mode runs after the body was read.
+    let warnedBodyUsed = false;
+
     return async (ctx: BurgerContext): Promise<ForwardHookResult> => {
         // Skip check for methods that typically don't have bodies
         if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(ctx.method)) {
@@ -116,21 +119,33 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
 
             return undefined;
         } else {
-            // Stream mode: read and measure the body in bounded chunks.
-            // Never buffer more than `maxSize` bytes — an oversized body is
-            // aborted mid-stream, and an in-limit body is replayed to the
-            // handler via a reconstructed Request so handlers can still
-            // read it.
+            // Stream mode: measure a CLONE of the body in bounded chunks.
+            // Cloning tees the stream, so the original request body stays
+            // readable for validation and the handler — nothing on the
+            // context is replaced. At most `maxSize` bytes (plus one chunk)
+            // are buffered; an oversized body is aborted mid-stream.
 
             if (!ctx.body) {
                 return undefined; // No body to check
             }
 
-            const chunks: Uint8Array[] = [];
+            if (ctx.bodyUsed) {
+                // Body validation (or another hook) already read the whole
+                // body — measuring now protects nothing.
+                if (!warnedBodyUsed) {
+                    warnedBodyUsed = true;
+                    console.warn(
+                        "[burger-api/body-size-limiter] The request body was already read before the limiter ran (mode: 'stream'). " +
+                            'Register bodySizeLimiter() in `onRequest` so it runs before body validation.'
+                    );
+                }
+                return undefined;
+            }
+
             let size = 0;
 
             try {
-                const reader = ctx.body.getReader();
+                const reader = ctx.request.clone().body!.getReader();
                 for (;;) {
                     const { done, value } = await reader.read();
                     if (done) {
@@ -142,17 +157,8 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
                             await reader.cancel();
                             return onError(size, maxSize);
                         }
-                        chunks.push(value);
                     }
                 }
-
-                // Replay the buffered body so downstream validation and
-                // handlers can still read it.
-                (ctx as unknown as { _raw: Request })._raw = new Request(ctx.url, {
-                    method: ctx.method,
-                    headers: ctx.headers,
-                    body: new Blob(chunks as unknown as BlobPart[]),
-                });
 
                 return undefined;
             } catch (error) {

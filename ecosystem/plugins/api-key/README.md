@@ -35,6 +35,11 @@ export default function (burger: PluginRegistrar) {
 }
 ```
 
+At least one of `keys` (non-empty) or `validate` is required:
+`apiKey()` with neither throws at startup instead of rejecting every
+request with `401`. The check runs in the plugin's `beforeRoute` hook;
+routes with `auth: false` skip it entirely.
+
 ### Dynamic validation
 
 ```typescript
@@ -80,8 +85,8 @@ export default function (burger: PluginRegistrar) {
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `header` | `string` | `"X-API-Key"` | Header name to extract API key from |
-| `keys` | `string[]` | `[]` | Static list of valid API keys |
-| `validate` | `(key: string) => Promise<boolean>` | - | Dynamic validation function |
+| `keys` | `string[]` | `[]` | Static list of valid API keys (or use `validate`) |
+| `validate` | `(key: string) => Promise<boolean>` | - | Dynamic validation function (or use `keys`) |
 | `extract` | `(ctx: BurgerContext) => string \| null` | - | Custom key extraction function |
 | `attachToContext` | `boolean` | `true` | Attach API key info to context |
 
@@ -109,18 +114,22 @@ export default {
 
 ## Context properties
 
-After successful validation, the API key is available as `ctx.apiKey`:
+After successful validation, the API key is available as `ctx.apiKey`
+(typed by the plugin's `declare module "burger-api"` augmentation — no cast
+needed):
 
 ```typescript
+import type { BurgerContext } from "burger-api";
+
 export async function GET(ctx: BurgerContext) {
-  const apiKey = ctx.apiKey as string;
-  return Response.json({ apiKey });
+  return Response.json({ apiKey: ctx.apiKey });
 }
 ```
 
 ## Error responses
 
 - **401 Unauthorized** — Missing API key or invalid API key
+- **Config error at startup** — Neither `keys` nor `validate` configured
 
 ## Security notes
 

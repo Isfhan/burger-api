@@ -18,20 +18,21 @@ export interface RateLimiterOptions {
 
     /**
      * Custom key generator function to identify clients.
-     * By default, uses the client's IP address — only available when
-     * `trustProxy` is enabled (the proxy is expected to overwrite, never
-     * append to, `X-Forwarded-For` / `X-Real-IP`).
+     * By default, uses the client's socket IP (`ctx.ip`), or the
+     * `X-Forwarded-For` / `X-Real-IP` header when `trustProxy` is enabled.
      *
-     * @param req - The request object
+     * @param ctx - The request context
      * @returns A unique identifier for the client
      */
     keyGenerator?: (ctx: BurgerContext) => string;
 
     /**
      * Whether to trust `X-Forwarded-For` / `X-Real-IP` headers as the client
-     * identity. Only enable when the app is served behind a proxy that
-     * overwrites these headers on every request; otherwise a client can
-     * spoof them to bypass the limit.
+     * identity (falling back to `ctx.ip` when they are absent). Only enable
+     * when the app is served behind a proxy that overwrites these headers on
+     * every request; otherwise a client can spoof them to bypass the limit.
+     * Behind a proxy WITHOUT this option, every client has the proxy's
+     * socket IP — and therefore shares one bucket.
      * @default false
      */
     trustProxy?: boolean;
@@ -40,7 +41,7 @@ export interface RateLimiterOptions {
      * Custom handler for when rate limit is exceeded.
      * If not provided, returns a default 429 response.
      *
-     * @param req - The request object
+     * @param ctx - The request context
      * @returns Response to send when rate limit is exceeded
      */
     handler?: (ctx: BurgerContext) => Response;
@@ -114,6 +115,9 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
     // In-memory store for rate limit records
     const store = new Map<string, RateLimitRecord>();
 
+    // Warn once per limiter when a request carries no client identity.
+    let warnedNoIdentity = false;
+
     // Cleanup old entries periodically (every minute)
     const cleanupInterval = setInterval(() => {
         const now = Date.now();
@@ -149,18 +153,20 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
             rawKey = defaultKeyGenerator(ctx, trustProxy);
         }
 
-        // Refuse to rate-limit an unidentifiable client rather than share a
-        // single fallback bucket — an attacker would otherwise exhaust the
-        // shared bucket for every other client.
+        // No identity at all (a runtime that does not expose the client
+        // address, and no trusted proxy header): such requests share ONE
+        // bucket. That still caps anonymous traffic instead of rejecting
+        // every request; warn once so the degradation is not silent.
         if (!rawKey) {
-            return Response.json(
-                {
-                    error: 'Unable to determine client identity',
-                    message:
-                        'Set trustProxy when behind a proxy that overwrites X-Forwarded-For, or provide a keyGenerator.',
-                },
-                { status: 403 }
-            );
+            if (!warnedNoIdentity) {
+                warnedNoIdentity = true;
+                console.warn(
+                    '[burger-api/rate-limiter] Could not determine the client IP (ctx.ip is undefined); ' +
+                        'requests without a client identity share a single rate-limit bucket. ' +
+                        'Set `trustProxy` behind a proxy that overwrites X-Forwarded-For, or provide a `keyGenerator`.'
+                );
+            }
+            rawKey = SHARED_BUCKET_KEY;
         }
 
         const key = await hashKey(rawKey);
@@ -272,40 +278,40 @@ export async function hashKey(key: string): Promise<string> {
     ).join('');
 }
 
+/** Bucket key shared by requests without any client identity. */
+const SHARED_BUCKET_KEY = '\0burger-api:no-client-identity';
+
 /**
- * Default key generator that extracts the client's IP address.
- * Honors `X-Forwarded-For` / `X-Real-IP` ONLY when `trustProxy` is enabled —
- * those headers are client-controlled otherwise. Returns `null` when no
- * trustworthy identity is available.
+ * Default key generator: the client's IP address.
+ * With `trustProxy`, the first `X-Forwarded-For` entry (or `X-Real-IP`) is
+ * used — those headers are client-controlled otherwise, so they are ignored
+ * without it. Falls back to the socket peer address (`ctx.ip`). Returns
+ * `null` when no identity is available.
  */
 function defaultKeyGenerator(
     ctx: BurgerContext,
     trustProxy: boolean
 ): string | null {
-    if (!trustProxy) {
-        return null;
-    }
+    if (trustProxy) {
+        // The proxy must overwrite (not append to) X-Forwarded-For.
+        const forwarded = ctx.headers.get('X-Forwarded-For');
+        if (forwarded) {
+            const ip = forwarded.split(',')[0]!.trim();
+            if (ip) {
+                return ip;
+            }
+        }
 
-    // Try to get real IP from common proxy headers
-    // Only used when trustProxy is enabled, and the first entry is taken —
-    // the proxy must overwrite (not append to) X-Forwarded-For.
-    const forwarded = ctx.headers.get('X-Forwarded-For');
-    if (forwarded) {
-        const ip = forwarded.split(',')[0]!.trim();
-        if (ip) {
-            return ip;
+        const realIp = ctx.headers.get('X-Real-IP');
+        if (realIp) {
+            const ip = realIp.trim();
+            if (ip) {
+                return ip;
+            }
         }
     }
 
-    const realIp = ctx.headers.get('X-Real-IP');
-    if (realIp) {
-        const ip = realIp.trim();
-        if (ip) {
-            return ip;
-        }
-    }
-
-    return null;
+    return ctx.ip || null;
 }
 
 /**

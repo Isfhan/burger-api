@@ -1,7 +1,7 @@
 import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
 /**
- * Configuration options for the timeout hook.
+ * Configuration options for the timeout hook / handler wrapper.
  */
 export interface TimeoutOptions {
     /**
@@ -12,7 +12,8 @@ export interface TimeoutOptions {
 
     /**
      * Custom error handler for timeout.
-     * If not provided, returns a default 408 response.
+     * If not provided, the guard hook returns 408 and {@link withTimeout}
+     * returns 504.
      *
      * @returns Response to send when timeout occurs
      */
@@ -26,47 +27,107 @@ export interface TimeoutOptions {
 }
 
 /**
- * Creates a timeout hook that detects slow requests.
+ * Creates a timeout GUARD hook that replaces late responses with 408.
  *
- * This hook measures how long the handler takes to complete.
- * If it takes longer than the timeout, it returns a 408 response.
- *
- * Residual risk (documented, not fixed): the 408 is only sent after the
- * handler completes — a hung handler keeps the client waiting until it
- * resolves. Within the current hook contract the transform runs after the
- * handler, so this guard cannot interrupt mid-flight. Full enforcement
- * (AbortController wiring) is deferred; for true timeouts implement them
- * inside handlers using AbortSignal.
+ * Limitation: lifecycle hooks cannot wrap the handler — a `beforeRoute`
+ * hook runs before it and its after-mapper only runs once the handler has
+ * finished. So this hook cannot respond AT the deadline: a slow handler
+ * still keeps the client waiting until it resolves, and only then is its
+ * response swapped for a 408. To actually respond at the deadline with a
+ * 504, wrap the handler with {@link withTimeout} in `route.ts`.
  *
  * @param options - Configuration options for timeout behavior
- * @returns A hook function that detects slow requests
+ * @returns A hook function that replaces over-budget responses with 408
  *
  * @example
  * ```typescript
- * // Basic usage: detect requests taking longer than 30 seconds
- * const timeout = requestTimeout();
- *
- * // Custom timeout duration
- * const timeout = requestTimeout({ ms: 5000 }); // 5 seconds
- *
- * // Custom error response
- * const timeout = requestTimeout({
- *   ms: 10000,
- *   onTimeout: () => Response.json(
- *     { error: 'Request took too long' },
- *     { status: 408 }
- *   )
- * });
+ * // src/hooks.ts
+ * export const beforeRoute = [requestTimeout({ ms: 5000 })];
  * ```
  */
 export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
-    const {
-        ms = 30000, // 30 seconds
-        onTimeout,
-        message = 'Request timeout',
-    } = options;
+    const { ms = 30000 } = options;
+    const timeoutResponse = createTimeoutResponse(options);
 
-    const timeoutResponse = (): Response => {
+    return (_ctx: BurgerContext): ForwardHookResult => {
+        // Start timer when the hook runs
+        const startTime = Date.now();
+
+        // Return function to check timeout after handler completes
+        return async (response: Response): Promise<Response> => {
+            // Over budget: replace the late response.
+            if (Date.now() - startTime >= ms) {
+                return timeoutResponse();
+            }
+            return response;
+        };
+    };
+}
+
+/**
+ * Wraps a route handler so the client gets a 504 **at the deadline**.
+ *
+ * The handler receives a second argument, an `AbortSignal` that aborts at
+ * the deadline (or when the client disconnects). JavaScript cannot cancel a
+ * running function: after the 504 is sent the handler keeps running in the
+ * background unless it passes the signal on (e.g. `fetch(url, { signal })`)
+ * or checks `signal.aborted`.
+ *
+ * @example
+ * ```typescript
+ * // src/api/report/route.ts
+ * import { withTimeout } from '../../../ecosystem/hooks/timeout/timeout';
+ *
+ * export const GET = withTimeout(async (ctx, signal) => {
+ *     const res = await fetch('https://slow.example.com/data', { signal });
+ *     return Response.json(await res.json());
+ * }, { ms: 5000 });
+ * ```
+ */
+export function withTimeout<C extends BurgerContext = BurgerContext>(
+    handler: (ctx: C, signal: AbortSignal) => Response | Promise<Response>,
+    options: TimeoutOptions = {}
+): (ctx: C) => Promise<Response> {
+    const { ms = 30000 } = options;
+    const timeoutResponse = createDeadlineResponse(options);
+
+    return async (ctx: C): Promise<Response> => {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([ctx.signal, controller.signal]);
+
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<'timeout'>((resolve) => {
+            timer = setTimeout(() => resolve('timeout'), ms);
+        });
+
+        const work = Promise.resolve().then(() => handler(ctx, signal));
+
+        try {
+            const winner = await Promise.race([work, deadline]);
+            if (winner !== 'timeout') {
+                return winner;
+            }
+        } finally {
+            clearTimeout(timer);
+        }
+
+        // Deadline hit: tell the handler to stop, respond now. A late
+        // failure must not become an unhandled rejection; an abort error
+        // caused by our own signal is expected and not logged.
+        controller.abort(new Error(`Handler exceeded ${ms}ms timeout`));
+        work.catch((error: unknown) => {
+            if (error !== signal.reason && (error as Error)?.name !== 'AbortError') {
+                console.error('[burger-api/timeout] Handler failed after its timeout response was sent:', error);
+            }
+        });
+        return timeoutResponse();
+    };
+}
+
+/** 408 builder for the guard hook (its response is sent after the handler). */
+function createTimeoutResponse(options: TimeoutOptions): () => Response {
+    const { onTimeout, message = 'Request timeout' } = options;
+    return (): Response => {
         if (onTimeout) {
             return onTimeout();
         }
@@ -81,23 +142,24 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
             }
         );
     };
+}
 
-    return (ctx: BurgerContext): ForwardHookResult => {
-        // Start timer when the hook runs
-        const startTime = Date.now();
-
-        // Return function to check timeout after handler completes
-        return async (response: Response): Promise<Response> => {
-            const duration = Date.now() - startTime;
-
-            // If the handler hit or exceeded the budget, respond 408
-            // instead of the late response.
-            if (duration >= ms) {
-                return timeoutResponse();
+/** 504 builder for {@link withTimeout} (sent exactly at the deadline). */
+function createDeadlineResponse(options: TimeoutOptions): () => Response {
+    const { onTimeout, message = 'Request timeout' } = options;
+    return (): Response => {
+        if (onTimeout) {
+            return onTimeout();
+        }
+        return Response.json(
+            {
+                error: 'Gateway Timeout',
+                message,
+            },
+            {
+                status: 504,
+                statusText: 'Gateway Timeout',
             }
-
-            // Handler completed in time, return normal response
-            return response;
-        };
+        );
     };
 }

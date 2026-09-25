@@ -21,7 +21,25 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError } from "burger-api";
+import { UnauthorizedError, renderHTTPError } from "burger-api";
+
+// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
+// each declares the SAME property type and merges its fields into
+// `BurgerAuthUser`, so several can be installed without type conflicts.
+declare module "burger-api" {
+  interface BurgerContext {
+    /** The authenticated user, set by an auth plugin. */
+    user?: BurgerAuthUser & Record<string, unknown>;
+  }
+  interface BurgerAuthUser {
+    /** User ID (basic-auth) */
+    id?: string;
+    /** Username (basic-auth) */
+    username?: string;
+    /** User roles */
+    roles?: string[];
+  }
+}
 
 /**
  * Basic auth validation result
@@ -111,6 +129,13 @@ function base64Decode(str: string): string {
  * ```
  */
 export function basicAuth(options: BasicAuthOptions): Plugin {
+  if (typeof options?.validate !== "function") {
+    throw new Error(
+      "[burger-api/plugin-basic-auth] basicAuth() requires a `validate(username, password)` option " +
+        "that returns the user object or null, e.g. basicAuth({ validate: async (u, p) => ... })."
+    );
+  }
+
   const {
     header = "Authorization",
     validate,
@@ -163,7 +188,7 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         },
       },
 
-      beforeRoute: async (ctx: BurgerContext): Promise<void> => {
+      beforeRoute: async (ctx: BurgerContext): Promise<Response | void> => {
         // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
@@ -173,7 +198,7 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         }
 
         // Check if user was already validated in transform
-        const user = (ctx as { user?: BasicAuthUser }).user;
+        const user = ctx.user;
         if (user) {
           return;
         }
@@ -182,44 +207,35 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         const credentials = (ctx as { _basicAuth?: { username: string; password: string } })._basicAuth;
         if (!credentials) {
           // No Basic auth provided
-          throw new UnauthorizedError("Missing Basic authentication");
+          return challenge("Missing Basic authentication");
         }
 
         // Validate credentials
         const validatedUser = await validate(credentials.username, credentials.password);
         if (!validatedUser) {
-          throw new UnauthorizedError("Invalid credentials");
+          return challenge("Invalid credentials");
         }
 
         // Attach user to context if enabled
         if (attachToContext) {
-          (ctx as { user?: BasicAuthUser }).user = validatedUser;
+          ctx.user = validatedUser;
         }
-      },
-
-      mapResponse: (ctx: BurgerContext): ((response: Response) => Response) => {
-        // 1.0 contract: response hooks return a transform function;
-        // the framework applies it to the response. (Legacy two-arg form is
-        // not supported by the pipeline.)
-        return (response: Response) => {
-          // Check if we need to add WWW-Authenticate header
-          const user = (ctx as { user?: BasicAuthUser }).user;
-          if (!user) {
-            // Add WWW-Authenticate header for 401 responses
-            const newResponse = new Response(response.body, {
-              status: response.status,
-              statusText: response.statusText,
-              headers: response.headers,
-            });
-            newResponse.headers.set(
-              "WWW-Authenticate",
-              `Basic realm="${realm}"`
-            );
-            return newResponse;
-          }
-          return response;
-        };
       },
     },
   };
+
+  /**
+   * 401 with `WWW-Authenticate` so browsers show their login prompt. Returned
+   * (not thrown) from beforeRoute: a thrown error skips response hooks, so
+   * the header could not be attached. Body is RFC 9457 problem+json, like
+   * the framework's own 401s.
+   */
+  function challenge(detail: string): Response {
+    const response = renderHTTPError(new UnauthorizedError(detail), false);
+    response.headers.set(
+      "WWW-Authenticate",
+      `Basic realm="${realm.replace(/["\\]/g, '\\$&')}", charset="UTF-8"`
+    );
+    return response;
+  }
 }

@@ -22,6 +22,34 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, ForbiddenError } from "burger-api";
 
+// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
+// each declares the SAME property type and merges its fields into
+// `BurgerAuthUser`, so several can be installed without type conflicts.
+declare module "burger-api" {
+  interface BurgerContext {
+    /** Verified JWT claims, set after signature verification. */
+    user?: BurgerAuthUser & Record<string, unknown>;
+  }
+  interface BurgerAuthUser {
+    /** Subject (user ID) */
+    sub?: string;
+    /** Issuer */
+    iss?: string;
+    /** Audience */
+    aud?: string | string[];
+    /** Expiration time (seconds since epoch) */
+    exp?: number;
+    /** Not-before time (seconds since epoch) */
+    nbf?: number;
+    /** Issued-at time (seconds since epoch) */
+    iat?: number;
+    /** JWT ID */
+    jti?: string;
+    /** User roles */
+    roles?: string[];
+  }
+}
+
 /**
  * JWT plugin configuration options
  */
@@ -234,7 +262,8 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
     secret.length < 32
   ) {
     throw new Error(
-      `JWT plugin: HMAC secret must be at least 32 bytes long (got ${secret.length} bytes)`
+      `JWT plugin: HMAC secret must be at least 32 bytes long (got ${secret.length} bytes). ` +
+        "Generate one with `openssl rand -base64 32` and load it from an environment variable."
     );
   }
 

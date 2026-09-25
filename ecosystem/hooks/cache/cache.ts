@@ -119,7 +119,7 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
         vary,
     } = options;
 
-    return (_ctx: BurgerContext): ForwardHookResult => {
+    return (ctx: BurgerContext): ForwardHookResult => {
         // Transform response to add cache headers
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
@@ -163,24 +163,37 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
 
             headers.set('Cache-Control', cacheControlValue);
 
-            // Add ETag if enabled
-            if (etag) {
-                const body = await response.text();
-                const hash = await generateETag(body);
-                headers.set('ETag', `"${hash}"`);
+            // Add Vary header if specified
+            if (vary) {
+                const varyValue = Array.isArray(vary) ? vary.join(', ') : vary;
+                headers.set('Vary', varyValue);
+            }
 
-                // Recreate response with body
+            // ETag + conditional GET: only for successful GET/HEAD responses.
+            if (
+                etag &&
+                response.status === 200 &&
+                (ctx.method === 'GET' || ctx.method === 'HEAD')
+            ) {
+                // Hash the raw bytes — decoding as text would corrupt
+                // binary bodies. A handler-set ETag is kept as-is.
+                const body = await response.arrayBuffer();
+                let tag = headers.get('ETag');
+                if (!tag) {
+                    tag = `"${await generateETag(body)}"`;
+                    headers.set('ETag', tag);
+                }
+
+                if (ifNoneMatchHits(ctx.headers.get('If-None-Match'), tag)) {
+                    headers.delete('Content-Length');
+                    return new Response(null, { status: 304, headers });
+                }
+
                 return new Response(body, {
                     status: response.status,
                     statusText: response.statusText,
                     headers,
                 });
-            }
-
-            // Add Vary header if specified
-            if (vary) {
-                const varyValue = Array.isArray(vary) ? vary.join(', ') : vary;
-                headers.set('Vary', varyValue);
             }
 
             return new Response(response.body, {
@@ -247,14 +260,26 @@ export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600):
 }
 
 /**
- * Generate ETag hash from content.
+ * Generate an ETag hash from the body bytes.
  */
-async function generateETag(content: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(content);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+async function generateETag(content: ArrayBuffer): Promise<string> {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', content);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     return hashHex.substring(0, 16); // Use first 16 characters
 }
 
+/**
+ * `If-None-Match` evaluation (RFC 9110 §13.1.2): `*` or any listed tag
+ * matching under WEAK comparison (the `W/` prefix is ignored).
+ */
+function ifNoneMatchHits(header: string | null, etag: string): boolean {
+    if (!header) {
+        return false;
+    }
+    const opaque = (tag: string): string => tag.trim().replace(/^W\//, '');
+    const target = opaque(etag);
+    return header
+        .split(',')
+        .some((candidate) => candidate.trim() === '*' || opaque(candidate) === target);
+}

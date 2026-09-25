@@ -60,21 +60,35 @@ describe('rate-limiter', () => {
     });
 
     it('spoofed X-Forwarded-For is ignored without trustProxy', async () => {
-        const burger = makeBurger(rateLimit({ maxRequests: 3 }));
+        const burger = makeBurger(rateLimit({ maxRequests: 2 }));
         const handler = await burger.fetchHandler();
-        const res = await handler(
+        // Different spoofed addresses must not get separate buckets: without
+        // trustProxy the header is ignored and no client identity exists.
+        for (const spoofed of ['203.0.113.7', '198.51.100.9']) {
+            const res = await handler(
+                new Request('http://localhost/api', {
+                    headers: { 'X-Forwarded-For': spoofed },
+                })
+            );
+            expect(res.status).toBe(200);
+        }
+        const third = await handler(
             new Request('http://localhost/api', {
-                headers: { 'X-Forwarded-For': '203.0.113.7' },
+                headers: { 'X-Forwarded-For': '192.0.2.1' },
             })
         );
-        expect(res.status).toBe(403);
+        expect(third.status).toBe(429);
     });
 
-    it('no identity source does not create a shared fallback bucket', async () => {
-        const burger = makeBurger(rateLimit({ maxRequests: 3, trustProxy: true }));
+    it('no identity source uses one shared bucket instead of rejecting', async () => {
+        const burger = makeBurger(rateLimit({ maxRequests: 3 }));
         const handler = await burger.fetchHandler();
-        const res = await handler(new Request('http://localhost/api'));
-        expect(res.status).toBe(403);
+        const statuses: number[] = [];
+        for (let i = 0; i < 4; i++) {
+            const res = await handler(new Request('http://localhost/api'));
+            statuses.push(res.status);
+        }
+        expect(statuses).toEqual([200, 200, 200, 429]);
     });
 
     it('custom keyGenerator still enforces the limit', async () => {

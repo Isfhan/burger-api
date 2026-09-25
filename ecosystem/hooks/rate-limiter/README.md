@@ -34,18 +34,39 @@ burger-api add rate-limiter
 // src/hooks.ts — global hooks, applies to every request
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
-export const beforeRoute = [
-    rateLimit() // 100 requests per minute per IP
+export const onRequest = [
+    rateLimit(), // 100 requests per minute per client IP
 ];
+```
 
-// index.ts
-import { Burger } from 'burger-api';
+**Recommended stage:** `onRequest` — it runs before routing, so unknown
+paths (404s) and docs/static routes are limited too, and the 429 is sent
+before any route work. `beforeRoute` (global or in a route's `hooks.ts`)
+also works when you only want to limit matched API routes.
 
-const app = new Burger({
-    apiDir: './src/api',
-});
+Every allowed response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`
+and `X-RateLimit-Reset`; the 101st request in a window gets `429` with
+`Retry-After`.
 
-app.serve(4000);
+### How clients are identified
+
+By default the key is the client's **socket IP** (`ctx.ip`):
+
+| Setup | Key used |
+|-------|----------|
+| Default (`app.serve()` on Bun, no proxy) | `ctx.ip` — the TCP peer address |
+| `trustProxy: true` | First `X-Forwarded-For` entry, then `X-Real-IP`, then `ctx.ip` |
+| `keyGenerator` provided | Whatever it returns |
+| No identity available (runtime without a client address, e.g. some `toFetchHandler` targets) | One **shared** bucket for all such requests, with a one-time `console.warn` |
+
+> ⚠️ Behind a reverse proxy / load balancer, `ctx.ip` is the proxy's
+> address, so every client shares one bucket. Set `trustProxy: true` —
+> but only if the proxy **overwrites** `X-Forwarded-For` on every request;
+> otherwise clients can spoof the header to dodge the limit.
+
+```typescript
+// Behind a proxy that sets X-Forwarded-For
+export const onRequest = [rateLimit({ trustProxy: true })];
 ```
 
 ### Custom Limits
@@ -73,10 +94,8 @@ export const beforeRoute = [
         windowMs: 60000, // 1 minute
         maxRequests: 100,
         keyGenerator: (ctx) => {
-            // Use API key or fall back to IP
-            return ctx.headers.get('X-API-Key') || 
-                   ctx.headers.get('X-Forwarded-For') || 
-                   'anonymous';
+            // Use API key or fall back to the client IP
+            return ctx.headers.get('X-API-Key') || ctx.ip || 'anonymous';
         }
     })
 ];
@@ -108,7 +127,7 @@ const limiter = rateLimit({
 
 ```typescript
 // src/api/auth/login/hooks.ts
-import { rateLimit } from '../../../ecosystem/hooks/rate-limiter/rate-limiter';
+import { rateLimit } from '../../../../ecosystem/hooks/rate-limiter/rate-limiter';
 
 // Stricter rate limit for login endpoint
 export const beforeRoute = [
@@ -117,7 +136,7 @@ export const beforeRoute = [
         maxRequests: 5, // Only 5 login attempts
         keyGenerator: (ctx) => {
             // Rate limit by IP + username combination
-            const ip = ctx.headers.get('X-Forwarded-For') || 'unknown';
+            const ip = ctx.ip || 'unknown';
             const username = ctx.headers.get('X-Username') || 'anonymous';
             return `${ip}:${username}`;
         }
@@ -144,7 +163,7 @@ Maximum number of requests allowed per time window.
 ### `keyGenerator`
 
 - **Type**: `(ctx: BurgerContext) => string`
-- **Default**: IP-based key generator
+- **Default**: client IP (`ctx.ip`, or the forwarding headers with `trustProxy`)
 
 Custom function to generate a unique key for each client. Common strategies:
 
@@ -152,6 +171,13 @@ Custom function to generate a unique key for each client. Common strategies:
 - API key
 - User ID
 - Combination of multiple factors
+
+### `trustProxy`
+
+- **Type**: `boolean`
+- **Default**: `false`
+
+Use the first `X-Forwarded-For` entry (or `X-Real-IP`) as the client key, falling back to `ctx.ip`. Only enable behind a proxy that overwrites these headers on every request — otherwise clients can spoof them.
 
 ### `handler`
 
@@ -239,7 +265,7 @@ const loginLimiter = rateLimit({
     maxRequests: 5,
     skipSuccessfulRequests: true, // Only count failed logins
     keyGenerator: (ctx) => {
-        return ctx.headers.get('X-Forwarded-For') || 'unknown';
+        return ctx.ip || 'unknown';
     }
 });
 ```
@@ -280,8 +306,8 @@ const authenticatedRateLimit = rateLimit({
     maxRequests: 200,
     keyGenerator: (ctx) => {
         // Assuming you have an auth plugin that adds user to the context
-        const userId = (ctx as { user?: { id?: string } }).user?.id;
-        return userId || ctx.headers.get('X-Forwarded-For') || 'anonymous';
+        const userId = (ctx as { user?: { sub?: string } }).user?.sub;
+        return userId || ctx.ip || 'anonymous';
     }
 });
 ```
@@ -341,7 +367,7 @@ rateLimit({
 ## Security Notes
 
 - ✅ This uses an in-memory store. For distributed systems, consider using Redis or another shared store.
-- ✅ The default IP-based limiting can be bypassed by proxies. Use custom key generators for better security.
+- ✅ The default key is the socket IP (`ctx.ip`). Forwarding headers are only trusted with `trustProxy: true` — never enable it unless your proxy overwrites them.
 - ✅ IP addresses are automatically hashed for privacy (using `Bun.CryptoHasher` on Bun.js)
 - ✅ Combine with authentication for better rate limiting accuracy.
 - ⚠️ Memory usage grows with the number of unique clients. The cleanup interval helps manage this.
@@ -380,7 +406,7 @@ The hook hashes IP addresses for privacy and efficient storage. On Bun.js, it us
 // Bun's CryptoHasher (synchronous, native, super fast):
 const hasher = new Bun.CryptoHasher('sha256');
 hasher.update(ipAddress);
-return hasher.digest('hex').slice(0, 16);
+return hasher.digest('hex'); // full 256-bit digest
 
 // ~10x faster than crypto.subtle (which is async)
 // ~100x faster than Node.js crypto module
@@ -389,8 +415,8 @@ return hasher.digest('hex').slice(0, 16);
 **Benefits:**
 - ⚡ **10x faster** than `crypto.subtle` (Web Crypto API)
 - 🔒 **Privacy**: IP addresses are hashed, not stored in plain text
-- 💾 **Efficient storage**: Uses short hash (16 chars) as map key
-- 🔄 **Automatic fallback**: Uses simple hash on other runtimes
+- 💾 **Fixed-size keys**: every key is a 64-char SHA-256 hex digest
+- 🔄 **Automatic fallback**: Uses WebCrypto `crypto.subtle` SHA-256 on other runtimes
 
 **Performance Impact:**
 
@@ -398,9 +424,6 @@ return hasher.digest('hex').slice(0, 16);
 |---------|-----------|------------|
 | Bun v1.3.1 (CryptoHasher) | 0.02ms | ~50,000 req/s |
 | Node.js v20 (crypto.subtle) | 0.20ms | ~5,000 req/s |
-| Fallback (simple hash) | 0.01ms | ~100,000 req/s* |
-
-*Fallback is fastest but not cryptographically secure (fine for rate limiting).
 
 **Why This Matters:**
 
@@ -411,7 +434,7 @@ Rate limiting is typically applied to *every* request. A 10x improvement in key 
 The hook automatically detects the runtime and chooses the best hashing method:
 
 1. **Bun.js**: Uses `Bun.CryptoHasher` (fast + secure)
-2. **Other runtimes**: Uses simple hash (fast, good enough for rate limiting)
+2. **Other runtimes**: Uses `crypto.subtle.digest('SHA-256')`
 
 No configuration needed—it just works optimally on each runtime! 🚀
 

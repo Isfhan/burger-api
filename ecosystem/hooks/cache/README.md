@@ -45,6 +45,10 @@ const app = new Burger({
 app.serve(4000);
 ```
 
+**Recommended stage:** `beforeRoute` — the hook returns a response
+transform (headers / `304`), so it must wrap the handler's response.
+Global (`src/hooks.ts`) or route-level (`hooks.ts`) both work.
+
 ### Public Cache (1 hour)
 
 ```typescript
@@ -363,7 +367,16 @@ Client includes in subsequent requests:
 If-None-Match: "a1b2c3d4e5f6"
 ```
 
-Server returns `304 Not Modified` if content unchanged.
+Server returns `304 Not Modified` if content unchanged. Details:
+
+- `etag: true` only adds/compares ETags on `200` responses to `GET`/`HEAD`
+  requests. A handler-set `ETag` header is honored and compared as-is.
+- The generated tag is a hash of the raw response bytes (`arrayBuffer`),
+  never a text decode — binary bodies can't be corrupted.
+- `If-None-Match` uses **weak comparison** per RFC 9110: a `W/` prefix on
+  either side is ignored, and `*` matches any tag.
+- The `Vary` header is set before the `304`, so caches key the response
+  correctly (e.g. `vary: ['Accept-Encoding', 'Accept']`).
 
 ### Vary Header
 

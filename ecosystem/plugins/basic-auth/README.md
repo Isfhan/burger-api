@@ -26,21 +26,26 @@ that receives the `Burger` instance:
 ```typescript
 // src/plugins.ts
 import type { PluginRegistrar } from "burger-api";
+import { timingSafeEqual } from "burger-api";
 import { basicAuth } from "../ecosystem/plugins/basic-auth/basic-auth";
 
 export default function (burger: PluginRegistrar) {
   burger.usePlugin(basicAuth({
     validate: async (username, password) => {
-      // Check against database
-      const user = await db.users.findByUsername(username);
-      if (user && user.password === password) {
-        return { id: user.id, username: user.username, roles: user.roles };
-      }
-      return null;
+      // Replace with your user lookup (compare password HASHES in real apps)
+      const ok =
+        timingSafeEqual(username, "admin") &&
+        timingSafeEqual(password, process.env.ADMIN_PASSWORD ?? "");
+      return ok ? { id: "1", username, roles: ["admin"] } : null;
     },
   }));
 }
 ```
+
+Every route now requires credentials (except routes with `auth: false` in
+their `config.ts`). Without valid credentials the plugin responds `401` with
+`WWW-Authenticate: Basic realm="Restricted"`, so browsers show their login
+prompt. `validate` is required — `basicAuth()` without it throws at startup.
 
 ### With custom realm
 
@@ -71,7 +76,8 @@ The validation function receives the decoded username and password, and should r
 ```typescript
 validate: async (username, password) => {
   const user = await db.users.findByUsername(username);
-  if (user && user.password === password) {
+  // Never compare secrets with === (timing side channel)
+  if (user && (await Bun.password.verify(password, user.passwordHash))) {
     return {
       id: user.id,
       username: user.username,
@@ -109,16 +115,22 @@ export default {
 After successful validation, the user info is available as `ctx.user`:
 
 ```typescript
+import type { BurgerContext } from "burger-api";
+
 export async function GET(ctx: BurgerContext) {
-  const user = ctx.user as BasicAuthUser;
-  return Response.json({ userId: user.id, username: user.username });
+  return Response.json({ userId: ctx.user?.id, username: ctx.user?.username });
 }
 ```
 
+`ctx.user` is typed by the plugin's `declare module "burger-api"`
+augmentation (shared with jwt-auth and oidc).
+
 ## Error responses
 
-- **401 Unauthorized** — Missing Basic authentication or invalid credentials
-- Includes `WWW-Authenticate: Basic realm="Restricted"` header
+- **401 Unauthorized** — Missing Basic authentication or invalid credentials.
+  RFC 9457 `application/problem+json` body plus
+  `WWW-Authenticate: Basic realm="<realm>", charset="UTF-8"`.
+  Successful responses carry no `WWW-Authenticate` header.
 
 ## Security notes
 

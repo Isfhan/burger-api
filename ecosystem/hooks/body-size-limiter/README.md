@@ -31,12 +31,24 @@ burger-api add body-size-limiter
 ```typescript
 // src/hooks.ts
 import { bodySizeLimiter } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeRoute = [bodySizeLimiter()];
 
-// index.ts
-import { Burger } from 'burger-api';
-new Burger({ apiDir: './src/api' }).serve(4000);
+export const onRequest = [bodySizeLimiter()];
 ```
+
+A `POST`/`PUT`/`PATCH` whose `Content-Length` exceeds the limit gets
+`413 Payload Too Large`; a body sent without `Content-Length` (chunked)
+gets `411` in the default `header` mode.
+
+**Recommended stage:** `onRequest`. It runs before routing and — more
+importantly — before schema **body validation**, which reads the whole body
+between `transform` and `beforeRoute`. In `beforeRoute`, `mode: 'header'`
+still works, but `mode: 'stream'` would run after the body was already
+buffered (the hook then logs a one-time warning and lets the request
+through). A route's `hooks.ts` has no `onRequest`, so per-route limits must
+use `beforeRoute` with the default `header` mode.
+
+Stream mode measures a **clone** of the body (the request itself is never
+replaced), so validation and the handler still read the original body.
 
 ### Custom Size Limit
 
@@ -187,9 +199,12 @@ extraLargePayloadLimit()
 import { smallPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
 export const beforeRoute = [smallPayloadLimit()];
 
-// src/api/upload/hooks.ts (route-specific override)
-import { largePayloadLimit } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeRoute = [largePayloadLimit()]; // Override with larger limit
+// src/api/upload/hooks.ts (route-specific, runs AFTER the global hook)
+import { largePayloadLimit } from '../../../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [largePayloadLimit()];
+// Note: hooks don't override each other — global runs first, so a smaller
+// global limit still rejects first. Put the SMALL limit on specific routes
+// and keep the global limit as the largest one you accept.
 ```
 
 ### Conditional Limits Based on User
@@ -320,15 +335,16 @@ bodySizeLimiter({
 ```typescript
 // src/hooks.ts — start with a safe global limit
 import { mediumPayloadLimit } from '../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeRoute = [mediumPayloadLimit()];
+export const onRequest = [mediumPayloadLimit()];
 ```
 
 ### 2. Override for Specific Routes
 
 ```typescript
-// src/api/upload/hooks.ts — higher limit for upload endpoints
-import { largePayloadLimit } from '../../ecosystem/hooks/body-size-limiter/body-size-limiter';
-export const beforeRoute = [largePayloadLimit()];
+// src/api/login/hooks.ts — tighter limit for a small-payload endpoint
+// (route hooks run after global hooks, so they can only be stricter)
+import { smallPayloadLimit } from '../../../ecosystem/hooks/body-size-limiter/body-size-limiter';
+export const beforeRoute = [smallPayloadLimit()];
 ```
 
 ### 3. Combine with Rate Limiting

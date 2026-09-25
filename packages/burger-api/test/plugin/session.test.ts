@@ -1,5 +1,6 @@
 /**
- * Session plugin: persistence, rotation, cookie flags, tamper rejection.
+ * Session plugin: lazy creation, persistence of handler-set data, rotation,
+ * cookie flags, tamper rejection.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
@@ -43,6 +44,28 @@ function makeBurger(plugin: ReturnType<typeof session>) {
                 config: { auth: false },
                 openapi: {},
             },
+            {
+                path: '/api/login',
+                handlers: {
+                    POST: (ctx: unknown) => {
+                        (ctx as SessionCtx).session = { userId: 'u1' };
+                        return Response.json({ ok: true });
+                    },
+                },
+                config: { auth: false },
+                openapi: {},
+            },
+            {
+                path: '/api/logout',
+                handlers: {
+                    POST: (ctx: unknown) => {
+                        (ctx as SessionCtx).session = undefined;
+                        return Response.json({ ok: true });
+                    },
+                },
+                config: { auth: false },
+                openapi: {},
+            },
         ],
     });
     burger.usePlugin(plugin);
@@ -59,15 +82,31 @@ function unsignedId(signed: string): string {
 }
 
 describe('session plugin', () => {
-    it('persists a new session in the store and loads it on the next request', async () => {
+    it('creates no session entry or cookie for requests that never touch it', async () => {
         const store = new MemorySessionStore();
         const burger = makeBurger(session({ store, secret: 'test-secret-0123456789abcdef' }));
         const handler = await burger.fetchHandler();
 
-        const r1 = await handler(new Request('http://localhost/api/count'));
-        expect(r1.status).toBe(200);
-        const id = signedIdFrom(r1.headers.get('Set-Cookie'));
-        expect(await store.get(unsignedId(id))).toEqual({});
+        for (const path of ['/api/peek', '/api/count', '/api/peek']) {
+            const res = await handler(new Request(`http://localhost${path}`));
+            expect(res.status).toBe(200);
+            expect(res.headers.get('Set-Cookie')).toBeNull();
+        }
+        const peek = await handler(new Request('http://localhost/api/peek'));
+        expect(await peek.json()).toEqual({ hasSession: false });
+    });
+
+    it('persists what the handler set on a new session and loads it next request', async () => {
+        const store = new MemorySessionStore();
+        const burger = makeBurger(session({ store, secret: 'test-secret-0123456789abcdef' }));
+        const handler = await burger.fetchHandler();
+
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        expect(login.status).toBe(200);
+        const id = signedIdFrom(login.headers.get('Set-Cookie'));
+        expect(await store.get(unsignedId(id))).toEqual({ userId: 'u1' });
 
         const r2 = await handler(
             new Request('http://localhost/api/count', {
@@ -82,8 +121,10 @@ describe('session plugin', () => {
         const burger = makeBurger(session({ store, secret: 'test-secret-0123456789abcdef' }));
         const handler = await burger.fetchHandler();
 
-        const r1 = await handler(new Request('http://localhost/api/count'));
-        const id1 = signedIdFrom(r1.headers.get('Set-Cookie'));
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        const id1 = signedIdFrom(login.headers.get('Set-Cookie'));
 
         const r2 = await handler(
             new Request('http://localhost/api/count', {
@@ -92,7 +133,7 @@ describe('session plugin', () => {
         );
         const id2 = signedIdFrom(r2.headers.get('Set-Cookie'));
         expect(id2).not.toBe(id1);
-        expect(await store.get(unsignedId(id2))).toEqual({ count: 1 });
+        expect(await store.get(unsignedId(id2))).toEqual({ userId: 'u1', count: 1 });
         expect(await store.get(unsignedId(id1))).toBeNull();
 
         const r3 = await handler(
@@ -111,8 +152,10 @@ describe('session plugin', () => {
         );
         const handler = await burger.fetchHandler();
 
-        const r1 = await handler(new Request('http://localhost/api/count'));
-        const id = signedIdFrom(r1.headers.get('Set-Cookie'));
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        const id = signedIdFrom(login.headers.get('Set-Cookie'));
 
         const r2 = await handler(
             new Request('http://localhost/api/count', {
@@ -120,7 +163,7 @@ describe('session plugin', () => {
             })
         );
         expect(r2.headers.get('Set-Cookie')).toBeNull();
-        expect(await store.get(unsignedId(id))).toEqual({ count: 1 });
+        expect(await store.get(unsignedId(id))).toEqual({ userId: 'u1', count: 1 });
     });
 
     it('sets HttpOnly always and Secure in production', async () => {
@@ -132,27 +175,59 @@ describe('session plugin', () => {
         const burger = makeBurger(plugin);
         const handler = await burger.fetchHandler();
 
-        const r1 = await handler(new Request('http://localhost/api/count'));
-        const cookie = r1.headers.get('Set-Cookie');
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        const cookie = login.headers.get('Set-Cookie');
         expect(cookie).toContain('HttpOnly');
         expect(cookie).toContain('Secure');
     });
 
-    it('rejects a tampered signature and issues a fresh session', async () => {
+    it('rejects a tampered signature and treats the request as session-less', async () => {
         const store = new MemorySessionStore();
         const burger = makeBurger(session({ store, secret: 'test-secret-0123456789abcdef' }));
         const handler = await burger.fetchHandler();
 
-        const r1 = await handler(new Request('http://localhost/api/count'));
-        const id = signedIdFrom(r1.headers.get('Set-Cookie'));
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        const id = signedIdFrom(login.headers.get('Set-Cookie'));
         const tampered = id.slice(0, -8) + 'deadbeef';
 
-        const r2 = await handler(
-            new Request('http://localhost/api/count', {
+        const peek = await handler(
+            new Request('http://localhost/api/peek', {
                 headers: { Cookie: `session_id=${tampered}` },
             })
         );
-        expect(await r2.json()).toEqual({ hasSession: false, count: 0 });
-        expect(r2.headers.get('Set-Cookie')).toBeTruthy();
+        expect(await peek.json()).toEqual({ hasSession: false });
+        expect(peek.headers.get('Set-Cookie')).toBeNull();
+
+        // Recoverable: logging in again still creates a fresh session.
+        const relogin = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        expect(relogin.headers.get('Set-Cookie')).toBeTruthy();
+    });
+
+    it('destroys the session and expires the cookie on logout', async () => {
+        const store = new MemorySessionStore();
+        const burger = makeBurger(session({ store, secret: 'test-secret-0123456789abcdef' }));
+        const handler = await burger.fetchHandler();
+
+        const login = await handler(
+            new Request('http://localhost/api/login', { method: 'POST' })
+        );
+        const id = signedIdFrom(login.headers.get('Set-Cookie'));
+        expect(await store.get(unsignedId(id))).toEqual({ userId: 'u1' });
+
+        const logout = await handler(
+            new Request('http://localhost/api/logout', {
+                method: 'POST',
+                headers: { Cookie: `session_id=${id}` },
+            })
+        );
+        expect(logout.status).toBe(200);
+        expect(logout.headers.get('Set-Cookie')).toContain('Max-Age=0');
+        expect(await store.get(unsignedId(id))).toBeNull();
     });
 });

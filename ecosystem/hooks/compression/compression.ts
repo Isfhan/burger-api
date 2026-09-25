@@ -13,7 +13,8 @@ export interface CompressionOptions {
 
     /**
      * Compression algorithms to support in order of preference.
-     * Note: Bun currently supports 'gzip' and 'deflate'. Brotli ('br') is not yet supported.
+     * Note: this hook implements 'gzip' and 'deflate'; a 'br' entry is
+     * skipped with a warning and the response is sent uncompressed.
      * @default ['gzip', 'deflate']
      */
     encodings?: ('gzip' | 'deflate' | 'br')[];
@@ -38,8 +39,9 @@ export interface CompressionOptions {
 /**
  * Creates a compression hook for compressing HTTP responses.
  *
- * This hook compresses response bodies using gzip, deflate, or brotli compression
- * based on the client's Accept-Encoding header. It automatically skips compression for:
+ * This hook compresses response bodies using gzip or deflate compression
+ * based on the client's Accept-Encoding header. Brotli requests are skipped
+ * with a warning. It automatically skips compression for:
  * - Small responses (below threshold)
  * - Already compressed content (images, videos, etc.)
  * - Content without a body
@@ -62,9 +64,9 @@ export interface CompressionOptions {
  *   contentTypes: ['text/html', 'application/json', 'text/css', 'application/javascript']
  * });
  *
- * // Prefer brotli if available
+ * // gzip first, deflate as a fallback
  * const compression = compress({
- *   encodings: ['br', 'gzip', 'deflate']
+ *   encodings: ['gzip', 'deflate']
  * });
  * ```
  */
@@ -188,10 +190,12 @@ async function compressData(
 ): Promise<ArrayBuffer> {
     // Check if CompressionStream is available (Bun, Deno, modern browsers)
     if (typeof CompressionStream !== 'undefined') {
-        // Note: Bun's CompressionStream currently only supports gzip and deflate
-        // Brotli (br) is not yet supported
+        // This hook does not implement Brotli: warn and return the body
+        // as-is so the caller sends it uncompressed.
         if (encoding === 'br') {
-            console.warn('Brotli compression not supported in Bun, skipping compression');
+            console.warn(
+                '[burger-api/compression] Brotli (br) is not supported by this hook, skipping compression'
+            );
             return data;
         }
 
