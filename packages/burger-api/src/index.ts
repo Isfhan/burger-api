@@ -4,7 +4,10 @@ import { timingSafeEqual } from './utils/timing-safe.js';
 
 // Import router
 import { Router } from './router/index.js';
-import { extractCtxInit } from './router/param-extract.js';
+import {
+    compilePatternSegments,
+    extractCtxInitWithSegments,
+} from './router/param-extract.js';
 import { BurgerContext } from './context/context.js';
 import type { NativeMethodHandlers } from './router/types.js';
 
@@ -408,15 +411,22 @@ export class Burger {
         path: string
     ): RequestHandler {
         if (!path.includes(':')) return handler;
+        // The pattern's segment layout is compiled ONCE per page route, not
+        // per request (the pattern never changes).
+        const compiledPattern = compilePatternSegments(path);
         // Registered on Bun's native routes map, so this is invoked with the
         // raw `Request` (mirrors `fetchHandler`'s static dispatch).
         const wrapped = async (request: Request): Promise<Response> => {
-            const ctxInit = extractCtxInit(request, path, false);
+            const ctxInit = extractCtxInitWithSegments(
+                request,
+                path,
+                compiledPattern
+            );
             const ctx = BurgerContext.create(
                 request,
                 ctxInit,
                 undefined,
-                undefined,
+                this.dynamicRouter?.getAppServices(),
                 undefined,
                 undefined,
                 undefined,
@@ -561,68 +571,79 @@ export class Burger {
             // Loaded lazily: production AOT builds ship prebuilt apiRoutes
             // and never evaluate these filesystem modules.
             await this.applyConventionDefaults();
-            if (!this.apiDir) return false;
-            const { DirectoryScanner } = await import('./compiler/scanner.js');
-            const { ModuleLoader } = await import('./compiler/module-loader.js');
-            const scanned = await new DirectoryScanner(
-                this.apiDir,
-                this.apiPrefix
-            ).scan();
-            const loader = new ModuleLoader();
-            const modules = await loader.load(scanned);
-            globalOnRequest = scanned.globalOnRequest;
-            globalRouteHooks = scanned.globalRouteHooks;
-            this.globalWsHooks = pickWsHooks(
-                scanned.globalRouteHooks as Record<string, unknown> | undefined
-            );
-            if (modules.length === 0) this.emptyApiDir = this.apiDir;
+            if (!this.apiDir) {
+                apiRoutes = [];
+            } else {
+                const { DirectoryScanner } = await import(
+                    './compiler/scanner.js'
+                );
+                const { ModuleLoader } = await import(
+                    './compiler/module-loader.js'
+                );
+                const scanned = await new DirectoryScanner(
+                    this.apiDir,
+                    this.apiPrefix
+                ).scan();
+                const loader = new ModuleLoader();
+                const modules = await loader.load(scanned);
+                globalOnRequest = scanned.globalOnRequest;
+                globalRouteHooks = scanned.globalRouteHooks;
+                this.globalWsHooks = pickWsHooks(
+                    scanned.globalRouteHooks as
+                        | Record<string, unknown>
+                        | undefined
+                );
+                if (modules.length === 0) this.emptyApiDir = this.apiDir;
 
-            // Load openapi.config.ts if discovered
-            this.openAPIConfig = await loader.loadOpenAPIConfig(scanned);
+                // Load openapi.config.ts if discovered
+                this.openAPIConfig = await loader.loadOpenAPIConfig(scanned);
 
-            // Load and execute plugins.ts (auto-discovered at app root)
-            const pluginsFn = await loader.loadPlugins(scanned);
-            if (typeof pluginsFn === 'function') {
-                await (
-                    pluginsFn as (
-                        burger: PluginRegistrar
-                    ) => void | Promise<void>
-                )(this);
+                // Load and execute plugins.ts (auto-discovered at app root)
+                const pluginsFn = await loader.loadPlugins(scanned);
+                if (typeof pluginsFn === 'function') {
+                    await (
+                        pluginsFn as (
+                            burger: PluginRegistrar
+                        ) => void | Promise<void>
+                    )(this);
+                }
+
+                // Load and execute providers.ts (auto-discovered at app root)
+                const providersFn = await loader.loadProviders(scanned);
+                if (typeof providersFn === 'function') {
+                    await (
+                        providersFn as (
+                            burger: ProviderRegistrar
+                        ) => void | Promise<void>
+                    )(this);
+                }
+
+                // Retained for introspection (deterministic ordering, no dispatch).
+                const { RouteTree } = await import('./compiler/route-tree.js');
+                this.routeTree = new RouteTree(modules);
+                apiRoutes = modules.map((m) => ({
+                    path: m.path,
+                    handlers: m.handlers,
+                    schema: m.schema,
+                    openapi: m.openapi,
+                    hooks: m.hooks as RouteHooks | undefined,
+                    config: m.config,
+                    isWildcard: m.isWildcard,
+                }));
             }
-
-            // Load and execute providers.ts (auto-discovered at app root)
-            const providersFn = await loader.loadProviders(scanned);
-            if (typeof providersFn === 'function') {
-                await (
-                    providersFn as (
-                        burger: ProviderRegistrar
-                    ) => void | Promise<void>
-                )(this);
-            }
-
-            // Retained for introspection (deterministic ordering, no dispatch).
-            const { RouteTree } = await import('./compiler/route-tree.js');
-            this.routeTree = new RouteTree(modules);
-            apiRoutes = modules.map((m) => ({
-                path: m.path,
-                handlers: m.handlers,
-                schema: m.schema,
-                openapi: m.openapi,
-                hooks: m.hooks as RouteHooks | undefined,
-                config: m.config,
-                isWildcard: m.isWildcard,
-            }));
         }
 
-        // If there are no API routes, return false
-        if (apiRoutes.length === 0) return false;
+        // API routes are optional: plugin/global `onRequest` hooks, the `ip`
+        // holder and app services must still reach pages, assets and docs, so
+        // the router is built (and wired) even for a routes-less API tree.
+        const hasApiRoutes = apiRoutes.length > 0;
 
         const config = this.openAPIConfig;
         const openapiEnabled = config?.enabled !== false;
 
         // Generate the OpenAPI document only when docs are enabled, and load
         // the generator lazily (it pulls Zod's JSON Schema machinery).
-        if (openapiEnabled) {
+        if (hasApiRoutes && openapiEnabled) {
             const { generateOpenAPIDocument } = await import('./core/openapi.js');
             this.openApiDoc = generateOpenAPIDocument(
                 apiRoutes,
@@ -663,6 +684,13 @@ export class Burger {
             globalRouteHooks
         );
         this.dynamicRouter = router;
+
+        // Only the onRequest machinery was needed (pages/assets/docs); there
+        // is no route table to merge and no OpenAPI document to serve.
+        if (!hasApiRoutes) {
+            this.routesProcessed = true;
+            return false;
+        }
 
         // Merge static routes into Bun's native routes map (fast path), then
         // merge dynamic (`:param` / `*`) routes onto the same native map. Bun

@@ -108,7 +108,10 @@ export const ZodAdapter: ValidatorAdapter = {
         const validate = (value: unknown): ValidationResult => {
             const result = zodSchema.safeParse(value);
             if (result.success) {
-                return { success: true, data: result.data };
+                // Zod's success result already IS the `{ success, data }`
+                // shape — return it directly instead of re-wrapping (one less
+                // allocation per successful slot validation).
+                return result as unknown as ValidationResult;
             }
             return { success: false, issues: normalizeIssues(result.error) };
         };

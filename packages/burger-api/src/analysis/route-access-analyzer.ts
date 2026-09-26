@@ -8,19 +8,26 @@ import { freezeRouteAccessInfo } from '../context/route-access.js';
  *
  * It inspects a route's handler + hook *source* (via
  * `Function.prototype.toString()`) to produce a frozen `RouteAccessInfo` hint
- * describing which `BurgerContext` fields each route touches. Nothing here is
- * read at runtime, so any failure degrades to a safe default and can
- * never affect request correctness.
+ * describing which `BurgerContext` fields each route touches. Any failure
+ * degrades to the safe "unknown" default (every field treated as used), so a
+ * wrong verdict that would hide a field the route actually reads is
+ * impossible-by-construction.
  *
  * Design constraints:
  * - Self-contained: no import from `@burger-api/cli`, no `node:fs`.
- * - Reuses the discipline of `cli/src/utils/route-methods.ts`, not its code.
  * - `debug: true` → skip analysis entirely (return the safe empty default).
- * - Any parse error → try/catch → safe default (empty set, `unknown: false`).
+ * - Any parse error → try/catch → safe default (empty set, `unknown: true`).
  *
- * The analysis is heuristic (best-effort regex over source text). It is
- * intentionally conservative only in the "we can't tell" direction via the
- * `unknown` flag; a clean parse returns exactly the fields that were observed.
+ * A "known" (`unknown: false`) result is only produced when, for every
+ * function in the route, the context parameter is provably never allowed to
+ * escape:
+ * - the first parameter is a plain identifier (no destructuring / rest /
+ *   default-value patterns), and
+ * - the identifier appears only as direct member access (`ctx.field` /
+ *   `ctx['field']`), never bare (`helper(ctx)`, `const r = ctx`, `...ctx`).
+ *
+ * Anything else — including a native function, an unrecognized source shape,
+ * or the legacy aliasing patterns — marks the whole route `unknown: true`.
  */
 
 const FIELD_KEYS: readonly ContextField[] = [
@@ -71,14 +78,19 @@ function safeToString(fn: unknown): string {
     }
 }
 
+const ARROW_PARAMS =
+    /^(?:async\s+)?(?:\(([^()]*)\)|([\w$]+))\s*=>/;
+const FUNCTION_PARAMS =
+    /^(?:async\s+)?function(?:\s+[\w$]+)?\s*\(([^()]*)\)/;
+const METHOD_PARAMS = /^(?:async\s+)?(?:[\w$]+)\s*\(([^()]*)\)\s*\{/;
+const FIRST_IDENTIFIER = /[\w$]+/;
+
 /**
- * Detects indirect/aliased access patterns the per-field scanner cannot
- * resolve statically. The analyzer is conservative:
- * when it cannot prove which fields a route reads, the whole route is marked
- * `unknown: true` (every field treated as used) rather than risk hiding a field
- * the handler actually needs.
+ * Legacy conservative patterns kept as an extra gate: they catch aliasing of
+ * a context variable that was never a parameter (e.g. a closure imported from
+ * another module, or `req` referenced without being declared locally).
  */
-function isAmbiguous(source: string): boolean {
+function isLegacyAmbiguous(source: string): boolean {
     // `const r = req` / `let r = req` / `var r = req` — aliasing the request.
     if (/\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*req\b/.test(source)) {
         return true;
@@ -93,11 +105,114 @@ function isAmbiguous(source: string): boolean {
 }
 
 /**
+ * Scans ONE function's source and records the fields it reads. Returns `false`
+ * when the function cannot be proven safe to specialize (context escapes,
+ * destructured parameter, unrecognized source shape, native code), in which
+ * case the caller marks the whole route `unknown`.
+ */
+function scanFunction(
+    fn: unknown,
+    accessed: Set<ContextField>
+): boolean {
+    const literal = stripComments(safeToString(fn));
+    if (literal === '') return true;
+    if (literal.includes('[native code]')) return false;
+
+    let params: string | undefined;
+    let bodyStart = -1;
+    const arrow = ARROW_PARAMS.exec(literal);
+    if (arrow) {
+        params = arrow[1] ?? arrow[2] ?? '';
+        bodyStart = arrow[0].length;
+    } else {
+        const fnMatch = FUNCTION_PARAMS.exec(literal);
+        if (fnMatch) {
+            params = fnMatch[1] ?? '';
+            bodyStart = literal.indexOf('{', fnMatch[0].length);
+        } else {
+            const methodMatch = METHOD_PARAMS.exec(literal);
+            if (methodMatch) {
+                params = methodMatch[1] ?? '';
+                bodyStart = literal.indexOf('{', methodMatch[0].length - 1);
+            }
+        }
+    }
+    if (params === undefined || bodyStart === -1) return false;
+
+    const trimmedParams = params.trim();
+    // Destructured / rest / default-value parameter patterns hide which
+    // locals map to context fields — cannot be proven.
+    if (
+        trimmedParams.includes('{') ||
+        trimmedParams.includes('[') ||
+        trimmedParams.includes('...') ||
+        trimmedParams.includes('=')
+    ) {
+        return false;
+    }
+
+    const body = literal.slice(bodyStart);
+    const nameMatch = FIRST_IDENTIFIER.exec(trimmedParams);
+    if (nameMatch) {
+        const name = nameMatch[0];
+        const nameRe = new RegExp(`\\b${name}\\b`, 'g');
+        let occurrence: RegExpExecArray | null;
+        while ((occurrence = nameRe.exec(body)) !== null) {
+            let i = occurrence.index + name.length;
+            // Skip whitespace between the identifier and the next token.
+            while (
+                i < body.length &&
+                (body[i] === ' ' ||
+                    body[i] === '\t' ||
+                    body[i] === '\n' ||
+                    body[i] === '\r')
+            ) {
+                i++;
+            }
+            const next = body[i];
+            if (next === '.') continue; // ctx.field
+            if (next === '?') {
+                // ctx?.field — only a clean optional member access is safe.
+                let j = i + 1;
+                while (j < body.length && body[j] === ' ') j++;
+                if (body[j] === '.') continue;
+                return false;
+            }
+            if (next === '[') {
+                // ctx['field'] is fine; a computed key is not provable.
+                let j = i + 1;
+                while (j < body.length && body[j] === ' ') j++;
+                const quote = body[j];
+                if (quote === "'" || quote === '"' || quote === '`') continue;
+                return false;
+            }
+            // Bare occurrence: the context escaped (helper call, assignment,
+            // return, spread, comparison, …) — cannot be proven.
+            return false;
+        }
+    }
+
+    for (let i = 0; i < FIELD_KEYS.length; i++) {
+        const field = FIELD_KEYS[i]!;
+        if (referencesField(body, field)) {
+            accessed.add(field);
+        }
+    }
+    return true;
+}
+
+/**
  * Analyzes one route definition and returns a frozen `RouteAccessInfo`.
+ *
+ * `extraSources` are additional functions that run for this route but are not
+ * part of the definition (plugin hooks, app-level hooks, transform
+ * factories); their source is scanned with the same rules so a "known" result
+ * accounts for every framework-known reader.
  */
 export function analyzeRouteAccess(
     def: RouteDefinition,
-    debug = false
+    debug = false,
+    extraSources: unknown[] = []
 ): RouteAccessInfo {
     // detect hook stages before debug/field analysis so hooks are
     // always recorded even in debug mode or when field analysis is skipped.
@@ -120,17 +235,68 @@ export function analyzeRouteAccess(
     }
 
     try {
-        // Concatenate the source of every handler and every lifecycle hook
-        // (the lifecycle lives in `hooks.ts`). Keeps field-access detection
-        // accurate for routes that read context fields inside hooks.
-        let source = '';
+        const accessed = new Set<ContextField>();
+        let safe = true;
+
+        const scan = (value: unknown, depth = 0): void => {
+            if (!safe || depth > 2) return;
+            if (Array.isArray(value)) {
+                for (let i = 0; i < value.length; i++) {
+                    if (!scanFunction(value[i], accessed)) {
+                        safe = false;
+                        return;
+                    }
+                }
+                return;
+            }
+            if (typeof value === 'function') {
+                if (!scanFunction(value, accessed)) safe = false;
+                return;
+            }
+            // Plain objects (the `transform` factory map) — scan each factory.
+            if (
+                typeof value === 'object' &&
+                value !== null &&
+                (value as object).constructor === Object
+            ) {
+                const record = value as Record<string, unknown>;
+                for (const key of Object.keys(record)) {
+                    scan(record[key], depth + 1);
+                    if (!safe) return;
+                }
+            }
+        };
+
         // Handler keys are a runtime string (module exports); the map type is
         // union-keyed, so widen for iteration.
         const handlers = (def.handlers ?? {}) as Record<string, unknown>;
         for (const key of Object.keys(handlers)) {
-            source += '\n' + safeToString(handlers[key]);
+            scan(handlers[key] as unknown);
         }
 
+        // Route hooks (`hooks.ts`): stage arrays, single hooks, transform map.
+        if (hooks) {
+            const hookValues = Object.values(hooks);
+            for (let i = 0; i < hookValues.length; i++) {
+                scan(hookValues[i]);
+            }
+        }
+
+        // Plugin / app-level hooks and transform factories.
+        for (let i = 0; i < extraSources.length && safe; i++) {
+            scan(extraSources[i]);
+        }
+
+        if (!safe) {
+            return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
+        }
+
+        // Legacy aliasing patterns: an extra conservative gate for context
+        // variables that are not parameters (`req` closures, ...).
+        let source = '';
+        for (const key of Object.keys(handlers)) {
+            source += '\n' + safeToString(handlers[key]);
+        }
         if (hooks) {
             const hookValues = Object.values(hooks);
             for (let i = 0; i < hookValues.length; i++) {
@@ -144,21 +310,8 @@ export function analyzeRouteAccess(
                 }
             }
         }
-
-        // Strip comments before scanning so commented-out fields don't count.
-        source = stripComments(source);
-
-        // Ambiguous access we cannot resolve → safe "all fields used" default.
-        if (isAmbiguous(source)) {
+        if (isLegacyAmbiguous(stripComments(source))) {
             return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
-        }
-
-        const accessed: ContextField[] = [];
-        for (let i = 0; i < FIELD_KEYS.length; i++) {
-            const field = FIELD_KEYS[i]!;
-            if (referencesField(source, field)) {
-                accessed.push(field);
-            }
         }
 
         return freezeRouteAccessInfo(accessed, /* unknown */ false, usedHooks);

@@ -1,5 +1,5 @@
 import type { RouteDefinition, RequestHandler } from '../types/index.js';
-import type { HTTPMethod } from '../utils/routing.js';
+import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing.js';
 import type { RouteModule } from '../compiler/route-module.js';
 import type {
     ContextInit,
@@ -35,11 +35,15 @@ import type {
     RequestIPHolder,
 } from '../context/context.js';
 import { analyzeRouteAccess } from '../analysis/route-access-analyzer.js';
+import { isThenable } from '../utils/thenable.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
 import { Trie } from './trie.js';
 import { ROUTE_CONSTANTS } from '../utils/routing.js';
-import { extractCtxInit } from './param-extract.js';
+import {
+    compilePatternSegments,
+    extractCtxInitWithSegments,
+} from './param-extract.js';
 import type {
     CompiledHandler,
     CompiledRouter,
@@ -108,6 +112,10 @@ export class RouterCompiler {
         const compiledRoutes = new Map<string, CompiledRoute>();
         // App services resolved ONCE — shared (frozen) by every request.
         const services = createServices(providers);
+        // Plugin / app-level hook functions every route runs; the route-access
+        // analyzer scans them alongside the route's own source (once per
+        // compile pass).
+        const accessSources = collectAccessSources(plugins, globalHooks);
 
         for (const def of defs) {
             const path = def.path;
@@ -216,10 +224,17 @@ export class RouterCompiler {
                     ? { ...this.config, responseValidation: routeMode }
                     : this.config;
 
-            // Optional, compile-time-only route field analysis. The result is
-            // baked into `meta` but is unused at runtime, so it can
-            // never affect request correctness.
-            const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
+            // Compile-time-only route field analysis. When it returns
+            // `unknown: false` (every reader provably accesses fields only
+            // through direct member reads), the compiled executor may skip
+            // work for fields nothing reads (see `buildMethodCore`); any
+            // doubt keeps the conservative "all fields used" fallback, and
+            // `debug: true` disables analysis entirely.
+            const meta: RouteAccessInfo = analyzeRouteAccess(
+                def,
+                this.debug,
+                accessSources
+            );
 
             const isWildcard = def.isWildcard === true;
             const isStatic = isStaticPath(path);
@@ -424,13 +439,17 @@ function buildRouteCores(
         ? Object.freeze({ path: pattern, pattern })
         : undefined;
 
+    // When the analyzer proved nothing reads `ctx.validated` and a method
+    // declares no validators, the empty `{}` bag is not allocated (B3).
+    const skipValidatedBag = meta.unknown === false && !meta.has('validated');
+
     for (const m of Object.keys(planHandlers) as HTTPMethod[]) {
         cores[m] = buildMethodCore(
             m,
             m,
             rawHandlers[m]!,
             planHandlers[m]!,
-            plan,
+            specializePlan(plan, m, skipValidatedBag),
             meta,
             pattern,
             isWildcard,
@@ -451,7 +470,7 @@ function buildRouteCores(
             'GET',
             rawHandlers.GET,
             planHandlers.GET!,
-            plan,
+            specializePlan(plan, 'HEAD', skipValidatedBag),
             meta,
             pattern,
             isWildcard,
@@ -464,6 +483,72 @@ function buildRouteCores(
     }
 
     return cores;
+}
+
+/**
+ * Clones a route plan with the validation hook specialized for one method
+ * (B4): the method lookup and `toLowerCase()` are resolved at compile time,
+ * so the request path runs only the declared slots. Plans without validators
+ * are returned as-is (no allocation).
+ */
+function specializePlan(
+    plan: HookPlan,
+    method: HTTPMethod,
+    skipValidatedBag: boolean
+): HookPlan {
+    const validators = plan.validators;
+    if (!validators || !plan.validation) return plan;
+    return {
+        ...plan,
+        validation: createValidationHook(
+            validators,
+            plan.validatorConfig ?? {},
+            plan.debug === true,
+            method.toLowerCase() as import('../utils/routing.js').LowercaseHTTPMethod,
+            skipValidatedBag
+        ),
+    };
+}
+
+/**
+ * Per-function access readers that are not part of the route definition but
+ * still run for it: plugin hooks and app-level (`src/hooks.ts`) hooks plus
+ * their transform factories. Used by the route-access analyzer so a "known"
+ * result accounts for every framework-known reader.
+ */
+function collectAccessSources(
+    plugins?: ResolvedPlugin[],
+    globalHooks?: RouteHooks
+): unknown[] {
+    const out: unknown[] = [];
+    const pushStage = (value: unknown): void => {
+        if (value === undefined) return;
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) out.push(value[i]);
+        } else {
+            out.push(value);
+        }
+    };
+    const pushHooks = (
+        hooks: {
+            beforeRoute?: unknown;
+            afterRoute?: unknown;
+            mapResponse?: unknown;
+            onError?: unknown;
+            transform?: unknown;
+        }
+    ): void => {
+        pushStage(hooks.beforeRoute);
+        pushStage(hooks.afterRoute);
+        pushStage(hooks.mapResponse);
+        pushStage(hooks.onError);
+        if (hooks.transform !== undefined) out.push(hooks.transform);
+    };
+    if (globalHooks) pushHooks(globalHooks);
+    if (plugins) {
+        for (let i = 0; i < plugins.length; i++) pushHooks(plugins[i]!.hooks);
+    }
+    return out;
 }
 
 /**
@@ -500,11 +585,40 @@ function buildMethodCore(
     // authoritative (extractCtxInit always keyed off it too).
     const hasWildcard = isWildcard || pattern.includes('*');
 
+    // B3: when the analyzer proved (`unknown === false`) that neither the
+    // handler nor any framework-known hook reads params/wildcardParams, and
+    // the method declares no params validator, the per-request extraction
+    // (Bun record copy / URL split + decode) is skipped. `ctx.params` still
+    // materializes lazily as `{}` if unforeseen code reads it, matching the
+    // documented empty-record default.
+    const needsParams =
+        meta.unknown !== false ||
+        meta.has('params') ||
+        meta.has('wildcardParams') ||
+        methodHasSlot(plan.validators, method, 'params');
+    // The pattern's segment layout is compiled ONCE here; request handling
+    // does a single URL scan and decodes only `%`-bearing segments.
+    const compiledPattern =
+        needsParams && !staticRouteMeta
+            ? compilePatternSegments(pattern)
+            : undefined;
+
     const resolveCtxInit = (request: Request): ContextInit => {
         if (staticRouteMeta) return { route: staticRouteMeta };
+        if (!needsParams) {
+            // Only the pattern is carried so `ctx.route` can still derive its
+            // concrete path lazily.
+            return { pattern };
+        }
         // Wildcards are not exposed by Bun's `request.params`; the URL is
         // needed to split the captured segments.
-        if (hasWildcard) return extractCtxInit(request, pattern, true);
+        if (hasWildcard) {
+            return extractCtxInitWithSegments(
+                request,
+                pattern,
+                compiledPattern!
+            );
+        }
         // Bun decodes `:param` values already; use its record directly (a
         // plain object with `Record<string,string>` semantics) and keep the
         // route identity lazy. Direct (non-Bun) invocations fall back to URL
@@ -513,7 +627,7 @@ function buildMethodCore(
             .params;
         return bunParams !== undefined
             ? { params: bunParams, pattern }
-            : extractCtxInit(request, pattern, false);
+            : extractCtxInitWithSegments(request, pattern, compiledPattern!);
     };
 
     const makeCtx = (
@@ -632,14 +746,18 @@ function buildMethodCore(
         ctx: BurgerContext,
         handler: RequestHandler,
         request: Request
-    ): Promise<Response> => {
+    ): Response | Promise<Response> => {
         if (jit) {
             if (jitFn === undefined) {
-                jitFn = compileJitHookPlan(plan, plan.debug);
+                // The handler is passed for compile-time async analysis only;
+                // the generated function still receives it per request.
+                jitFn = compileJitHookPlan(plan, plan.debug, planHandler);
             }
             const compiled = jitFn;
             if (compiled) {
-                return Promise.resolve(compiled(ctx, handler, request.method));
+                // The compiled function stays synchronous when every step was
+                // provably sync — no `Promise.resolve` wrapper on that path.
+                return compiled(ctx, handler, request.method);
             }
         }
         return executeHookPlanForHandler(ctx, plan, handler, request);
@@ -690,10 +808,17 @@ function buildMethodCore(
 
     return (request, ctxInit, prebuilt, env, executionCtx) => {
         const ctx = makeCtx(request, ctxInit, prebuilt, env, executionCtx);
-        return runPlan(ctx, planHandler, request).then((response) => {
-            const mutated = finish(ctx, response);
-            return isHead ? finishHead(mutated) : mutated;
-        });
+        const result = runPlan(ctx, planHandler, request);
+        // Sync-first exit: a synchronously resolved plan finishes without an
+        // extra `.then` microtask.
+        if (isThenable(result)) {
+            return result.then((response) => {
+                const mutated = finish(ctx, response);
+                return isHead ? finishHead(mutated) : mutated;
+            });
+        }
+        const mutated = finish(ctx, result);
+        return isHead ? finishHead(mutated) : mutated;
     };
 }
 
@@ -743,6 +868,25 @@ function mergeTransformRecords(
         }
     }
     return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/**
+ * True when the method's compiled validators declare `slot`. HEAD reuses
+ * GET's validators (auto-HEAD derives from GET). Used by the B3 gating so a
+ * params validator never loses its input.
+ */
+function methodHasSlot(
+    validators: CompiledRouteValidators | undefined,
+    method: string,
+    slot: 'params' | 'query' | 'headers' | 'cookies' | 'body'
+): boolean {
+    if (!validators) return false;
+    const lower = method.toLowerCase() as LowercaseHTTPMethod;
+    let methodValidators = validators.methods[lower];
+    if (!methodValidators && lower === 'head') {
+        methodValidators = validators.methods['get'];
+    }
+    return methodValidators?.[slot] !== undefined;
 }
 
 /**

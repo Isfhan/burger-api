@@ -13,6 +13,22 @@
 - `ctx.ip` is resolved lazily on first read instead of recorded per request.
 - 404/405 bodies are prebuilt; the fallback router allocates nothing before
   matching when there are no `onRequest` hooks.
+- Query strings are parsed in a single pass and decoded only when they contain
+  `%` or `+`.
+- Hooks, transforms and validation run sync-first: `await` only happens when a
+  step really returns a promise, in both the JIT and the interpreter.
+- Validation is specialized per method at startup; only the body slot is async.
+- The route-access analyzer skips param extraction and the empty `validated`
+  bag when it can prove a route never reads them (conservative fallback kept).
+- `ctx.set` tracks what changed, so untouched responses are returned as is and
+  status-only changes skip copying headers.
+- Pathname parsing and trie matching decode segments only when they contain
+  `%`, with no per-request `split`/`map` or param-object copies.
+
+**Fixed**
+- Apps with pages/assets but no API routes now run global and plugin
+  `onRequest` hooks for pages, assets, `/openapi.json` and `/docs`.
+- Page handlers now receive `ctx.services` and `ctx.ip`.
 
 ### Version 1.0.0-beta
 

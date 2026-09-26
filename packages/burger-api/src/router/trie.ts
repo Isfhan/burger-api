@@ -61,7 +61,7 @@ export class Trie {
         methods: Set<string>,
         isWildcard: boolean
     ): void {
-        const segments = splitPath(path);
+        const segments = splitPattern(path);
         let node = this.root;
 
         for (let i = 0; i < segments.length; i++) {
@@ -117,7 +117,12 @@ export class Trie {
      * @returns the match result, or `null` if no route matches.
      */
     match(pathname: string): TrieMatch | null {
-        const segments = splitPath(pathname).map((s) => safeDecode(s));
+        const segments: string[] = [];
+        splitPathInto(pathname, segments);
+        // ONE params object per match: `descend` writes into it while
+        // backtracking (restoring previous values on dead ends) and returns it
+        // by reference on success — no `{ ...params }` copy per candidate
+        // (memoirist does the same; see research report Q9 #5).
         return this.descend(this.root, segments, 0, {});
     }
 
@@ -163,7 +168,7 @@ export class Trie {
                 return {
                     handler: node.handler,
                     methods: node.methods,
-                    params: { ...params },
+                    params,
                     isWildcard: !!node.isWildcard,
                     pattern: node.pattern!,
                 };
@@ -172,7 +177,7 @@ export class Trie {
                 return {
                     handler: node.wildcardChild.handler,
                     methods: node.wildcardChild.methods!,
-                    params: { ...params },
+                    params,
                     wildcardParams: [],
                     isWildcard: true,
                     pattern: node.wildcardChild.pattern!,
@@ -205,11 +210,16 @@ export class Trie {
         // Priority 3: wildcard — capture the rest (including the empty
         // trailing segment produced by a path that ends with `/`).
         if (node.wildcardChild?.handler) {
+            const count = segments.length - i;
+            const wildcardParams: string[] = new Array(count);
+            for (let j = 0; j < count; j++) {
+                wildcardParams[j] = segments[i + j]!;
+            }
             return {
                 handler: node.wildcardChild.handler,
                 methods: node.wildcardChild.methods!,
-                params: { ...params },
-                wildcardParams: segments.slice(i),
+                params,
+                wildcardParams,
                 isWildcard: true,
                 pattern: node.wildcardChild.pattern!,
             };
@@ -220,18 +230,13 @@ export class Trie {
 }
 
 /**
- * Splits a pathname into segments for trie matching.
- *
- * Unlike a naive `split('/').filter(Boolean)`, this preserves a single trailing
- * empty segment when the path ends with `/`, so that `:param` routes can capture
- * an empty value (e.g. `/users/` → `["users", ""]` → `:id === ""`). The leading
- * empty segment produced by the leading `/` is dropped.
+ * Build-time pattern split (used by `insert`): segments are NOT decoded —
+ * `:param` / `*` markers and static pattern text are stored verbatim.
  */
-function splitPath(pathname: string): string[] {
-    const raw = pathname.split('/');
+function splitPattern(path: string): string[] {
+    const raw = path.split('/');
     const segments = raw.slice(1); // drop the leading '' before the first '/'
-    if (pathname.endsWith('/') && pathname.length > 1) {
-        // keep the trailing '' so a `:param` can capture the empty value
+    if (path.endsWith('/') && path.length > 1) {
         return segments;
     }
     if (segments.length > 0 && segments[segments.length - 1] === '') {
@@ -241,11 +246,40 @@ function splitPath(pathname: string): string[] {
 }
 
 /**
+ * Splits a pathname into `out` for trie matching (no `split()` / `map()`
+ * arrays per request).
+ *
+ * Unlike a naive `split('/').filter(Boolean)`, this preserves a single trailing
+ * empty segment when the path ends with `/`, so that `:param` routes can capture
+ * an empty value (e.g. `/users/` → `["users", ""]` → `:id === ""`). The leading
+ * empty segment produced by the leading `/` is dropped.
+ *
+ * Each segment is percent-decoded as it is emitted, but only when it actually
+ * contains `%` (Hono's `tryDecodeURIComponent` guard, research item #15).
+ */
+function splitPathInto(pathname: string, out: string[]): void {
+    let start = pathname.charCodeAt(0) === 47 /* '/' */ ? 1 : 0;
+    let count = 0;
+    for (let i = start; i < pathname.length; i++) {
+        if (pathname.charCodeAt(i) === 47 /* '/' */) {
+            out[count++] = safeDecode(pathname.slice(start, i));
+            start = i + 1;
+        }
+    }
+    if (start < pathname.length || pathname.length > 1) {
+        // Keep the trailing '' so a `:param` can capture the empty value.
+        out[count++] = safeDecode(pathname.slice(start));
+    }
+    out.length = count;
+}
+
+/**
  * Decodes a single path segment, falling back to the raw value if decoding fails
- * (e.g. malformed percent-encoding).
+ * (e.g. malformed percent-encoding). Segments without `%` are returned as-is
+ * (no `decodeURIComponent` call).
  */
 function safeDecode(segment: string): string {
-    if (segment === '') return segment;
+    if (segment === '' || segment.indexOf('%') === -1) return segment;
     try {
         return decodeURIComponent(segment);
     } catch {

@@ -111,25 +111,29 @@ export const createAutoOptionsHandler = (
 };
 
 import type { ContextSet } from '../context/types.js';
+import {
+    SET_HEADERS,
+    TrackedContextSet,
+} from '../context/context-set.js';
 
 /**
  * Reports whether a `ContextSet` carries any response mutation.
  *
- * `applySet` uses this to skip rebuilding the `Response` when nothing changed
- * (no work when no mutations exist).
+ * For the framework's own `ctx.set` (a `TrackedContextSet`) this is one flag
+ * read; plain objects (callers passing a literal) fall back to a scan.
+ * `applySet` uses this to skip rebuilding the `Response` when nothing changed.
  */
 export function hasSetMutations(set?: ContextSet): boolean {
     if (!set) return false;
+    if (set instanceof TrackedContextSet) return set.flags !== 0;
     if (set.status !== undefined) return true;
     const headers = set.headers;
     if (headers) {
         if (headers instanceof Headers) {
             // Bun's `Headers.size` typing is unreliable; iterate to detect content.
-            let nonEmpty = false;
-            headers.forEach(() => {
-                nonEmpty = true;
-            });
-            if (nonEmpty) return true;
+            for (const _ of headers as unknown as Iterable<[string, string]>) {
+                return true;
+            }
         } else if (Object.keys(headers).length > 0) {
             return true;
         }
@@ -153,13 +157,34 @@ export function hasSetMutations(set?: ContextSet): boolean {
  * allocation).
  */
 export function applySet(response: Response, set?: ContextSet): Response {
-    if (!set || !hasSetMutations(set)) return response;
+    if (!set) return response;
+
+    if (set instanceof TrackedContextSet) {
+        const flags = set.flags;
+        if (flags === 0) return response;
+        if ((flags & SET_HEADERS) === 0) {
+            // Status-only mutation: the `Response` constructor copies the
+            // header list itself, so no explicit `new Headers(...)` copy is
+            // needed (Elysia 1's three-property `mapResponse` check).
+            return new Response(response.body, {
+                status: set.status ?? response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+            });
+        }
+    } else if (!hasSetMutations(set)) {
+        return response;
+    }
 
     const headers = new Headers(response.headers);
     const setHeaders = set.headers;
     if (setHeaders) {
         if (setHeaders instanceof Headers) {
-            setHeaders.forEach((value, key) => headers.set(key, value));
+            for (const entry of setHeaders as unknown as Iterable<
+                [string, string]
+            >) {
+                headers.set(entry[0], entry[1]);
+            }
         } else {
             for (const key in setHeaders) {
                 const value = setHeaders[key];

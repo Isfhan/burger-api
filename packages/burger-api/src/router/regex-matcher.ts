@@ -217,7 +217,9 @@ function execTier(tier: Tier, path: string): RegexMatch | null {
 
     // Locate the matched alternative via its wrapper group.
     let absStart = 1; // match[0] occupies index 0
-    for (const candidate of tier.alternatives) {
+    const alternatives = tier.alternatives;
+    for (let i = 0; i < alternatives.length; i++) {
+        const candidate = alternatives[i]!;
         const width = candidate.groupNames.length + 1; // inner + wrapper
         if (match[absStart] !== undefined) {
             return materialize(candidate, match, absStart);
@@ -250,10 +252,7 @@ function materialize(
     if (rawWildcard !== undefined) {
         // rawWildcard keeps its leading '/' ('/a/b'); normalize exactly like
         // the trie: base hit → [], '/files/' → [''], '/files/a/' → ['a',''].
-        wildcardParams =
-            rawWildcard === '/'
-                ? ['']
-                : rawWildcard.slice(1).split('/').map(safeDecode);
+        wildcardParams = splitWildcard(rawWildcard);
     }
 
     return {
@@ -270,12 +269,32 @@ function splitPattern(path: string): string[] {
     return path.split('/').slice(1).filter((s) => s !== '');
 }
 
+/**
+ * Splits a raw wildcard capture (`/a/b`, `/`, `/files/`) into decoded
+ * segments without `split().map()` per request; a trailing empty segment is
+ * preserved exactly like `String.split('/')`.
+ */
+function splitWildcard(rawWildcard: string): string[] {
+    if (rawWildcard === '/') return [''];
+    const body = rawWildcard.slice(1);
+    const out: string[] = [];
+    let start = 0;
+    for (let i = 0; i < body.length; i++) {
+        if (body.charCodeAt(i) === 47 /* '/' */) {
+            out.push(safeDecode(body.slice(start, i)));
+            start = i + 1;
+        }
+    }
+    out.push(safeDecode(body.slice(start)));
+    return out;
+}
+
 function escapeLiteral(segment: string): string {
     return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function safeDecode(segment: string): string {
-    if (segment === '') return segment;
+    if (segment === '' || segment.indexOf('%') === -1) return segment;
     try {
         return decodeURIComponent(segment);
     } catch {

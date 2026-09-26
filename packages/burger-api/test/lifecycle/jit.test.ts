@@ -5,9 +5,15 @@
  * transform reserved-key drops, validation failures, error dispatch,
  * response hooks, and response validation.
  */
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach, spyOn } from 'bun:test';
 import { z } from 'zod';
-import { compileJitHookPlan, canUseJit, resetJitProbe } from '../../src/lifecycle/jit';
+import {
+    compileJitHookPlan,
+    canUseJit,
+    resetJitProbe,
+    isAsyncFunction,
+    mayReturnPromise,
+} from '../../src/lifecycle/jit';
 import { executeHookPlan } from '../../src/lifecycle/executor';
 import { RouterCompiler } from '../../src/router/compiler';
 import { Router } from '../../src/router/router';
@@ -361,5 +367,241 @@ describe('jit hook plan — equivalence with interpreter', () => {
         expect(rj.status).toBe(405);
         expect(rj.status).toBe(ri.status);
         expect(rj.headers.get('allow')).toBe(ri.headers.get('allow'));
+    });
+});
+
+describe('jit async analysis helpers (B2)', () => {
+    it('isAsyncFunction detects async declarations and generators', () => {
+        expect(isAsyncFunction(async () => {})).toBe(true);
+        expect(isAsyncFunction(async function named() {})).toBe(true);
+        expect(isAsyncFunction(function () {})).toBe(false);
+        expect(isAsyncFunction(() => {})).toBe(false);
+        expect(isAsyncFunction(undefined)).toBe(false);
+    });
+
+    it('mayReturnPromise proves only no-return blocks and literal arrows', () => {
+        // Proven synchronous.
+        expect(mayReturnPromise(() => {})).toBe(false);
+        expect(mayReturnPromise(() => 1)).toBe(false);
+        expect(mayReturnPromise(() => 'x')).toBe(false);
+        expect(mayReturnPromise(function () {})).toBe(false);
+        // May return a promise (conservative default).
+        expect(mayReturnPromise(() => Response.json({}))).toBe(true);
+        expect(mayReturnPromise(function () { return 1; })).toBe(true);
+        expect(mayReturnPromise(async () => {})).toBe(true);
+        expect(mayReturnPromise(undefined)).toBe(true);
+    });
+
+    it('stays a plain function when every step is provably synchronous', () => {
+        const plan: HookPlan = {
+            beforeRoute: [() => {}],
+            afterRoute: [],
+            mapResponse: [],
+            onError: [],
+        };
+        const syncHandler = function () {
+            // no return → provably not a promise
+        } as unknown as RequestHandler;
+        const fn = compileJitHookPlan(plan, false, syncHandler);
+        expect(fn).not.toBeNull();
+        expect(fn!.constructor.name).not.toBe('AsyncFunction');
+    });
+
+    it('is an async function when a step is statically async', () => {
+        const plan: HookPlan = {
+            beforeRoute: [async () => {}],
+            afterRoute: [],
+            mapResponse: [],
+            onError: [],
+        };
+        const fn = compileJitHookPlan(plan, false, async () =>
+            new Response('x')
+        );
+        expect(fn).not.toBeNull();
+        expect(fn!.constructor.name).toBe('AsyncFunction');
+    });
+});
+
+describe('B2 — sync-first JIT is byte-identical to the interpreter', () => {
+    type Snapshot = {
+        status: number;
+        headers: Record<string, string>;
+        body: string;
+    };
+    async function snapshot(res: Response): Promise<Snapshot> {
+        const headers: Record<string, string> = {};
+        res.headers.forEach((value, key) => {
+            headers[key] = value;
+        });
+        return { status: res.status, headers, body: await res.text() };
+    }
+
+    function headersRecord(res: Response): Record<string, string> {
+        const out: Record<string, string> = {};
+        res.headers.forEach((value, key) => {
+            out[key] = value;
+        });
+        return out;
+    }
+
+    const defs: RouteDefinition[] = [
+        {
+            path: '/api/sync-hook',
+            handlers: {
+                GET: (ctx: import('../../src/context/context').BurgerContext) => {
+                    (ctx as unknown as { seeded?: string }).seeded =
+                        (ctx as unknown as { seeded?: string }).seeded ?? 'x';
+                    return Response.json({
+                        seeded: (ctx as unknown as { seeded?: string }).seeded,
+                    });
+                },
+            },
+            hooks: { beforeRoute: [() => undefined] },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/async-hook',
+            handlers: { GET: () => Response.json({ async: true }) },
+            hooks: {
+                beforeRoute: [
+                    async (
+                        ctx: import('../../src/context/context').BurgerContext
+                    ) => {
+                        await Promise.resolve();
+                        (ctx as unknown as { who?: string }).who = 'async';
+                    },
+                ],
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/short',
+            handlers: { GET: () => Response.json({ never: true }) },
+            hooks: {
+                beforeRoute: [
+                    () => undefined,
+                    () => new Response('blocked', { status: 403 }),
+                ],
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/mappers',
+            handlers: {
+                GET: () =>
+                    Response.json(
+                        { ok: true },
+                        { status: 201, headers: { 'x-base': '1' } }
+                    ),
+            },
+            hooks: {
+                beforeRoute: [
+                    () =>
+                        (res: Response) =>
+                            new Response(res.body, {
+                                status: res.status,
+                                headers: {
+                                    ...headersRecord(res),
+                                    'x-first': 'a',
+                                },
+                            }),
+                    async () =>
+                        (res: Response) =>
+                            new Response(res.body, {
+                                status: res.status,
+                                headers: {
+                                    ...headersRecord(res),
+                                    'x-second': 'b',
+                                },
+                            }),
+                ],
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/after',
+            handlers: { GET: () => new Response('base') },
+            hooks: {
+                afterRoute: [
+                    () => (res: Response) => new Response(`${res.status}`),
+                ],
+                mapResponse: [
+                    async (
+                        ctx: import('../../src/context/context').BurgerContext
+                    ) => {
+                        await Promise.resolve();
+                        return (res: Response) =>
+                            new Response(`mapped:${res.status}`, {
+                                status: 202,
+                            });
+                    },
+                ],
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/throw-sync',
+            handlers: {
+                GET: () => {
+                    throw new Error('sync-boom');
+                },
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/reject',
+            handlers: {
+                GET: async () => {
+                    await Promise.resolve();
+                    throw new Error('async-boom');
+                },
+            },
+        } as unknown as RouteDefinition,
+        {
+            path: '/api/onerror',
+            handlers: {
+                GET: () => {
+                    throw new Error('handled-boom');
+                },
+            },
+            hooks: {
+                onError: [
+                    (error: Error) => undefined,
+                    (error: Error) =>
+                        new Response(`caught:${error.message}`, { status: 418 }),
+                ],
+            },
+        } as unknown as RouteDefinition,
+    ];
+
+    const paths = [
+        '/api/sync-hook',
+        '/api/async-hook',
+        '/api/short',
+        '/api/mappers',
+        '/api/after',
+        '/api/throw-sync',
+        '/api/reject',
+        '/api/onerror',
+    ];
+
+    it('returns identical status/headers/body on every route', async () => {
+        const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            // `debug: false` keeps error bodies stack-free, so the JIT and
+            // interpreter 500 bodies are comparable byte-for-byte.
+            const routerI = new Router({ engine: 'trie', jit: false, debug: false });
+            const routerJ = new Router({ engine: 'trie', jit: true, debug: false });
+            routerI.compile(defs);
+            routerJ.compile(defs);
+
+            for (const path of paths) {
+                const ri = await routerI.fetch(
+                    new Request(`http://t${path}`)
+                );
+                const rj = await routerJ.fetch(
+                    new Request(`http://t${path}`)
+                );
+                const si = await snapshot(ri);
+                const sj = await snapshot(rj);
+                expect(sj, `route ${path}`).toEqual(si);
+            }
+        } finally {
+            errorSpy.mockRestore();
+        }
     });
 });

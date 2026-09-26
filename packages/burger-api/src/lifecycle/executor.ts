@@ -12,6 +12,7 @@ import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import { ValidationError } from '../validation/error.js';
 import { validateResponse } from '../validation/response.js';
 import { isNotProductionEnv } from '../utils/env.js';
+import { isThenable } from '../utils/thenable.js';
 
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
@@ -84,14 +85,18 @@ export async function executeHookPlanForHandler(
     }
 
     try {
-        // 1. Transform — inject derived values onto the context.
+        // 1. Transform — inject derived values onto the context. Sync
+        // factories resolve without yielding (no `await` on a plain value).
         if (plan.transform) {
-            await applyTransform(ctx, plan.transform);
+            const transformed = applyTransform(ctx, plan.transform);
+            if (isThenable(transformed)) await transformed;
         }
 
-        // 2. Validation — framework-owned stage; throws ValidationError on failure.
+        // 2. Validation — framework-owned stage; throws ValidationError on
+        // failure. A body-less schema validates synchronously.
         if (plan.validation) {
-            await plan.validation(ctx);
+            const validated = plan.validation(ctx);
+            if (isThenable(validated)) await validated;
         }
 
         // 3. beforeRoute → handler.

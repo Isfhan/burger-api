@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { applySet, hasSetMutations } from '../../src/utils/response';
+import {
+    SET_HEADERS,
+    SET_STATUS,
+    TrackedContextSet,
+} from '../../src/context/context-set';
 import { Router } from '../../src/router/router';
 import type { RouteDefinition } from '../../src/types/index';
 
@@ -91,6 +96,68 @@ describe('auto-HEAD response validation', () => {
         );
         expect(ok.status).toBe(200);
         expect(await ok.text()).toBe('');
+    });
+});
+
+describe('B5 — tracked ContextSet fast paths', () => {
+    it('tracks flags per assignment', () => {
+        const set = new TrackedContextSet();
+        expect(set.flags).toBe(0);
+        set.status = 201;
+        expect(set.flags).toBe(SET_STATUS);
+        set.headers = { a: 'b' };
+        expect(set.flags).toBe(SET_STATUS | SET_HEADERS);
+    });
+
+    it('status-only applies without touching the header list contents', () => {
+        const res = new Response('body', {
+            status: 200,
+            headers: { 'content-type': 'text/plain', 'x-keep': '1' },
+        });
+        const set = new TrackedContextSet();
+        set.status = 202;
+        const out = applySet(res, set);
+        expect(out).not.toBe(res);
+        expect(out.status).toBe(202);
+        expect(out.headers.get('content-type')).toBe('text/plain');
+        expect(out.headers.get('x-keep')).toBe('1');
+    });
+
+    it('an untouched tracked set returns the original response', () => {
+        const res = new Response('body');
+        const set = new TrackedContextSet();
+        expect(applySet(res, set)).toBe(res);
+        expect(hasSetMutations(set)).toBe(false);
+    });
+
+    it('headers (with or without status) still merge over the response', () => {
+        const res = new Response('body', {
+            status: 200,
+            headers: { 'x-base': '1' },
+        });
+        const headersOnly = new TrackedContextSet();
+        headersOnly.headers = { 'x-added': '2' };
+        const out = applySet(res, headersOnly);
+        expect(out.status).toBe(200);
+        expect(out.headers.get('x-base')).toBe('1');
+        expect(out.headers.get('x-added')).toBe('2');
+
+        const res2 = new Response('body', {
+            status: 200,
+            headers: { 'x-base': '1' },
+        });
+        const both = new TrackedContextSet();
+        both.status = 418;
+        both.headers = new Headers({ 'x-added': '3' });
+        const out2 = applySet(res2, both);
+        expect(out2.status).toBe(418);
+        expect(out2.headers.get('x-added')).toBe('3');
+    });
+
+    it('a plain object set keeps the legacy scan behavior', () => {
+        const res = new Response('body');
+        expect(applySet(res, {})).toBe(res);
+        expect(applySet(res, { status: 204 }).status).toBe(204);
     });
 });
 

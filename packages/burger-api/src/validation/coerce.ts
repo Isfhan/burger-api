@@ -171,10 +171,16 @@ export function apply(
         const elementOp = plan.arrays?.[key];
         if (elementOp !== undefined) {
             const list = Array.isArray(value) ? value : [value as string];
-            out[key] =
-                elementOp === 'none'
-                    ? list
-                    : list.map((v) => coerceValue(elementOp, v));
+            if (elementOp === 'none') {
+                out[key] = list;
+                continue;
+            }
+            // Plain loop: element coercion runs per request, no `map` closure.
+            const coerced: unknown[] = new Array(list.length);
+            for (let i = 0; i < list.length; i++) {
+                coerced[i] = coerceValue(elementOp, list[i]!);
+            }
+            out[key] = coerced;
             continue;
         }
         if (!op) {

@@ -12,10 +12,49 @@ import type { ContextInit } from '../context/types.js';
  * runtime-agnostic (WinterCG-compatible). Non-Bun adapters that do not use
  * Bun's native `routes` map keep dispatching through `Router.fetch` + trie and
  * never touch this code.
+ *
+ * The pattern's segment layout is compiled ONCE at route-compile time
+ * (`compilePatternSegments`); request handling does only one URL scan and
+ * decodes a segment when it actually contains `%`.
  */
 
-function safeDecode(segment: string): string {
-    if (segment === '') return segment;
+/**
+ * Compile-time pattern layout: which pattern segments are params and where
+ * the wildcard sits. Built once per route (never per request).
+ */
+export interface CompiledPatternSegments {
+    /** Param name per pattern segment (`undefined` for static / wildcard). */
+    names: (string | undefined)[];
+    /** Index of the `*` pattern segment, or `-1`. */
+    wildcardIndex: number;
+}
+
+/** Compiles a route pattern (e.g. `/users/:id/*`) into its segment layout. */
+export function compilePatternSegments(
+    pattern: string
+): CompiledPatternSegments {
+    const raw = pattern.split('/');
+    // Drop the leading '' before the first '/'.
+    const names: (string | undefined)[] = new Array(
+        raw.length > 0 ? raw.length - 1 : 0
+    );
+    let wildcardIndex = -1;
+    for (let i = 1; i < raw.length; i++) {
+        const segment = raw[i]!;
+        if (segment === ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX) {
+            wildcardIndex = i - 1;
+        } else if (
+            segment.charCodeAt(0) === 58 /* ':' — DYNAMIC_SEGMENT_PREFIX */
+        ) {
+            names[i - 1] = segment.slice(1);
+        }
+    }
+    return { names, wildcardIndex };
+}
+
+/** Decodes a path segment only when it actually carries a percent escape. */
+function decodeSegment(segment: string): string {
+    if (segment === '' || segment.indexOf('%') === -1) return segment;
     try {
         return decodeURIComponent(segment);
     } catch {
@@ -28,51 +67,65 @@ function safeDecode(segment: string): string {
  * when the path ends with `/` (so `/users/` yields `["users", ""]` and a
  * `:param` captures the empty value, mirroring the trie's behavior).
  */
-function splitPath(pathname: string): string[] {
-    const raw = pathname.split('/');
-    const segments = raw.slice(1); // drop the leading '' before the first '/'
-    if (pathname.endsWith('/') && pathname.length > 1) {
-        return segments;
+function splitPath(pathname: string, out: string[]): string[] {
+    let start = pathname.charCodeAt(0) === 47 /* '/' */ ? 1 : 0;
+    let count = 0;
+    for (let i = start; i < pathname.length; i++) {
+        if (pathname.charCodeAt(i) === 47 /* '/' */) {
+            out[count++] = pathname.slice(start, i);
+            start = i + 1;
+        }
     }
-    if (segments.length > 0 && segments[segments.length - 1] === '') {
-        segments.pop();
+    if (start < pathname.length || pathname.length > 1) {
+        out[count++] = pathname.slice(start);
     }
-    return segments;
+    out.length = count;
+    return out;
 }
 
 /**
  * Builds the `ContextInit` (params / wildcardParams / route) for a request that
  * Bun dispatched to a native `:param` or `*` route. `pattern` is the
  * route-definition path (e.g. `/users/:id`, `/files/*`).
+ *
+ * `compiled` is the pattern layout produced by {@link compilePatternSegments}
+ * at route-compile time; when omitted it is derived on the spot (kept for
+ * callers that only have the raw path string).
  */
-export function extractCtxInit(
+export function extractCtxInitWithSegments(
     request: Request,
     pattern: string,
-    isWildcard: boolean
+    compiled: CompiledPatternSegments
 ): ContextInit {
     const pathname = extractPathnameFromUrl(request.url);
-    const patternSegs = pattern.split('/').slice(1);
-    const pathSegs = splitPath(pathname).map(safeDecode);
+    const pathSegments: string[] = [];
+    splitPath(pathname, pathSegments);
 
-    const params: Record<string, string> = {};
-    let wildcardParams: string[] | undefined;
+    const names = compiled.names;
+    const wildcardIndex = compiled.wildcardIndex;
+    let params: Record<string, string> | undefined;
 
-    for (let i = 0; i < patternSegs.length; i++) {
-        const ps = patternSegs[i]!;
-        if (ps === ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX) {
-            wildcardParams = pathSegs.slice(i);
-            break;
-        }
-        if (ps.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
-            const name = ps.slice(
-                ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length
-            );
-            params[name] = pathSegs[i] ?? '';
-        }
+    for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        if (name === undefined) continue;
+        if (params === undefined) params = {};
+        // A pattern segment without a URL segment captures the empty value
+        // (mirrors the trie's `/users/` → `:id === ""` behavior).
+        const raw = pathSegments[i];
+        params[name] = raw === undefined ? '' : decodeSegment(raw);
     }
 
     const ctx: ContextInit = { route: { path: pathname, pattern } };
-    if (Object.keys(params).length > 0) ctx.params = params;
-    if (wildcardParams) ctx.wildcardParams = wildcardParams;
+    if (params !== undefined) ctx.params = params;
+    if (wildcardIndex !== -1) {
+        const count = pathSegments.length - wildcardIndex;
+        const wildcardParams: string[] = new Array(count > 0 ? count : 0);
+        for (let i = 0; i < count; i++) {
+            wildcardParams[i] = decodeSegment(pathSegments[wildcardIndex + i]!);
+        }
+        ctx.wildcardParams = wildcardParams;
+    }
     return ctx;
 }
+
+

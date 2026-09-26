@@ -36,6 +36,66 @@ export function resetJitProbe(): void {
     jitCapability = null;
 }
 
+/**
+ * True when `fn` is declared `async` (or is an async generator). Ported from
+ * Elysia 2 (`compile/utils.js` `isAsyncFunction`) — an async-declared function
+ * ALWAYS returns a promise, so its call site must await unconditionally.
+ */
+export function isAsyncFunction(fn: unknown): boolean {
+    if (typeof fn !== 'function') return false;
+    const name = (fn as { constructor?: { name?: string } }).constructor?.name;
+    return name === 'AsyncFunction' || name === 'AsyncGeneratorFunction';
+}
+
+const MAY_RETURN_PROMISE_CACHE = new WeakMap<object, boolean>();
+
+const MATCH_ARROW = /^(?:[\w$]+|\([\w$\s,.[\]{}:]*\))\s*=>([\s\S]*)$/;
+const MATCH_FUNCTION =
+    /^(?:function(?:\s+[\w$]+)?|[\w$]+)\s*\([\w$\s,.[\]{}:]*\)\s*(\{[\s\S]*\})$/;
+const MATCH_LITERAL =
+    /^(?:true|false|null|undefined|-?\d+(?:\.\d+)?|'[^'\\]*'|"[^"\\]*")$/;
+
+/**
+ * Conservative source-level proof that `fn` can NEVER return a promise.
+ * Ported from Elysia 2 (`compile/utils.js` `mayReturnPromise`, cached per
+ * function). Only two shapes are proven safe:
+ *
+ * - a function/arrow **block body with no `return`** (any value-producing
+ *   return would need the `return` token, so the call yields `undefined`), and
+ * - an arrow with a **literal expression body** (`true`/`undefined`/…).
+ *
+ * Every other shape (including anything with a `return`, native code, or
+ * unparseable source) reports `true` — "may return a promise" — so the
+ * generated code keeps the thenable check and behavior can never drift.
+ */
+export function mayReturnPromise(fn: unknown): boolean {
+    if (typeof fn !== 'function') return true;
+    const cached = MAY_RETURN_PROMISE_CACHE.get(fn as object);
+    if (cached !== undefined) return cached;
+
+    let result = true;
+    try {
+        const literal = Function.prototype.toString.call(fn).trim();
+        const arrow = MATCH_ARROW.exec(literal);
+        const body = (
+            arrow?.[1] ?? MATCH_FUNCTION.exec(literal)?.[1]
+        )?.trimStart();
+        const blockWithoutReturn =
+            !!body &&
+            body.startsWith('{') &&
+            body.endsWith('}') &&
+            !/\breturn\b/.test(body);
+        const literalArrow = !!arrow && body !== undefined && MATCH_LITERAL.test(body);
+        result =
+            literal.includes('[native code]') ||
+            !(blockWithoutReturn || literalArrow);
+    } catch {
+        result = true;
+    }
+    MAY_RETURN_PROMISE_CACHE.set(fn as object, result);
+    return result;
+}
+
 interface JitDeps {
     /** transform map (applyTransform owns reserved-key guarding). */
     tf?: import('./types.js').TransformMap;
@@ -51,8 +111,16 @@ interface JitDeps {
     dbg?: boolean;
 }
 
+/** A thenable guard emitted after a call whose result may be a promise. */
+function thenableGuard(target: string): string {
+    return (
+        `if(${target}!=null&&typeof ${target}.then==='function')` +
+        `{${target}=await ${target};}`
+    );
+}
+
 /**
- * Compiles a frozen {@link HookPlan} into a single async function via
+ * Compiles a frozen {@link HookPlan} into a single function via
  * `new Function`, unrolling the beforeRoute/response-hook chains that
  * `executeHookPlan` walks per request.
  *
@@ -62,6 +130,12 @@ interface JitDeps {
  *   → afterRoute* → mapResponse*
  *   any throw → dispatchOnError (nearest-first onError chain)
  *
+ * - **Sync-first**: a step that is not statically `async` is called without
+ *   `await` when its source proves it cannot return a promise, and with a
+ *   conditional `if (r != null && typeof r.then === 'function') r = await r`
+ *   guard otherwise (Elysia 2 `awaitGuard`). The generated function only
+ *   becomes `async` when some emitted call actually needs `await`; the error
+ *   path always returns `dispatchOnError`'s promise.
  * - Forward hooks: `Response` short-circuits the remaining beforeRoute hooks
  *   and the handler (the response still flows through the collected
  *   mappers, response validation, afterRoute and mapResponse); a function
@@ -79,7 +153,8 @@ interface JitDeps {
  */
 export function compileJitHookPlan(
     plan: HookPlan,
-    debug?: boolean
+    debug?: boolean,
+    handler?: RequestHandler
 ): ((
     ctx: BurgerContext,
     handler: RequestHandler,
@@ -126,27 +201,93 @@ export function compileJitHookPlan(
     L.push('"use strict";');
     L.push('try{');
 
-    if (plan.transform) L.push('await TF(ctx,D.tf,D.dbg===true);');
-    if (plan.validation) L.push('await D.v(ctx);');
+    // ---- sync-first call emission ----
+    // The generated function is declared `async` only when at least one
+    // emitted call site actually needs `await`.
+    let needsAsync = false;
+    /**
+     * Emits `target = <call>` plus the await form its function demands:
+     * unconditional for a statically-async fn, conditional (thenable guard)
+     * for a fn that may return a promise, plain otherwise. `declare` prefixes
+     * the assignment with `let` (the guard keeps using the bare name).
+     */
+    const emitCall = (
+        target: string,
+        call: string,
+        fn: unknown,
+        declare = false
+    ): void => {
+        const assignment = declare ? `let ${target}` : target;
+        if (isAsyncFunction(fn)) {
+            L.push(`${assignment}=await ${call};`);
+            needsAsync = true;
+            return;
+        }
+        if (!mayReturnPromise(fn)) {
+            L.push(`${assignment}=${call};`);
+            return;
+        }
+        L.push(`${assignment}=${call};${thenableGuard(target)}`);
+        needsAsync = true;
+    };
+
+    if (plan.transform) {
+        L.push('let _tf=TF(ctx,D.tf,D.dbg===true);');
+        if (isAsyncFunction(applyTransform)) {
+            L.push('_tf=await _tf;');
+            needsAsync = true;
+        } else {
+            L.push(thenableGuard('_tf'));
+            needsAsync = true;
+        }
+    }
+    if (plan.validation) {
+        emitCall('_v', 'D.v(ctx)', plan.validation, true);
+    }
 
     // ---- beforeRoute chain (unrolled, mapper collection in order) ----
     if (bLen === 0) {
-        L.push('let res=await H(ctx);');
+        emitCall('res', 'H(ctx)', handler, true);
     } else {
         // A `Response` short-circuit skips the remaining beforeRoute hooks
         // and the handler, but — exactly like `runHooks` — the mappers
         // collected so far still apply, and the response then continues
         // through response validation → afterRoute → mapResponse.
-        L.push(`const M=new Array(${bLen});let mc=0;let res;`);
+        //
+        // A hook proven synchronous can only return `undefined`, so it never
+        // contributes a mapper; when no hook can, the collection machinery
+        // and its `await` loop disappear entirely.
+        const canReturnMapper: boolean[] = [];
+        let anyMapper = false;
+        for (let i = 0; i < bLen; i++) {
+            const hook = plan.beforeRoute[i];
+            const may =
+                isAsyncFunction(hook) || mayReturnPromise(hook);
+            canReturnMapper.push(may);
+            if (may) anyMapper = true;
+        }
+        L.push(
+            anyMapper
+                ? `const M=new Array(${bLen});let mc=0;let res;`
+                : 'let res;'
+        );
         L.push('sc:{');
         for (let i = 0; i < bLen; i++) {
-            L.push(`const h${i}=await D.b[${i}](ctx);`);
+            emitCall(`h${i}`, `D.b[${i}](ctx)`, plan.beforeRoute[i], true);
             L.push(`if(h${i} instanceof Response){res=h${i};break sc;}`);
-            L.push(`if(typeof h${i}==='function'){M[mc++]=h${i};}`);
+            if (canReturnMapper[i]) {
+                L.push(`if(typeof h${i}==='function'){M[mc++]=h${i};}`);
+            }
         }
-        L.push('res=await H(ctx);');
+        emitCall('res', 'H(ctx)', handler);
         L.push('}');
-        L.push('for(let i=mc-1;i>=0;i--){res=await M[i](res);}');
+        if (anyMapper) {
+            L.push(
+                `for(let i=mc-1;i>=0;i--){res=M[i](res);` +
+                    `if(res!=null&&typeof res.then==='function'){res=await res;}}`
+            );
+            needsAsync = true;
+        }
     }
 
     // ---- response validation (post-handler, pre-afterRoute; JSON only) ----
@@ -161,17 +302,31 @@ export function compileJitHookPlan(
                 'D.vc||{},D.dbg);' +
                 'if(!out.ok&&out.errorResponse){res=out.errorResponse;} } }catch(_sv){}'
         );
+        needsAsync = true;
     }
 
     // ---- afterRoute / mapResponse chains (unrolled) ----
     const emitChain = (key: 'a' | 'm', len: number): void => {
         for (let i = 0; i < len; i++) {
             const v = `c_${key}${i}`;
-            L.push(`const ${v}=await D.${key}[${i}](ctx);`);
-            L.push(
-                `if(${v} instanceof Response){res=${v};}` +
-                    `else if(typeof ${v}==='function'){res=await ${v}(res);}`
-            );
+            const hooks =
+                key === 'a' ? plan.afterRoute : plan.mapResponse;
+            const hook = hooks[i];
+            const may =
+                isAsyncFunction(hook) || mayReturnPromise(hook);
+            emitCall(v, `D.${key}[${i}](ctx)`, hook, true);
+            if (may) {
+                L.push(
+                    `if(${v} instanceof Response){res=${v};}` +
+                        `else if(typeof ${v}==='function'){res=${v}(res);` +
+                        `if(res!=null&&typeof res.then==='function'){res=await res;}}`
+                );
+                needsAsync = true;
+            } else {
+                // Proven synchronous hook: only a Response replacement is
+                // possible, so no mapper branch and no `await` are emitted.
+                L.push(`if(${v} instanceof Response){res=${v};}`);
+            }
         }
     };
     emitChain('a', aLen);
@@ -185,7 +340,7 @@ export function compileJitHookPlan(
         'TF',
         'VR',
         'DE',
-        `return async function(ctx,H,METHOD){${L.join('\n')}}`
+        `return ${needsAsync ? 'async ' : ''}function(ctx,H,METHOD){${L.join('\n')}}`
     ) as (
         d: JitDeps,
         tf: typeof applyTransform,
@@ -195,7 +350,7 @@ export function compileJitHookPlan(
         ctx: BurgerContext,
         handler: RequestHandler,
         method: string
-    ) => Promise<Response>;
+    ) => Response | Promise<Response>;
 
     return factory(deps, applyTransform, validateResponse, dispatchOnError);
 }

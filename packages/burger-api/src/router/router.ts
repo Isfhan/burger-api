@@ -166,6 +166,15 @@ export class Router {
     }
 
     /**
+     * The app services resolved ONCE at compile time. Non-API contexts
+     * (dynamic pages) receive the same shared object so `ctx.services` is
+     * populated there too.
+     */
+    getAppServices(): BurgerServices {
+        return this.appServices;
+    }
+
+    /**
      * Builds the RegExp dispatch matcher for dynamic/wildcard routes when
      * the configured engine asks for it ('regex'). Benchmarks showed the
      * radix trie equal-or-faster on fallback dispatch (single-route parity,

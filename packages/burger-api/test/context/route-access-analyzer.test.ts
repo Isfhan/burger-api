@@ -107,4 +107,93 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         const info = analyzeRouteAccess(def, true);
         expect(info.hooks.has('afterRoute')).toBe(true);
     });
+
+    // --- B3: only "provably safe" access may produce unknown === false ---
+
+    it('marks the route unknown when the context escapes to a helper', () => {
+        const readId = (ctx: any) => ctx.params.id;
+        const def = {
+            path: '/x',
+            handlers: { GET: (ctx: any) => Response.json({ id: readId(ctx) }) },
+        } as unknown as RouteDefinition;
+        expect(analyzeRouteAccess(def).unknown).toBe(true);
+    });
+
+    it('marks the route unknown when the context parameter is destructured', () => {
+        const def = {
+            path: '/x',
+            handlers: {
+                GET: ({ query }: any) => Response.json({ q: query }),
+            },
+        } as unknown as RouteDefinition;
+        expect(analyzeRouteAccess(def).unknown).toBe(true);
+    });
+
+    it('marks the route unknown on computed member access', () => {
+        const def = {
+            path: '/x',
+            handlers: {
+                // The key arrives at runtime, so the source always carries a
+                // computed access (`ctx[key]`).
+                GET: (ctx: any, key: string) => Response.json(ctx[key]),
+            },
+        } as unknown as RouteDefinition;
+        expect(analyzeRouteAccess(def).unknown).toBe(true);
+    });
+
+    it('marks native functions unknown', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: Response.json.bind(Response) },
+        } as unknown as RouteDefinition;
+        expect(analyzeRouteAccess(def).unknown).toBe(true);
+    });
+
+    it('accepts direct / optional / quoted-literal member reads as known', () => {
+        const def = {
+            path: '/x',
+            handlers: {
+                GET: (ctx: any) => {
+                    void ctx.query;
+                    void ctx?.params;
+                    void ctx['route'];
+                    return new Response('ok');
+                },
+            },
+        } as unknown as RouteDefinition;
+        const info = analyzeRouteAccess(def);
+        expect(info.unknown).toBe(false);
+        expect(info.has('query')).toBe(true);
+        expect(info.has('params')).toBe(true);
+        expect(info.has('route')).toBe(true);
+    });
+
+    it('scans extra sources (plugin hooks / transform factories)', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: () => new Response('ok') },
+        } as unknown as RouteDefinition;
+        const pluginHook = (ctx: any) => {
+            void ctx.headers;
+        };
+        const info = analyzeRouteAccess(def, false, [
+            pluginHook,
+            { derived: (ctx: any) => ctx.params },
+        ]);
+        expect(info.unknown).toBe(false);
+        expect(info.has('headers')).toBe(true);
+        expect(info.has('params')).toBe(true);
+    });
+
+    it('marks unknown when an extra source lets the context escape', () => {
+        const def = {
+            path: '/x',
+            handlers: { GET: () => new Response('ok') },
+        } as unknown as RouteDefinition;
+        const pluginHook = (ctx: any) => ctx.query;
+        const helper = (c: any) => c;
+        const escape = (ctx: any) => helper(ctx);
+        const info = analyzeRouteAccess(def, false, [pluginHook, escape]);
+        expect(info.unknown).toBe(true);
+    });
 });

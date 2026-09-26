@@ -1,6 +1,7 @@
 import type { BurgerContext } from '../context/context.js';
 import type { RequestHandler } from '../types/index.js';
 import type { ForwardHook, ResponseHook } from './types.js';
+import { isThenable } from '../utils/thenable.js';
 
 /** Either hook kind — both share the same runtime 3-way return contract. */
 type RunnerHook = ForwardHook | ResponseHook;
@@ -15,7 +16,9 @@ async function runSingleHook(
     hook: RunnerHook,
     handler: RequestHandler
 ): Promise<Response> {
-    const result = await hook(ctx);
+    // Sync-first: a plain hook result continues without a microtask.
+    let result = hook(ctx);
+    if (isThenable(result)) result = await result;
 
     // Short-circuit with Response
     if (result instanceof Response) {
@@ -24,7 +27,11 @@ async function runSingleHook(
 
     // Transform response after handler
     if (typeof result === 'function') {
-        return result(await handler(ctx));
+        let response = handler(ctx);
+        if (isThenable(response)) response = await response;
+        let mapped = result(response);
+        if (isThenable(mapped)) mapped = await mapped;
+        return mapped;
     }
 
     // Continue to handler
@@ -55,31 +62,40 @@ async function runHookChain(
         const first = hooks[0]!;
         const second = hooks[1]!;
 
-        // First hook
-        const result1 = await first(ctx);
+        // First hook (sync-first: no microtask when it returned a plain value)
+        let result1 = first(ctx);
+        if (isThenable(result1)) result1 = await result1;
         if (result1 instanceof Response) {
             return result1;
         }
 
         // Second hook
-        const result2 = await second(ctx);
+        let result2 = second(ctx);
+        if (isThenable(result2)) result2 = await result2;
         if (result2 instanceof Response) {
             // Apply first hook's after function if exists
             if (typeof result1 === 'function') {
-                return result1(result2);
+                let mapped = result1(result2);
+                if (isThenable(mapped)) mapped = await mapped;
+                return mapped;
             }
             return result2;
         }
 
         // Run handler
-        let response = await handler(ctx);
+        let response = handler(ctx);
+        if (isThenable(response)) response = await response;
 
         // Apply after functions in reverse order (manual unroll)
         if (typeof result2 === 'function') {
-            response = await result2(response);
+            let mapped = result2(response);
+            if (isThenable(mapped)) mapped = await mapped;
+            response = mapped;
         }
         if (typeof result1 === 'function') {
-            response = await result1(response);
+            let mapped = result1(response);
+            if (isThenable(mapped)) mapped = await mapped;
+            response = mapped;
         }
 
         return response;
@@ -91,9 +107,10 @@ async function runHookChain(
         new Array(len);
     let afterCount = 0;
 
-    // Run each hook
+    // Run each hook (sync-first: a plain hook result never yields)
     for (let i = 0; i < len; i++) {
-        const result = await hooks[i]!(ctx);
+        let result = hooks[i]!(ctx);
+        if (isThenable(result)) result = await result;
 
         // Short-circuit with Response (check first - most common early exit)
         if (result instanceof Response) {
@@ -104,7 +121,9 @@ async function runHookChain(
             // Multiple after functions
             let response = result;
             for (let j = afterCount - 1; j >= 0; j--) {
-                response = await afterStack[j]!(response);
+                let mapped = afterStack[j]!(response);
+                if (isThenable(mapped)) mapped = await mapped;
+                response = mapped;
             }
             return response;
         }
@@ -118,20 +137,31 @@ async function runHookChain(
     }
 
     // All hooks passed - run handler
-    let response = await handler(ctx);
+    let response = handler(ctx);
+    if (isThenable(response)) response = await response;
 
     // Apply "after" functions in reverse order
     // Fast paths for common cases
     if (afterCount === 0) return response;
-    if (afterCount === 1) return afterStack[0]!(response);
+    if (afterCount === 1) {
+        let mapped = afterStack[0]!(response);
+        if (isThenable(mapped)) mapped = await mapped;
+        return mapped;
+    }
     if (afterCount === 2) {
-        response = await afterStack[1]!(response);
-        return afterStack[0]!(response);
+        let mapped = afterStack[1]!(response);
+        if (isThenable(mapped)) mapped = await mapped;
+        response = mapped;
+        mapped = afterStack[0]!(response);
+        if (isThenable(mapped)) mapped = await mapped;
+        return mapped;
     }
 
     // General case: 3+ after functions
     for (let i = afterCount - 1; i >= 0; i--) {
-        response = await afterStack[i]!(response);
+        let mapped = afterStack[i]!(response);
+        if (isThenable(mapped)) mapped = await mapped;
+        response = mapped;
     }
 
     return response;

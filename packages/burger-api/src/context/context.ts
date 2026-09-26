@@ -6,6 +6,7 @@ import type {
 } from './types.js';
 import { parseQuery } from './query-parser.js';
 import { parseCookies } from './cookie-parser.js';
+import { TrackedContextSet } from './context-set.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
 import type { InferValidated } from '../types/inference.js';
 import type { RouteMethodSchema } from '../types/inference.js';
@@ -282,7 +283,7 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     get set(): ContextSet {
-        return (this._set ??= Object.create(null) as ContextSet);
+        return (this._set ??= new TrackedContextSet());
     }
 
     set set(value: ContextSet) {
