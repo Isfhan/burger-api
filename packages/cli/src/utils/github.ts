@@ -1,14 +1,4 @@
-/**
- * GitHub Integration
- *
- * Downloads files from GitHub using Bun's built-in fetch.
- * No extra packages needed - we use the native fetch API that comes with Bun!
- *
- * This module handles all communication with GitHub to:
- * - Get lists of available hooks and plugins
- * - Download template files
- * - Download ecosystem component code
- */
+/** GitHub access via Bun's built-in fetch: lists and downloads ecosystem hooks, plugins, and skills. */
 
 import type {
     GitHubFile,
@@ -19,10 +9,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { withEcosystemCache } from './ecosystem-cache';
 
-/**
- * Configuration for GitHub repository.
- * Override via env: BURGER_API_REPO_OWNER, BURGER_API_REPO_NAME, BURGER_API_BRANCH.
- */
+/** Repo config; override with BURGER_API_REPO_OWNER, BURGER_API_REPO_NAME, BURGER_API_BRANCH. */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
 const REPO_NAME = process.env.BURGER_API_REPO_NAME ?? 'burger-api';
 /** Injected at build time when compiling to executable (--define CLI_VERSION). */
@@ -30,9 +17,8 @@ declare const CLI_VERSION: string | undefined;
 
 /**
  * True when the installed CLI is a prerelease (`1.0.0-beta`, `-rc.1`, …).
- * Prerelease CLIs read ecosystem content from the 1.0 development branch,
- * because `main` does not carry 1.0 content until the stable release — so
- * this switches back to `main` on its own once a stable version ships.
+ * Prereleases read ecosystem content from the 1.0 development branch until
+ * stable 1.0 ships on `main`.
  */
 export function isPrereleaseBuild(): boolean {
     let version = typeof CLI_VERSION !== 'undefined' ? CLI_VERSION : '';
@@ -57,22 +43,17 @@ const BRANCH =
     process.env.BURGER_API_BRANCH ??
     (isPrereleaseBuild() ? PRERELEASE_BRANCH : 'main');
 
-// Build the URLs we'll use to access GitHub
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 
-// Contents API needs an explicit ref; the default branch is stale until
-// feat/burger-api-v1 merges, so list/add/skills would return empty results.
+// Contents API needs an explicit ref, or list/add/skills return empty results
+// while the 1.0 branch has not merged to the default branch yet.
 const contentsUrl = (path: string): string =>
     `${API_URL}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`;
 
 const FETCH_TIMEOUT_MS = 20_000;
 
-/**
- * Fetch with a timeout. Always clears the timer when the request settles so
- * the CLI process can exit (orphaned timers were keeping the event loop alive
- * after successful responses).
- */
+/** Fetch with a timeout; always clears the timer so the CLI process can exit. */
 async function fetchWithTimeout(
     input: string | URL | Request,
     init?: RequestInit
@@ -89,10 +70,7 @@ async function fetchWithTimeout(
     }
 }
 
-/**
- * Headers for GitHub API requests. Uses GITHUB_TOKEN (if set) for
- * authenticated requests — unauthenticated requests share a low rate limit.
- */
+/** GitHub API headers; GITHUB_TOKEN (when set) avoids the low anonymous rate limit. */
 function githubHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
         Accept: 'application/vnd.github.v3+json',
@@ -106,8 +84,7 @@ function githubHeaders(): Record<string, string> {
 
 /**
  * Throw a descriptive error for a non-OK GitHub response (rate limit,
- * missing branch, ...). Never swallow these — silent empty results made
- * failures look like "not found".
+ * missing branch, ...) — never turn a failure into "not found".
  */
 async function throwForGitHubError(response: Response): Promise<never> {
     let detail = '';
@@ -135,10 +112,9 @@ function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 }
 
 /**
- * Get the list of available ecosystem components from GitHub.
- * This scans the ecosystem/hooks and ecosystem/plugins folders.
+ * List ecosystem components (hooks and plugins) from GitHub.
  *
- * @returns Promise with array of `{ name, kind }` entries
+ * @returns Array of `{ name, kind }` entries
  * @throws Error if GitHub is unreachable or request fails
  * @example
  * const components = await getComponentList();
@@ -148,7 +124,6 @@ export async function getComponentList(): Promise<
     Array<{ name: string; kind: 'hook' | 'plugin' }>
 > {
     try {
-        // Fetch both hooks and plugins from ecosystem
         const [hooksRes, pluginsRes] = await Promise.all([
             fetchWithTimeout(contentsUrl('ecosystem/hooks'), {
                 headers: githubHeaders(),
@@ -158,8 +133,7 @@ export async function getComponentList(): Promise<
             }),
         ]);
 
-        // Fail loud on HTTP errors (403 rate limit, 404 branch, ...) instead
-        // of silently rendering an empty list.
+        // Fail loud on HTTP errors instead of rendering an empty list.
         if (!hooksRes.ok) await throwForGitHubError(hooksRes);
         if (!pluginsRes.ok) await throwForGitHubError(pluginsRes);
 
@@ -181,12 +155,7 @@ export async function getComponentList(): Promise<
     }
 }
 
-/**
- * Cached wrapper around {@link getComponentList} — see `ecosystem-cache.ts`
- * for the caching contract (fresh: served from disk; stale: refreshed,
- * falling back to the stale copy on a failed refresh; cold + failing
- * fetch: throws, same as the uncached function).
- */
+/** Cached {@link getComponentList} — see `ecosystem-cache.ts` for the caching contract. */
 export async function getCachedComponentList(): Promise<{
     data: Array<{ name: string; kind: 'hook' | 'plugin' }>;
     stale: boolean;
@@ -210,12 +179,7 @@ export interface ComponentCatalogEntry {
     description: string;
 }
 
-/**
- * The component list plus each README's description, cached together so a
- * warm `burger-api list` makes no network calls at all. A cold fetch costs
- * 2 Contents API calls (the rate-limited API); descriptions come from raw
- * README files, which don't count against the API rate limit.
- */
+/** Component list plus each README's description, cached together so a warm `burger-api list` makes no network calls. */
 export async function getCachedComponentCatalog(): Promise<{
     data: ComponentCatalogEntry[];
     stale: boolean;
@@ -241,15 +205,11 @@ export async function getCachedComponentCatalog(): Promise<{
 }
 
 /**
- * Get detailed information about a specific ecosystem component.
- * This reads the README file to get the description.
+ * Detailed info for one ecosystem component, including its README description.
  *
  * @param name - Name of the component (e.g., 'cors')
  * @param kind - Whether the component is a hook or a plugin
  * @returns Promise with component information
- * @example
- * const info = await getComponentInfo('cors', 'hook');
- * console.log(info.description);
  */
 export async function getComponentInfo(
     name: string,
@@ -257,7 +217,6 @@ export async function getComponentInfo(
 ): Promise<EcosystemComponentInfo> {
     const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
     try {
-        // Get list of files in the component directory
         const response = await fetchWithTimeout(
             contentsUrl(`${dir}/${name}`),
             {
@@ -275,7 +234,6 @@ export async function getComponentInfo(
 
         const files = (await response.json()) as GitHubFile[];
 
-        // Try to find and read the README file for description
         const readmeFile = files.find(
             (f) => f.name.toLowerCase() === 'readme.md'
         );
@@ -288,7 +246,6 @@ export async function getComponentInfo(
                 );
                 const readmeContent = await readmeResponse.text();
 
-                // Extract first non-empty line after the title as description
                 const lines = readmeContent.split('\n');
                 for (const line of lines) {
                     const trimmed = line.trim();
@@ -298,7 +255,7 @@ export async function getComponentInfo(
                     }
                 }
             } catch {
-                // If we can't read the README, just use default description
+                // README unreadable — keep the default description.
             }
         }
 
@@ -317,21 +274,17 @@ export async function getComponentInfo(
 }
 
 /**
- * Download a file from GitHub
+ * Download a file from GitHub.
  *
  * @param path - Path in the repo (e.g., 'ecosystem/hooks/cors/cors.ts')
- * @param destination - Where to save it on your computer
- * @returns Promise that resolves when download is complete
+ * @param destination - Where to save it locally
  * @throws Error if download fails
- * @example
- * await downloadFile('ecosystem/hooks/cors/cors.ts', './ecosystem/hooks/cors/cors.ts');
  */
 export async function downloadFile(
     path: string,
     destination: string
 ): Promise<void> {
     try {
-        // Build the URL to the raw file content
         const url = `${RAW_URL}/${path}`;
 
         const response = await fetchWithTimeout(url);
@@ -340,11 +293,9 @@ export async function downloadFile(
             throw new Error(`Could not download ${path}`);
         }
 
-        // Get the file content
         const content = await response.text();
 
-        // Save using Bun's fast file system
-        // Bun.write is much faster than Node's fs.writeFile!
+        // Bun.write creates parent directories as needed.
         await Bun.write(destination, content);
     } catch (err) {
         throw wrapFetchError(
@@ -357,15 +308,12 @@ export async function downloadFile(
 }
 
 /**
- * Download all files for a specific ecosystem component
+ * Download all files for a specific ecosystem component.
  *
  * @param componentName - Name of the component to download
  * @param targetDir - Directory to save files in
  * @param kind - Whether the component is a hook or a plugin
  * @returns Promise with number of files downloaded
- * @example
- * const count = await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
- * console.log(`Downloaded ${count} files`);
  */
 export async function downloadComponent(
     componentName: string,
@@ -373,17 +321,15 @@ export async function downloadComponent(
     kind: 'hook' | 'plugin'
 ): Promise<number> {
     try {
-        // Get information about the component
         const info = await getComponentInfo(componentName, kind);
 
-        // Create target directory if it doesn't exist
-        await Bun.write(`${targetDir}/.gitkeep`, ''); // Creates dir
+        // Create the target directory.
+        await Bun.write(`${targetDir}/.gitkeep`, '');
 
         let filesDownloaded = 0;
 
-        // Download ALL files (including README.md)
+        // Download every file, README.md included.
         for (const fileName of info.files) {
-            // Skip .gitkeep files - we don't need them
             if (fileName === '.gitkeep') {
                 continue;
             }
@@ -395,11 +341,11 @@ export async function downloadComponent(
             filesDownloaded++;
         }
 
-        // Remove the .gitkeep file we created for the directory
+        // Remove the .gitkeep placeholder again.
         try {
             unlinkSync(`${targetDir}/.gitkeep`);
         } catch {
-            // If .gitkeep doesn't exist or can't be deleted, ignore the error
+            // Already gone — nothing to do.
         }
 
         return filesDownloaded;
@@ -414,14 +360,9 @@ export async function downloadComponent(
 
 /**
  * Check if a hook exists on GitHub under ecosystem/hooks/.
- * This is useful before trying to download something
  *
  * @param name - Name of the hook to check
  * @returns Promise with true if it exists, false otherwise
- * @example
- * if (await hookExists('cors')) {
- * await downloadComponent('cors', './ecosystem/hooks/cors', 'hook');
- * }
  */
 export async function hookExists(name: string): Promise<boolean> {
     return existsInEcosystem('hooks', name);
@@ -435,8 +376,8 @@ export async function pluginExists(name: string): Promise<boolean> {
 }
 
 /**
- * Shared exists-check: 404 means genuinely absent; any other failure
- * (rate limit, network) throws so callers never report a false "not found".
+ * Shared exists-check: 404 means absent; any other failure (rate limit,
+ * network) throws so callers never report a false "not found".
  */
 async function existsInEcosystem(
     kind: 'hooks' | 'plugins',
@@ -474,10 +415,9 @@ export async function detectEcosystemType(
 }
 
 /**
- * Get list of available skills from GitHub
- * This scans the ecosystem/skills folder and returns what's available
+ * List available skills from GitHub (ecosystem/skills).
  *
- * @returns Promise with array of skill names
+ * @returns Array of skill names
  * @throws Error if GitHub is unreachable or request fails
  */
 export async function getSkillList(): Promise<string[]> {
@@ -547,10 +487,7 @@ export async function flattenSkillFiles(
     return files;
 }
 
-/**
- * Parse a description line from SKILL.md YAML frontmatter.
- * Extracted as a separate function for testability.
- */
+/** Parse description and version from SKILL.md YAML frontmatter. */
 export function parseSkillDescription(raw: string): {
     description: string;
     version?: string;
@@ -624,7 +561,6 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
         const entries = (await response.json()) as GitHubFile[];
         const flatFiles = await flattenSkillFiles(`ecosystem/skills/${name}`);
 
-        // Try to parse description and version from SKILL.md frontmatter
         const skillMd = entries.find((f) => f.name === 'SKILL.md');
         let description = `AI agent skill for ${name}`;
         let version: string | undefined;
@@ -640,7 +576,7 @@ export async function getSkillInfo(name: string): Promise<SkillInfo> {
                 }
                 version = parsed.version;
             } catch {
-                // fall back to defaults
+                // Keep the defaults.
             }
         }
 
@@ -670,10 +606,8 @@ export async function downloadSkill(
     try {
         const info = await getSkillInfo(skillName);
 
-        // Download into a staging dir, then replace the target: an update
-        // never leaves stale files from the previous version behind, and a
-        // failed download never destroys the existing install. (Bun.write
-        // creates parent directories — no .gitkeep placeholders needed.)
+        // Stage, then swap: an update leaves no stale files behind, and a
+        // failed download never destroys the existing install.
         const stagingDir = `${targetDir}.download`;
         rmSync(stagingDir, { recursive: true, force: true });
         let filesDownloaded = 0;

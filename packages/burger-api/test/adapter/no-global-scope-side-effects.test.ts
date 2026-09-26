@@ -1,21 +1,7 @@
 /**
- * Regression test for the Cloudflare Workers boot crash found in Phase 3 of
- * the v1.0.0 release audit: `utils/response.ts` had a dead, unused
- * module-top-level `METHOD_NOT_ALLOWED = new Response(...)` constant. Eager
- * construction at import time crashed every Worker before any request was
- * handled ("Disallowed operation called within global scope. Asynchronous
- * I/O... are not allowed within global scope.").
- *
- * This can't run inside a real Workers runtime here, so it approximates the
- * restriction: importing the built package must not synchronously construct
- * a `Response`/`Request`, or call `fetch`/`setTimeout`/`setInterval`, during
- * module evaluation. Those are exactly the operations Workers forbids at
- * global scope, and exactly the shape of the original bug (an eager
- * top-level side effect that only a real multi-runtime boot ever caught).
- *
- * Requires a fresh `dist` build (`bun run build` in packages/burger-api).
- * Run with `REQUIRE_BUILD_BUNDLE=true` (set in CI) to make a missing build
- * a hard failure instead of a skip.
+ * Module evaluation must not construct `Response`/`Request` or call
+ * `fetch`/timers — Cloudflare Workers forbids that at global scope.
+ * Requires a fresh `dist` build; REQUIRE_BUILD_BUNDLE=true makes it fail hard.
  */
 import { describe, it, expect } from 'bun:test';
 import { existsSync } from 'fs';
@@ -79,8 +65,8 @@ describe('importing the built package does no disallowed global-scope work', () 
         }) as typeof setInterval;
 
         try {
-            // Cache-bust: append a query so a prior test run in the same
-            // process (module cache) can't hide a real violation.
+            // Cache-bust so a prior import in the same process cannot hide
+            // a real violation via the module cache.
             await import(`${DIST_INDEX}?t=${Date.now()}`);
         } finally {
             duringImport = false;

@@ -307,9 +307,9 @@ describe('generateWsFiles', () => {
 
     it('config.ts scaffolds a per-route-valid WebSocketConfig, not connection-level options', () => {
         const files = generateWsFiles('chat');
-        // maxPayloadLength/idleTimeout are connection-level (Bun.serve-wide)
-        // and are ignored with a runtime warning if set per-route — the
-        // template must not scaffold them as if they were valid here.
+        // maxPayloadLength/idleTimeout are connection-level (Bun.serve-wide);
+        // per-route values warn and are ignored, so the template must not
+        // scaffold them.
         expect(files['config.ts']).not.toContain('maxPayloadLength');
         expect(files['config.ts']).not.toContain('idleTimeout');
         expect(files['config.ts']).toContain('auth');

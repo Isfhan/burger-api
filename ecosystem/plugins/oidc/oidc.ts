@@ -1,8 +1,8 @@
 /**
  * OpenID Connect Plugin for BurgerAPI
  *
- * Official OpenID Connect authentication plugin that integrates with BurgerAPI's hook system.
- * Parses OIDC token, verifies signature against provider's JWKS, and attaches user info to context.
+ * Verifies an OIDC token against the provider's JWKS and attaches its claims
+ * to the context.
  *
  * @example
  * ```typescript
@@ -21,9 +21,8 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { HTTPError, UnauthorizedError } from "burger-api";
 
-// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
-// each declares the SAME property type and merges its fields into
-// `BurgerAuthUser`, so several can be installed without type conflicts.
+// All auth plugins declare `ctx.user` with the same type and merge their
+// fields into `BurgerAuthUser`, so they can be installed together.
 declare module "burger-api" {
   interface BurgerContext {
     /** Verified token claims, set by the oidc plugin after verification. */
@@ -124,8 +123,8 @@ interface JwksResponse {
 const DEFAULT_ALGORITHMS = ["RS256", "ES256"];
 
 /**
- * Web Crypto algorithm dictionaries, derived from the platform so the plugin
- * compiles without the DOM lib (scaffold tsconfigs use `lib: ["ESNext"]`).
+ * Web Crypto algorithm types derived from the platform, so this compiles
+ * without the DOM lib.
  */
 type ImportKeyAlgorithm = NonNullable<
   Parameters<typeof crypto.subtle.importKey>[2]
@@ -173,10 +172,10 @@ function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
 /**
  * Verify JWT signature using JWKS
  *
- * The token's `alg` must be allowlisted, and the selected key must match
- * the algorithm family (`kty`) and be usable for signatures (`use`).
- * Import/verification failures return `false` — they are authentication
- * failures, never server errors.
+ * The token's `alg` must be allowlisted, and the selected key must match the
+ * algorithm family (`kty`) and be usable for signatures (`use`).
+ * Import/verification failures return `false` — auth failures, not server
+ * errors.
  */
 async function verifyToken(
   token: string,
@@ -212,8 +211,7 @@ async function verifyToken(
     return false;
   }
 
-  // Key must be usable for signature verification and (if declared) match
-  // the token's algorithm.
+  // Key must be usable for signatures and match the token's alg if declared.
   const key = keys.find(
     (k) =>
       k.kid === kid &&
@@ -306,8 +304,7 @@ export function oidc(options: OidcOptions): Plugin {
     requireExpiration = true,
   } = options;
 
-  // Per-instance state. Never share a JWKS cache across plugin instances —
-  // instances with different issuers must verify against their own keys.
+  // Per-instance state: different issuers must verify against their own keys.
   let discoveryPromise: Promise<OidcDiscovery> | null = null;
   let discovery: OidcDiscovery | null = null;
   let jwksCache: {
@@ -332,9 +329,8 @@ export function oidc(options: OidcOptions): Plugin {
       return cache.keys;
     }
     if (cache) {
-      // TTL expired: keep serving the stale keys while one background
-      // refresh runs; a failed refresh keeps the stale keys usable and
-      // lets the next request retry.
+      // TTL expired: serve stale keys while one refresh runs; a failed
+      // refresh keeps them usable and the next request retries.
       cache.inflight ??= refreshJwks(jwksUri).catch(() => {
         cache.inflight = null;
         return cache.keys;
@@ -349,13 +345,12 @@ export function oidc(options: OidcOptions): Plugin {
 
     hooks: {
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        // Get config for this route
         const config = ctx.config as
           | { auth?: boolean | { required?: boolean } }
           | undefined;
 
-        // Skip auth check if explicitly disabled. The token is not parsed or
-        // attached here — unverified claims never reach auth-disabled routes.
+        // Skip auth check if explicitly disabled. The token is not parsed
+        // here — unverified claims never reach auth-disabled routes.
         if (
           config?.auth === false ||
           (typeof config?.auth === "object" && config.auth.required === false)
@@ -363,15 +358,14 @@ export function oidc(options: OidcOptions): Plugin {
           return;
         }
 
-        // Consistent token extraction — the prefix must match exactly.
+        // The prefix must match exactly.
         const authHeader = ctx.headers.get(header);
         if (!authHeader?.startsWith(`${prefix} `)) {
           throw new UnauthorizedError("Missing or invalid token");
         }
         const token = authHeader.slice(prefix.length + 1);
 
-        // Lazily resolve provider config and keys — only when a token must
-        // actually be verified.
+        // Resolve discovery and keys lazily, only when a token must be verified.
         let keys: JwksKey[];
         try {
           if (!discovery) {
@@ -384,8 +378,8 @@ export function oidc(options: OidcOptions): Plugin {
           }
           keys = await getJwks(discovery.jwks_uri);
         } catch (error) {
-          // The provider (not the token) failed: log it server-side and tell
-          // the client to retry — an unreachable IdP is not a bad token.
+          // Provider failure, not a bad token: log server-side and tell the
+          // client to retry.
           console.error(
             `[burger-api/plugin-oidc] Failed to load discovery/JWKS for issuer "${issuer}":`,
             error
@@ -409,7 +403,6 @@ export function oidc(options: OidcOptions): Plugin {
           throw new UnauthorizedError("Malformed token");
         }
 
-        // Check expiration
         const now = Math.floor(Date.now() / 1000);
         if (user.exp === undefined) {
           if (requireExpiration) {
@@ -425,7 +418,6 @@ export function oidc(options: OidcOptions): Plugin {
           }
         }
 
-        // Check not-before
         if (user.nbf !== undefined) {
           if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
             throw new UnauthorizedError("Token has invalid not-before claim");
@@ -435,12 +427,12 @@ export function oidc(options: OidcOptions): Plugin {
           }
         }
 
-        // Check issuer (must match the configured issuer exactly)
+        // The issuer must match exactly.
         if (user.iss !== issuer) {
           throw new UnauthorizedError("Invalid issuer");
         }
 
-        // Check audience — a configured audience must be present AND listed
+        // A configured audience must be present and listed.
         if (audience) {
           if (!user.aud) {
             throw new UnauthorizedError("Invalid audience");

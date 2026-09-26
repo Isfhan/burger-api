@@ -71,31 +71,16 @@ export interface CacheControlOptions {
 }
 
 /**
- * Creates a cache control hook for HTTP caching.
- *
- * This hook sets Cache-Control and related headers to control how responses
- * are cached by browsers, CDNs, and proxy servers.
+ * Creates a hook that sets `Cache-Control` (plus optional `ETag` and
+ * `Vary` headers) to control caching by browsers, CDNs, and proxies.
  *
  * @param options - Configuration options for cache control
  * @returns A hook function that adds cache headers to responses
  *
  * @example
  * ```typescript
- * // No caching (default)
- * const noCache = cacheControl();
- *
  * // Cache for 1 hour
- * const cache1Hour = cacheControl({
- *   directive: 'public',
- *   maxAge: 3600
- * });
- *
- * // Private cache with revalidation
- * const privateCache = cacheControl({
- *   directive: 'private',
- *   maxAge: 300,
- *   mustRevalidate: true
- * });
+ * const cache1Hour = cacheControl({ directive: 'public', maxAge: 3600 });
  *
  * // Immutable assets
  * const immutableCache = cacheControl({
@@ -120,18 +105,14 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
     } = options;
 
     return (ctx: BurgerContext): ForwardHookResult => {
-        // Transform response to add cache headers
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
 
-            // Build Cache-Control header
             let cacheControlValue: string;
 
             if (custom) {
-                // Use custom value if provided
                 cacheControlValue = custom;
             } else {
-                // Build from options
                 const parts: string[] = [directive];
 
                 if (maxAge !== undefined) {
@@ -163,7 +144,6 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
 
             headers.set('Cache-Control', cacheControlValue);
 
-            // Add Vary header if specified
             if (vary) {
                 const varyValue = Array.isArray(vary) ? vary.join(', ') : vary;
                 headers.set('Vary', varyValue);

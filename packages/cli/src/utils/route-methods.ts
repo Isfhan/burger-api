@@ -32,12 +32,12 @@ const EXPORT_CONST_RE =
 /** Matches destructured exports: export const { GET, POST } = ... */
 const EXPORT_DESTRUCTURE_RE = /export\s+(?:const|let|var)\s*\{([^}]*)\}\s*=/g;
 
-/** Matches a single HTTP method name (used to find all methods inside a block) */
+/** Matches a single HTTP method name inside an export block. */
 const METHOD_NAME_RE = /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 
 /**
- * Strip comments so export regexes do not match inside comments.
- * Removes multi-line comments (/* ... *\/) and lines that are only a single-line comment (// ...).
+ * Strip block comments and full-line comments so the export regexes below
+ * don't match inside them.
  */
 function stripComments(content: string): string {
     let out = content.replace(/\/\*[\s\S]*?\*\//g, ' ');
@@ -46,11 +46,11 @@ function stripComments(content: string): string {
 }
 
 /**
- * Detect which HTTP methods are exported from a route file.
- * Reads the file and looks for export function METHOD(, export const METHOD = ..., and export { ... METHOD ... }.
+ * Detect the HTTP methods a route file exports (function, const, named and
+ * destructured exports).
  *
  * @param filePath - Absolute path to the route file (e.g. route.ts).
- * @returns Array of method names found, or undefined if file could not be read or parsed.
+ * @returns Method names found, or undefined if the file could not be read.
  */
 export async function detectExportedMethods(
     filePath: string
@@ -78,7 +78,7 @@ export async function detectExportedMethods(
         if (name) found.add(name);
     }
 
-    // Scan each export { ... } block and collect all HTTP method names inside it
+    // Collect method names from each export { ... } / destructured block.
     for (const blockRe of [EXPORT_NAMED_BLOCK_RE, EXPORT_DESTRUCTURE_RE]) {
         blockRe.lastIndex = 0;
         while ((match = blockRe.exec(contentWithoutComments)) !== null) {
@@ -125,10 +125,9 @@ const EXPORT_HOOK_FUNCTION_RE =
     /export\s+(?:async\s+)?function\s+(onRequest|beforeRoute|afterRoute|mapResponse|onError|transform)\s*\(/g;
 
 /**
- * Detect which lifecycle hook names a `hooks.ts` module exports. Mirrors
- * {@link detectExportedMethods} but for hook exports rather than HTTP
- * methods. Display-only (`inspect`): the build always imports a present
- * hooks file rather than trusting this best-effort guess.
+ * Detect the lifecycle hook names a `hooks.ts` module exports. Display-only
+ * (`inspect`): the build imports a present hooks file directly rather than
+ * trusting this best-effort guess.
  */
 export async function detectExportedHookNames(
     filePath: string

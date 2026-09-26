@@ -179,8 +179,7 @@ describe('WebSocket integration', () => {
 
         await server.serve(port);
 
-        // HTTP request should still work via the normal router
-        // (no apiDir set, so it'll return 404, but it shouldn't crash)
+        // HTTP still routed normally; no apiDir means 404, not a crash.
         const res = await fetch(`http://localhost:${port}/anything`);
         // No routes configured → 404
         expect(res.status).toBe(404);

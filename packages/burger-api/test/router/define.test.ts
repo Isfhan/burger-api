@@ -1,9 +1,7 @@
 /**
- * Type-level tests for `defineRoute`/`defineHooks` (`src/router/define.ts`):
- * confirm the schema-bound `ctx` they infer is identical to what a
- * hand-written `BurgerContext<typeof schema>` generic already produces, and
- * that hook signatures narrow the same way. Compile-time assertions, gated
- * by the `tsc --noEmit` typecheck script — they pass trivially at runtime.
+ * Type-level tests for `defineRoute`/`defineHooks`: the schema-bound `ctx`
+ * they infer matches a hand-written `BurgerContext<typeof schema>`, and hook
+ * signatures narrow the same way. Compile-time assertions; pass at runtime.
  */
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
@@ -82,8 +80,8 @@ describe('defineHooks', () => {
 
         expect(typeof hooks.beforeRoute).toBe('function');
 
-        // Hooks run for every method (a POST has no GET query): unguarded
-        // slot access is a compile error; after validation the bag exists.
+        // Hooks run for every method (a POST has no GET query), so unguarded
+        // slot access is a compile error.
         defineHooks(schema, {
             beforeRoute: (ctx) => {
                 // @ts-expect-error query may be undefined on another method

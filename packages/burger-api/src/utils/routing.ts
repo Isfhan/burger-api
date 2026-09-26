@@ -22,8 +22,8 @@ export const ROUTE_CONSTANTS = {
 };
 
 /**
- * Supported HTTP methods, as a literal tuple so the method names can be
- * reused as a type union (`HTTPMethod`) across the public API.
+ * Supported HTTP methods as a literal tuple; the names double as the
+ * `HTTPMethod` union.
  */
 export const HTTP_METHODS = [
     'GET',
@@ -36,25 +36,23 @@ export const HTTP_METHODS = [
 ] as const;
 
 /**
- * The closed set of HTTP methods a route can handle, in the uppercase form
- * used by `RouteDefinition.handlers` keys and `request.method` at runtime.
+ * The closed set of HTTP methods a route can handle, uppercase as used in
+ * `RouteDefinition.handlers` and `request.method`.
  */
 export type HTTPMethod = (typeof HTTP_METHODS)[number];
 
 /**
  * Lowercase form of `HTTPMethod`, used by the lowercase-keyed maps
- * (`RouteSchema`, `openapi`, compiled validators) at runtime.
+ * (`RouteSchema`, `openapi`, compiled validators).
  */
 export type LowercaseHTTPMethod = Lowercase<HTTPMethod>;
 
 /**
- * Calculates the specificity of a route path based on the number of static segments.
- * Static segments increase the score, dynamic segments (`:param`, `[param]`)
- * do not, and wildcard segments (`*`, `[...]`) get a penalty — so higher
- * always means more static, and sorting by this score puts static routes
- * first, dynamic second, wildcard last.
+ * Scores a route path by specificity: +1 per static segment, 0 per dynamic
+ * (`:param`, `[param]`), -1 per wildcard. Higher means more static; sorting by
+ * it puts static first, dynamic second, wildcard last.
  * @param path The route path to evaluate.
- * @returns The specificity score (higher means more static segments).
+ * @returns The specificity score.
  */
 export const getRouteSpecificity = (path: string): number => {
     const segments = path.split('/').filter(Boolean);
@@ -78,12 +76,11 @@ export const getRouteSpecificity = (path: string): number => {
 };
 
 /**
- * Compares two routes for sorting, prioritizing those with higher specificity (more static segments).
- * Route prioritization: Static > Dynamic > Wildcard.
- * If specificity is equal, sorts alphabetically by path.
+ * Compares two routes for sorting: higher specificity first (Static >
+ * Dynamic > Wildcard), ties alphabetically by path.
  * @param a The first route to compare.
  * @param b The second route to compare.
- * @returns Negative if a comes before b, positive if b comes before a, zero if equal.
+ * @returns Negative if a comes first, positive if b does, zero if equal.
  */
 export const compareRoutes = (
     a: PageDefinition | RouteDefinition,
@@ -98,18 +95,17 @@ export const compareRoutes = (
 };
 
 /**
- * Collects all routes from the trie and returns them as an array of RouteDefinition objects.
+ * Collects all routes from the trie as `RouteDefinition` objects.
  * @param node The current node in the trie.
  * @param currentPath The current path being traversed.
  * @param routes The array of collected routes.
- * @returns An array of RouteDefinition objects.
+ * @returns The collected routes.
  */
 export function collectRoutes(
     node: TrieNode,
     currentPath: string = '',
     routes: RouteDefinition[] = []
 ): RouteDefinition[] {
-    // If this node has a route definition, add it
     if (node.route) {
         routes.push({
             ...node.route,
@@ -130,7 +126,6 @@ export function collectRoutes(
 
     // Traverse wildcard child if exists (lowest priority)
     if (node.wildcardChild) {
-        // const wildcardPath = `${currentPath}/${node.wildcardChild.wildcardParamName}`;
         const wildcardPath = `${currentPath}/${ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX}`;
         collectRoutes(node.wildcardChild, wildcardPath, routes);
     }
@@ -139,11 +134,10 @@ export function collectRoutes(
 }
 
 /**
- * Returns a copy of a per-method map (`schema.ts` / `openapi.ts` exports)
- * with uppercase method keys (`GET`) lowercased (`get`) — the form the
- * validation compiler and OpenAPI generator read. Non-method keys (e.g.
- * `coerce`) pass through. Never mutates the input (module namespaces are
- * frozen).
+ * Copies a per-method map (`schema.ts` / `openapi.ts` exports) with uppercase
+ * method keys (`GET`) lowercased (`get`) for the validation compiler and
+ * OpenAPI generator. Non-method keys (e.g. `coerce`) pass through; never
+ * mutates the input (module namespaces are frozen).
  */
 export function lowercaseMethodKeys(
     raw: Record<string, unknown> | object

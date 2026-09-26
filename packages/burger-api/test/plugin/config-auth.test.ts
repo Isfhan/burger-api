@@ -1,9 +1,7 @@
 /**
- * D4 — `config.auth === false` bypass tests for the ecosystem auth plugins.
- *
- * Auth lives in `ecosystem/plugins/` only (1.0). Each plugin must respect
- * `config.auth === false` / `config.auth.required === false` (route-level
- * opt-out from `config.ts`) and 401 otherwise.
+ * `config.auth === false` bypass tests for the ecosystem auth plugins.
+ * Each plugin respects `auth: false` / `auth: { required: false }` from
+ * `config.ts` and returns 401 otherwise.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';

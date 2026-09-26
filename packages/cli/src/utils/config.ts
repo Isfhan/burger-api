@@ -1,8 +1,7 @@
 /**
- * Build config resolution: conventions-first with optional burger.build.ts
- *
- * Used by the CLI build pipeline to discover apiDir, pageDir, and prefixes
- * without parsing the user's entry file.
+ * Build config resolution: convention defaults overridden by an optional
+ * burger.build.ts, used by the CLI build pipeline to discover apiDir,
+ * pageDir, and prefixes without parsing the user's entry file.
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -33,14 +32,14 @@ export const CONVENTION_DEFAULTS: BuildConfig = {
 const CONFIG_NAMES = [
     'burger.build.ts',
     'burger.build.js',
-    // legacy names (read-only fallback during migration)
+    // older config names, still read as a fallback
     'burger.config.ts',
     'burger.config.js',
 ];
 
 /**
- * Resolve build configuration from the project directory.
- * Uses convention defaults; overrides with burger.build.ts (or legacy burger.config.ts) if present.
+ * Resolve build configuration from the project directory: convention
+ * defaults, overridden by burger.build.ts (or burger.config.ts) if present.
  *
  * @param cwd - Project root (e.g. process.cwd())
  * @returns BuildConfig with resolved paths and prefixes
@@ -116,10 +115,10 @@ export const SHARED_SCAN_KEYS = [
 export type SharedScanKey = (typeof SHARED_SCAN_KEYS)[number];
 
 /**
- * Read the string-literal scan options from `new Burger({ ... })` in the
- * entry file. Keys whose value is not a plain string literal (variables,
- * env lookups) are reported in `dynamic` — they cannot be compared.
- * Returns undefined when the entry or its options object is not found.
+ * Read string-literal scan options from `new Burger({ ... })` in the entry
+ * file. Non-literal values (variables, env lookups) are reported in
+ * `dynamic` — they cannot be compared. Returns undefined when the entry or
+ * its options object is not found.
  */
 export function readEntryScanOptions(entryPath: string):
     | {
@@ -161,10 +160,9 @@ function resolveDirLikeRuntime(cwd: string, appDir: string, dir: string): string
 
 /**
  * Compare the scan options `burger-api dev`/`start` will use (entry file,
- * falling back to the runtime defaults) with what build/inspect/doctor use
- * (burger.build.ts over {@link CONVENTION_DEFAULTS}). Returns one
- * human-readable message per detectable disagreement — empty when they
- * agree or when the entry options cannot be read statically.
+ * else runtime defaults) with what build/inspect/doctor use (burger.build.ts
+ * over {@link CONVENTION_DEFAULTS}). Returns one message per disagreement;
+ * empty when they agree or the entry options cannot be read statically.
  */
 export function compareEntryAndBuildConfig(
     cwd: string,

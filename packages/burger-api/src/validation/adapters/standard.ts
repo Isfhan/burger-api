@@ -1,16 +1,11 @@
 /**
- * The Standard Schema adapter — brings Valibot/ArkType/`~standard` libraries
- * into BurgerAPI with no framework change.
+ * The Standard Schema adapter — supports Valibot/ArkType/`~standard`
+ * libraries with no framework change.
  *
- * Responsibilities:
- * - Compute a stable identity from the `~standard` contract (vendor + shape).
- * - Compile into a `CompiledValidator` whose `validate` calls
- * `schema['~standard'].validate` and normalizes the result into the common
- * `ValidationResult` shape.
- *
- * This adapter must NOT assume a specific library — it depends only on the
- * `~standard` contract. It is registered with the detection seam by the
- * validation compiler (explicit registration survives tree-shaking).
+ * Computes identity from the `~standard` contract and compiles into a
+ * `CompiledValidator` whose `validate` calls `schema['~standard'].validate`
+ * and normalizes the result into the common `ValidationResult` shape. Depends
+ * only on the `~standard` contract, never on a specific library.
  */
 
 import type { ValidatorAdapter } from '../adapter.js';
@@ -49,8 +44,8 @@ export const StandardAdapter: ValidatorAdapter = {
     identity(schema: SchemaInput): string {
         const std = schema as StandardSchemaV1;
         const vendor = std['~standard'].vendor ?? 'unknown';
-        // Structural fingerprint from the JSON-ish shape of the standard
-        // Use the vendor + a stable stringification.
+        // Fingerprint from the `~standard.types`, falling back to a stable
+        // stringification of the schema.
         let fingerprint: string;
         try {
             const types = std['~standard'].types;
@@ -73,12 +68,10 @@ export const StandardAdapter: ValidatorAdapter = {
 
     /**
      * Standard Schema vendors expose no reliable structural identity —
-     * `~standard.types` rarely serializes meaningfully (valibot's, for
-     * example, fingerprints every schema as `"[object Object]"`), so two
-     * different schemas can collide on one identity and the cache would
-     * validate a slot with the WRONG schema (silently stripping fields).
-     * Correctness first: always compile fresh. Compile cost is trivial —
-     * it just wraps `~standard.validate`.
+     * `~standard.types` often serializes the same for different schemas, so
+     * cache sharing could validate a slot with the WRONG schema (silently
+     * stripping fields). Correctness first: always compile fresh; the cost is
+     * trivial.
      */
     cacheable(): boolean {
         return false;
@@ -87,11 +80,9 @@ export const StandardAdapter: ValidatorAdapter = {
     compile(schema: SchemaInput, slot: ValidationSlot): CompiledValidator {
         const std = schema as StandardSchemaV1;
         const identity = this.identity(schema);
-        // Standard Schema v1 allows `~standard.validate` to be sync or async.
-        // BurgerAPI's validation pipeline is synchronous per slot, so an async
-        // validator would only fail at request time. Detect it here, at
-        // compile/registration time, so a bad schema fails fast at startup
-        // instead of throwing a 500 on the first matching request.
+        // `~standard.validate` may be sync or async; the pipeline validates
+        // synchronously per slot. Probe here so a bad schema fails fast at
+        // startup instead of throwing a 500 on the first matching request.
         let isAsync = false;
         try {
             const probe = std['~standard'].validate(undefined);
@@ -137,9 +128,8 @@ export const StandardAdapter: ValidatorAdapter = {
             slot,
             identity,
             validate,
-            // Per the Standard Schema spec, `~standard.coercible` marks
-            // schemas that transform their input during validate (e.g.
-            // Valibot `v.coerce`). Framework coercion must not run on them.
+            // `~standard.coercible` marks schemas that transform their own input
+            // during validate — framework coercion must not run on them.
             coercible: std['~standard'].coercible === true,
         };
     },

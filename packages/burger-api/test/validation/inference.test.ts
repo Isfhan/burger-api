@@ -24,8 +24,8 @@ type Equal<A, B> =
         ? true
         : false;
 
-// Declared slots (params/query/headers/cookies/body) are non-optional. Asserted via mutual assignability (the Equal trick cannot see
-// through intersections of single-key mapped types with optional members).
+// Schema-declared slots are non-optional. Asserted via mutual
+// assignability because `Equal` cannot see through mapped intersections.
 type _check1 = Expect<V extends {
     params: { id: string };
     query: { q?: string };

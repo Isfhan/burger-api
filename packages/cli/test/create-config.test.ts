@@ -47,7 +47,7 @@ describe('generateBurgerConfig', () => {
         expect(content).not.toContain('wsDir');
     });
 
-    it('includes wsDir when useWs is set (mirrors pageDir/usePages)', () => {
+    it('includes wsDir when useWs is set, like pageDir/usePages', () => {
         const content = generateBurgerConfig({
             name: 'my-api',
             useApi: true,
@@ -64,7 +64,7 @@ describe('generateBurgerConfig', () => {
     it('types the TS config with satisfies Partial<BuildConfig>', () => {
         // A scaffold only writes enabled features (no pageDir when pages are
         // off), so the config is deliberately partial; the CLI merges in
-        // convention defaults. `satisfies BuildConfig` rejected that shape.
+        // convention defaults.
         const content = generateBurgerConfig({
             name: 'x',
             useApi: true,
@@ -138,7 +138,7 @@ describe('generateIndexFile', () => {
         expect(content).not.toContain('wsDir');
     });
 
-    it('wires wsDir into the Burger() call when useWs is set (mirrors pageDir)', () => {
+    it('wires wsDir into the Burger() call when useWs is set, like pageDir', () => {
         const content = generateIndexFile({
             ...base,
             useWs: true,
@@ -322,7 +322,7 @@ describe('JS scaffold (--lang js)', () => {
     it('generateOpenAPIConfig leaves servers unset (docs call the same origin)', () => {
         const config = generateOpenAPIConfig(jsOptions);
 
-        // A hard-coded localhost:4000 broke "Try it out" on any other port.
+        // Hard-coding localhost:4000 breaks "Try it out" on other ports.
         expect(config).not.toContain('localhost:4000');
         expect(config).not.toMatch(/^\s*servers:/m);
         expect(config).toContain('// servers:');
@@ -338,10 +338,9 @@ describe('JS scaffold (--lang js)', () => {
     });
 
     it('types plugins.ts/providers.ts against the narrow registrar types, not the full Burger class', () => {
-        // Regression: these files used to be typed against the entire
-        // Burger class, exposing serve()/fetchHandler()/etc. in autocomplete
-        // — methods that are actively unsafe (or throw) if called from this
-        // registration-time callback. Each file should now only see the one
+        // Regression: typing these files against the full Burger class
+        // exposes serve()/fetchHandler() in autocomplete, which are unsafe
+        // from this registration-time callback. Each file sees only the one
         // method it exists for.
         expect(generatePluginsFile('ts')).toContain(
             "import type { PluginRegistrar } from 'burger-api';"
@@ -371,7 +370,7 @@ describe('JS scaffold (--lang js)', () => {
     });
 });
 
-describe('Scaffold typecheck hardening (U15)', () => {
+describe('Scaffold typecheck hardening', () => {
     const transpile = async (source: string): Promise<void> => {
         new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
     };

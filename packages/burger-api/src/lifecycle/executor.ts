@@ -17,16 +17,10 @@ import { isThenable } from '../utils/thenable.js';
 /**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
  *
- * Fixed forward order:
- * transform → validation → beforeRoute
- * → handler → afterRoute → mapResponse
- *
- * On throw the {@link HookPlan#onError} chain is dispatched nearest-first
- * (route → global). If no `onError` handles the error it re-throws so the
- * adapter's `errorResponse` fallback catches it.
- *
- * `applySet` (always last) is applied by the caller — the compiled
- * route+method executor in `router/compiler.ts`.
+ * Forward order: transform → validation → beforeRoute → handler → afterRoute
+ * → mapResponse. On throw the {@link HookPlan#onError} chain is dispatched
+ * nearest-first (route → global). `applySet` is applied by the caller (the
+ * compiled route+method executor in `router/compiler.ts`).
  */
 export async function executeHookPlan(
     ctx: BurgerContext,
@@ -47,11 +41,9 @@ export async function executeHookPlan(
 }
 
 /**
- * Runs the frozen {@link HookPlan} for an already-resolved handler (the
+ * Runs the frozen {@link HookPlan} for an already-resolved handler. The
  * compiled route+method path resolves the handler at compile time, so the
- * interpreter must not repeat the method lookup).
- *
- * Semantics are identical to {@link executeHookPlan} (which delegates here).
+ * interpreter must not repeat the method lookup.
  */
 export async function executeHookPlanForHandler(
     ctx: BurgerContext,
@@ -61,8 +53,7 @@ export async function executeHookPlanForHandler(
 ): Promise<Response> {
     const method = request.method;
 
-    // Empty plan: the handler runs directly (the compiled route executor
-    // takes this path synchronously; this keeps the interpreter equivalent).
+    // Empty plan: the handler runs directly.
     if (
         plan.transform === undefined &&
         plan.validation === undefined &&
@@ -86,14 +77,13 @@ export async function executeHookPlanForHandler(
 
     try {
         // 1. Transform — inject derived values onto the context. Sync
-        // factories resolve without yielding (no `await` on a plain value).
+        // factories resolve without yielding.
         if (plan.transform) {
             const transformed = applyTransform(ctx, plan.transform);
             if (isThenable(transformed)) await transformed;
         }
 
-        // 2. Validation — framework-owned stage; throws ValidationError on
-        // failure. A body-less schema validates synchronously.
+        // 2. Validation — framework-owned; throws ValidationError on failure.
         if (plan.validation) {
             const validated = plan.validation(ctx);
             if (isThenable(validated)) await validated;
@@ -102,11 +92,10 @@ export async function executeHookPlanForHandler(
         // 3. beforeRoute → handler.
         let response = await runHooks(ctx, plan.beforeRoute, handler);
 
-        // 4. Response validation — post-handler, pre-afterRoute.
-        // Validates the handler's return against declared response schemas.
+        // 4. Response validation — post-handler, pre-afterRoute; validates the
+        // handler's return against declared response schemas (JSON only).
         if (plan.validators?.response) {
             try {
-                // Only validate JSON responses.
                 const ct = response.headers.get('content-type') ?? '';
                 if (ct.includes('application/json')) {
                     // Clone to avoid consuming the body stream.
@@ -120,7 +109,7 @@ export async function executeHookPlanForHandler(
                         plan.validatorConfig ?? {},
                         plan.debug ?? isNotProductionEnv()
                     );
-                    // Enforce failure replaces the response; afterRoute /
+                    // A failure replaces the response; afterRoute /
                     // mapResponse still run on it (e.g. CORS headers).
                     if (!outcome.ok && outcome.errorResponse) {
                         response = outcome.errorResponse;
@@ -149,17 +138,13 @@ export async function executeHookPlanForHandler(
 /**
  * Dispatches an error through the `onError` hook chain (nearest-first).
  *
- * Each hook may return a `Response` to handle the error. If a hook itself
- * throws it is silently skipped (no recursion). Returns the first `Response`
- * an `onError` returns.
+ * Each hook may return a `Response` to handle the error; a hook that throws
+ * is skipped (no recursion). The thrown value is passed through unchanged —
+ * objects carrying a `status` stay intact.
  *
- * The thrown value is passed through to hooks unchanged — objects carrying
- * a `status` stay intact instead of being collapsed to
- * `Error(String(value))`.
- *
- * Default fallback: unhandled `HTTPError` renders an RFC 9457 Problem Details
- * response. `ValidationError` retains its structured error format for backward
- * compatibility. Unknown errors are wrapped in `HTTPError(500)`.
+ * Fallback: `HTTPError` renders an RFC 9457 Problem Details response,
+ * `ValidationError` keeps its structured format, unknown errors are wrapped
+ * in `HTTPError(500)`.
  */
 export async function dispatchOnError(
     error: unknown,
@@ -170,8 +155,8 @@ export async function dispatchOnError(
 ): Promise<Response> {
     for (const hook of onErrorHooks) {
         try {
-            // Runtime: hooks may receive any thrown value (Error, object,
-            // primitive). The `Error` type is the documented contract.
+            // Hooks may receive any thrown value; `Error` is the documented
+            // contract.
             const result = await hook(error as Error, ctx);
             if (result instanceof Response) {
                 return result;
@@ -181,8 +166,8 @@ export async function dispatchOnError(
         }
     }
 
-    // Default fallback: unhandled errors → RFC 9457.
-    // Dev mode: stack + cause included. Production: no internals.
+    // Fallback for unhandled errors: RFC 9457. Dev mode includes stack and
+    // cause; production exposes no internals.
     const isDev = debug ?? isNotProductionEnv();
 
     // ValidationError retains its structured format (errorsBySlot grouping).
@@ -192,8 +177,8 @@ export async function dispatchOnError(
 
     // All other HTTPError subclasses and unknown errors → RFC 9457.
     const response = renderHTTPError(error, isDev);
-    // No user onError handled a server-side failure: log it, or it would
-    // vanish (the client only sees a generic 500 in production).
+    // No onError handled a server-side failure: log it, or it would vanish
+    // (the client only sees a generic 500 in production).
     if (response.status >= 500) {
         logUnhandledError(ctx.method, ctx.url, error);
     }

@@ -6,7 +6,7 @@ import type {
     ValidationResult,
 } from '../../src/validation/types';
 
-/** A hand-built `~standard` stub (no Valibot dependency needed). */
+/** A hand-built `~standard` stub, so no validator dependency is needed. */
 function makeStub(
     ok: boolean,
     opts?: { coercible?: boolean }
@@ -74,10 +74,8 @@ describe('StandardAdapter', () => {
     });
 
     it('is not cacheable — distinct schemas must never share a cached validator', () => {
-        // Vendors like valibot fingerprint every schema identically
-        // (`~standard.types` serializes to "[object Object]"), so a cache
-        // keyed on identity would validate one slot with another schema's
-        // validator (silently stripping fields). The adapter must opt out.
+        // Standard Schema vendors fingerprint schemas identically, so an
+        // identity-keyed cache would validate one slot with another schema.
         const a = makeStub(true);
         const b = makeStub(true);
         expect(StandardAdapter.identity(a)).toBe(StandardAdapter.identity(b));

@@ -1,16 +1,7 @@
 /**
- * Regression test: reading `process.env.NODE_ENV` used to be a bare,
- * unguarded property access in three places (`lifecycle/jit.ts`,
- * `lifecycle/executor.ts` x2) — found while actually running an example
- * app under `deno serve` (no framework test previously exercised this).
- * Deno's permission model throws a `NotCapable` error on the *first*
- * `process.env` access unless `--allow-env` is granted — not just
- * `undefined` the way Node/Bun behave without the var set — so every real
- * request crashed with a 500 the moment a route needed its hook plan
- * compiled. Fixed by centralizing the read in `isNotProductionEnv()`,
- * which treats a throw the same as `process` not existing at all
- * (Cloudflare Workers without `nodejs_compat`): fall back to the
- * permissive default instead of crashing.
+ * `isNotProductionEnv()` must tolerate `process.env` access throwing, e.g.
+ * Deno without `--allow-env`, and fall back to the permissive default
+ * instead of crashing.
  */
 import { describe, it, expect } from 'bun:test';
 import { isNotProductionEnv } from '../../src/utils/env';

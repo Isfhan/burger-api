@@ -1,6 +1,5 @@
 /**
- * WebSocket compiler
- * Imports and compiles WebSocket handlers and hooks
+ * Compiles scanned WebSocket routes into executable form.
  */
 
 import type {
@@ -26,8 +25,7 @@ const WS_TRANSPORT_KEYS = [
 ] as const;
 
 /**
- * WebSocket compiler
- * Compiles scanned WebSocket routes into executable form
+ * WebSocket route compiler.
  */
 export class WebSocketCompiler {
     private globalHooks?: WebSocketHooks;
@@ -90,9 +88,8 @@ export class WebSocketCompiler {
                 (configModule.default as WebSocketConfig) ??
                 ({ ...configModule } as WebSocketConfig);
 
-            // Connection-level options are Bun.serve-wide — a per-route value
-            // cannot override what Bun enforces for the whole server. Warn
-            // loud instead of silently ignoring the author's intent.
+            // Connection-level options are Bun.serve-wide; a per-route value
+            // cannot override them, so warn loud instead of ignoring it.
             for (const key of WS_TRANSPORT_KEYS) {
                 if ((routeConfig as Record<string, unknown>)[key] !== undefined) {
                     console.warn(
@@ -104,10 +101,8 @@ export class WebSocketCompiler {
             }
         }
 
-        // Merge global and route-specific config. `auth` is merged deeply:
-        // a route-level `auth: { roles: [...] }` must not drop a global
-        // `auth: { required: true }`. Either side being `false` disables
-        // auth for the route.
+        // `auth` is merged deeply so a route-level `auth.roles` keeps a global
+        // `auth.required`; either side being `false` disables auth.
         const globalAuth = this.globalConfig.auth;
         const routeAuth = routeConfig.auth;
         const mergedConfig: WebSocketConfig = {
@@ -174,9 +169,8 @@ export class WebSocketCompiler {
 }
 
 /**
- * Merges app-level (`src/hooks.ts` onOpen/onMessage/onClose) and route WS
- * hooks — global runs first, then route. Shared by file-based, prebuilt
- * (AOT) and programmatic WebSocket routes.
+ * Merges app-level and route WS hooks — global runs first, then route.
+ * Shared by file-based, prebuilt (AOT) and programmatic routes.
  */
 export function mergeWsHooks(
     global?: WebSocketHooks,
@@ -188,7 +182,6 @@ export function mergeWsHooks(
 
     const merged: WebSocketHooks = {};
 
-    // onOpen: global runs first, then route
     if (global?.onOpen || route?.onOpen) {
         merged.onOpen = async (ws) => {
             if (global?.onOpen) await global.onOpen(ws);
@@ -196,7 +189,6 @@ export function mergeWsHooks(
         };
     }
 
-    // onMessage: global runs first, then route
     if (global?.onMessage || route?.onMessage) {
         merged.onMessage = async (ws, message) => {
             if (global?.onMessage) await global.onMessage(ws, message);
@@ -204,7 +196,6 @@ export function mergeWsHooks(
         };
     }
 
-    // onClose: global runs first, then route
     if (global?.onClose || route?.onClose) {
         merged.onClose = async (ws, code, reason) => {
             if (global?.onClose) await global.onClose(ws, code, reason);

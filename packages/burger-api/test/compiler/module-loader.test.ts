@@ -7,9 +7,8 @@ import { ModuleLoader } from '../../src/compiler/module-loader';
 import { RouteTree } from '../../src/compiler/route-tree';
 
 /**
- * Tests for the Module Loader + Route Tree: assembles RouteModule from the
- * scanner inventory. Each route directory is self-contained — no group
- * inheritance merging. Fails fast on duplicate paths.
+ * Module Loader + Route Tree tests: assembles RouteModules from the scanner
+ * inventory. Each route directory is self-contained; duplicate paths fail fast.
  */
 
 function makeTree(): string {

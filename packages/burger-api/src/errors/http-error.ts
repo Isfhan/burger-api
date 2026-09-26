@@ -1,11 +1,9 @@
 /**
- * The base HTTP error class for BurgerAPI (vision §14).
+ * Base HTTP error class for BurgerAPI.
  *
- * All framework error classes extend this. Each subclass sets a static
- * `status` code and a default `name`. The `onError` pipeline catches
- * these and renders RFC 9457 Problem Details by default.
- *
- * Subclasses: ValidationError (422), NotFoundError (404),
+ * All framework errors extend this; each subclass sets a static `status` and a
+ * default `name`. The `onError` pipeline renders them as RFC 9457 Problem
+ * Details. Subclasses: ValidationError (422), NotFoundError (404),
  * UnauthorizedError (401), ForbiddenError (403), MethodNotAllowedError (405).
  */
 
@@ -61,9 +59,8 @@ const STATUS_TITLES: Record<number, string> = {
 };
 
 /**
- * Logs an error that produced a 5xx response and was not handled by any
- * user `onError` hook — server-side only (clients get a generic body in
- * production). One line of context plus the error (with its stack).
+ * Logs a 5xx error that no user `onError` hook handled. Server-side only:
+ * one line of context plus the error and its stack.
  */
 export function logUnhandledError(
     method: string,
@@ -80,22 +77,22 @@ export function logUnhandledError(
 }
 
 /**
- * Renders any `HTTPError` (or subclass) into an RFC 9457 Problem Details
+ * Renders an `HTTPError` (or subclass) as an RFC 9457 Problem Details
  * response (`application/problem+json`).
  *
- * - In dev mode, includes `stack` and `cause` chain.
- * - In production, only `type`, `title`, `status`, `detail` are emitted,
- *   and 500 responses always carry the fixed `Internal Server Error`
- *   detail — a thrown message is never echoed to clients.
- * - Unknown (non-HTTPError) errors are wrapped in `HTTPError(500)`.
- * - The status is clamped to the HTTP range (100-599, integer); anything
- *   else renders as 500 instead of escaping as a `RangeError`.
+ * - Dev mode adds `stack` and the `cause` chain; production emits only
+ *   `type`, `title`, `status`, `detail`.
+ * - 500 responses always carry the fixed `Internal Server Error` detail — a
+ *   thrown message is never echoed to clients.
+ * - Non-HTTPError values are wrapped in `HTTPError(500)`.
+ * - The status is clamped to 100-599 (integer); anything else renders as 500
+ *   instead of escaping as a `RangeError`.
  *
  * @param error The error to render.
  * @param isDev Whether to include dev diagnostics (stack, cause).
- * @param extras Optional extra members merged into the problem body (e.g.
- * `{ errors }` for validation failures). Spread after the defaults, so they
- * can override `title`/`detail`.
+ * @param extras Optional members merged into the problem body (e.g.
+ * `{ errors }` for validation failures); spread last, so they can override
+ * `title`/`detail`.
  */
 export function renderHTTPError(
     error: unknown,
@@ -115,8 +112,8 @@ export function renderHTTPError(
                   error instanceof Error ? { cause: error } : undefined
               );
 
-    // Clamp to a valid HTTP status; garbage must render as 500, never
-    // escape as a `RangeError` from the `Response` constructor.
+    // Clamp to a valid HTTP status; junk renders as 500, never throws a
+    // `RangeError` from the `Response` constructor.
     const rawStatus = httpError.status;
     const status =
         Number.isInteger(rawStatus) && rawStatus >= 100 && rawStatus <= 599

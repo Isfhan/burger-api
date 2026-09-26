@@ -1,24 +1,7 @@
 /**
- * Regression test: `burger-api build:exec` compiles a standalone binary
- * that must actually boot and serve requests on its own, with no Bun
- * install or node_modules alongside it at runtime.
- *
- * Found via manual testing: `core/server.ts` resolves the Bun adapter via
- * a deliberately non-static specifier
- * (`['burger-api','adapter','bun'].join('/')`) so bundlers never pull
- * `import 'bun'` into WinterCG (Cloudflare/Vercel/Deno) bundles — safe for
- * `dev`/`build`, where a real `node_modules` still exists alongside the
- * output at runtime. `build:exec` output has none: Bun's compiler can only
- * embed a dynamic import whose specifier is a literal string at the call
- * site, so the computed specifier was left unresolved and every compiled
- * binary crashed on startup with "Cannot find module
- * 'burger-api/adapter/bun'" — 100% reproducible, never caught by the
- * `bun run build` (non-exec) tests because that path never hits this code.
- *
- * Fixed in `virtual-entry.ts`: when compiling, the generated entry
- * statically imports `BunAdapter` and injects it via the framework's
- * existing `ServerOptions.adapter` seam, bypassing the dynamic import
- * entirely for this one build target.
+ * Regression: `burger-api build:exec` output must boot standalone with no
+ * node_modules alongside it. The entry statically imports BunAdapter and
+ * injects it via ServerOptions.adapter instead of a runtime dynamic import.
  */
 import { afterAll, describe, expect, it } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
@@ -29,8 +12,8 @@ import { createProject } from '../../src/utils/templates';
 import type { CreateOptions } from '../../src/types';
 import { getAvailablePort } from '../test-utils';
 
-// Same rationale as scaffold-e2e.test.ts: `file:`, not `link:`, to avoid
-// the packages/burger-api/examples/* symlink cycle.
+// `file:` not `link:`, to avoid the packages/burger-api/examples/* symlink
+// cycle (see scaffold-e2e.test.ts).
 const LOCAL_BURGER_API_PATH = resolve(import.meta.dir, '../../../burger-api');
 
 const E2E_TIMEOUT = 240_000;
@@ -59,10 +42,8 @@ async function killTree(pid: number): Promise<void> {
 const createdDirs: string[] = [];
 afterAll(async () => {
     for (const dir of createdDirs) {
-        // Windows briefly holds the just-run .exe's file handle open even
-        // after `taskkill` returns (the process record isn't reaped
-        // instantly) — retry the removal instead of failing the whole
-        // suite on a transient EPERM.
+        // Windows briefly holds the just-run .exe open even after taskkill;
+        // retry the removal instead of failing on a transient EPERM.
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
                 await rm(dir, { recursive: true, force: true });
@@ -96,8 +77,8 @@ describe('E2E build:exec', () => {
             const pkgPath = join(dir, 'package.json');
             const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
             pkg.dependencies['burger-api'] = `file:${LOCAL_BURGER_API_PATH}`;
-            // The CLI under test runs from source; the (unpublished) @burger-api/cli
-            // devDependency would make `bun install` fail offline.
+            // The CLI runs from source; the unpublished @burger-api/cli
+            // devDependency would break offline installs.
             delete pkg.devDependencies?.['@burger-api/cli'];
             await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
 
@@ -150,9 +131,8 @@ describe('E2E build:exec', () => {
             await killTree(proc.pid);
             const [stderr] = await Promise.all([errReader, outReader]);
 
-            // The original bug's exact symptom: a "Cannot find module" crash
-            // in stderr and status staying -1 (the process never served
-            // anything, not even a 404).
+            // A failed boot shows "Cannot find module" in stderr and leaves
+            // status at -1.
             expect(stderr).not.toContain('Cannot find module');
             expect(status).toBe(200);
         },

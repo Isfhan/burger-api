@@ -1,6 +1,5 @@
 /**
- * WebSocket directory scanner
- * Scans the WebSocket directory for ws.ts / ws.js / ws.mjs files
+ * Scans a directory tree for WebSocket convention files.
  */
 
 import { readdir } from 'node:fs/promises';
@@ -123,8 +122,7 @@ export class WebSocketScanner {
     }
 
     /**
-     * Recursively walks the directory and emits ScannedWebSocketRoute
-     * when a ws.ts file is found.
+     * Recursively walks the directory, emitting a route per ws file found.
      */
     private async walk(
         dir: string,
@@ -191,10 +189,9 @@ export class WebSocketScanner {
             });
         }
 
-        // Process subdirectories
+        // Process subdirectories. Group directories only affect the URL but
+        // are still walked.
         for (const subDir of subDirs) {
-            // Skip group directories (they only affect URL)
-            // but still recurse into them
             await this.walk(path.join(dir, subDir), out);
         }
     }
@@ -227,7 +224,6 @@ export class WebSocketScanner {
             routeParts.push(part);
         }
 
-        // Build final path with prefix
         const routePath = '/' + routeParts.join('/');
         return this.prefix
             ? `/${this.prefix}${routePath}`.replace(/\/+/g, '/')

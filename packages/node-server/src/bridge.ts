@@ -2,13 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 
 /**
- * burger-api ships `toFetchHandler` — a Web-Standard
- * `(request: Request) => Promise<Response>` — but no way to feed it from
- * `node:http` on its own. This is that bridge: converts a real
- * `IncomingMessage` into a Fetch API `Request`, and writes a `Response`
- * back onto a real `ServerResponse`. Extracted and hardened from a
- * hand-built example verified end-to-end (GET/POST/validation/404,
- * streaming bodies) before being promoted into this package.
+ * Bridges `node:http` to `toFetchHandler`: converts an `IncomingMessage`
+ * into a Fetch API `Request`, and writes a `Response` back onto a
+ * `ServerResponse`.
  */
 
 /** Converts a `node:http` request into a Fetch API `Request`. */

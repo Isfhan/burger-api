@@ -1,11 +1,8 @@
 /**
- * Real, end-to-end tests for `list`/`skills available`'s stale-cache
- * fallback (Phase D: cache ecosystem discovery so these commands don't
- * hit GitHub on every invocation, and degrade gracefully when GitHub is
- * unreachable). Points BURGER_API_REPO_OWNER at a repo that genuinely
- * does not exist — a real network call to a real, deterministic 404, not
- * a mock — so a live refresh always fails, and pre-warms the cache so
- * there's something to fall back to.
+ * End-to-end tests for `list`/`skills available`'s stale-cache fallback.
+ * Points BURGER_API_REPO_OWNER at a repo that does not exist — a real
+ * deterministic 404, not a mock — so a live refresh always fails, and
+ * pre-warms the cache so there is something to fall back to.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';
@@ -26,8 +23,8 @@ async function runCliIn(
         env: {
             ...process.env,
             BURGER_API_CACHE_DIR: cacheDir,
-            // A repo that does not exist — the live refresh this forces
-            // always 404s, exercising the stale-fallback path for real.
+            // A nonexistent repo — live refresh always 404s, exercising
+            // the stale-fallback path for real.
             BURGER_API_REPO_OWNER: 'isfhan',
             BURGER_API_REPO_NAME: 'burger-api-does-not-exist-xyz',
         },

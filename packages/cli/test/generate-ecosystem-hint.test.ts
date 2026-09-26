@@ -1,10 +1,7 @@
 /**
- * Real, end-to-end test for `generate hook/plugin`'s ecosystem-catalog
- * hint (Phase D: DRY the generate/add split). Spawns the actual CLI
- * (matching `cli-process-exit.test.ts`/`inspect-doctor-json.test.ts`)
- * against a real temp project, with a pre-warmed cache file (via
- * `BURGER_API_CACHE_DIR`) so the check never touches the network — this
- * tests the hint's behavior, not GitHub's availability.
+ * End-to-end test for `generate hook/plugin`'s ecosystem-catalog hint.
+ * Spawns the real CLI against a temp project with a pre-warmed cache (via
+ * BURGER_API_CACHE_DIR), so it never touches the network.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';
@@ -46,8 +43,7 @@ beforeEach(async () => {
         })
     );
 
-    // Pre-warm the cache with a known catalog entry — real components this
-    // repo actually ships, per ecosystem/hooks and ecosystem/plugins.
+    // Pre-warm the cache with real catalog entries this repo ships.
     await writeFile(
         join(cacheDir, 'component-list.json'),
         JSON.stringify({

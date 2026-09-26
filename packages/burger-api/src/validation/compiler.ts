@@ -1,17 +1,11 @@
 /**
- * The schema preparation component — the core of Validation 2.0
- *.
+ * The schema preparation component — compiles a `RouteSchema` into
+ * `CompiledRouteValidators`.
  *
- * Responsibilities:
- * - Walk a `RouteSchema` and prepare each slot into a `CompiledValidator`.
- * - Detect the adapter (connector) per slot; compute identity; consult the
- * cache.
- * - Build coercion plans and response validators when present.
- *
- * This runs ONCE per route when it is set up (before `serve()`). It never
- * executes when a request comes in and never throws on a per-request path
- *. Every schema is prepared a single time; identical
- * schemas (by reference) share one cached validator.
+ * Walks each slot, detects its adapter, computes identity, and consults the
+ * cache; builds coercion plans and response validators when present. Runs
+ * ONCE per route when it is set up (before `serve()`), never per request.
+ * Identical schemas (by reference) share one cached validator.
  */
 
 import type { RouteSchema, MethodSchema } from '../types/index.js';

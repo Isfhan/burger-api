@@ -1,11 +1,4 @@
-/**
- * List Command
- *
- * Shows users all available hooks and plugins they can add to their project.
- * Fetches the list from GitHub and displays it in a nice table format.
- *
- * Example: burger-api list
- */
+/** List command — shows ecosystem hooks and plugins in a table. */
 
 import { Command } from 'commander';
 import { getCachedComponentCatalog } from '../utils/github';
@@ -21,25 +14,22 @@ import {
     warning,
 } from '../utils/logger';
 
-/**
- * Create the "list" command
- * This shows all available hooks and plugins from the ecosystem
- */
+/** `burger-api list` — show ecosystem hooks and plugins. */
 export const listCommand = new Command('list')
     .description('Show available hooks and plugins from the ecosystem')
-    .alias('ls') // Allow users to type "burger-api ls" too
+    .alias('ls')
     .action(async () => {
         try {
             await withSpinner(
                 'Fetching hooks and plugins list from GitHub...',
                 async (spin) => {
-                    // Names, kinds and descriptions are cached together: a
-                    // warm cache makes no GitHub calls at all.
+                    // Names, kinds and descriptions are cached together —
+                    // a warm cache makes no GitHub calls.
                     const { data: components, stale } =
                         await getCachedComponentCatalog();
 
                     // No success marker when GitHub was unreachable — the
-                    // warning below explains what is shown instead.
+                    // warning below explains what is shown.
                     spin.stop(
                         stale ? undefined : 'Found available hooks and plugins!'
                     );

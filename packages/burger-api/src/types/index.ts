@@ -123,20 +123,17 @@ export interface ServerOptions {
     validation?: ValidatorConfig;
 
     /**
-     * JIT-compile each route's HookPlan into a single async function
-     * (Fastify-style codegen). ON by default (+3% measured on hook-carrying
-     * routes, burger-api-benchmarks `optimize/hooks-*`). Capability-probed
-     * at startup: runtimes that forbid dynamic code generation (Cloudflare
-     * Workers) silently keep the interpreter. Set `false` to opt out.
+     * JIT-compile each route's HookPlan into a single async function.
+     * ON by default; capability-probed at startup, so runtimes that forbid
+     * dynamic code generation (Cloudflare Workers) silently keep the
+     * interpreter. Set `false` to opt out.
      */
     jit?: boolean;
 
     /**
      * Dynamic-route dispatch engine for the fetch-fallback path.
-     * `'auto'` (default) and `'trie'` use the radix trie — the measured
-     * winner (burger-api-benchmarks `optimize/many-*`). `'regex'` opts into
-     * the Hono-style compiled alternation matcher. Static dispatch is
-     * unaffected.
+     * `'auto'` (default) and `'trie'` use the radix trie; `'regex'` opts into
+     * a compiled regex alternation matcher. Static dispatch is unaffected.
      */
     engine?: 'auto' | 'regex' | 'trie';
 
@@ -405,7 +402,7 @@ export interface BuildConfig {
  * Without augmentation, `ctx.config` is typed as the empty `RouteConfig`,
  * so unknown keys fail at compile time. Augment to unlock them.
  *
- * Core itself only honors `responseValidation`; keys such as `auth`,
+ * Core itself only reads `responseValidation`; keys such as `auth`,
  * `cache` or `timeout` do nothing unless a plugin or hook reads them.
  */
 export interface RouteConfig {}

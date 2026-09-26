@@ -38,20 +38,16 @@ const RESERVED = new Set([
 export const TRANSFORM_RESERVED = RESERVED;
 
 /**
- * Applies `transform` factories onto a context instance.
+ * Applies `transform` factories onto a context instance: each factory is
+ * called with the context and its result shallow-assigned. Reserved keys
+ * (built-ins plus prototype hazards) are dropped with a `console.warn` in
+ * debug mode.
  *
- * For each entry in the transform map, the factory is called with the context
- * and the result is shallow-assigned onto the context object. Reserved keys
- * (built-in properties like `params`, `query`, `body`, etc.) are silently
- * dropped with a `console.warn` in debug mode.
+ * Runs once per request, before validation and `beforeRoute`. Global entries
+ * apply first, then route-level ones (so a route can override globals).
  *
- * This runs once per request, before validation and before `beforeRoute`.
- * Order: global `transform` entries are applied first, then route-level entries
- * (so route can reference or override global-transformed values).
- *
- * Sync-first: factories that return a plain value are assigned without an
- * `await` (no microtask). Only a factory that actually returned a thenable
- * switches to the async continuation.
+ * Sync-first: a plain value is assigned without an `await`; only a thenable
+ * result switches to the async continuation.
  */
 export function applyTransform(
     ctx: BurgerContext,

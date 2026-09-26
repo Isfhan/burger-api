@@ -26,13 +26,10 @@ import { basename, dirname, relative, resolve } from 'path';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
 
 /**
- * Portable entries (cloudflare/deno/vercel) are bundled later by the
- * platform's own tool, often on another machine (CI), so they must not
- * embed this machine's absolute paths (`C:/Users/.../route.ts`). Every
- * absolute import — and, with `sourceDir`, every relative import written
- * for a file that lived in `sourceDir` — is rewritten relative to `outDir`.
- * Relative specifiers are also spec-legal for Deno (bare absolute paths are
- * rejected there). Bare package specifiers (`burger-api`) are untouched.
+ * Rewrite absolute imports — and, with `sourceDir`, relative ones written
+ * for that directory — to be relative to `outDir`: portable entries are
+ * bundled later, possibly on another machine, so they must not embed this
+ * machine's paths. Bare package specifiers (`burger-api`) are untouched.
  */
 function rewriteImportsRelativeTo(
     source: string,
@@ -55,11 +52,9 @@ function rewriteImportsRelativeTo(
 }
 
 /**
- * App-level convention files live next to the entry file (like the
- * runtime scanner): `hooks`, `plugins`, `providers`, `openapi.config` with
- * `.ts`, `.js` or `.mjs` — a JS project's `src/hooks.js` must reach the
- * production bundle just like `src/hooks.ts`. Two variants of one file
- * fail loud.
+ * Find app-level convention files next to the entry file: `hooks`,
+ * `plugins`, `providers`, `openapi.config` with `.ts`, `.js` or `.mjs`.
+ * Two variants of one file fail loud.
  */
 export function scanAppConventions(
     appDir: string
@@ -104,13 +99,12 @@ export async function runVirtualEntryBuild(options: {
     outfile: string;
     /**
      * Raw Bun.build target passthrough: a compile OS/arch triple when
-     * `compile` is true (`build:exec`'s `--target`), or the legacy
-     * `--target=browser` client-bundle escape hatch. Independent of
-     * `platformTarget` below — most callers should leave this unset.
+     * `compile` is true (`build:exec`'s `--target`), or `--target=browser`
+     * for a client bundle. Most callers should leave this unset.
      */
     target?: string;
     /**
-     * Deployment platform for `burger-api build --target`. Defaults to
+     * Deployment platform for `burger-api build --target`; defaults to
      * `burger.build.ts`'s `target`, then `'bun'`. Ignored when `compile` is
      * true — `--compile` only ever produces a Bun binary.
      */
@@ -121,8 +115,8 @@ export async function runVirtualEntryBuild(options: {
     bytecode?: boolean;
 }): Promise<VirtualBuildResult> {
     const config = await resolveBuildConfig(options.cwd);
-    // dev/start read the entry file's options; the build reads burger.build.
-    // Never let the two disagree silently.
+    // dev/start read options from the entry file; the build reads
+    // burger.build. Warn when the two disagree.
     for (const msg of compareEntryAndBuildConfig(
         options.cwd,
         options.entryFile,
@@ -214,19 +208,14 @@ export async function runVirtualEntryBuild(options: {
             platformTarget === 'deno' ||
             platformTarget === 'vercel'
         ) {
-            // No Bun.build here — these targets have no long-running process
-            // to bundle for; the platform's own tool (wrangler/deno/vercel)
-            // bundles the portable source file directly, the same way the
-            // hand-written deploy examples already do. That tool runs later,
-            // in a separate process, so (unlike the Bun.build path) nothing
-            // this build produces can be a transient temp file — including
-            // the entry-options module, which the outer `finally` deletes.
+            // No Bun.build here: wrangler/deno/vercel bundle the portable
+            // source later, in a separate process, so nothing written here
+            // may be a transient temp file — including the entry-options
+            // module the outer `finally` deletes.
             const outPath = resolve(options.cwd, options.outfile);
             const portableOutDir = dirname(outPath);
-            // Clean the target output dir first so files from an earlier
-            // build never ship alongside the new entry. Only `.build/**`
-            // is cleared wholesale — a custom --outfile may share its
-            // directory with unrelated user files.
+            // Clear `.build/**` first so an earlier build's files never ship
+            // with the new entry; a custom --outfile dir may hold user files.
             const relOutDir = relative(options.cwd, portableOutDir)
                 .split('\\')
                 .join('/');
@@ -244,7 +233,7 @@ export async function runVirtualEntryBuild(options: {
                     portableOutDir,
                     basename(entryOptions.tempFilePath)
                 );
-                // The options module carries the entry file's prelude, whose
+                // The options module carries the entry's prelude; its
                 // relative imports were written for `src/` — re-point them.
                 writeFileSync(
                     optionsDest,
@@ -294,11 +283,10 @@ export async function runVirtualEntryBuild(options: {
                 cwd: options.cwd,
                 outfile: options.outfile,
                 // `compile` (build:exec) uses `options.target` as a Bun
-                // compile OS/arch triple (e.g. 'bun-windows-x64') and must
-                // stay undefined when the caller didn't ask for one — Bun's
-                // compiler then defaults to the current platform. Only the
-                // regular bundling path derives its Bun.build `target`
-                // (bundler output format) from the deployment platform.
+                // compile OS/arch triple (e.g. 'bun-windows-x64') and stays
+                // undefined when unset (Bun then targets the current
+                // platform). Otherwise derive the Bun.build `target` from the
+                // deployment platform.
                 target: options.compile
                     ? options.target
                     : (options.target ??

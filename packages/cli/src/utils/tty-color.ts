@@ -1,15 +1,14 @@
 /**
  * Plain-text output on a non-TTY.
  *
- * The CLI's own logger and spinners already detect a non-TTY, but
- * `@clack/prompts` colors through `picocolors` (CJS), which enables ANSI
- * unconditionally on win32 and is evaluated by Bun before any ESM module
- * body runs — so setting `NO_COLOR` here is too late for it. Belt and
- * braces: set the flag (helps anything loaded later) and strip SGR
- * sequences from both output streams. An explicit `FORCE_COLOR` wins.
+ * The logger and spinners detect a non-TTY themselves, but `@clack/prompts`
+ * colors through `picocolors` (CJS) with ANSI enabled on win32, and that
+ * loads before any ESM body runs — so setting NO_COLOR here is too late for
+ * it. Set the flag anyway and strip SGR sequences from both output streams;
+ * an explicit FORCE_COLOR wins.
  *
- * Imported first from the entry point so the patch is installed before any
- * command module can print.
+ * Imported first from the entry point so the patch lands before any command
+ * module can print.
  */
 const ANSI_SGR = /\x1b\[[0-9;]*m/g;
 

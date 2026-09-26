@@ -1,10 +1,6 @@
-// Import stuff from node
-// NOTE: Bun has no native recursive directory walker, so we use Node's
-// `fs/promises` via Bun's Node compatibility layer (AGENTS Rule 12 exception:
-// no `Bun.*` equivalent exists for directory traversal). The original
-// `readdirSync` has been replaced with the async `readdir`. `node:path` is
-// only used for OS-agnostic path string joining (`pathConversion.ts` relies
-// on `path.sep`); no other Node-specific APIs are used.
+// Bun has no native recursive directory walker, so traversal uses Node's
+// `fs/promises` via Bun's compatibility layer. `node:path` is only used for
+// OS-agnostic path string joins.
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -22,18 +18,16 @@ import { filePathToPageRoutePath } from '../utils/pathConversion.js';
 import type { PageDefinition, RequestHandler } from '../types/index.js';
 
 /**
- * PageRouter class for handling file-based page routing.
- * Loads pages from a directory structure and matches requests to the appropriate page handlers.
- * Supports dynamic segments (e.g., [id]) and uses default exports as page handlers.
+ * File-based page router: loads pages from a directory tree, matches requests,
+ * and supports dynamic segments (e.g. `[id]`). Default exports are handlers.
  */
 export class PageRouter {
     /** Array of loaded page definitions */
     public pages: PageDefinition[] = [];
 
     /**
-     * Constructor for the PageRouter class.
-     * @param pagesDir The directory path where page modules are located.
-     * @param prefix Optional prefix to prepend to all routes (e.g., "pages" becomes "/pages/...").
+     * @param pagesDir Directory containing page modules.
+     * @param prefix Optional prefix for every route (e.g. "pages" → "/pages/...").
      */
     constructor(
         private pagesDir: string,
@@ -43,26 +37,20 @@ export class PageRouter {
             throw new Error('Pages directory path must be provided');
         }
 
-        // Normalize the pagesDir path
         this.pagesDir = path.normalize(resolveScanDir(pagesDir, 'Pages', 'pageDir'));
 
-        // Normalize the prefix if provided
         if (prefix) {
             this.prefix = cleanPrefix(prefix);
         }
     }
 
     /**
-     * Loads page modules from the specified directory and adds them to the pages array.
-     * After loading, sorts the pages to prioritize static routes over dynamic ones based on specificity.
-     * @returns A promise that resolves when all page modules have been loaded and sorted.
+     * Loads and sorts page modules (static routes before dynamic ones).
      */
     public async loadPages(): Promise<void> {
-        // Clear the pages array
         this.pages = [];
         try {
             await this.scanDirectory(this.pagesDir);
-            // Sort pages to ensure static routes are matched before dynamic ones
             this.pages.sort((a, b) => compareRoutes(a, b));
         } catch (error) {
             console.error('Failed to load pages:', error);
@@ -75,15 +63,15 @@ export class PageRouter {
     }
 
     /**
-     * Recursively scans the directory for page modules and adds them to the pages array.
-     * @param dir The current directory to scan.
-     * @param basePath The base path for constructing the route path.
+     * Recursively scans `dir` for page modules.
+     * @param dir Directory to scan.
+     * @param basePath Base path used to build route paths.
      */
     private async scanDirectory(
         dir: string,
         basePath: string = ''
     ): Promise<void> {
-        // Track if a dynamic folder has been found at this directory level
+        // Tracks whether a dynamic folder was already seen at this level.
         let dynamicFolderFound = false;
 
         try {
@@ -137,22 +125,18 @@ export class PageRouter {
                         this.prefix
                     );
 
-                    // Import the module. `.html` files are imported as raw
-                    // markup — Bun's default `.html` import yields an
-                    // HTMLBundle object that only Bun.serve understands
-                    // (it would crash on `toFetchHandler`).
+                    // `.html` files are imported as raw markup — Bun's default
+                    // `.html` import yields an HTMLBundle that would crash on
+                    // `toFetchHandler`.
                     const isHtmlPage = entry.name.endsWith('.html');
                     const modulePath = path.resolve(
                         isHtmlPage ? entryPath + '?raw' : entryPath
                     );
 
-                    // Import the module
                     const pageModule = await import(modulePath);
 
-                    // Get the default export as the page handler. `.tsx`
-                    // pages must export a function; `.html` pages export
-                    // the raw markup string — wrap it so both Bun and
-                    // WinterCG serve it as text/html.
+                    // `.tsx` pages export a function; `.html` pages export raw
+                    // markup — wrap it so both Bun and WinterCG serve text/html.
                     let handler: RequestHandler;
                     if (typeof pageModule.default === 'function') {
                         handler = pageModule.default;
@@ -170,19 +154,16 @@ export class PageRouter {
                         );
                     }
 
-                    // Create page definition
                     const pageDefWithSlash: PageDefinition = {
                         path: cleanedRoutePath + '/',
                         handler,
                     };
 
-                    // Create page definition
                     const pageDef: PageDefinition = {
                         path: cleanedRoutePath,
                         handler,
                     };
 
-                    // Add the page definition to the pages array
                     this.pages.push(pageDefWithSlash, pageDef);
                 }
             }
@@ -193,9 +174,9 @@ export class PageRouter {
     }
 
     /**
-     * Resolves the given request by finding a matching page and extracting dynamic parameters.
+     * Finds the page matching the request and extracts dynamic params.
      * @param request The request to resolve.
-     * @returns An object containing the matched page and parameters, or an empty params object if no match.
+     * @returns The matched page + params, or empty params when nothing matches.
      */
     public resolve(request: Request): {
         page?: PageDefinition;
@@ -222,10 +203,10 @@ export class PageRouter {
     }
 
     /**
-     * Checks if the request path matches the page path, extracting dynamic parameters if matched.
+     * Matches a request path against a page path.
      * @param requestPath The request path to check.
      * @param pagePath The page path to match against.
-     * @returns A record of dynamic parameters if matched, otherwise null.
+     * @returns Captured params when matched, otherwise null.
      */
     private matchRoute(
         requestPath: string,
@@ -247,8 +228,8 @@ export class PageRouter {
                 const paramName = pSegment.slice(
                     ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length
                 );
-                // Percent-decode the captured value (`caf%C3%A9` → `café`);
-                // fall back to the raw segment on malformed encoding.
+                // Percent-decode the captured value; fall back to the raw
+                // segment on malformed encoding.
                 try {
                     params[paramName] = decodeURIComponent(reqSegment);
                 } catch {

@@ -29,12 +29,10 @@ export interface TimeoutOptions {
 /**
  * Creates a timeout GUARD hook that replaces late responses with 408.
  *
- * Limitation: lifecycle hooks cannot wrap the handler — a `beforeRoute`
- * hook runs before it and its after-mapper only runs once the handler has
- * finished. So this hook cannot respond AT the deadline: a slow handler
- * still keeps the client waiting until it resolves, and only then is its
- * response swapped for a 408. To actually respond at the deadline with a
- * 504, wrap the handler with {@link withTimeout} in `route.ts`.
+ * A hook can't wrap the handler, so a slow handler still keeps the client
+ * waiting until it resolves; only then is its response swapped for a 408.
+ * To respond at the deadline with a 504, wrap the handler with
+ * {@link withTimeout}.
  *
  * @param options - Configuration options for timeout behavior
  * @returns A hook function that replaces over-budget responses with 408
@@ -50,10 +48,8 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
     const timeoutResponse = createTimeoutResponse(options);
 
     return (_ctx: BurgerContext): ForwardHookResult => {
-        // Start timer when the hook runs
         const startTime = Date.now();
 
-        // Return function to check timeout after handler completes
         return async (response: Response): Promise<Response> => {
             // Over budget: replace the late response.
             if (Date.now() - startTime >= ms) {
@@ -68,10 +64,10 @@ export function requestTimeout(options: TimeoutOptions = {}): (ctx: BurgerContex
  * Wraps a route handler so the client gets a 504 **at the deadline**.
  *
  * The handler receives a second argument, an `AbortSignal` that aborts at
- * the deadline (or when the client disconnects). JavaScript cannot cancel a
- * running function: after the 504 is sent the handler keeps running in the
- * background unless it passes the signal on (e.g. `fetch(url, { signal })`)
- * or checks `signal.aborted`.
+ * the deadline (or when the client disconnects). JavaScript can't cancel a
+ * running function: after the 504 is sent the handler keeps running unless
+ * it passes the signal on (e.g. `fetch(url, { signal })`) or checks
+ * `signal.aborted`.
  *
  * @example
  * ```typescript

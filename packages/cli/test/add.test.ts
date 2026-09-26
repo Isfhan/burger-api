@@ -13,9 +13,8 @@ describe('hyphenToCamelCase', () => {
 });
 
 describe('resolveExportName', () => {
-    // Regression: a naive hyphen->camelCase conversion of the directory name
-    // does NOT reliably predict the real export — these packages' primary
-    // factory is named differently from their directory.
+    // Regression: the directory name does not always match the real export —
+    // a package's primary factory may be named differently.
     it('resolves the real primary export, not a guess from the directory name', () => {
         const cases: [string, string, string][] = [
             ['hooks', 'rate-limiter', 'rateLimit'],

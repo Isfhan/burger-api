@@ -1,8 +1,6 @@
 /**
- * B4 — validation fast-path behavior parity:
- * media-type parsing (case, parameters, `+json`), the blank content-type
- * error, the headers slot (Bun `Headers.toJSON()` path) and the cookies slot
- * reusing `ctx.cookies`.
+ * Validation fast-path behavior: media-type parsing (case, parameters,
+ * `+json`), blank content-type errors, and the headers and cookies slots.
  */
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
@@ -33,7 +31,7 @@ function bodyRouter() {
         );
 }
 
-describe('B4 — body media-type gate', () => {
+describe('body media-type gate', () => {
     it('accepts application/json with parameters', async () => {
         const post = bodyRouter();
         const res = await post('application/json; charset=utf-8');
@@ -75,7 +73,7 @@ describe('B4 — body media-type gate', () => {
     });
 });
 
-describe('B4 — headers and cookies slots', () => {
+describe('headers and cookies slots', () => {
     it('validates headers from mixed-case names via Headers.toJSON()', async () => {
         const defs = [
             {

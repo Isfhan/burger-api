@@ -1,11 +1,7 @@
 /**
- * Build Commands
- *
- * Two commands for packaging your Burger API project:
- * 1. `burger-api build <file>` — Bundle to .build/bundle/
- * 2. `burger-api build:exec <file>` — Compile to .build/executable/
- *
- * Both use build-time (AOT) route discovery — no filesystem scanning at runtime.
+ * Build commands — `build` bundles to .build/bundle/ and `build:exec`
+ * compiles to .build/executable/. Both use build-time (AOT) route
+ * discovery, with no filesystem scanning at runtime.
  */
 
 import { Command } from 'commander';
@@ -54,11 +50,9 @@ function defaultOutfile(
 }
 
 /**
- * Validates `--target`. `'browser'` is accepted as a legacy escape hatch
- * (raw `Bun.build({ target: 'browser' })` passthrough for bundling
- * client-side code) and is not a deployment platform — it never reaches
- * `RUNTIME_CAPABILITIES` or the codegen branch, so it isn't included in the
- * error's list of real targets.
+ * Validate `--target`. `'browser'` is a passthrough for bundling client-side
+ * code, not a deployment platform — it never reaches `RUNTIME_CAPABILITIES`
+ * or the codegen branch.
  */
 function validatePlatformTarget(raw: string | undefined): RuntimeTarget {
     if (!raw) return 'bun';
@@ -136,17 +130,10 @@ interface BuildExecutableOptions {
 /**
  * `burger-api build <file>`
  *
- * Bundles your project into .build/bundle/ using AOT route discovery.
- *
- * Output:
- * .build/bundle/
- * app.js — Bun server (run with: bun .build/bundle/app.js)
- * index.html — HTML pages (flat, one per page route)
- * style-[hash].css — CSS assets (flat)
- * app-[hash].js — JS chunks (flat)
- *
- * API-only projects: app.js is a self-contained single file.
- * Projects with HTML pages: deploy the entire .build/bundle/ directory.
+ * Bundles the project into .build/bundle/ using AOT route discovery.
+ * API-only projects produce a self-contained `app.js`; projects with HTML
+ * pages also get flat index.html / style-[hash].css / app-[hash].js assets,
+ * so deploy the whole directory.
  */
 export const buildCommand = new Command('build')
     .description('Build your project for a deployment target')
@@ -304,9 +291,9 @@ export const buildCommand = new Command('build')
 /**
  * `burger-api build:exec <file>`
  *
- * Compiles your project into a standalone binary in .build/executable/.
- * The binary is fully self-contained — no Bun installation required on the target.
- * All routes, pages, and assets are embedded inside the binary.
+ * Compiles the project into a standalone binary in .build/executable/ with
+ * all routes, pages, and assets embedded. No Bun installation is required
+ * on the target.
  */
 export const buildExecutableCommand = new Command('build:exec')
     .description(

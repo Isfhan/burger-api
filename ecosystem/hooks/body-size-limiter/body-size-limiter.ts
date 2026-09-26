@@ -35,11 +35,9 @@ export interface BodySizeLimiterOptions {
 }
 
 /**
- * Creates a body size limiter hook to prevent large payload attacks.
- *
- * This hook checks the size of incoming request bodies and rejects
- * requests that exceed the specified limit. It helps prevent DoS attacks
- * and protects server resources.
+ * Creates a hook that rejects request bodies over `maxSize` (default 1MB)
+ * to protect against oversized-payload attacks. Header mode checks
+ * `Content-Length`; stream mode measures the body itself.
  *
  * @param options - Configuration options for body size limiting
  * @returns A hook function that enforces body size limits
@@ -52,24 +50,8 @@ export interface BodySizeLimiterOptions {
  * // Custom limit: 10MB
  * const bodySizeLimit = bodySizeLimiter({ maxSize: 10 * 1024 * 1024 });
  *
- * // Strict mode: actually measure body size
- * const bodySizeLimit = bodySizeLimiter({
- *   maxSize: 1024 * 1024,
- *   mode: 'stream'
- * });
- *
- * // Custom error message
- * const bodySizeLimit = bodySizeLimiter({
- *   maxSize: 5 * 1024 * 1024,
- *   onError: (size, max) => Response.json(
- *     {
- *       error: 'Payload too large',
- *       received: `${(size / 1024 / 1024).toFixed(2)}MB`,
- *       maximum: `${(max / 1024 / 1024).toFixed(2)}MB`
- *     },
- *     { status: 413 }
- *   )
- * });
+ * // Measure the body even without a Content-Length header
+ * const strictLimit = bodySizeLimiter({ mode: 'stream' });
  * ```
  */
 export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
@@ -108,9 +90,8 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
                 }
             } else if (ctx.body !== null) {
                 // A body without a trustworthy Content-Length (e.g. chunked
-                // transfer-encoding) cannot be measured in header mode —
-                // require the header rather than letting an unbounded body
-                // through.
+                // encoding) can't be measured in header mode — require the
+                // header instead of letting an unbounded body through.
                 return Response.json(
                     { error: 'Content-Length header required' },
                     { status: 411 }
@@ -119,11 +100,10 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
 
             return undefined;
         } else {
-            // Stream mode: measure a CLONE of the body in bounded chunks.
-            // Cloning tees the stream, so the original request body stays
-            // readable for validation and the handler — nothing on the
-            // context is replaced. At most `maxSize` bytes (plus one chunk)
-            // are buffered; an oversized body is aborted mid-stream.
+            // Stream mode: measure a CLONE of the body in bounded chunks,
+            // so the original stays readable for validation and the handler.
+            // At most `maxSize` bytes (plus one chunk) are buffered; an
+            // oversized body is aborted mid-stream.
 
             if (!ctx.body) {
                 return undefined; // No body to check

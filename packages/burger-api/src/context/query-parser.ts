@@ -1,22 +1,14 @@
 /**
- * Fast, allocation-light, Bun-native querystring parser.
+ * Fast, allocation-light querystring parser.
  *
- * Replaces the per-request `new URL(req.url)` + `URLSearchParams` allocation
- * previously used in the validator. It performs a single linear `charCodeAt`
- * scan of the raw query string and never constructs a `URL` or
- * `URLSearchParams`; `decodeURIComponent` runs only for segments that actually
- * contain a `%` or `+`.
+ * One linear `charCodeAt` scan of the raw query string; never constructs a
+ * `URL` or `URLSearchParams`, and `decodeURIComponent` runs only for segments
+ * that actually contain a `%` or `+`.
  *
- * Behavior matches `URLSearchParams` parity (: "match
- * `URLSearchParams` parity so the existing validator behavior is preserved
- * exactly"), which includes the `application/x-www-form-urlencoded` rule that
- * `+` decodes to a space. Malformed percent-encoding (and lone surrogates)
- * are preserved verbatim and never throw.
- *
- * The scan shape (one pass, per-segment decode flags, `&` as the boundary
- * character) mirrors Elysia's `parseQueryFromURL`
- * (`elysia2/dist/parse-query.js`) and Hono's index-based `_getQueryParam`
- * (`hono/dist/utils/url.js`) — see `research-report.md` item #2.
+ * Behavior matches `URLSearchParams`, including the
+ * `application/x-www-form-urlencoded` rule that `+` decodes to a space.
+ * Malformed percent-encoding (and lone surrogates) is preserved verbatim and
+ * never throws.
  */
 
 /** Segment flags recorded while scanning one `key=value` pair. */
@@ -32,8 +24,8 @@ const CHAR_PLUS = 43; // '+'
 const CHAR_QUESTION = 63; // '?'
 
 /**
- * Replaces every `+` with a space without a regex/split allocation. Only
- * called when the scan already proved the segment contains a `+`.
+ * Replaces every `+` with a space without regex/split allocations. Called
+ * only when the scan already proved the segment contains a `+`.
  */
 function replacePlus(segment: string): string {
     let out = '';
@@ -48,15 +40,11 @@ function replacePlus(segment: string): string {
 }
 
 /**
- * Decodes a single key/value segment. `application/x-www-form-urlencoded`
- * rules apply: `+` is first normalized to a space, then `decodeURIComponent`
- * runs. `decodeURIComponent` throws on a malformed percent sequence (e.g. an
- * incomplete `%XX`) or a lone surrogate, so we fall back to the
- * (space-normalized) raw substring — preserving it verbatim and continuing,
- * exactly like the documented malformed-decoding behavior.
- *
- * The caller's scan already proved which operations are needed: a segment
- * without `%`/`+` is returned as-is, so the decoding work is skipped entirely.
+ * Decodes a single key/value segment: `+` normalized to a space, then
+ * `decodeURIComponent`. Malformed escapes and lone surrogates make
+ * `decodeURIComponent` throw, so we fall back to the raw substring (never
+ * throws). The flags come from the caller's scan, so segments without
+ * `%`/`+` skip decoding entirely.
  */
 function decodeSegment(segment: string, flags: number): string {
     let value = segment;
@@ -72,17 +60,14 @@ function decodeSegment(segment: string, flags: number): string {
 }
 
 /**
- * Parses a raw query string (the portion after `?`, with or without the leading
- * `?`) into a `Record<string, string | string[]>`.
+ * Parses a raw query string (after `?`, with or without the leading `?`)
+ * into a `Record<string, string | string[]>`.
  *
- * Rules:
- * - Empty input → `{}`.
- * - A segment without `=` is a valueless key → `""`.
- * - A repeated key becomes an array of its values, in order.
- * - Every key and value is percent-decoded when needed; `+` is normalized
- *   to a space (form-encoding parity with `URLSearchParams`).
- * - The `[]` suffix is treated literally (not as an array hint).
- * - Malformed percent-escapes are preserved verbatim; the parser never throws.
+ * - Empty input → `{}`; a segment without `=` maps its key to `""`.
+ * - A repeated key becomes an array of values, in order.
+ * - Keys and values are percent-decoded when needed; `+` becomes a space.
+ * - The `[]` suffix is literal, not an array hint.
+ * - Malformed percent-escapes are preserved verbatim; never throws.
  */
 export function parseQuery(search: string): Record<string, string | string[]> {
     // Null prototype: `__proto__` / `constructor` keys are attacker-

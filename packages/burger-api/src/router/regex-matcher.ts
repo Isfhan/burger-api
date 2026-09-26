@@ -2,30 +2,20 @@ import type { CompiledHandler } from './types.js';
 import { ROUTE_CONSTANTS } from '../utils/routing.js';
 
 /**
- * Hono-style RegExp matcher for the dynamic (`:param` / `*`) route set.
+ * RegExp matcher for the dynamic (`:param` / `*`) route set.
  *
- * The trie stays the reference implementation; this matcher is a drop-in
- * replacement for its dispatch role in `Router.fetch` on runtimes without
- * a native pattern router (WinterCG targets). Design notes:
+ * The trie stays the reference; this is an opt-in replacement for its
+ * dispatch role on runtimes without a native pattern router (WinterCG).
  *
- * - **Numeric capture groups, never named.** JS named groups must be unique
- *   per regex; two routes may legitimately reuse a param name. Each
- *   alternative's group indices are mapped to param names at build time.
- * - **Wrapper group per alternative.** Every alternative is wrapped in one
- *   capturing group whose definedness identifies which alternative matched —
- *   required because a base-path wildcard hit (`/files/*` on `/files`)
- *   leaves all inner captures undefined.
- * - **Two tiers preserve priority.** Param routes (no `*`) are compiled into
- *   one alternation, wildcard routes into another; the wildcard tier is only
- *   consulted when the param tier misses — mirroring the trie's
- *   `param > wildcard` fallback. Within a tier, alternatives are ordered by
- *   specificity so overlapping patterns resolve deterministically like the
- *   trie's static-before-param descent.
- * - **Segment-exact matching** with `[^/]*` captures reproduces the trie's
- *   trailing-slash semantics (`/users/` → `:id === ""`).
- * - **Bail-out guard:** absurdly large route sets fall back to the trie by
- *   returning `null` from the builder instead of compiling a pathological
- *   regex.
+ * - Numeric capture groups, never named: two routes may reuse a param name.
+ * - A wrapper group per alternative identifies which branch matched (a
+ *   base-path wildcard hit leaves all inner captures undefined).
+ * - Two tiers preserve priority: param routes first, wildcard routes only
+ *   when the param tier misses, matching the trie's `param > wildcard`
+ *   fallback. Within a tier, alternatives are ordered by specificity.
+ * - Segment-exact `[^/]*` captures reproduce the trie's trailing-slash
+ *   semantics (`/users/` → `:id === ""`).
+ * - Oversized route sets return `null` from the builder and stay on the trie.
  */
 
 export interface RegexRouteEntry {
@@ -66,10 +56,8 @@ interface Tier {
  * Builds the matcher from the dynamic route set.
  *
  * @param order optional authoritative pattern order (from
- *        `Trie.orderedPatterns()`). When supplied, alternatives keep this
- *        exact sequence — a pre-order DFS of the trie encodes its per-node
- *        priority, which no flat heuristic can reproduce. When omitted
- *        (standalone use), the specificity heuristic orders them.
+ *        `Trie.orderedPatterns()`); when supplied, alternatives keep this
+ *        exact sequence. When omitted, the specificity heuristic orders them.
  * @returns a matcher function, or `null` when the route set should stay on
  *          the trie (empty set, size cap exceeded, or unusable patterns).
  */
@@ -165,10 +153,9 @@ function compileAlternative(entry: RegexRouteEntry): CompiledAlternative {
 }
 
 /**
- * Ascending sort key — lower is tried earlier. Encodes the trie's descent
- * preference globally: deepest literal anchoring wins, then fewer dynamics,
- * then a later first-dynamic position (`/x/b/:c` before `/x/:a/y`), then
- * params before wildcards.
+ * Ascending sort key — lower is tried earlier. Deepest literal anchoring
+ * wins, then fewer dynamics, then a later first-dynamic position
+ * (`/x/b/:c` before `/x/:a/y`), then params before wildcards.
  */
 function compareAlternatives(
     a: CompiledAlternative,

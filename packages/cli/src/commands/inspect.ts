@@ -1,10 +1,4 @@
-/**
- * Inspect Command
- *
- * Displays discovered routes, hooks, plugins, and config summary.
- *
- * Example: burger-api inspect
- */
+/** Inspect command — displays discovered routes, hooks, plugins, and config. */
 
 import { Command } from 'commander';
 import { existsSync } from 'fs';
@@ -63,12 +57,8 @@ function findPluginsFile(cwd: string): string | undefined {
 }
 
 /**
- * Structured, machine-readable inspection result — the same data the
- * formatted console output presents, serialized instead of printed. Kept
- * as a single named interface (not an inline object literal at the print
- * site) so it's a documented, versionable contract: a CLI meant to be
- * consumed by AI agents/tooling needs its structured output to be a real
- * type, not an implicit shape that can drift silently.
+ * Structured, machine-readable inspection result — same data as the console
+ * output. A documented contract for tooling/agents.
  */
 export interface InspectResult {
     /** Schema version for this JSON shape — bump on any breaking field change. */
@@ -179,8 +169,7 @@ async function buildInspectResult(cwd: string): Promise<InspectResult> {
             })),
         },
         plugins: { pluginsFileFound: !!pluginsFile, pluginsFile },
-        // The scanner already resolves schema/openapi/config/hooks with
-        // any of .ts/.js/.mjs.
+        // Scanner already resolves these with any of .ts/.js/.mjs.
         conventionFiles: {
             totalApiRoutes: apiEntries.length,
             schema: apiEntries.filter((e) => e.schemaPath).length,

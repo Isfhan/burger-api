@@ -1,10 +1,4 @@
-/**
- * Template Management System
- *
- * Handles downloading and caching project templates.
- * Templates are the starter projects users get when running `burger-api create`
- *
- */
+/** Scaffolding templates and generated files for `burger-api create` and `generate`. */
 
 import { join, resolve, dirname } from 'path';
 import { readFileSync, existsSync } from 'fs';
@@ -27,15 +21,10 @@ function findPackageRoot(startFile: string): string | undefined {
 }
 
 /**
- * Resolves the exact `zod` version the CLI's own `burger-api` dependency
- * uses, so the scaffold can pin to that same concrete version instead of an
- * independently-drifting range. This matters even when the ranges overlap:
- * TypeScript treats two separately-installed zod copies (even adjacent
- * patch versions) as distinct, deeply-recursive generic types, and checking
- * a schema against both can blow up (`TS2589`, tens of millions of type
- * instantiations) — verified against zod 4.5.4 vs 4.6.5. Pinning to the
- * exact version burger-api itself resolves avoids that class of bug,
- * whether burger-api came from a real npm install or `bun link`.
+ * Resolve the exact `zod` version the CLI's own `burger-api` dependency
+ * uses, so the scaffold pins it. Two zod copies (even adjacent patches) are
+ * distinct types to TypeScript and can blow up with `TS2589`, so pinning to
+ * the version burger-api itself resolves avoids that class of bug.
  */
 function resolveMatchingZodVersion(): string {
     const FALLBACK = '^4.5.4';
@@ -58,11 +47,9 @@ function resolveMatchingZodVersion(): string {
 }
 
 /**
- * Resolve a local burger-api source override from the BURGER_API_SOURCE env
- * var (pre-release testing aid):
- * - unset  → null — generatePackageJson keeps the npm range (default)
- * - "link" → "link:burger-api" — resolves via the global bun link store
- * - <path> → "file:<absolute path>" — resolves from a local checkout
+ * Local burger-api override from BURGER_API_SOURCE (pre-release testing):
+ * unset → null (npm range), "link" → the global bun link store, a path →
+ * "file:<absolute path>" from a local checkout.
  */
 export function burgerApiSourceOverride(): {
     specifier: string;
@@ -96,10 +83,8 @@ function cliVersion(): string | undefined {
 }
 
 /**
- * `@burger-api/cli` specifier for scaffolded devDependencies. Follows the
- * same strategy as `burger-api`: BURGER_API_SOURCE=link → the bun link
- * store; BURGER_API_SOURCE=<path to packages/burger-api> → the sibling
- * `packages/cli` checkout when present; otherwise `^<this CLI's version>`.
+ * `@burger-api/cli` specifier for scaffolded devDependencies, following
+ * BURGER_API_SOURCE like `burger-api` does; otherwise `^<this CLI's version>`.
  */
 function cliSpecifier(): string {
     const override = burgerApiSourceOverride();
@@ -112,8 +97,7 @@ function cliSpecifier(): string {
 }
 
 /**
- * Generate package.json content for a new project
- * This includes the burger-api dependency and basic scripts
+ * package.json for a new project: burger-api dependency, scripts, dev deps.
  *
  * @param projectName - Name of the project
  * @returns package.json content as a string
@@ -123,9 +107,8 @@ export function generatePackageJson(
     lang: 'ts' | 'js' = 'ts'
 ): string {
     const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
-    // `^1.0.0-beta` (not `^1.0.0`) so scaffolded projects resolve the beta
-    // at all — a plain `^1.0.0` range excludes prereleases. It also picks up
-    // later betas (1.0.0-beta.2, …) and, once released, stable 1.x.
+    // `^1.0.0-beta` so scaffolds resolve prereleases at all (`^1.0.0` would
+    // exclude them) and pick up later betas and stable 1.x.
     const burgerApiSpecifier =
         burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta';
     const packageJson = {
@@ -134,14 +117,12 @@ export function generatePackageJson(
         version: '0.1.0',
         type: 'module',
         // dev/start/build auto-detect src/index.ts|js|mjs, so TS and JS
-        // scaffolds share the same scripts. `start` runs the production
-        // bundle when one exists (see `burger-api start`).
+        // scaffolds share scripts; `start` runs the production bundle.
         scripts: {
             dev: 'burger-api dev',
             start: 'burger-api start',
             build: `burger-api build ${entry}`,
-            // tsc reads tsconfig.json for TS projects; JS projects use
-            // jsconfig.json (plain `tsc` would print help instead of checking).
+            // JS projects check with jsconfig.json; plain `tsc` prints help.
             typecheck:
                 lang === 'js'
                     ? 'tsc -p jsconfig.json --noEmit'
@@ -151,8 +132,8 @@ export function generatePackageJson(
             'burger-api': burgerApiSpecifier,
             zod: resolveMatchingZodVersion(),
         },
-        // The scripts call `burger-api`, so the CLI must be installed with
-        // the project (CI/Docker have no global CLI).
+        // Scripts call `burger-api`, so the CLI ships with the project
+        // (CI/Docker have no global CLI).
         devDependencies: {
             '@burger-api/cli': cliSpecifier(),
             '@types/bun': 'latest',
@@ -163,12 +144,7 @@ export function generatePackageJson(
     return JSON.stringify(packageJson, null, 2);
 }
 
-/**
- * Generate tsconfig.json content for a new project
- * This sets up TypeScript properly for Bun
- *
- * @returns tsconfig.json content as a string
- */
+/** tsconfig.json content for a new TypeScript project. */
 export function generateTsConfig(): string {
     const tsconfig = {
         compilerOptions: {
@@ -206,12 +182,7 @@ export function generateTsConfig(): string {
     return JSON.stringify(tsconfig, null, 2);
 }
 
-/**
- * Generate jsconfig.json for JavaScript projects (`--lang js`).
- * Enables editor type-checking of JSDoc annotations (checkJs).
- *
- * @returns jsconfig.json content as a string
- */
+/** jsconfig.json for `--lang js`: editor type-checking of JSDoc (checkJs). */
 export function generateJsConfig(): string {
     const jsconfig = {
         compilerOptions: {
@@ -240,11 +211,7 @@ export function generateJsConfig(): string {
     return JSON.stringify(jsconfig, null, 2);
 }
 
-/**
- * Generate .gitignore content
- *
- * @returns .gitignore content as a string
- */
+/** .gitignore content for a new project. */
 export function generateGitIgnore(): string {
     return `# Bun
 node_modules/
@@ -268,12 +235,7 @@ Thumbs.db
 `;
 }
 
-/**
- * Generate .prettierrc content
- * This matches the burger-api project style
- *
- * @returns .prettierrc content as a string
- */
+/** .prettierrc content matching the BurgerAPI style. */
 export function generatePrettierConfig(): string {
     const prettierConfig = {
         semi: true,
@@ -287,23 +249,16 @@ export function generatePrettierConfig(): string {
     return JSON.stringify(prettierConfig, null, 2);
 }
 
-/**
- * Generate index.ts content based on user options
- * This is the main entry point for the user's project
- *
- * @param options - Project configuration from user prompts
- * @returns index.ts content as a string
- */
-/**
- * Scan dirs and prefixes written identically into src/index.* (read by
- * dev/start) and burger.build.* (read by build/inspect/doctor), so the two
- * files never disagree out of the box. Disabled features are omitted.
- */
 /** Single-quoted JS string literal (scaffolds follow the shipped .prettierrc). */
 function sq(value: string): string {
     return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 
+/**
+ * Scan dirs and prefixes written identically into src/index.* and
+ * burger.build.*, so dev/start and build never disagree; disabled
+ * features are omitted.
+ */
 export function scaffoldScanOptions(
     options: CreateOptions
 ): [key: string, value: string, comment: string][] {
@@ -342,14 +297,14 @@ export function scaffoldScanOptions(
     return entries;
 }
 
+/** src/index.ts|js: scan options plus app.serve(). */
 export function generateIndexFile(options: CreateOptions): string {
     const lines: string[] = [];
 
-    // Import statement
     lines.push("import { Burger } from 'burger-api';");
     lines.push('');
 
-    // Configuration object — keep scan options in sync with burger.build.
+    // Keep scan options in sync with burger.build.
     lines.push('// Keep dirs/prefixes in sync with burger.build (used by the build).');
     lines.push('const app = new Burger({');
 
@@ -364,7 +319,7 @@ export function generateIndexFile(options: CreateOptions): string {
     lines.push('});');
     lines.push('');
 
-    // Start server - uses PORT env variable for flexibility (e.g., burger-api start --port 4000)
+    // PORT lets `burger-api start --port` / hosting platforms override it.
     lines.push('const port = Number(process.env.PORT) || 4000;');
     lines.push('app.serve(port, () => {');
     lines.push(' console.log(`Server running on http://localhost:${port}`);');
@@ -375,8 +330,7 @@ export function generateIndexFile(options: CreateOptions): string {
 }
 
 /**
- * Generate burger.build.ts from create command answers.
- * This keeps build/runtime config explicit in scaffolded projects.
+ * burger.build.ts from the create answers.
  *
  * @param options - Project configuration from user prompts
  * @returns burger.build.ts content as a string
@@ -401,9 +355,8 @@ export function generateBurgerConfig(options: CreateOptions): string {
         ' */',
     ];
 
-    // `Partial<BuildConfig>`: a scaffold only writes the features it enabled
-    // (no pageDir when pages are off), and the CLI fills the rest from
-    // CONVENTION_DEFAULTS — every key is optional here by design.
+    // Only enabled features are written; the CLI fills the rest from
+    // CONVENTION_DEFAULTS, so every key is optional.
     if (options.lang === 'js') {
         return [
             ...header,
@@ -425,11 +378,7 @@ export function generateBurgerConfig(options: CreateOptions): string {
     ].join('\n');
 }
 
-/**
- * Generate a CSS file with modern styling for the landing page
- *
- * @returns style.css content as a string
- */
+/** The sample landing page stylesheet. */
 export function generateSampleCss(): string {
     return `
  :root {
@@ -726,11 +675,7 @@ export function generateSampleCss(): string {
  `;
 }
 
-/**
- * Generate a sample JavaScript file with useful utilities
- *
- * @returns app.js content as a string
- */
+/** The sample page script (app.js). */
 export function generateSampleJs(): string {
     return 'console.log("Hello from app.js");';
 }
@@ -755,8 +700,7 @@ function hrefFromApiPrefix(apiPrefix: string | undefined): string {
 }
 
 /**
- * Generate a minimal, clean landing page
- * Uses official BurgerAPI color scheme
+ * The scaffolded landing page (index.html), using the BurgerAPI colors.
  *
  * @param options - Project configuration (name, dirs, apiPrefix, useApi)
  * @returns index.html content as a string
@@ -766,8 +710,8 @@ export function generateIndexPage(options: CreateOptions): string {
     const pageDir = options.pageDir || 'pages';
     const apiDir = options.apiDir || 'api';
     const apiTryHref = escapeHtml(hrefFromApiPrefix(options.apiPrefix));
-    // Root-absolute asset URLs: relative `./assets/...` breaks as soon as the
-    // page is served at `/prefix` (no trailing slash) under a custom pagePrefix.
+    // Root-absolute asset URLs: relative ./assets/... breaks under a custom
+    // pagePrefix when the page is served at `/prefix` (no trailing slash).
     const trimmedPagePrefix = (options.pagePrefix ?? '/').replace(
         /^\/+|\/+$/g,
         ''
@@ -885,12 +829,7 @@ export function generateIndexPage(options: CreateOptions): string {
 `;
 }
 
-/**
- * Generate hooks index file
- * This is where users will export their hooks
- *
- * @returns hooks/index.ts content as a string
- */
+/** hooks.ts|js — global lifecycle hook registrations. */
 export function generateHooksFile(lang: 'ts' | 'js' = 'ts'): string {
     if (lang === 'js') {
         return `/**
@@ -953,8 +892,7 @@ export default (burger: ProviderRegistrar) => {
 
 
 /**
- * Generate openapi.config.ts content
- * Convention file for OpenAPI metadata, docs UI, and docs auth.
+ * openapi.config.ts|js: OpenAPI metadata, docs UI, docs auth.
  *
  * @param options - Project configuration from user prompts
  * @returns openapi.config.ts content as a string
@@ -975,8 +913,7 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
     );
     lines.push(` version: '1.0.0',`);
     lines.push('');
-    // No `servers` by default: Swagger/Scalar then call the same origin the
-    // docs are served from, whatever port the app runs on.
+    // No `servers` by default: docs call the same origin they are served from.
     lines.push(' // Uncomment to list explicit servers (default: same origin as the docs):');
     lines.push(
         ' // servers: [{ url: "https://api.example.com", description: "Production" }],'
@@ -1006,8 +943,7 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
 }
 
 /**
- * Create a new project with all necessary files
- * This is the main function that sets up everything
+ * Create a new project scaffold.
  *
  * @param targetDir - Where to create the project
  * @param options - Project configuration from user prompts
@@ -1024,7 +960,6 @@ export async function createProject(
         Bun.write(path, isReindentable(path) ? reindent(content) : content);
 
     try {
-        // Create base files that every project needs
         await write(
             join(targetDir, 'package.json'),
             generatePackageJson(options.name, lang)
@@ -1050,13 +985,11 @@ export async function createProject(
             generateBurgerConfig(options)
         );
 
-        // Create src directory and index file
         await write(
             join(targetDir, 'src', `index.${ext}`),
             generateIndexFile(options)
         );
 
-        // Create openapi.config.ts in src/
         await write(
             join(targetDir, 'src', `openapi.config.${ext}`),
             generateOpenAPIConfig(options)
@@ -1075,7 +1008,6 @@ export async function createProject(
             generateProvidersFile(lang)
         );
 
-        // Create API directory and files if requested
         if (options.useApi) {
             const apiDir = join(targetDir, 'src', options.apiDir || 'api');
             const routeFiles = generateRouteFiles(
@@ -1093,7 +1025,6 @@ export async function createProject(
             }
         }
 
-        // Create Pages directory and files if requested
         if (options.usePages) {
             const pagesDir = join(targetDir, 'src', options.pageDir || 'pages');
             await write(
@@ -1102,7 +1033,7 @@ export async function createProject(
             );
         }
 
-        // Create sample assets inside pages directory (so they're served by page router)
+        // Sample assets live under the pages dir so the page router serves them.
         if (options.usePages) {
             const pagesDir = join(targetDir, 'src', options.pageDir || 'pages');
             await write(
@@ -1113,12 +1044,9 @@ export async function createProject(
                 join(pagesDir, 'assets', 'js', 'app.js'),
                 generateSampleJs()
             );
-            // Logo is loaded from https://burger-api.com/img/logo.png
         }
 
-        // Create a sample WebSocket route if requested, so opting in
-        // produces something immediately runnable under `bun run dev`
-        // instead of an empty, unscanned directory.
+        // A sample echo route, so an opted-in ws dir runs immediately.
         if (options.useWs) {
             const wsRouteDir = join(
                 targetDir,
@@ -1132,8 +1060,7 @@ export async function createProject(
             }
         }
 
-        // (No ecosystem/ stub: `burger-api add` creates ecosystem/hooks/ and
-        // ecosystem/plugins/ on demand, and nothing imports an index file.)
+        // No ecosystem/ stub: `burger-api add` creates those dirs on demand.
 
         spin.stop('Project files created');
     } catch (err) {
@@ -1169,8 +1096,7 @@ export interface CreateProjectResult {
 }
 
 /**
- * Install dependencies in a project directory
- * Runs `bun install` to install all packages
+ * Install dependencies (`bun install`) in a project directory.
  *
  * @param projectDir - Directory containing package.json
  */
@@ -1178,7 +1104,6 @@ export async function installDependencies(projectDir: string): Promise<void> {
     const spin = spinner('Installing dependencies...');
 
     try {
-        // Run bun install using Bun.spawn
         const proc = Bun.spawn(['bun', 'install'], {
             cwd: projectDir,
             stdout: 'ignore',
@@ -1245,8 +1170,8 @@ export function generateRouteFiles(
             ? `Get ${tag} by ${params.join(', ')}`
             : `${tag} endpoint`;
 
-    // With a schema, the starter handler shows the core idea end to end:
-    // `defineRoute` types `ctx.validated` straight from schema.ts.
+    // With a schema, the starter handler shows `defineRoute` typing
+    // `ctx.validated` from schema.ts.
     if (options.schema !== false && params.length > 0) {
         files[`route.${ext}`] = [
             "import { defineRoute } from 'burger-api';",
@@ -1312,8 +1237,8 @@ export function generateRouteFiles(
             files['schema.js'] = [
                 "import { z } from 'zod';",
                 '',
-                // @satisfies (not @type) keeps the literal type, so
-                // defineRoute can infer ctx.validated from it.
+                // @satisfies keeps the literal type so defineRoute can infer
+                // ctx.validated from it.
                 "/** @satisfies {import('burger-api').MethodSchema} */",
                 ...schemaBody,
                 '};',
@@ -1404,8 +1329,7 @@ export function generateRouteFiles(
 
 /**
  * JS identifier for a hook/plugin name: `rate-limit` → `rateLimit`
- * (`RateLimit` with `pascal`). Anything else non-identifier becomes `_`, and
- * a leading digit gets a `_` prefix, so any accepted name yields valid code.
+ * (`RateLimit` with `pascal`); any accepted name yields valid code.
  */
 export function toIdentifier(name: string, pascal = false): string {
     let id = name
@@ -1459,8 +1383,7 @@ export function generatePluginTemplate(
     pluginName: string,
     lang: 'ts' | 'js' = 'ts'
 ): string {
-    // The name doubles as a JS identifier — sanitize so arbitrary plugin
-    // names (spaces, quotes, dashes) still produce parseable code.
+    // Sanitize: the name doubles as a JS identifier.
     const className = toIdentifier(pluginName, true);
     if (lang === 'js') {
         return [

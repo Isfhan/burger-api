@@ -2,18 +2,12 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 
 /**
- * Resolve a scan root directory (apiDir / pageDir / wsDir) for the dev
- * pipeline, with an entry-relative fallback:
+ * Resolves a scan root (apiDir / pageDir / wsDir) for the dev pipeline.
  *
- * 1. Absolute paths are used as-is (still checked to exist).
- * 2. Paths that exist relative to the project root (process.cwd()) are used
- *    as-is — backward compatible, always wins over the fallback.
- * 3. Otherwise, if `BURGER_API_APP_DIR` is set (the CLI `dev` command sets it
- *    to the entry file's directory, e.g. `<root>/src`) and the path exists
- *    under it, that is used — so `apiDir: 'api'` resolves to `src/api` when
- *    `index.ts` lives in `src/`.
- * 4. Otherwise a dynamic error is thrown with the candidate paths, so the
- *    hint matches whatever the user named the directory.
+ * Absolute paths are used as-is; existing paths relative to the project root
+ * win; otherwise `BURGER_API_APP_DIR` (set by `burger-api dev` to the entry
+ * file's directory, e.g. `<root>/src`) is tried, so `apiDir: 'api'` resolves
+ * to `src/api`. Throws with the candidate paths when none exist.
  *
  * @param dir - The configured directory path
  * @param label - Kind of directory, e.g. 'Routes', 'Pages', 'WebSocket'
@@ -54,10 +48,9 @@ export function resolveScanDir(dir: string, label: string, option: string): stri
 
 /**
  * Convention default for a scan root the app did not configure
- * (`src/api`, `src/pages`, `src/websocket`) — mirrors the CLI build's
+ * (`src/api`, `src/pages`, `src/websocket`) — matches the CLI build's
  * defaults so dev and production mount the same directories. Returns the
- * path only when the directory exists: `./src/<name>` under the project
- * root, else `<BURGER_API_APP_DIR>/<name>` (the entry file's directory).
+ * path only when it exists: `./src/<name>`, else `<BURGER_API_APP_DIR>/<name>`.
  */
 export function resolveConventionDir(
     name: 'api' | 'pages' | 'websocket'

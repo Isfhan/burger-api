@@ -233,7 +233,7 @@ describe('WebSocket Auth Integration', () => {
 
             const response = await fetchHandler(request, mockServer as any);
 
-            // Auth should still run (transform hooks always run)
+            // Transform hooks always run, even when auth is optional.
             expect(transformCalled).toBe(true);
             // But connection should succeed
             expect(upgradeData).toBeDefined();

@@ -18,15 +18,12 @@ export type HookStage =
 /**
  * The return contract of a forward (pre-handler) hook:
  * `Response` short-circuits the pipeline; `(response) => Response` registers
- * an after-mapper that transforms the eventual response once the handler
- * runs (queued in reverse collection order — see `runHooks`/the JIT's
- * beforeRoute unrolling); `undefined` / `void` continues. The `Promise`
- * variants cover async hooks.
+ * an after-mapper applied in reverse collection order once the handler runs;
+ * `undefined` / `void` continues. Promise variants cover async hooks.
  *
- * The mapper-return branch is real, tested runtime behavior (it's how a
- * single hook — e.g. `cors()` — can both short-circuit preflight requests
- * AND inject headers on the real response), not a legacy leftover; keep it
- * in sync with `ResponseHookResult` below.
+ * The mapper branch lets one hook (e.g. `cors()`) short-circuit a request and
+ * still transform the eventual response; keep in sync with
+ * `ResponseHookResult`.
  */
 export type ForwardHookResult =
     | Response
@@ -48,9 +45,9 @@ export type ResponseHookResult =
 /**
  * A forward (pre-handler) lifecycle hook — `onRequest`, `validation`,
  * `beforeRoute`. May return an after-mapper function (see
- * {@link ForwardHookResult}) to transform the response once the handler
- * runs — this is distinct from the `transform` hook point, which injects
- * derived values onto the context before the handler, not the response.
+ * {@link ForwardHookResult}) to transform the response once the handler runs.
+ * Distinct from the `transform` hook point, which injects values onto the
+ * context before the handler.
  */
 export type ForwardHook = (
     ctx: BurgerContext
@@ -71,13 +68,14 @@ export type ResponseHook = (
 export type Hook = ForwardHook | ResponseHook;
 
 /**
- * An error-path interceptor hook. Runs when the pipeline throws (beforeRoute,
- * handler, afterRoute, mapResponse). Dispatched nearest-first (route → global)
- * so a route-level onError can handle its own errors before a global fallback.
+ * An error-path interceptor hook. Runs when the pipeline throws (validation,
+ * beforeRoute, handler, afterRoute, mapResponse), dispatched nearest-first
+ * (route → global) so a route-level onError can handle its own errors before
+ * a global fallback.
  *
  * Returns a `Response` to handle the error, or `undefined`/`void` to let the
- * next onError in the chain try. If no onError handles it, the framework
- * renders an RFC 9457 response (and logs 5xx errors server-side). May be async.
+ * next onError try. If none handles it, the framework renders an RFC 9457
+ * response (and logs 5xx errors server-side). May be async.
  */
 export type ErrorHook = (
     error: Error,
@@ -89,15 +87,13 @@ export type ErrorHook = (
     | Promise<Response | void | undefined>;
 
 /**
- * The frozen, per-route hook plan. Composed ONCE at compile time
- * (RouterCompiler.compile) and executed inside the single pipeline.
+ * The frozen, per-route hook plan. Composed once at compile time and executed
+ * inside the single pipeline.
  *
- * `validation` runs after `transform` but before `beforeRoute`. It is a
- * single hook (not an array) — validation is a framework-owned stage, not
- * a user-extensible hook point.
- *
- * `onError` is a separate error-path array — it is only consulted when
- * the forward pipeline throws.
+ * `validation` runs after `transform` and before `beforeRoute`. It is a single
+ * hook (not an array) — a framework-owned stage, not a user-extensible hook
+ * point. `onError` is a separate array consulted only when the forward
+ * pipeline throws.
  */
 export interface HookPlan {
     /** Framework-owned validation stage; runs after transform, before beforeRoute. */
@@ -124,11 +120,10 @@ export interface HookPlan {
 }
 
 /**
- * A record of factory functions keyed by the context field name to inject.
- * Each factory receives the {@link BurgerContext} and returns the value to
- * shallow-merge onto the context instance.
+ * Factory functions keyed by the context field to inject. Each factory
+ * receives the {@link BurgerContext} and its result is shallow-assigned onto
+ * the context instance.
  *
- * Example:
  * ```ts
  * export const transform = {
  * user: (ctx) => loadUser(ctx),
@@ -139,15 +134,13 @@ export interface HookPlan {
 export type TransformMap = Record<string, (ctx: BurgerContext) => unknown>;
 
 /**
- * The raw, uncompiled hook object carried on a `RouteModule` / `RouteDefinition`
- * from a route's `hooks.ts` (or inline `route.ts` export). Every value is
- * normalized to a `Hook[]` / `ErrorHook[]` when the plan is built.
+ * The raw, uncompiled hook object from a route's `hooks.ts` (or inline
+ * `route.ts` export). Values are normalized to arrays when the plan is built.
  *
- * Route scope only — there is no `onRequest` here. `onRequest` runs
- * pre-routing, before a route is even matched, so it cannot be scoped to one
- * route; declaring it in a route's `hooks.ts` is always a no-op. Use
- * {@link GlobalHooks} (the app's `src/hooks.ts`) or a plugin's `hooks` for
- * `onRequest`.
+ * Route scope only — there is no `onRequest` here: it runs pre-routing,
+ * before a route is matched, so declaring it in a route's `hooks.ts` is a
+ * no-op. Use {@link GlobalHooks} (the app's `src/hooks.ts`) or a plugin's
+ * `hooks` instead.
  */
 export interface RouteHooks {
     beforeRoute?: ForwardHook | ForwardHook[];
@@ -158,10 +151,9 @@ export interface RouteHooks {
 }
 
 /**
- * The hook object shape for scopes that run before routing: the app's global
- * `src/hooks.ts` and plugin `hooks`. Adds `onRequest` on top of
- * {@link RouteHooks} — the pre-routing hook that runs before a route is
- * matched, so it can only apply app-wide or plugin-wide, never per-route.
+ * Hook object for scopes that run before routing: the app's `src/hooks.ts` and
+ * plugin `hooks`. Adds `onRequest` (pre-routing, so app-wide or plugin-wide
+ * only) on top of {@link RouteHooks}.
  */
 export interface GlobalHooks extends RouteHooks {
     /** Pre-routing hook — runs before the route is matched. */

@@ -51,10 +51,8 @@ describe('Coercion end-to-end', () => {
         const validators = compileRouteSchema(schema, { coerce: false });
         const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { n: '42' });
-        // Without coercion, "42" is not a number => ValidationError.
-        // The hook throws synchronously for schemas without a body slot
-        // (the compiled pipeline catches either form identically); accept
-        // both a sync throw and a rejected promise here.
+        // Without coercion "42" is not a number -> ValidationError. The hook
+        // may throw synchronously or reject; accept either form.
         let error: unknown;
         try {
             await hook(ctx);

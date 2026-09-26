@@ -119,10 +119,8 @@ const colors = {
 };
 
 /**
- * Creates a logger hook for request/response logging.
- *
- * This hook logs HTTP requests with method, URL, status code, and response time.
- * It supports colorized output, custom formatting, and filtering.
+ * Creates a hook that logs each request with method, path, status code,
+ * and duration. Supports colors, JSON output, request IDs, and filtering.
  *
  * @param options - Configuration options for logging behavior
  * @returns A hook function that logs requests and responses
@@ -132,32 +130,18 @@ const colors = {
  * // Basic usage with default settings
  * const logger = createLogger();
  *
- * // With custom options
+ * // Custom options
  * const logger = createLogger({
- *   colors: true,
  *   logQuery: true,
  *   skip: '/health'
  * });
  *
- * // With request IDs
- * const logger = createLogger({
- *   requestId: true,
- *   requestIdHeader: 'X-Request-ID',
- * });
- *
  * // JSON format
- * const logger = createLogger({
- *   format: 'json',
- * });
+ * const logger = createLogger({ format: 'json' });
  *
  * // Custom formatter
  * const logger = createLogger({
  *   formatter: (info) => `[${info.timestamp}] ${info.method} ${info.path} - ${info.status} (${info.duration}ms)`
- * });
- *
- * // Log to file
- * const logger = createLogger({
- *   logFn: (message) => fs.appendFileSync('app.log', message + '\n')
  * });
  * ```
  */
@@ -177,7 +161,6 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
     } = options;
 
     return (ctx: BurgerContext): ForwardHookResult => {
-        // Check if we should skip logging for this request
         if (skip) {
             if (typeof skip === 'string' && ctx.url.includes(skip)) {
                 return undefined;
@@ -190,38 +173,32 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
             }
         }
 
-        // Use Bun's high-precision nanosecond timer if available
-        // Falls back to Date.now() for compatibility with other runtimes
+        // Bun's nanosecond timer when available, Date.now() otherwise.
         const startTime = typeof Bun !== 'undefined' && Bun.nanoseconds
             ? Bun.nanoseconds()
             : Date.now() * 1_000_000; // Convert to nanoseconds
         const method = ctx.method;
         const url = ctx.url;
 
-        // Extract path and query from URL
         const urlObj = new URL(url);
         const path = urlObj.pathname;
         const query = urlObj.search;
 
-        // Generate or extract request ID
         let requestId: string | undefined;
         if (enableRequestId) {
-            // Check for existing request ID in header
             const existingId = ctx.headers.get(requestIdHeader);
             if (existingId) {
                 requestId = existingId;
             } else {
-                // Generate new UUID
                 requestId = crypto.randomUUID();
             }
 
-            // Attach to context for use in handlers
+            // Expose the request ID to handlers via ctx.requestId.
             (ctx as { requestId?: string }).requestId = requestId;
         }
 
-        // Transform response to log after handler completes
+        // Log once the response is ready.
         return async (response: Response): Promise<Response> => {
-            // Calculate duration with high precision
             const endTime = typeof Bun !== 'undefined' && Bun.nanoseconds
                 ? Bun.nanoseconds()
                 : Date.now() * 1_000_000;
@@ -229,7 +206,6 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
             const status = response.status;
             const timestamp = new Date().toISOString();
 
-            // Prepare log info
             const logInfo: LogInfo = {
                 method,
                 url,
@@ -240,7 +216,6 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
                 requestId: includeRequestIdInLog ? requestId : undefined,
             };
 
-            // Add optional information
             if (logQuery && query) {
                 logInfo.query = query;
             }
@@ -251,11 +226,9 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
 
             if (logBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
                 try {
-                    // Try to parse body if it's JSON
-                    // Note: This consumes the request body stream
                     const contentType = ctx.headers.get('content-type');
                     if (contentType?.includes('application/json')) {
-                        // Clone the request to avoid consuming the original body
+                        // Clone the request so the handler can still read it.
                         const clonedReq = ctx.clone();
                         logInfo.body = await clonedReq.json();
                     }
@@ -264,7 +237,6 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
                 }
             }
 
-            // Format and log the message
             const message = formatter(logInfo);
             const coloredMessage = useColors ? colorize(logInfo, message) : message;
             logFn(coloredMessage);
@@ -371,30 +343,24 @@ function colorize(info: LogInfo, message: string): string {
         statusColor = colors.green;
     }
 
-    // Build colorized message
     const parts = message.split(' ');
     const colorizedParts: string[] = [];
 
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i]!;
-        
-        // Timestamp (gray)
+
         if (part.startsWith('[') && part.endsWith(']')) {
             colorizedParts.push(colors.gray + part + colors.reset);
         }
-        // HTTP Method
         else if (part === info.method) {
             colorizedParts.push(methodColor + colors.bright + part + colors.reset);
         }
-        // Status code
         else if (part === info.status.toString()) {
             colorizedParts.push(statusColor + part + colors.reset);
         }
-        // Duration (dim)
         else if (part.endsWith('ms')) {
             colorizedParts.push(colors.dim + part + colors.reset);
         }
-        // Default
         else {
             colorizedParts.push(part);
         }

@@ -6,10 +6,8 @@ import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
 import { getAvailablePort } from './test-utils';
 
 /**
- * Regression: file-based WebSocket routes (src/websocket/ws.ts files) must be
- * embedded in production builds. Previously the virtual entry only imported
- * api/page routes, silently dropping every ws.ts route from `burger-api build`
- * output (they only existed in the dev filesystem scan).
+ * Regression: file-based WebSocket routes (src/websocket/ws.ts) must be
+ * embedded in production builds, not dropped by the virtual entry.
  */
 const FIXTURE_DIR = join(import.meta.dir, 'fixtures', 'ws-app');
 const OUTFILE = '.build/bundle/app.js';

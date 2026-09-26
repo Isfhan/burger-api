@@ -1,8 +1,6 @@
 /**
- * Scaffolds the platform config file `wrangler`/`deno`/`vercel` each expect
- * at the project root, only when one doesn't already exist there — a
- * `burger-api build --target=<platform>` run never overwrites a project's
- * own config.
+ * Scaffold the platform config file (wrangler/deno/vercel) at the project
+ * root when missing — never overwrite an existing config.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -12,9 +10,8 @@ import { getProjectName } from './project';
 import { info } from '../logger';
 
 /**
- * Fixed, known-good Workers compatibility date. Today's date is rejected by
- * any wrangler whose bundled runtime is older than today ("date in the
- * future"); bump deliberately after verifying against current wrangler.
+ * Fixed, known-good Workers compatibility date. Older wrangler runtimes
+ * reject "today" as a future date; bump deliberately after verifying.
  */
 export const WRANGLER_COMPATIBILITY_DATE = '2025-06-01';
 
@@ -31,8 +28,7 @@ function wranglerToml(projectName: string, mainPath: string): string {
 /**
  * The `burger-api` range from the project's package.json, when it is a
  * registry range (not link:/file:/workspace:). An unpinned `npm:burger-api`
- * resolves the latest stable release on Deno Deploy, not the version the
- * project was built and tested with.
+ * would resolve to the latest release, not the tested one.
  */
 function projectBurgerApiRange(cwd: string): string | undefined {
     try {
@@ -73,11 +69,8 @@ function vercelJson(): string {
 }
 
 /**
- * Writes the platform's config file at the project root when missing.
- * `outfile` (relative to `cwd`) becomes wrangler's `main` entry; Deno and
- * Vercel don't need the entry path in their config (Deno is pointed at it
- * directly on the command line; Vercel discovers `api/index.ts` by
- * convention — see `defaultOutfileForTarget`).
+ * Write the platform's config file when missing. `outfile` becomes
+ * wrangler's `main`; Deno and Vercel discover the entry themselves.
  */
 export function scaffoldPlatformConfig(
     cwd: string,

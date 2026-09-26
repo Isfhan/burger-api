@@ -5,8 +5,7 @@
 import type { BurgerServices } from '../context/context.js';
 
 /**
- * Per-connection data structure
- * Extends this via module augmentation:
+ * Per-connection data, extended via module augmentation:
  *
  * @example
  * ```typescript
@@ -208,8 +207,8 @@ export interface BurgerWS {
     readonly params: Record<string, string>;
 
     /**
-     * Injected application services (same as `ctx.services` in HTTP handlers).
-     * Populated by `burger.provide()`. Typed via module augmentation of `BurgerServices`.
+     * Injected application services, populated by `burger.provide()` (the
+     * `ctx.services` equivalent). Extend `BurgerServices` via module augmentation.
      *
      * @example
      * ```typescript
@@ -220,8 +219,8 @@ export interface BurgerWS {
     services: BurgerServices;
 
     /**
-     * Authenticated user from auth plugins (same as `ctx.user` in HTTP handlers).
-     * Available when auth plugins are registered and auth succeeds during upgrade.
+     * Authenticated user from auth plugins, available when auth succeeds during
+     * the upgrade.
      *
      * @example
      * ```typescript
@@ -381,22 +380,19 @@ export interface WebSocketHooksModule {
 export interface WebSocketConfigModule extends WebSocketConfig {}
 
 /**
- * BurgerWS implementation that wraps Bun's ServerWebSocket
+ * Default `BurgerWS` implementation wrapping the runtime's native socket.
  */
 export class BurgerWSContext implements BurgerWS {
-    // Platform boundary: wraps the runtime's native server-side socket —
-    // Bun's `ServerWebSocket`, a Cloudflare/Deno `WebSocket`, or a `ws`
-    // WebSocket on Node. Core stays runtime-pure: every method probes the
-    // raw socket structurally and degrades loudly where a capability
-    // genuinely does not exist (e.g. pub/sub off Bun).
+    // Platform boundary: wraps the runtime's native server-side socket (Bun,
+    // Cloudflare/Deno, or `ws` on Node). Methods probe the raw socket
+    // structurally and fail loud where a capability does not exist.
     private _raw: any;
     private _data: WebSocketData = {};
     private _params: Record<string, string>;
     private _services: BurgerServices = Object.create(null) as BurgerServices;
 
-    // The raw socket is the platform's server-side WebSocket (see `_raw`
-    // above); the provider map mirrors `BurgerContext.create`'s providers
-    // parameter.
+    // The raw socket is the platform's server-side WebSocket; `providers` is
+    // the same map passed to `BurgerContext.create`.
     constructor(
         rawWebSocket: any,
         providers?: Map<string, unknown>,
@@ -404,12 +400,11 @@ export class BurgerWSContext implements BurgerWS {
     ) {
         this._raw = rawWebSocket;
         this._params = params;
-        // Copy data from raw WebSocket (typed via the WebSocketData
-        // augmentation interface users extend).
+        // Copy data from the raw socket (typed via the `WebSocketData`
+        // augmentation).
         if (rawWebSocket.data) {
             this._data = { ...rawWebSocket.data } as WebSocketData;
         }
-        // Inject providers as services
         this._services = providers
             ? (Object.fromEntries(providers) as unknown as BurgerServices)
             : (Object.create(null) as BurgerServices);
@@ -436,8 +431,7 @@ export class BurgerWSContext implements BurgerWS {
     }
 
     get user(): unknown {
-        // `user` is not declared on WebSocketData (auth plugins seed it);
-        // access through the widened record.
+        // `user` is not declared on `WebSocketData`; auth plugins seed it.
         return (this._data as Record<string, unknown>).user;
     }
 
@@ -451,8 +445,8 @@ export class BurgerWSContext implements BurgerWS {
             }
             return;
         }
-        // Standard WebSocket (Cloudflare / Deno / ws): `send` accepts
-        // strings and binary views.
+        // Standard WebSocket (Workers / Deno / `ws`): `send` takes strings
+        // and binary views.
         this._raw.send(
             typeof message === 'string'
                 ? message
@@ -530,7 +524,7 @@ export class BurgerWSContext implements BurgerWS {
     }
 
     get readyState(): WebSocketReadyState {
-        // Standard WebSockets (CF/Deno/ws) expose the same numeric states.
+        // Other runtimes expose the same numeric states.
         return this._raw.readyState ?? WebSocketReadyState.OPEN;
     }
 
@@ -560,9 +554,8 @@ export class BurgerWSContext implements BurgerWS {
     }
 
     /**
-     * Fails loud for capabilities that only exist on Bun's socket
-     * (topic pub/sub, batched cork). A silent no-op would hide real
-     * delivery failures from application code.
+     * Fails loud for Bun-only capabilities (topic pub/sub). A silent no-op
+     * would hide real delivery failures from application code.
      */
     private requireBun(method: string, topic?: string): void {
         const available =

@@ -1,7 +1,6 @@
 /**
- * WebSocket platform seam: runtime detection, explicit upgrade outcomes
- * (no more post-upgrade HTTP fall-through), Cloudflare/Deno handoff wiring,
- * Node 501 guidance, and loud degradation of Bun-only socket capabilities.
+ * WebSocket platform seam: runtime detection, upgrade outcomes, and the
+ * Cloudflare, Deno, and Node handoff paths.
  */
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Burger } from '../../src/index';

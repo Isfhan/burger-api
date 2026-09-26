@@ -1,11 +1,10 @@
 /**
- * Regression: ephemeral CLI commands must exit without leaving orphaned handles
- * (e.g. per-request abort timers that outlive successful fetches).
+ * Regression: ephemeral CLI commands must exit without leaving orphaned
+ * handles (e.g. abort timers that outlive successful fetches).
  *
- * Network-dependent tests:
+ * Network-dependent tests (need GitHub reachable):
  *  - `burger-api ls`: set BURGER_API_CLI_LIST_EXIT_TEST=1
  *  - `burger-api skills available`: set BURGER_API_CLI_SKILLS_EXIT_TEST=1
- * when GitHub API is reachable (e.g. local dev) to assert full list paths.
  */
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
@@ -27,8 +26,8 @@ async function runCli(
     const proc = Bun.spawn(['bun', cliEntry, ...args], {
         stdout: 'pipe',
         stderr: 'pipe',
-        // A parent terminal's FORCE_COLOR would legitimately force ANSI on
-        // the piped streams; drop it so the non-TTY assertions test our logic.
+        // A parent FORCE_COLOR would force ANSI on the piped streams; drop
+        // it so the non-TTY assertions test our logic.
         env: { ...process.env, FORCE_COLOR: undefined },
         cwd,
     });
@@ -95,8 +94,7 @@ describe('CLI process exit', () => {
 
     test('piped (non-TTY) output carries no ANSI escapes', async () => {
         // picocolors (via @clack/prompts) enables ANSI on win32 regardless
-        // of TTY, so `skills list` outside a project is a cheap way to get
-        // clack's colored outro on the piped stream.
+        // of TTY, so `skills list` gets a colored outro on the piped stream.
         const dir = mkdtempSync(join(tmpdir(), 'burger-cli-notty-'));
         try {
             const { stdout, stderr } = await runCli(['skills', 'list'], dir);

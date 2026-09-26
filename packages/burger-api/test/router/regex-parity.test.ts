@@ -1,8 +1,7 @@
 /**
- * RegExp matcher ↔ trie parity: the regex dispatch path must produce
- * identical routing decisions to the radix trie across randomized route
- * sets and targeted edge cases (trailing-slash empty params, wildcard base
- * hits, encoded segments, overlapping dynamic patterns).
+ * RegExp matcher ↔ trie parity: both dispatch paths must produce identical
+ * routing decisions across randomized route sets and edge cases (trailing
+ * slashes, wildcard base hits, encoded segments).
  */
 import { describe, it, expect } from 'bun:test';
 import { Router } from '../../src/router/router';
@@ -188,7 +187,7 @@ describe('regex matcher — parity with trie', () => {
         }
     });
 
-    it('engine "regex" and "trie" flags are honored', async () => {
+    it('engine "regex" and "trie" flags are respected', async () => {
         const defs = [probeRoute('/api/n/:id')];
         // Both engines still route the same request identically.
         const t = await resolve(defs, 'trie', 'GET', '/api/n/1');

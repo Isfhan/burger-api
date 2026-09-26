@@ -7,18 +7,14 @@ import type { Hook } from '../lifecycle/types.js';
 /**
  * The compiler's internal view of ONE route directory.
  *
- * `RouteModule` is the canonical intermediate produced by the Module Loader and
- * consumed by the Compiler. Users never see it; it exists so the compiler has a
- * single object to discover, validate, optimize, and emit.
+ * `RouteModule` is the canonical intermediate produced by the Module Loader
+ * and consumed by the Compiler; users never see it. Each route directory is
+ * self-contained — no parent/group inheritance; convention data comes from
+ * the route's own files only.
  *
- * Each route directory is **self-contained** — no parent/group inheritance.
- * Convention data is loaded from the route's own files only.
- *
- * Fields are carried raw through and compiled in downstream compilation:
- * - `schema` → (validation compilation)
- * - `hooks` → (hook compilation into a frozen `HookPlan`)
- * - `openapi` → (OpenAPI generation)
- * - `config` → Attached for runtime use (auth, cache, timeout, …)
+ * Fields are carried raw and compiled downstream: `schema` (validation
+ * compilation), `hooks` (frozen `HookPlan`), `openapi` (OpenAPI generation),
+ * `config` (runtime options such as auth, cache, timeout).
  */
 export interface RouteModule {
     /**
@@ -65,10 +61,9 @@ export interface RouteModule {
 }
 
 /**
- * The Directory Scanner's output for a single route directory (one that
- * contains a `route.ts`). It is the *input* to the Module Loader — a pure
- * inventory plus the resolved route path. No module code is imported by the
- * scanner; only the Module Loader imports.
+ * The Directory Scanner's output for one route directory (one that contains
+ * a `route.ts`) and the input to the Module Loader. No module code is
+ * imported by the scanner.
  *
  * Each route directory is self-contained — no group inheritance chain.
  */

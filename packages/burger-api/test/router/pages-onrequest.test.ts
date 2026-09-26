@@ -1,12 +1,11 @@
 /**
- * B0 regression tests: the onRequest machinery (plugin/global hooks), the
- * lazy `ctx.ip` holder and the shared app services must exist for apps with
- * pages/assets/docs but NO API routes.
+ * Regression tests: the onRequest machinery, lazy `ctx.ip`, and shared app
+ * services must exist for apps with pages/assets but no API routes.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
 
-describe('B0 — onRequest machinery without API routes', () => {
+describe('onRequest machinery without API routes', () => {
     it('runs a plugin onRequest hook once per page and per asset request', async () => {
         const seen: string[] = [];
         const burger = new Burger({

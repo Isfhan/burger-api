@@ -14,8 +14,7 @@ import type { RouteConfig } from '../types/index.js';
 import { HTTPError } from '../errors/http-error.js';
 
 /**
- * Empty interface for module augmentation. Users extend this to type
- * `ctx.services`:
+ * Module augmentation target for `ctx.services`:
  *
  * ```ts
  * declare module "burger-api" {
@@ -29,12 +28,11 @@ import { HTTPError } from '../errors/http-error.js';
 export interface BurgerServices {}
 
 /**
- * Module augmentation target for validated request data (`ctx.validated`).
- * Default slots match the validator (`params`, `query`, `body`, `headers`, `cookies`).
+ * Module augmentation target for `ctx.validated`. Default slots match the
+ * validator: `params`, `query`, `body`, `headers`, `cookies`.
  *
- * With schema-driven inference (`BurgerContext<typeof GET>`), `ctx.validated`
- * is typed from `schema.ts` automatically. Augmentation remains the escape
- * hatch for anything inference cannot express:
+ * `BurgerContext<typeof GET>` types it from `schema.ts` automatically;
+ * augmentation is the escape hatch for anything inference cannot express:
  *
  * ```ts
  * declare module "burger-api" {
@@ -54,8 +52,8 @@ export interface BurgerValidated {
 
 /**
  * Module augmentation target for deployment-platform bindings (`ctx.env`).
- * Populated by the serving entry point (`toFetchHandler(burger)` on WinterCG
- * targets receives the platform `env`; Bun leaves it `undefined`):
+ * `toFetchHandler(burger)` on WinterCG targets receives the platform `env`;
+ * plain Bun `serve()` leaves it `undefined`:
  *
  * ```ts
  * declare module "burger-api" {
@@ -69,9 +67,8 @@ export interface BurgerValidated {
 export interface BurgerEnv {}
 
 /**
- * Minimal structural view of a platform execution context (the third
- * argument of a WinterCG `fetch(request, env, ctx)` handler). Only
- * `waitUntil` is modeled — the one capability portable code relies on.
+ * Minimal view of a platform execution context (third argument of a WinterCG
+ * `fetch(request, env, ctx)` handler). Only `waitUntil` is modeled.
  */
 export interface BurgerExecutionContext {
     waitUntil(promise: Promise<unknown>): void;
@@ -83,30 +80,26 @@ export interface RequestIPSource {
 }
 
 /**
- * Per-app mutable reference to the serving runtime's IP source.
- *
- * One holder is created per router and stored on every context at creation;
- * the adapter writes the server into it ONCE at startup (Bun's `Server` is
- * stable for the lifetime of `Bun.serve`), so `ctx.ip` resolves lazily with
- * no per-request bookkeeping (no WeakMap write on the hot path).
+ * Per-app mutable reference to the serving runtime's IP source. The adapter
+ * writes the server once at startup (stable for the life of the server), so
+ * `ctx.ip` resolves lazily with no per-request bookkeeping.
  */
 export interface RequestIPHolder {
     server?: RequestIPSource;
 }
 
 /**
- * Shared empty services object handed to every context of an app without
- * `burger.provide()` providers. Frozen: services are app-scoped singletons,
- * never per-request scratch space.
+ * Shared services object for apps without `burger.provide()` providers.
+ * Frozen: services are app-scoped singletons, never per-request scratch space.
  */
 export const EMPTY_SERVICES = Object.freeze(
     Object.create(null) as BurgerServices
 ) as BurgerServices;
 
 /**
- * Resolves the app-level services for `ctx.services` ONCE (at compile time).
- * Providers are app-scoped singletons, so the resulting bag is shared — and
- * frozen — by every request; a prebuilt object passes through unchanged.
+ * Resolves the app-level services for `ctx.services` once, at compile time.
+ * Providers are app-scoped singletons, so the resulting frozen bag is shared
+ * by every request; a prebuilt object passes through unchanged.
  */
 export function createServices(
     providers?: Map<string, unknown> | BurgerServices
@@ -122,9 +115,8 @@ export function createServices(
 }
 
 /**
- * Per-request client address sources, keyed by the raw `Request`. Set by the
- * serving layer (Bun adapter / router — or a Node adapter via
- * {@link setRequestIP}); read lazily by `ctx.ip`.
+ * Per-request client address sources keyed by the raw `Request`. Set by the
+ * serving layer (or a Node adapter via {@link setRequestIP}); read by `ctx.ip`.
  */
 const requestIPs = new WeakMap<Request, string | RequestIPSource>();
 
@@ -151,8 +143,8 @@ export function isRequestIPSource(value: unknown): value is RequestIPSource {
 }
 
 /**
- * Module augmentation target for adding custom properties to BurgerContext.
- * Use this to type request-scoped values set in `transform` hooks:
+ * Module augmentation target for custom properties on BurgerContext, e.g.
+ * request-scoped values set in `transform` hooks:
  *
  * ```ts
  * declare module "burger-api" {
@@ -164,17 +156,15 @@ export function isRequestIPSource(value: unknown): value is RequestIPSource {
  * }
  * ```
  *
- * The actual `BurgerContext` class is defined below. This interface exists
- * solely for declaration merging via module augmentation.
+ * The class is defined below; this interface exists for declaration merging.
  */
 export interface BurgerContext {}
 
 /**
  * `BurgerContext` — the public request context type.
  *
- * Exactly **one** instance is allocated per request, via the static
- * `BurgerContext.create` entry point. It is never re-allocated inside the
- * hook pipeline.
+ * Exactly one instance is allocated per request via `BurgerContext.create()`;
+ * it is re-bound to the matched route, never re-allocated.
  *
  * Generic over the route's `schema.ts` method export for `ctx.validated`
  * inference:
@@ -190,42 +180,28 @@ export interface BurgerContext {}
  * }
  * ```
  *
- * The default type parameter keeps plain `BurgerContext` annotations working
- * (slots fall back to `unknown`, `BurgerValidated` augmentation applies).
+ * The default type parameter keeps plain `BurgerContext` working (slots fall
+ * back to `unknown`, `BurgerValidated` augmentation applies).
  *
- * Design:
- * - One **shared, frozen prototype** carries every lazy getter and every
- * delegated `Request` method. Per-request instances hold **only mutable
- * state** (`_raw`, `_query`, `_cookies`, `validated`, `set`, `services`,
- * `_ctxInit`), so every instance has an identical shape — preserving the
- * monomorphic hidden class.
- * - Fields are parsed **lazily** and **at most once** (single-parse guarantee);
- * a field a route never reads is never parsed and never allocated.
- * - The standard `Request` surface is **delegated** to the underlying `Request`
- * (`_raw`); `BurgerContext` does not extend `Request` and does not copy its
- * state.
- *
- * `BurgerContext` is the object that flows through the hook pipeline and into
- * handlers.
+ * One shared frozen prototype carries every lazy getter and delegated
+ * `Request` member; instances hold only mutable state, so every instance has
+ * the same shape. Fields are parsed lazily and at most once — a field a route
+ * never reads is never parsed.
  */
 export class BurgerContext<TRoute = unknown> {
     /**
-     * The underlying `Request`. Delegated to for the standard `Request` surface.
-     * Never copied; only this reference is held.
+     * The underlying `Request`; the standard `Request` surface delegates to
+     * it. Never copied.
      *
-     * `declare` (never `!`): a definite-assignment field would be re-defined
-     * by the class-field transform on every `new BurgerContext()` (Bun emits
-     * it), duplicating the assignments `create()` already performs. With
-     * `declare` the field exists only in the type system and `create()`
-     * defines every property in the same order, so the hidden class is
-     * identical for every request.
+     * `declare` (never `!`) keeps the field type-only: a class-field
+     * initializer would re-define it on every `new BurgerContext()` and
+     * duplicate the assignments `create()` performs in declaration order.
      */
     declare private _raw: Request;
 
     /**
-     * The route-specific data seeded at creation (params / wildcardParams /
-     * route). Exposed via the `params` / `wildcardParams` / `route` getters so
-     * the instance shape stays identical for every request.
+     * Route-specific data seeded at creation. Exposed via the `params` /
+     * `wildcardParams` / `route` getters.
      */
     declare private _ctxInit: ContextInit;
 
@@ -236,30 +212,19 @@ export class BurgerContext<TRoute = unknown> {
     declare private _cookies: Record<string, string> | undefined;
 
     /**
-     * Cached `json()` result. `undefined` until the body is parsed (JSON
-     * never parses to `undefined`). Lets `ctx.json()` be called again —
-     * e.g. in a handler after body validation already read the stream.
+     * Cached `json()` result. `undefined` until the body is parsed. Lets
+     * `ctx.json()` be called again after validation read the stream.
      */
     declare private _json: Promise<unknown> | undefined;
 
     /**
-     * Validated data attached by the validation hook. Mutable instance
-     * state. Starts `undefined` so the validation hook runs (it
-     * short-circuits when `ctx.validated` is already truthy).
+     * Validated data attached by the validation hook. Starts `undefined` so
+     * the hook runs (it short-circuits when already truthy).
      *
-     * Typed from `schema.ts` via `BurgerContext<typeof GET>`; falls back to
-     * `BurgerValidated` (augmentation) when no generic is supplied.
-     *
-     * When the route declares a schema (`TRoute extends RouteMethodSchema`),
-     * the type is **non-undefined**: handlers run after validation, so
-     * `ctx.validated.query` compiles without optional chaining — matching
-     * the runtime (a failed validation throws 422 and the handler never
-     * runs). A plain `BurgerContext` keeps `| undefined` because a route
-     * without a schema never runs the validation hook.
-     *
-     * `declare` replaces the field initializer: `create()` sets the field to
-     * `undefined` at runtime, and the validation hook assigns it through a
-     * plain (unparametrized) context.
+     * Typed from `schema.ts` via `BurgerContext<typeof GET>`, falling back to
+     * `BurgerValidated`. When the route declares a schema the type is
+     * non-undefined: a failed validation throws 422 and the handler never
+     * runs. A plain `BurgerContext` keeps `| undefined` (no schema, no hook).
      */
     declare validated: TRoute extends RouteMethodSchema
         ? InferValidated<TRoute> & BurgerValidated
@@ -267,13 +232,9 @@ export class BurgerContext<TRoute = unknown> {
 
     /**
      * The response-mutation object exposed through `ctx.set`. Allocated
-     * LAZILY on first access — the overwhelming majority of requests never
-     * mutate the response, so this saves one allocation plus the exit-time
-     * `applySet` scan per request. Merged into the response by `applySet`
-     * at the pipeline exit; `cookies` is reserved for a future release.
-     *
-     * Hot-path check: `hasSet()` is the O(1) "did anything mutate" probe
-     * used by the pipeline exit instead of scanning a candidate object.
+     * lazily on first access (most requests never mutate the response) and
+     * merged into the response by `applySet` at the pipeline exit. `cookies`
+     * is reserved for a future release.
      */
     declare private _set: ContextSet | undefined;
 
@@ -291,34 +252,21 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     /**
-     * Injected application services. Populated by `burger.provide()`.
-     * Typed via module augmentation of `BurgerServices`:
-     * ```ts
-     * declare module "burger-api" {
-     * interface BurgerServices {
-     * db: Database;
-     * mailer: Mailer;
-     * }
-     * }
-     * ```
-     *
-     * Assigned once in `create()`: apps without `burger.provide()` providers
-     * share the frozen `EMPTY_SERVICES` singleton, apps with providers share
-     * one frozen object built at compile time — never a per-request copy.
+     * Injected application services from `burger.provide()`, typed via
+     * augmentation of `BurgerServices`. Assigned once in `create()`: one
+     * frozen, shared object — never a per-request copy.
      */
     declare services: BurgerServices;
 
     /**
-     * Route-specific configuration from `config.ts`. Read-only at runtime.
-     * Used by hooks/plugins to read route-level settings (auth, cache,
-     * timeout, …). Typed via module augmentation of `RouteConfig`.
+     * Route-specific configuration from `config.ts`, read-only at runtime.
+     * Typed via augmentation of `RouteConfig`.
      */
     declare private _config: RouteConfig | undefined;
 
     /**
-     * Deployment-platform bindings (`env.MY_KV`, secrets, …). Populated by
-     * the serving entry point when the platform provides them; `undefined`
-     * on runtimes without bindings (e.g. plain Bun `serve()`).
+     * Deployment-platform bindings (`env.MY_KV`, secrets, …), populated by the
+     * serving entry point; `undefined` on runtimes without bindings.
      */
     declare private _env: BurgerEnv | undefined;
 
@@ -329,26 +277,22 @@ export class BurgerContext<TRoute = unknown> {
     declare private _executionCtx: BurgerExecutionContext | undefined;
 
     /**
-     * Per-app server reference (Bun's `Server`), used to resolve `ctx.ip`
-     * lazily. `undefined` on runtimes without a socket server (WinterCG).
+     * Per-app server reference for resolving `ctx.ip` lazily. `undefined` on
+     * runtimes without a socket server (WinterCG).
      */
     declare private _ipHolder: RequestIPHolder | undefined;
 
     /**
      * Cached `ctx.ip` result. `null` records "resolved to undefined" so the
-     * runtime is queried at most once per request; `undefined` means
-     * "not read yet".
+     * runtime is queried at most once per request.
      */
     declare private _ip: string | null | undefined;
 
     /**
-     * The single context creation entry point. Thin static method on
-     * `BurgerContext` (not a separate factory class) so there is exactly one
-     * obvious allocation site.
+     * The single context creation entry point.
      *
-     * `meta` (a `RouteAccessInfo` hint) is accepted but **ignored at runtime** in
-     * behavior never depends on it, because every field is already
-     * available lazily on the stable prototype.
+     * `meta` (a `RouteAccessInfo` hint) is accepted but ignored at runtime:
+     * every field is already available lazily on the stable prototype.
      */
     static create(
         raw: Request,
@@ -361,8 +305,8 @@ export class BurgerContext<TRoute = unknown> {
         ipHolder?: RequestIPHolder
     ): BurgerContext {
         const ctx = new BurgerContext();
-        // Assignments happen in declaration order so every instance has an
-        // identical hidden class (no field initializers exist any more).
+        // Assignments run in declaration order so every instance has an
+        // identical hidden class.
         ctx._raw = raw;
         ctx._ctxInit = ctxInit ?? {};
         ctx._query = undefined;
@@ -370,9 +314,8 @@ export class BurgerContext<TRoute = unknown> {
         ctx._json = undefined;
         ctx.validated = undefined;
         ctx._set = undefined;
-        // A Map (direct `create` callers, e.g. the WS adapter) gets its own
-        // shallow copy per context for backward compatibility; a prebuilt
-        // services object (the compiled route path) is shared as-is.
+        // A Map (direct callers, e.g. the WS adapter) is copied per context;
+        // a prebuilt services object (the compiled route path) is shared.
         ctx.services =
             services === undefined
                 ? EMPTY_SERVICES
@@ -391,12 +334,10 @@ export class BurgerContext<TRoute = unknown> {
     /**
      * @internal Re-bind route-specific state on an existing context.
      *
-     * The router creates ONE context per request before routing (so
-     * `onRequest` hooks can seed request IDs, counters, auth hints, …) and
-     * the dispatched handler then binds that same instance to the matched
-     * route instead of allocating a second context. Caches (`query`,
-     * `cookies`) stay valid — the underlying `Request` is identical — and
-     * any state hooks wrote is preserved.
+     * The router creates one context per request before routing (so
+     * `onRequest` hooks can seed request IDs, counters, …) and the dispatched
+     * handler binds that same instance to the matched route. Caches stay
+     * valid because the underlying `Request` is identical.
      */
     bind(
         raw: Request,
@@ -415,13 +356,13 @@ export class BurgerContext<TRoute = unknown> {
         }
         this._raw = raw;
         this._ctxInit = ctxInit ?? this._ctxInit;
-        // Services were already resolved at creation (shared per app) — bind
-        // must not rebuild them per request.
+        // Services were resolved at creation (shared per app); bind must not
+        // rebuild them per request.
         if (config !== undefined) {
             this._config = config as RouteConfig;
         }
         // Platform bindings carry over from the pre-routing context unless a
-        // fresh value is supplied by the dispatched route.
+        // fresh value is supplied.
         if (env !== undefined) {
             this._env = env;
         }
@@ -454,10 +395,9 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     /**
-     * The client's address as seen by the server socket (never a forwarded
-     * header — `X-Forwarded-For` / `CF-Connecting-IP` are client-controlled
-     * unless a trusted proxy sets them). `undefined` when the runtime does
-     * not expose it (WinterCG `fetch` entries).
+     * The socket peer address (never a forwarded header — `X-Forwarded-For`
+     * and friends are client-controlled unless a trusted proxy sets them).
+     * `undefined` when the runtime does not expose it (WinterCG `fetch`).
      */
     get ip(): string | undefined {
         if (this._ip !== undefined) return this._ip ?? undefined;
@@ -469,8 +409,8 @@ export class BurgerContext<TRoute = unknown> {
                     : (source.requestIP(this._raw)?.address ?? null);
             return this._ip ?? undefined;
         }
-        // Per-app server reference (set once at startup by the Bun adapter):
-        // resolve the socket peer lazily and cache it for the request.
+        // Per-app server reference (set once at startup): resolve the socket
+        // peer lazily and cache it for the request.
         const server = this._ipHolder?.server;
         this._ip = server ? (server.requestIP(this._raw)?.address ?? null) : null;
         return this._ip ?? undefined;
@@ -498,11 +438,10 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     /**
-     * The matched-route identity (seeded from `ctxInit`). Always present.
+     * The matched-route identity (seeded from `ctxInit`).
      *
-     * Natively dispatched dynamic routes seed only the route `pattern`; the
-     * concrete requested `path` is derived here on first access (never on the
-     * hot path) and cached for the request.
+     * Native dynamic routes seed only the `pattern`; the concrete requested
+     * `path` is derived here on first access and cached for the request.
      */
     get route(): RouteMeta | undefined {
         const init = this._ctxInit;
@@ -521,9 +460,8 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     /**
-     * Deployment-platform bindings (`env.MY_KV`, secrets, …). Typed via
-     * module augmentation of `BurgerEnv`. `undefined` when the runtime
-     * provides no bindings (plain Bun `serve()`).
+     * Deployment-platform bindings (`env.MY_KV`, secrets, …), typed via
+     * augmentation of `BurgerEnv`. `undefined` when the runtime provides none.
      */
     get env(): BurgerEnv | undefined {
         return this._env;
@@ -566,9 +504,9 @@ export class BurgerContext<TRoute = unknown> {
     // --- Delegated standard `Request` methods (forward to `_raw`) ---
 
     /**
-     * Parses the request body as JSON. Mirrors the platform `Request.json()`
-     * semantics: the default type is `any` because the shape of arbitrary JSON
-     * is unknown; callers can supply the expected shape explicitly:
+     * Parses the request body as JSON with the same semantics as the platform
+     * `Request.json()`. The default type is `any` because the shape of
+     * arbitrary JSON is unknown; callers can supply the expected shape:
      *
      * ```ts
      * const body = await ctx.json<{ id: number }>();
@@ -608,24 +546,15 @@ export class BurgerContext<TRoute = unknown> {
     }
 
     clone(): Request {
-        // Delegate to the underlying `Request.clone()` (returns a `Request`).
+        // Delegates to the underlying `Request.clone()`.
         return this._raw.clone();
     }
 }
 
 /**
- * Generic delegation of the full Bun `Request` surface.
- *
- * The design requires that *every* member Bun exposes on `Request` be
- * reachable through `BurgerContext` without hand-maintaining a list. Rather
- * than a `Proxy` (which breaks hidden-class optimization and adds per-access
- * trap overhead), we copy the remaining `Request.prototype` members onto the
- * shared `BurgerContext.prototype` **once at module load**. Because this runs
- * exactly once, every `BurgerContext` instance shares the same augmented
- * prototype and therefore the same hidden class — allocations and JIT behavior
- * are unaffected. Members already defined explicitly on `BurgerContext`
- * (`method`, `url`, `headers`, `signal`, `body`, `bodyUsed`, `json`, `text`,
- * `arrayBuffer`, `blob`, `formData`, `clone`) are skipped.
+ * Delegation of the full `Request` surface: every `Request.prototype` member
+ * not already defined on `BurgerContext` is copied onto the shared prototype
+ * once at module load, so instances keep one hidden class.
  */
 for (const name of Object.getOwnPropertyNames(Request.prototype)) {
     if (name === 'constructor' || name === 'prototype') continue;
@@ -656,17 +585,9 @@ for (const name of Object.getOwnPropertyNames(Request.prototype)) {
 }
 
 /**
- * Freeze the shared prototype's **getters**. The lazy and
- * delegated getters (`query`, `params`, `route`, `headers`, `method`, `url`,
- * `signal`, `body`, `bodyUsed`, plus any generic `Request` getters) are made
- * non-configurable so a handler cannot replace them on the shared prototype and
- * leak state across requests. The delegation **methods** (incl. `json`, `text`,
- * `arrayBuffer`, `blob`, `formData`, `clone`) are intentionally left
+ * Freezes the shared prototype's getters so a handler cannot replace them on
+ * the prototype and leak state across requests. Delegation methods stay
  * writable/configurable so user hooks can attach custom properties.
- * (`json()` caches its parsed result per instance, so body validation and
- * the handler can both call it.)
- * Freezing only getters preserves the safety goal and the documented
- * mutability contract without breaking existing validation behavior.
  */
 for (const name of Object.getOwnPropertyNames(BurgerContext.prototype)) {
     const desc = Object.getOwnPropertyDescriptor(BurgerContext.prototype, name);

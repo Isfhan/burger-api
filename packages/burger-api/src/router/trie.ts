@@ -17,17 +17,15 @@ export interface TrieMatch {
 /* ------------------------------------------------------------------ *
  * Radix matcher (fast path)
  *
- * A compressed character radix tree over the raw pathname — the technique
- * Elysia's memoirist uses (see research report Q8/Q9): literal runs are
- * compared with `charCodeAt` loops (or one slice compare for long runs)
- * instead of splitting the request path into a per-segment array and
- * probing a `Map` at every level. `:param` edges consume one segment up to
- * the next `/`; `*` edges capture the remainder (and, like the legacy
- * matcher, also match their own base path).
+ * A compressed character radix tree over the raw pathname: literal runs
+ * compare with `charCodeAt` loops (one slice compare for long runs) instead
+ * of splitting the path into segments and probing a `Map` per level.
+ * `:param` consumes one segment up to the next `/`; `*` captures the
+ * remainder and also matches its own base path.
  *
- * Only absolute, percent-free pathnames are served here. Anything else
- * falls back to the segment matcher below, whose decoding semantics are
- * preserved exactly (`%2F` inside a segment, decoded static segments, …).
+ * Only absolute, percent-free pathnames land here. Anything else uses the
+ * segment matcher below, which preserves its exact decoding semantics
+ * (`%2F` inside a segment, decoded static segments, …).
  * ------------------------------------------------------------------ */
 
 /** A terminal route stored in the radix tree. */
@@ -100,8 +98,7 @@ function resetRadixNode(
 /**
  * Per-match capture scratch. Matching is synchronous and never re-enters
  * (no user code runs while a match is in progress), so one module-level
- * buffer replaces a per-request array — same trick as memoirist's
- * `matchedNames`/`matchedIndex`.
+ * buffer replaces a per-request array.
  */
 const captured: string[] = [];
 let capturedCount = 0;
@@ -113,15 +110,12 @@ const CHAR_COMPARE_LIMIT = 15;
 /**
  * Optimized dynamic-route matcher.
  *
- * Dispatch rules, identical to the legacy segment matcher:
- * - Priority per node: literal continuation > `:param` > `*`, with
- *   backtracking when a literal prefix dead-ends.
- * - A `*` route also matches its own base path (`/files/*` matches
- *   `/files`, `wildcardParams: []`).
- * - A trailing slash is preserved: `/users/` binds `:id === ""` (the Router
- *   rejects empty params — the loose-slash retry then runs).
- * - Ambiguous param folders at one level and non-terminal wildcards throw
- *   at insert time.
+ * Per node the priority is literal continuation > `:param` > `*`, with
+ * backtracking when a literal prefix dead-ends. A `*` route also matches
+ * its own base path (`/files/*` matches `/files`, `wildcardParams: []`).
+ * A trailing slash is preserved: `/users/` binds `:id === ""` (the Router
+ * rejects empty params — the loose-slash retry then runs). Ambiguous param
+ * folders at one level and non-terminal wildcards throw at insert time.
  */
 export class Trie {
     private root: RadixNode = createRadixNode('/');
@@ -176,14 +170,11 @@ export class Trie {
     }
 
     /**
-     * Emits every registered pattern in strict match-priority order.
-     *
-     * The traversal is a pre-order DFS following the same per-node priority
-     * the matcher uses — static continuations (insertion order), then the
-     * `:param` subtree, then the `*` wildcard — so for any request path, the
-     * first emitted pattern that can match it is exactly the pattern the trie
-     * would select. This is the authoritative ordering source for the RegExp
-     * matcher (`regex-matcher.ts`).
+     * Emits every registered pattern in strict match-priority order: a
+     * pre-order DFS following the matcher's per-node priority (static
+     * continuations, then `:param`, then `*`). The first emitted pattern that
+     * can match a path is exactly the one the trie would select — the
+     * authoritative ordering source for the RegExp matcher.
      */
     orderedPatterns(): string[] {
         const out: string[] = [];
@@ -329,8 +320,8 @@ export class Trie {
 
     /**
      * Descends `part` into the radix subtree, splitting nodes where the
-     * existing literal run and `part` diverge (memoirist's insert). Returns
-     * the node whose `part` ends where `part` ends.
+     * existing literal run and `part` diverge. Returns the node whose
+     * `part` ends where `part` ends.
      */
     private insertPart(node: RadixNode, part: string): RadixNode {
         let current = node;
@@ -437,7 +428,7 @@ export class Trie {
             }
             if (param !== null && pos > 1) {
                 // Trailing-slash form: the empty final segment is the value.
-                // (`/` alone has no trailing empty segment — the legacy
+                // (`/` alone has no trailing empty segment — the segment
                 // matcher's zero-segment path.) No continuation can match at
                 // end-of-path; only the param's own terminal / wildcard.
                 const saved = capturedCount;
@@ -500,10 +491,9 @@ export class Trie {
 
 /**
  * Splits a wildcard capture (the text after the route's base path) into its
- * segments. `''` is a base-path hit (no segments). The capture normally
- * starts with `/` (everything after the base path's slash); a root wildcard
- * (`/*`) captures from the first character instead. A trailing empty segment
- * is preserved, exactly like `String.split('/')`.
+ * segments. `''` is a base-path hit (no segments); a root wildcard (`/*`)
+ * captures from the first character. A trailing empty segment is preserved,
+ * exactly like `String.split('/')`.
  */
 function splitWildcardCapture(raw: string): string[] {
     if (raw === '') return [];
@@ -539,9 +529,9 @@ function splitPattern(path: string): string[] {
 /* ------------------------------------------------------------------ *
  * Segment matcher (exact fallback)
  *
- * Retained verbatim for percent-encoded and non-absolute pathnames. It
- * decodes each request segment before comparison (and per wildcard
- * segment), semantics the radix matcher does not reproduce.
+ * Retained for percent-encoded and non-absolute pathnames. It decodes each
+ * request segment before comparison (and per wildcard segment), semantics
+ * the radix matcher does not reproduce.
  * ------------------------------------------------------------------ */
 
 interface DynTrieNode {
@@ -698,16 +688,10 @@ class LegacyTrie {
 }
 
 /**
- * Splits a pathname into `out` for legacy matching (no `split()` / `map()`
- * arrays per request).
- *
- * Unlike a naive `split('/').filter(Boolean)`, this preserves a single trailing
- * empty segment when the path ends with `/`, so that `:param` routes can capture
- * an empty value (e.g. `/users/` → `["users", ""]` → `:id === ""`). The leading
- * empty segment produced by the leading `/` is dropped.
- *
- * Each segment is percent-decoded as it is emitted, but only when it actually
- * contains `%`.
+ * Splits a pathname into `out` without per-request `split()` / `map()` arrays.
+ * Preserves a single trailing empty segment (so `/users/` yields
+ * `["users", ""]` and a `:param` can capture `""`); the leading empty segment
+ * is dropped. Each segment is percent-decoded only when it carries `%`.
  */
 function splitPathInto(pathname: string, out: string[]): void {
     let start = pathname.charCodeAt(0) === 47 /* '/' */ ? 1 : 0;

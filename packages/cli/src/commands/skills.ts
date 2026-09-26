@@ -45,7 +45,7 @@ async function ensureSkillsDir(): Promise<void> {
     }
 }
 
-/** Download logic shared by `install` and (potentially) `update` */
+/** Shared download logic for installing a skill. */
 async function doInstall(skillName: string): Promise<void> {
     requireProject();
     await ensureSkillsDir();

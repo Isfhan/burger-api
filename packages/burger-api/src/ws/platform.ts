@@ -1,34 +1,19 @@
 /**
- * WebSocket platform seam.
+ * WebSocket platform seam. Each runtime has its own upgrade primitive (Bun's
+ * `server.upgrade`, Cloudflare's `WebSocketPair`, Deno's `upgradeWebSocket`,
+ * Node's `'upgrade'` event); {@link detectWsPlatform} and
+ * {@link acceptWsUpgrade} isolate those differences.
  *
- * The HTTP pipeline is runtime-agnostic; WebSocket handoff is not — each
- * runtime has its own upgrade primitive (Bun's `server.upgrade`,
- * Cloudflare's `WebSocketPair`, Deno's `upgradeWebSocket`, Node's
- * `'upgrade'` event). This module isolates those differences behind two
- * pieces:
- *
- * 1. {@link detectWsPlatform} — best-effort runtime detection from the
- *    request-time environment (an explicit Bun `server` handle wins).
- * 2. {@link acceptWsUpgrade} — performs the protocol handoff for an
- *    already-matched and already-authorized request, wiring the platform
- *    socket to the shared event callbacks on runtimes that push events
- *    (Cloudflare / Deno) instead of pulling them through a serve-level
- *    option object (Bun).
- *
- * Core stays free of Bun/platform imports: every platform object is reached
- * structurally through `globalThis`, so WinterCG bundles never pull in a
- * runtime they do not run on.
+ * Core stays free of Bun/platform imports: platform objects are reached
+ * structurally through `globalThis`.
  */
 
 /**
  * Result of an upgrade attempt:
- * - `{ handled: false }` — not a WebSocket upgrade request; caller must run
- *   the normal HTTP pipeline.
- * - `{ handled: true, response }` — the request was consumed by the
- *   WebSocket layer. `response` is the protocol response where the platform
- *   returns one (`101 Switching Protocols` on Cloudflare/Deno, or the 404 /
- *   auth-rejection response). It is `undefined` when the runtime hijacked
- *   the socket itself (Bun) — callers must NOT fall through to HTTP.
+ * - `{ handled: false }` — not an upgrade; run the normal HTTP pipeline.
+ * - `{ handled: true, response }` — the request was consumed. `response` is
+ *   `undefined` when the runtime took over the socket directly (Bun);
+ *   callers must NOT fall through to HTTP.
  */
 export type WsUpgradeOutcome =
     | { handled: false }
@@ -46,18 +31,8 @@ export type WsPlatformName = 'bun' | 'cloudflare' | 'deno' | 'node';
 /**
  * Minimal shape of a framing-library socket on Node (`ws` package).
  *
- * `listener` is `(...args: any[]) => void`, not `never[]`: a real `ws`
- * `WebSocket.on('close', (code: number, reason: Buffer) => ...)` has
- * concretely-typed parameters, and `never[]` rejects it (checking whether a
- * function with real parameter types is assignable to a rest-`never[]`
- * listener requires each concrete parameter type to be assignable to
- * `never`, which is only true for `never` itself) — so the framework's own
- * documented `createNodeWsBridge({ WebSocketServer })` pattern, passed the
- * real `ws` package, failed to typecheck. `any[]` is intentionally
- * permissive here: this interface only describes what the framework calls
- * `.on()` with (never what it reads back out of `args`), so widening the
- * listener's declared parameters doesn't weaken anything the framework
- * itself relies on.
+ * `listener` is `(...args: any[]) => void` on purpose: `ws` declares concrete
+ * parameter types, which a rest-`never[]` listener would reject.
  */
 export interface NodeWsLike {
     on(
@@ -89,9 +64,8 @@ export interface NodeWsBridge {
 }
 
 /**
- * Detects the current WebSocket-capable runtime.
- * `server` is the Bun serve handle when available (authoritative); without
- * it, detection falls back to well-known globals.
+ * Detects the WebSocket-capable runtime: an explicit Bun `server` handle wins,
+ * otherwise well-known globals are probed.
  */
 export function detectWsPlatform(server?: unknown): WsPlatformName {
     if (
@@ -232,9 +206,8 @@ function wirePushListeners(
     data: Record<string, unknown>,
     events: WsEventSink
 ): void {
-    // Bun attaches `data` natively via `server.upgrade(request, { data })`;
-    // push-style sockets (Workers / Deno) need it attached explicitly, or
-    // the adapter cannot find the matched route (open/message never fire).
+    // Push-style sockets (Workers / Deno) need `data` attached explicitly,
+    // or the adapter cannot find the matched route (open/message never fire).
     (socket as PushSocket & { data?: unknown }).data = data;
     socket.addEventListener('open', () => {
         void events.onOpen(socket);
@@ -248,16 +221,11 @@ function wirePushListeners(
 }
 
 /**
- * `isBinary` matters for `ws`-package callers only: `ws`'s `'message'` event
- * always hands a Node `Buffer` — for text *and* binary frames alike — with
- * a separate `isBinary` flag distinguishing them (verified by running a
- * real Node WebSocket bridge end to end: text frames arrived as `Buffer`,
- * not `string`, breaking parity with Bun's native `ServerWebSocket`, which
- * delivers text frames as `string` directly). When `isBinary` is `false`,
- * decode the buffer as UTF-8 text instead of passing it through raw.
- * Cloudflare/Deno's `MessageEvent.data` is already a `string` for text
- * frames per the Fetch/WHATWG WebSocket standard, so `isBinary` is
- * irrelevant there — the `typeof data === 'string'` branch handles it.
+ * Normalizes a socket message to `string` (text) or `Buffer` (binary).
+ *
+ * `isBinary` matters for `ws`-package callers: its `'message'` event always
+ * hands a Node `Buffer` plus a separate `isBinary` flag, so text frames are
+ * decoded as UTF-8. Cloudflare/Deno deliver text as `string` already.
  */
 export function normalizeWsMessage(
     data: unknown,

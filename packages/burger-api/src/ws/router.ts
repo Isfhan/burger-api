@@ -1,13 +1,11 @@
 /**
- * WebSocket router
- * Maps WebSocket paths to compiled handlers
+ * Matches WebSocket paths to compiled handlers.
  */
 
 import type { CompiledWebSocketRoute } from './types.js';
 
 /**
- * WebSocket router
- * Matches incoming WebSocket paths to handlers
+ * WebSocket router: matches incoming paths to handlers.
  */
 export class WebSocketRouter {
     private routes: CompiledWebSocketRoute[] = [];

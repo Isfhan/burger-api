@@ -25,8 +25,7 @@ function jsString(value: string): string {
 }
 
 /**
- * Scalar API Reference — alternative docs UI.
- * Loads Scalar via CDN and points it at the served spec.
+ * Scalar API Reference docs UI, loaded from a CDN.
  */
 export function scalarDocs(): DocsProvider {
     return (spec: OpenAPIObject, { specUrl }: DocsProviderOptions) => `<!DOCTYPE html>
@@ -44,8 +43,7 @@ export function scalarDocs(): DocsProvider {
 }
 
 /**
- * Swagger UI — default docs UI.
- * Loads Swagger UI via CDN.
+ * Swagger UI (default docs UI), loaded from a CDN.
  */
 export function swaggerDocs(): DocsProvider {
     return (spec: OpenAPIObject, { specUrl }: DocsProviderOptions) => `<!DOCTYPE html>
@@ -81,8 +79,7 @@ export function swaggerDocs(): DocsProvider {
 }
 
 /**
- * ReDoc — alternative docs UI.
- * Loads ReDoc via CDN.
+ * ReDoc docs UI, loaded from a CDN.
  */
 export function redocDocs(): DocsProvider {
     return (spec: OpenAPIObject, { specUrl }: DocsProviderOptions) => `<!DOCTYPE html>

@@ -3,31 +3,17 @@ import type { RouteDefinition } from '../types/index.js';
 import { freezeRouteAccessInfo } from '../context/route-access.js';
 
 /**
- * `RouteAccessAnalyzer` — an optional, compile-time-only, self-contained
- * static analyzer.
+ * `RouteAccessAnalyzer` — an optional, compile-time-only static analyzer.
  *
- * It inspects a route's handler + hook *source* (via
- * `Function.prototype.toString()`) to produce a frozen `RouteAccessInfo` hint
- * describing which `BurgerContext` fields each route touches. Any failure
- * degrades to the safe "unknown" default (every field treated as used), so a
- * wrong verdict that would hide a field the route actually reads is
- * impossible-by-construction.
+ * Inspects a route's handler + hook source (`Function.prototype.toString()`)
+ * and returns a frozen `RouteAccessInfo` hint of which `BurgerContext` fields
+ * the route touches. Any failure degrades to the safe "unknown" default
+ * (every field treated as used), so a wrong verdict can never hide a field
+ * the route actually reads.
  *
- * Design constraints:
- * - Self-contained: no import from `@burger-api/cli`, no `node:fs`.
- * - `debug: true` → skip analysis entirely (return the safe empty default).
- * - Any parse error → try/catch → safe default (empty set, `unknown: true`).
- *
- * A "known" (`unknown: false`) result is only produced when, for every
- * function in the route, the context parameter is provably never allowed to
- * escape:
- * - the first parameter is a plain identifier (no destructuring / rest /
- *   default-value patterns), and
- * - the identifier appears only as direct member access (`ctx.field` /
- *   `ctx['field']`), never bare (`helper(ctx)`, `const r = ctx`, `...ctx`).
- *
- * Anything else — including a native function, an unrecognized source shape,
- * or the legacy aliasing patterns — marks the whole route `unknown: true`.
+ * A "known" result requires every function's first parameter to be a plain
+ * identifier used only as direct member access (`ctx.field` / `ctx['field']`),
+ * never bare (`helper(ctx)`, `...ctx`). `debug: true` skips analysis.
  */
 
 const FIELD_KEYS: readonly ContextField[] = [
@@ -86,8 +72,8 @@ const METHOD_PARAMS = /^(?:async\s+)?(?:[\w$]+)\s*\(([^()]*)\)\s*\{/;
 const FIRST_IDENTIFIER = /[\w$]+/;
 
 /**
- * Legacy conservative patterns kept as an extra gate: they catch aliasing of
- * a context variable that was never a parameter (e.g. a closure imported from
+ * Conservative patterns kept as an extra gate: they catch aliasing of a
+ * context variable that was never a parameter (a closure captured in
  * another module, or `req` referenced without being declared locally).
  */
 function isLegacyAmbiguous(source: string): boolean {
@@ -204,10 +190,9 @@ function scanFunction(
 /**
  * Analyzes one route definition and returns a frozen `RouteAccessInfo`.
  *
- * `extraSources` are additional functions that run for this route but are not
- * part of the definition (plugin hooks, app-level hooks, transform
- * factories); their source is scanned with the same rules so a "known" result
- * accounts for every framework-known reader.
+ * `extraSources` are functions that run for this route but are not part of
+ * the definition (plugin hooks, app-level hooks, transform factories); they
+ * are scanned so a "known" result accounts for every framework-known reader.
  */
 export function analyzeRouteAccess(
     def: RouteDefinition,
@@ -291,7 +276,7 @@ export function analyzeRouteAccess(
             return freezeRouteAccessInfo([], /* unknown */ true, usedHooks);
         }
 
-        // Legacy aliasing patterns: an extra conservative gate for context
+        // Aliasing patterns: an extra conservative gate for context
         // variables that are not parameters (`req` closures, ...).
         let source = '';
         for (const key of Object.keys(handlers)) {

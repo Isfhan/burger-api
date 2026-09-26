@@ -256,8 +256,7 @@ describe('WebSocketAdapter', () => {
             remoteAddress: '127.0.0.1',
         };
 
-        // Handlers are now awaited; the order is preserved on the microtask
-        // queue, so the calls must be awaited before asserting.
+        // Handlers are awaited; await these calls before asserting order.
         await wsOption.open(mockWs);
         await wsOption.message(mockWs, 'hello');
 

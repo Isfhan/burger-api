@@ -145,8 +145,7 @@ describe('WebSocket prebuilt routes (production path)', () => {
         const port = await getAvailablePort();
 
         let rejected = false;
-        // Hooks always run (even when a route opts out of auth) and decide
-        // for themselves — this one self-skips routes with `auth: false`.
+        // Hooks always run; this one self-skips routes with `auth: false`.
         const beforeRouteHook = (ctx: any) => {
             if (ctx.config?.auth === false) return;
             rejected = true;
@@ -155,8 +154,8 @@ describe('WebSocket prebuilt routes (production path)', () => {
 
         server = new Burger({
             debug: true,
-            // Production path (mirrors CLI virtual entry output: apiRoutes is
-            // always emitted, and pluginsModule only executes when it is).
+            // Production path: apiRoutes is always emitted, and
+            // pluginsModule runs only when it is present.
             apiRoutes: [],
             // A plugin beforeRoute hook rejects upgrades when auth is enabled.
             pluginsModule: {

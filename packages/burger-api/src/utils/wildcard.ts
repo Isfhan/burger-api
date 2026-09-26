@@ -5,10 +5,8 @@
  * @returns The extracted pathname (e.g., "/api/users/123/profile")
  */
 export function extractPathnameFromUrl(url: string): string {
-    // Where the authority ends. The two charCode checks skip the generic
-    // `indexOf('://')` scan for the two schemes that dominate real traffic
-    // (http/https) — mirrors Elysia's `authorityEnd`
-    // (`elysia2/dist/utils.js`).
+    // Where the authority ends. The charCode checks fast-path http/https
+    // instead of scanning for '://'.
     const authorityEnd =
         url.charCodeAt(4) === 58 /* : */
             ? 7
@@ -16,15 +14,13 @@ export function extractPathnameFromUrl(url: string): string {
               ? 8
               : url.indexOf('://') + 3;
 
-    // First "/" after the authority = path start. `-1` falls back to index 0
-    // so a URL with no path segment keeps the historical result.
+    // Path starts at the first "/" after the authority; no path segment
+    // falls back to index 0.
     const found = url.indexOf('/', authorityEnd);
     const pathStart = found === -1 ? 0 : found;
 
-    // Single scan for the terminator. `#` is included for parity with
-    // `new Request(url).url` inputs (the URL parser strips fragments, but
-    // callers may hand us a raw URL string) — mirrors Hono's `getPath`
-    // (`dist/utils/url.js`).
+    // Single scan for `?` or `#`. Raw URL strings may still carry a fragment
+    // even though the URL parser strips it.
     for (let i = pathStart; i < url.length; i++) {
         const code = url.charCodeAt(i);
         if (code === 63 /* ? */ || code === 35 /* # */) {

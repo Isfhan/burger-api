@@ -1,16 +1,7 @@
 /**
  * E2E: `burger-api build --target=<platform>` against a real scaffolded
- * project. Confirms the portable-target path (no Bun.build — the generated
- * entry is written out directly) actually produces a working artifact, the
- * platform config gets scaffolded, and a WebSocket route on a target that
- * can't support it (`vercel`) fails the build with a clear error instead of
- * silently dropping the route.
- *
- * `cloudflare`/`deno` are additionally boot-tested live in this session's
- * manual verification against real `wrangler dev` / `deno serve` — not
- * repeated here since spawning those tools per-CI-run is slow and requires
- * them on PATH. This test covers what every environment can check: the
- * generated files are correct and the build's exit code is right.
+ * project — portable entry output, scaffolded platform config, and a clear
+ * build error when `vercel` cannot support a WebSocket route.
  */
 import { afterAll, describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
@@ -61,8 +52,8 @@ async function scaffold(name: string): Promise<string> {
     const pkgPath = join(dir, 'package.json');
     const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
     pkg.dependencies['burger-api'] = `file:${LOCAL_BURGER_API_PATH}`;
-    // The CLI under test runs from source; the (unpublished) @burger-api/cli
-    // devDependency would make `bun install` fail offline.
+    // The CLI runs from source; the unpublished @burger-api/cli
+    // devDependency would break offline installs.
     delete pkg.devDependencies?.['@burger-api/cli'];
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
 

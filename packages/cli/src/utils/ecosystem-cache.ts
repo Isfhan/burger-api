@@ -1,19 +1,10 @@
 /**
  * Short-lived local cache for GitHub-sourced ecosystem catalogs
- * (`getComponentList()`, `getSkillList()`). Both are live GitHub Contents
- * API listings that change rarely — hitting the network on every single
- * `add`/`list`/`available`/`skills available` invocation is slow and
- * silently breaks the command offline, for information that's usually
- * still correct hours later.
+ * (`getComponentList()`, `getSkillList()`), so `add`/`list`/`skills
+ * available` don't hit the network on every run and still work offline.
  *
- * A plain TTL-file cache, not a database: one JSON file per cached list
- * under `~/.burger-api/cache/`, an envelope of `{ fetchedAt, data }`, and
- * three states on read — fresh (serve from disk, no network), stale (try
- * a live refresh; on failure, fall back to the stale data rather than
- * failing the command), and missing (must fetch live; a failure here
- * still throws — a cold cache with no network genuinely has nothing to
- * show, and this module must never invent a silent empty result the way
- * `github.ts`'s own comments already warn against for the live path).
+ * One JSON file per list under `~/.burger-api/cache/`, holding
+ * `{ fetchedAt, data }`; read policy is in {@link withEcosystemCache}.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
@@ -54,20 +45,15 @@ function writeCacheFile<T>(key: string, data: T): void {
         const envelope: CacheEnvelope<T> = { fetchedAt: Date.now(), data };
         writeFileSync(cacheFilePath(key), JSON.stringify(envelope));
     } catch {
-        // Cache writes are best-effort — a read-only home dir or full disk
-        // should never fail the command that triggered the fetch.
+        // Best-effort: a read-only home dir or full disk must not fail the command.
     }
 }
 
 /**
- * Returns cached data for `key` if it exists and is within `ttlMs`;
- * otherwise calls `fetchFresh()`, caches a successful result, and returns
- * it. If `fetchFresh()` throws and a cache entry exists (even expired),
- * returns the stale entry instead of failing — the caller is told via
- * the returned `stale` flag so it can warn, but a flaky network shouldn't
- * turn "slightly old ecosystem list" into "command doesn't work." A cold
- * cache with a failing fetch still throws — there is genuinely nothing
- * to serve.
+ * Return cached data for `key` when within `ttlMs`; otherwise call
+ * `fetchFresh()`, cache success, and return it. On fetch failure, fall back
+ * to any cache entry (even expired) with `stale: true`; a cold cache with a
+ * failing fetch throws.
  */
 export async function withEcosystemCache<T>(
     key: string,

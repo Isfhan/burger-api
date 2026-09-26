@@ -1,10 +1,7 @@
 /**
- * Extension → Content-Type lookup for static assets. Split out from
- * `assets.ts` (which also does disk scanning via `node:fs`/`node:path`) so
- * the package's main entry — which statically re-exports `contentTypeFor`
- * for consumers like the CLI's build-time asset scanner — never pulls a
- * Node builtin into its static import graph. AOT/WinterCG deployments
- * never touch disk scanning, but they do call `contentTypeFor()`.
+ * Extension → Content-Type lookup for static assets. Kept separate from
+ * `assets.ts` so the main entry can re-export `contentTypeFor` without pulling
+ * a Node builtin into its static import graph.
  */
 
 /** Extension → Content-Type map for supported static assets. */

@@ -1,13 +1,10 @@
 /**
  * Differential fuzz: the radix trie (`src/router/trie.ts`) must produce
- * identical match results to the pre-radix segment trie it replaced
- * (`trie-legacy.fixture.ts`, a snapshot of commit d42baf2).
- *
- * Coverage: randomized route sets (static, `:param`, `*`, route-group-like
- * segments, overlapping prefixes) and 10k random pathnames (encoded `%xx`,
- * unicode, empty segments, trailing slashes, `//`). For every pathname the
- * compared result is { pattern, isWildcard, params, wildcardParams, methods,
- * handler identity }; `allowedMethods` and `orderedPatterns` are compared too.
+ * identical match results to the legacy segment trie in
+ * `trie-legacy.fixture.ts` across randomized route sets and 10k random
+ * pathnames (encoded, unicode, empty segments, trailing slashes). Compared:
+ * pattern, isWildcard, params, wildcardParams, methods, handler identity,
+ * `allowedMethods`, and `orderedPatterns`.
  */
 import { describe, it, expect } from 'bun:test';
 import { Trie } from '../../src/router/trie';

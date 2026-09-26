@@ -1,9 +1,7 @@
 /**
  * The 404 body is a constant (RFC 9457 Problem Details), so it is serialized
- * once. A prebuilt `Response` is cloned per request — `clone()` is
- * substantially cheaper than re-running the `Response` constructor with a
- * headers init (measured; same technique as Elysia's prebuilt 404) and each
- * clone gets its own body stream.
+ * once. A prebuilt `Response` is cloned per request — `clone()` is much
+ * cheaper than re-running the `Response` constructor with a headers init.
  */
 const NOT_FOUND_BODY = JSON.stringify({
     type: 'about:blank',
@@ -16,17 +14,14 @@ const PROBLEM_JSON_HEADERS = { 'Content-Type': 'application/problem+json' };
 
 /**
  * Prebuilt 404 template, created on FIRST use — never at module scope
- * (Workers forbid `new Response()` during module evaluation; see
- * `test/adapter/no-global-scope-side-effects.test.ts`).
+ * (Workers forbid `new Response()` during module evaluation).
  */
 let notFoundTemplate: Response | undefined;
 
 /**
- * Builds the framework's 404 response (RFC 9457 Problem Details).
- *
- * Returns a clone of a prebuilt `Response`: a `Response` body is a single-use
- * stream, so one shared instance cannot be returned directly — but cloning it
- * is cheaper than constructing a fresh one per request.
+ * Builds the framework's 404 response (RFC 9457 Problem Details) as a clone of
+ * a prebuilt `Response` — a body stream is single-use, but cloning is cheaper
+ * than constructing a fresh `Response` per request.
  */
 export const notFound = (): Response => {
     const template =
@@ -39,10 +34,8 @@ export const notFound = (): Response => {
 };
 
 /**
- * The OpenAPI error response.
- *
- * A factory — see {@link notFound}: never share a `Response` instance
- * with a body across requests.
+ * The OpenAPI error response. A factory — see {@link notFound}: never share a
+ * `Response` instance with a body across requests.
  */
 export const openApiError = (): Response =>
     Response.json({
@@ -57,17 +50,15 @@ interface MethodNotAllowedTemplate {
 }
 
 /**
- * Per-`Allow` templates: the body string and headers are built once, then each
- * request gets a fresh `Response` over the same immutable init (bodies are
- * single-use; a `Headers` instance is copied by the constructor).
- * Keyed by the precomputed `Allow` value, so the map size is bounded by the
- * route table.
+ * Per-`Allow` 405 templates, built once and reused. Bodies are single-use, so
+ * each request gets a fresh `Response` over the same immutable init; the map
+ * is bounded by the route table's `Allow` values.
  */
 const methodNotAllowedTemplates = new Map<string, MethodNotAllowedTemplate>();
 
 /**
- * Builds a 405 response that includes the `Allow` header listing the methods
- * supported by the matched route. Returns RFC 9457 Problem Details format.
+ * Builds a 405 (RFC 9457) with the `Allow` header listing the methods the
+ * matched route supports.
  * @param allow - comma-separated allowed methods, e.g. "GET, POST"
  */
 export function methodNotAllowed(allow: string): Response {
@@ -94,13 +85,11 @@ export function methodNotAllowed(allow: string): Response {
 }
 
 /**
- * The framework's auto-generated OPTIONS handler (CORS preflight, 204 No
- * Content). Built per route so the response can advertise the route's
- * supported methods via `Allow` (RFC 9110).
+ * The auto-generated OPTIONS handler (CORS preflight, 204), built per route so
+ * it can advertise the route's methods via `Allow` (RFC 9110).
  *
- * The returned handler is tagged with `isAutoOptions` so the router compiler
- * can recognize it (e.g. for Bun native static responses) without relying on
- * function identity.
+ * Tagged with `isAutoOptions` so the router compiler can recognize it (e.g.
+ * for Bun native static responses) without relying on function identity.
  */
 export interface AutoOptionsHandler {
     (): Response;
@@ -129,11 +118,9 @@ import {
 } from '../context/context-set.js';
 
 /**
- * Reports whether a `ContextSet` carries any response mutation.
- *
- * For the framework's own `ctx.set` (a `TrackedContextSet`) this is one flag
- * read; plain objects (callers passing a literal) fall back to a scan.
- * `applySet` uses this to skip rebuilding the `Response` when nothing changed.
+ * Whether a `ContextSet` carries any response mutation. For the framework's
+ * `TrackedContextSet` it is one flag read; plain objects fall back to a scan.
+ * `applySet` uses this to skip rebuilding the `Response`.
  */
 export function hasSetMutations(set?: ContextSet): boolean {
     if (!set) return false;
@@ -154,19 +141,12 @@ export function hasSetMutations(set?: ContextSet): boolean {
 }
 
 /**
- * Merges a `ContextSet` (`req.set`) into the outgoing `Response`.
- *
- * Rules (see ):
- * - `set.headers` is merged *over* the response's existing headers; explicitly
- * set values win. Headers the handler already set are kept unless overridden
- * by name.
- * - `set.status` overrides the response status **only when defined**; otherwise
- * the handler's status is preserved.
- * - Runs exactly once, at the single pipeline exit, for every response path.
- *
- * The `set` object is optional and, when it carries no mutation, the original
- * `Response` is returned unchanged (no `Response` rebuild, no extra headers
- * allocation).
+ * Merges a `ContextSet` (`ctx.set`) into the outgoing `Response`:
+ * - `set.headers` is merged over the response's headers; explicitly set values
+ *   win and other handler headers are kept.
+ * - `set.status` overrides the response status only when defined.
+ * - Runs once at the pipeline exit, for every response path; returns the
+ *   original `Response` unchanged when there is nothing to apply.
  */
 export function applySet(response: Response, set?: ContextSet): Response {
     if (!set) return response;
@@ -177,7 +157,7 @@ export function applySet(response: Response, set?: ContextSet): Response {
         if ((flags & SET_HEADERS) === 0) {
             // Status-only mutation: the `Response` constructor copies the
             // header list itself, so no explicit `new Headers(...)` copy is
-            // needed (Elysia 1's three-property `mapResponse` check).
+            // needed.
             return new Response(response.body, {
                 status: set.status ?? response.status,
                 statusText: response.statusText,

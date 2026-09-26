@@ -7,9 +7,8 @@ import { CONVENTION_FILES } from '../../src/compiler/conventions';
 import type { ScannedRoute } from '../../src/compiler/route-module';
 
 /**
- * Tests for the Directory Scanner: pure filesystem inventory, convention
- * validation, dynamic/wildcard conflict detection, and `middleware.ts` rejection.
- * Each route directory is self-contained — no group inheritance chain.
+ * Directory Scanner tests: filesystem inventory, convention validation,
+ * dynamic/wildcard conflicts, and `middleware.ts` rejection.
  */
 
 function makeTree(): string {

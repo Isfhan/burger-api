@@ -1,8 +1,7 @@
 /**
  * Central type definitions for the validation subsystem.
  *
- * Types only — no runtime logic, no adapter (connector) implementations,
- * no I/O. Keeps the public `types/index.ts` clean.
+ * Types only — no runtime logic, no adapter implementations, no I/O.
  */
 
 import type { z } from 'zod';
@@ -10,10 +9,9 @@ import type { LowercaseHTTPMethod } from '../utils/routing.js';
 
 /**
  * Minimal structural type for a Standard Schema V1 validator — the common
- * shape shared by libraries like Valibot and ArkType so they can work with
- * BurgerAPI. No new dependency — only the stable `~standard` contract is
- * used. The `vendor` names the producing library
- * (e.g. "valibot", "arktype", "zod").
+ * shape shared by libraries like Valibot and ArkType so they work with
+ * BurgerAPI. Only the stable `~standard` contract is used. `vendor` names the
+ * producing library (e.g. "valibot", "arktype", "zod").
  */
 export interface StandardSchemaV1 {
     readonly '~standard': {
@@ -50,9 +48,8 @@ export interface StandardSchemaV1Issue {
 }
 
 /**
- * Any value accepted in a schema slot. Zod remains the default provider;
- * Standard Schema libraries are also accepted through the adapter (connector)
- * layer.
+ * Any value accepted in a schema slot. Zod is the default provider; Standard
+ * Schema libraries are also accepted.
  */
 export type SchemaInput = z.ZodTypeAny | StandardSchemaV1;
 
@@ -60,12 +57,12 @@ export type SchemaInput = z.ZodTypeAny | StandardSchemaV1;
 export type ValidationSlot =
     'params' | 'query' | 'headers' | 'cookies' | 'body';
 
-/** The kinds of validator providers known to the adapter (connector) layer. */
+/** The kinds of validator providers known to the adapter layer. */
 export type ValidatorKind = 'zod' | 'standard';
 
 /**
- * A common result shape shared by every adapter (connector) so that Zod and
- * other libraries all report success or failures the same way.
+ * A common result shape shared by every adapter, so Zod and other libraries
+ * report success or failure the same way.
  */
 export type ValidationResult =
     | { success: true; data: unknown }
@@ -93,9 +90,8 @@ export interface CompiledValidator {
     /**
      * True when the schema transforms (coerces) its own input during
      * `validate` (e.g. Zod `z.coerce.*`, Valibot `v.coerce`, or a
-     * `~standard.coercible` schema). Framework coercion must be skipped for
-     * such schemas — pre-coercing a self-coercing schema would double-apply
-     * type conversion. False for strict schemas (framework coercion applies).
+     * `~standard.coercible` schema). Framework coercion is skipped for these —
+     * pre-coercing would double-apply type conversion.
      */
     coercible: boolean;
 }
@@ -124,10 +120,8 @@ export type ResponseSchema = Record<string, SchemaInput>;
 
 /**
  * Configuration surfaced from `ServerOptions` into the compilation step.
- * Defaults match the BurgerAPI Vision:
- * - status: 422
- * - errorFormat: 'problem+json' (RFC 9457)
- * - responseValidation: 'dev'
+ * Defaults: status 422, errorFormat 'problem+json' (RFC 9457),
+ * responseValidation 'dev'.
  */
 export interface ValidatorConfig {
     /** Opt-in string→type coercion. Default false. */

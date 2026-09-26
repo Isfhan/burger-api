@@ -1,21 +1,16 @@
 /**
- * The coercer — builds and applies precomputed value-conversion plans
- *. "Coercion" here means automatic type conversion:
- * turning a string like `"42"` into the number `42`, or `"true"` into the
- * boolean `true`.
+ * The coercer — builds and applies precomputed value-conversion plans.
+ * "Coercion" means automatic type conversion: `"42"` → the number `42`,
+ * `"true"` → the boolean `true`.
  *
- * Responsibilities:
- * - `buildPlan`: inspect a schema slot and record only the fields that need
- * conversion (number/boolean/date). Returns undefined when there is nothing
- * to convert.
- * - `apply`: transform a raw string record into a typed record using the plan,
- * in a single linear pass. Fields not in the plan are copied unchanged (no
- * extra checks on them).
+ * `buildPlan` records only the fields that need conversion
+ * (number/boolean/date) and returns undefined when there is nothing to
+ * convert. `apply` transforms a raw string record in a single linear pass;
+ * fields not in the plan are copied unchanged.
  *
- * Conversion is OPT-IN (default OFF, ). The plan is built once when
- * the app starts; applied per request only when present. It must NOT run when
- * conversion is disabled, must NOT convert the body, and must NOT leak `NaN`
- * (a bad conversion simply fails later in the validator, ).
+ * Conversion is opt-in (default OFF, planned at startup and applied only when
+ * present). It never converts the body and never leaks `NaN` — a bad
+ * conversion stays a string so the validator reports the real input.
  */
 
 import { z } from 'zod';
@@ -57,16 +52,13 @@ function coerceValue(op: CoercionOp, raw: string): unknown {
     switch (op) {
         case 'number': {
             // Strict decimal form only: no empty/whitespace, hex, exponent,
-            // Infinity or NaN. Anything else stays a string so the
-            // downstream validator reports the real input.
+            // Infinity or NaN. Anything else stays a string.
             if (!/^\s*[+-]?\d+(\.\d+)?\s*$/.test(raw)) {
                 return raw;
             }
             const n = Number(raw);
-            // A failed conversion (e.g. "abc") yields NaN. Keep the original
-            // raw string instead so the downstream validator reports the
-            // actual bad input ("received 'abc'") rather than a confusing
-            // "received nan".
+            // Never leak NaN: keep the raw string so the validator reports
+            // the actual bad input.
             return Number.isNaN(n) ? raw : n;
         }
         case 'boolean': {
@@ -188,7 +180,7 @@ export function apply(
             continue;
         }
         // Arrays (duplicate keys) are not coerced field-by-field; pass through
-        // so the validator sees the same shape as today.
+        // unchanged so the validator sees the same shape.
         if (Array.isArray(value)) {
             out[key] = value;
             continue;

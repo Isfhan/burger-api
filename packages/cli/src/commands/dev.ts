@@ -1,12 +1,4 @@
-/**
- * Dev Command
- *
- * Runs a development server with hot reload (auto-restart on file changes).
- * This is the primary development command per vision §17.
- *
- * Example: burger-api dev
- * Example: burger-api dev --port 4000
- */
+/** Dev command — runs the app with hot reload (auto-restart on file changes). */
 
 import { Command } from 'commander';
 import { existsSync, watch, type FSWatcher } from 'fs';
@@ -20,12 +12,7 @@ import {
     dim,
 } from '../utils/logger';
 
-/**
- * Debounce window for the restart watcher. A single save typically fires
- * several raw fs events in quick succession (rename + change, sometimes for
- * both a file and its parent directory) — this coalesces a burst into one
- * restart instead of several.
- */
+/** Debounce window that coalesces one save's burst of fs events into a restart. */
 const RESTART_DEBOUNCE_MS = 150;
 
 /** A child that exits this soon after (re)start failed to start at all. */
@@ -33,8 +20,8 @@ const STARTUP_FAILURE_MS = 1500;
 
 /**
  * Resolve once `port` can be bound again (or after ~2s). On Windows a
- * killed child's listening socket lingers briefly, so respawning at once
- * hit EADDRINUSE on about half of all hot restarts.
+ * killed child's socket lingers briefly, so an immediate respawn can hit
+ * EADDRINUSE.
  */
 async function waitForPortFree(port: number): Promise<void> {
     for (let attempt = 0; attempt < 20; attempt++) {
@@ -59,9 +46,7 @@ interface DevCommandOptions {
     file?: string;
 }
 
-/**
- * Create the "dev" command — primary development server per vision §17.
- */
+/** `burger-api dev` — development server with hot reload. */
 export const devCommand = new Command('dev')
     .description('Start development server with hot reload')
     .option(
@@ -100,10 +85,9 @@ export const devCommand = new Command('dev')
         dim('File changes will automatically restart the server');
         newline();
 
-        // Entry-relative path fallback for the framework scanners
-        // (apiDir/pageDir/wsDir resolve under this dir when they don't
-        // exist relative to the project root) — also the root this
-        // command watches for restarts.
+        // App dir fallback for the scanners (apiDir/pageDir/wsDir resolve
+        // under this when not found at the project root) — also the root
+        // watched for restarts.
         const watchRoot = dirname(resolve(file));
 
         let startedAt = 0;
@@ -160,14 +144,11 @@ export const devCommand = new Command('dev')
         try {
             proc = spawnServer();
 
-            // Own the restart trigger directly instead of `bun --watch`:
-            // `--watch` only tracks modules already reachable from the
-            // entry's import graph, so a brand-new route directory (never
-            // imported until the scanner's next run) is invisible to it —
-            // it silently 404s until something else forces a restart.
-            // Watching the whole app directory recursively for ANY
-            // filesystem event (including new files/directories) closes
-            // that gap.
+            // Watch the app directory directly instead of `bun --watch`:
+            // `--watch` only sees modules already in the entry's import
+            // graph, so a brand-new route directory stays invisible (and
+            // 404s) until something else forces a restart. Watching
+            // recursively for any fs event closes that gap.
             watcher = watch(watchRoot, { recursive: true }, () => {
                 requestRestart();
             });
@@ -185,10 +166,8 @@ export const devCommand = new Command('dev')
                     proc = spawnServer();
                     continue;
                 }
-                // Exited on its own (not from our restart) — a startup
-                // error (syntax error, port in use, …) or a crash. Keep
-                // watching so saving the fix brings the server back instead
-                // of making the user rerun `dev`.
+                // Exited on its own — startup error or crash. Keep watching
+                // so saving the fix brings the server back without a rerun.
                 if (Date.now() - startedAt < STARTUP_FAILURE_MS) {
                     logError(`Server failed to start (exit code ${exitCode}).`);
                 } else {

@@ -11,11 +11,10 @@ import type {
 } from '../validation/types.js';
 
 /**
- * Capability probe: dynamic code generation (`new Function`) is forbidden
- * on several WinterCG runtimes — notably Cloudflare Workers
- * ("EvalError: Code generation from strings disallowed for this context").
- * Probed once per process; a negative result disables JIT globally and the
- * interpreter pipeline stays the permanent fallback.
+ * Capability probe: `new Function` is forbidden on several WinterCG runtimes
+ * (Cloudflare Workers throws "Code generation from strings disallowed for
+ * this context"). Probed once per process; a negative result disables JIT and
+ * the interpreter pipeline stays the fallback.
  */
 let jitCapability: boolean | null = null;
 
@@ -37,9 +36,9 @@ export function resetJitProbe(): void {
 }
 
 /**
- * True when `fn` is declared `async` (or is an async generator). Ported from
- * Elysia 2 (`compile/utils.js` `isAsyncFunction`) — an async-declared function
- * ALWAYS returns a promise, so its call site must await unconditionally.
+ * True when `fn` is declared `async` (or is an async generator). An
+ * async-declared function always returns a promise, so its call site must
+ * await unconditionally.
  */
 export function isAsyncFunction(fn: unknown): boolean {
     if (typeof fn !== 'function') return false;
@@ -56,17 +55,12 @@ const MATCH_LITERAL =
     /^(?:true|false|null|undefined|-?\d+(?:\.\d+)?|'[^'\\]*'|"[^"\\]*")$/;
 
 /**
- * Conservative source-level proof that `fn` can NEVER return a promise.
- * Ported from Elysia 2 (`compile/utils.js` `mayReturnPromise`, cached per
- * function). Only two shapes are proven safe:
- *
- * - a function/arrow **block body with no `return`** (any value-producing
- *   return would need the `return` token, so the call yields `undefined`), and
- * - an arrow with a **literal expression body** (`true`/`undefined`/…).
- *
- * Every other shape (including anything with a `return`, native code, or
- * unparseable source) reports `true` — "may return a promise" — so the
- * generated code keeps the thenable check and behavior can never drift.
+ * Conservative source-level proof that `fn` can NEVER return a promise,
+ * cached per function. Only two shapes are proven safe: a block body with no
+ * `return` token (the call yields `undefined`) and an arrow with a literal
+ * expression body. Everything else (a `return`, native code, unparseable
+ * source) reports `true`, so the generated code keeps its thenable check and
+ * behavior cannot drift.
  */
 export function mayReturnPromise(fn: unknown): boolean {
     if (typeof fn !== 'function') return true;
@@ -121,32 +115,28 @@ function thenableGuard(target: string): string {
 
 /**
  * Compiles a frozen {@link HookPlan} into a single function via
- * `new Function`, unrolling the beforeRoute/response-hook chains that
- * `executeHookPlan` walks per request.
+ * `new Function`, unrolling the chains `executeHookPlan` walks per request.
  *
- * Semantics contract (mirrors lifecycle/executor.ts exactly):
+ * Semantics contract (same as lifecycle/executor.ts):
  *
  *   transform → validation → beforeRoute* → handler → response-validation?
  *   → afterRoute* → mapResponse*
  *   any throw → dispatchOnError (nearest-first onError chain)
  *
- * - **Sync-first**: a step that is not statically `async` is called without
- *   `await` when its source proves it cannot return a promise, and with a
- *   conditional `if (r != null && typeof r.then === 'function') r = await r`
- *   guard otherwise (Elysia 2 `awaitGuard`). The generated function only
- *   becomes `async` when some emitted call actually needs `await`; the error
- *   path always returns `dispatchOnError`'s promise.
- * - Forward hooks: `Response` short-circuits the remaining beforeRoute hooks
- *   and the handler (the response still flows through the collected
- *   mappers, response validation, afterRoute and mapResponse); a function
- *   return is an after-mapper applied in REVERSE collection order; anything
- *   else continues.
+ * - Sync-first: a step proven not to return a promise is called without
+ *   `await`; otherwise a conditional thenable guard is emitted. The generated
+ *   function becomes `async` only when a call actually needs `await`; the
+ *   error path always returns `dispatchOnError`'s promise.
+ * - Forward hooks: `Response` short-circuits the remaining hooks and the
+ *   handler (the response still flows through collected mappers, response
+ *   validation, afterRoute and mapResponse); a function return is an
+ *   after-mapper applied in reverse collection order.
  * - Response hooks: `Response` replaces; `(res)=>Response` transforms.
- * - Cold/rare stages (transform, validation, response validation, error
- *   dispatch) delegate to the SAME shared functions the interpreter uses,
- *   so behavior cannot drift. Only hot chains are unrolled.
- * - Dependencies ride in one captured object `D`; no user function source
- *   is ever interpolated into the generated code.
+ * - Cold stages (transform, validation, response validation, error dispatch)
+ *   delegate to the same shared functions the interpreter uses, so behavior
+ *   cannot drift; only hot chains are unrolled.
+ * - Dependencies ride in one captured object `D`; no user function source is
+ *   ever interpolated into the generated code.
  *
  * @returns the compiled dispatcher, or `null` when there is nothing worth
  *          compiling or dynamic code generation is unavailable.
@@ -160,11 +150,9 @@ export function compileJitHookPlan(
     handler: RequestHandler,
     method: string
 ) => Response | Promise<Response>) | null {
-    // Empty plan: nothing to unwrap or await — call the handler directly.
-    // The caller's exit (Response check + `ctx.set` merge) is unchanged, and
-    // no codegen is needed, so this works even where `new Function` is banned.
-    // A plan carrying `onError` hooks is NOT empty here: this function owns
-    // the error dispatch and must keep the try/catch wrapper.
+    // Empty plan: call the handler directly (works where `new Function` is
+    // banned). A plan with onError hooks is not empty — this function owns the
+    // error dispatch and keeps the try/catch wrapper.
     if (
         plan.onError.length === 0 &&
         plan.transform === undefined &&
@@ -192,8 +180,8 @@ export function compileJitHookPlan(
         e: plan.onError,
         rv: plan.validators,
         vc: plan.validatorConfig,
-        // Resolve the executor's env fallback NOW so the hot path reads one
-        // boolean: explicit flag ?? NODE_ENV !== production.
+        // Resolve the env fallback now so the hot path reads one boolean:
+        // explicit flag ?? NODE_ENV !== production.
         dbg: (debug ?? plan.debug) ?? isNotProductionEnv(),
     };
 
@@ -202,14 +190,12 @@ export function compileJitHookPlan(
     L.push('try{');
 
     // ---- sync-first call emission ----
-    // The generated function is declared `async` only when at least one
-    // emitted call site actually needs `await`.
+    // The generated function is declared `async` only when a call needs await.
     let needsAsync = false;
     /**
-     * Emits `target = <call>` plus the await form its function demands:
-     * unconditional for a statically-async fn, conditional (thenable guard)
-     * for a fn that may return a promise, plain otherwise. `declare` prefixes
-     * the assignment with `let` (the guard keeps using the bare name).
+     * Emits `target = <call>` plus the await form the function demands:
+     * unconditional for an async fn, conditional (thenable guard) when it may
+     * return a promise, plain otherwise. `declare` prefixes with `let`.
      */
     const emitCall = (
         target: string,
@@ -250,13 +236,11 @@ export function compileJitHookPlan(
         emitCall('res', 'H(ctx)', handler, true);
     } else {
         // A `Response` short-circuit skips the remaining beforeRoute hooks
-        // and the handler, but — exactly like `runHooks` — the mappers
-        // collected so far still apply, and the response then continues
-        // through response validation → afterRoute → mapResponse.
-        //
+        // and the handler, but the mappers collected so far still apply, and
+        // the response continues through validation → afterRoute → mapResponse.
         // A hook proven synchronous can only return `undefined`, so it never
         // contributes a mapper; when no hook can, the collection machinery
-        // and its `await` loop disappear entirely.
+        // disappears entirely.
         const canReturnMapper: boolean[] = [];
         let anyMapper = false;
         for (let i = 0; i < bLen; i++) {
@@ -296,7 +280,7 @@ export function compileJitHookPlan(
             'try{const ct=res.headers.get("content-type")??"";' +
                 'if(ct.includes("application/json")){' +
                 'const body=await res.clone().json();' +
-                // Executor lowercases the method before schema lookup — an
+                // The method is lowercased before schema lookup — an
                 // uppercase key silently misses and skips enforcement.
                 'const out=VR(D.rv,METHOD.toLowerCase(),res.status,body,' +
                 'D.vc||{},D.dbg);' +
@@ -323,8 +307,7 @@ export function compileJitHookPlan(
                 );
                 needsAsync = true;
             } else {
-                // Proven synchronous hook: only a Response replacement is
-                // possible, so no mapper branch and no `await` are emitted.
+                // Proven synchronous: only a Response replacement is possible.
                 L.push(`if(${v} instanceof Response){res=${v};}`);
             }
         }

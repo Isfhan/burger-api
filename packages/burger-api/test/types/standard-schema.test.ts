@@ -1,11 +1,8 @@
 /**
  * Type-level tests for Standard Schema v1 support (non-Zod providers).
- *
- * Regression: real standard-schema libraries (e.g. valibot) type their
- * `~standard.types` as optional (`| undefined`), so the inference conditional
- * must strip `undefined` before matching `{ output: infer O }`. The failure
- * result shape has no `value` member — `StandardSchemaV1Result` must be a
- * success/failure union, not a single interface with a required `value`.
+ * Standard Schema libraries type `~standard.types` as optional, so inference
+ * must strip `undefined` before matching `{ output: infer O }`, and results
+ * must be a success/failure union.
  */
 import { describe, it, expect } from 'bun:test';
 import { object, string, number } from 'valibot';

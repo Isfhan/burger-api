@@ -20,7 +20,7 @@ describe('parseQuery (fast Bun-native parser)', () => {
     });
 
     it('normalizes + to a space (URLSearchParams / form-encoding parity)', () => {
-        // Backward compatibility: used URLSearchParams, which decodes +.
+        // `+` decodes to a space, matching URLSearchParams.
         expect(parseQuery('search=test+product+search')).toEqual({
             search: 'test product search',
         });
@@ -88,9 +88,9 @@ describe('parseQuery (fast Bun-native parser)', () => {
 });
 
 /**
- * The pre-rewrite implementation, kept verbatim as the differential
- * reference: `split('&')` + per-pair regex + unconditional decode. The
- * charCodeAt scanner must produce identical output for every input.
+ * Legacy parser kept as the differential reference: `split('&')` + per-pair
+ * regex + unconditional decode. The current scanner must produce identical
+ * output for every input.
  */
 function legacyParseQuery(search: string): Record<string, string | string[]> {
     const legacyDecode = (segment: string): string => {

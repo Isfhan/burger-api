@@ -2,32 +2,14 @@
  * The validation coordinator — builds the framework's validation hook from
  * precompiled route validators.
  *
- * It consumes the prepared `CompiledRouteValidators` produced by the schema
- * preparation component. When a request comes in it runs `cv.validate(value)`
- * once per slot — no walk over the raw schema, no adapter (connector)
- * selection, no preparing at request time. It does NOT redesign
- * the hook pipeline.
+ * Runs `cv.validate(value)` once per slot — no walk over the raw schema, no
+ * adapter selection, no preparing at request time. Skips work when
+ * `ctx.validated` is already set and validates
+ * params/query/headers/cookies/body with the same checks.
  *
- * Behavior:
- * - skips work when `ctx.validated` is already set,
- * - validates params/query/headers/cookies/body with the same checks,
- * - throws a `ValidationError` (422, RFC 9457 problem details) on failure,
- * - throws `HTTPError(415)` when a body schema is declared but the request
- *   body is not JSON (never skips validation).
- *
- * Performance (batch B):
- * - `createValidationHook` accepts the concrete lowercase method so the
- *   method lookup + `toLowerCase()` happen ONCE at compile time
- *   (per-method hook) instead of per request.
- * - params/query/headers/cookies validate synchronously; only the body slot
- *   can suspend.
- * - the content-type gate uses `indexOf`/`charCodeAt` scanning (no
- *   `split(';')` + `trim()` + `toLowerCase()` allocations when the header is
- *   already lowercase and well-formed) mirroring Elysia 2 (`jit.js` content
- *   type fast paths).
- * - headers materialize through Bun's `Headers.toJSON()` when available
- *   (research item #14) and the cookies slot reuses the context's cached
- *   `ctx.cookies`.
+ * Throws `ValidationError` (422, RFC 9457 problem details) on failure, or
+ * `HTTPError(415)` when a body schema is declared but the request body is not
+ * JSON (never skips validation).
  */
 
 import type { BurgerContext } from '../context/context.js';
@@ -49,7 +31,7 @@ type MethodValidators = NonNullable<
 >;
 
 /**
- * Splits a `Cookie` header into `name=value` pairs, honoring RFC 6265 quoted
+ * Splits a `Cookie` header into `name=value` pairs, following RFC 6265 quoted
  * cookie-values. A quoted value may contain `;` or `=` without terminating the
  * pair (e.g. `session="a;b=c"`). The surrounding DQUOTES are stripped from the
  * value; the inner content is preserved verbatim.
@@ -137,9 +119,9 @@ function resolveMethodValidators(
 
 /**
  * Lowercases an HTTP method without allocating when it is already lowercase
- * (Bun hands the uppercase form in). Returns `undefined` for anything that
- * cannot be a compiled method key, so the caller takes the "no validators"
- * path.
+ * (Bun hands the uppercase form in). Returns an empty string for anything
+ * that cannot be a compiled method key, so the caller takes the "no
+ * validators" path.
  */
 function toLowerMethod(method: string): string {
     const len = method.length;
@@ -154,8 +136,7 @@ function toLowerMethod(method: string): string {
 /**
  * Extracts the media type from a raw `Content-Type` header value without
  * `split`/`trim`/`toLowerCase` when the value is already a plain lowercase
- * token (the overwhelmingly common case). Mirrors the char-code fast paths in
- * Elysia 2's body parser (`jit.js`).
+ * token (the common case).
  */
 function mediaTypeOf(raw: string): string {
     const semi = raw.indexOf(';');
@@ -211,8 +192,8 @@ function validateMethodSlots(
     isHead: boolean,
     config: ValidatorConfig
 ): void | Promise<void> {
-    // The validated bag mirrors the `BurgerValidated` slots exactly, so it
-    // is assignable to `ctx.validated` without an assertion.
+    // The validated bag matches the `BurgerValidated` slots, so it is
+    // assignable to `ctx.validated` without an assertion.
     const validated: Partial<Record<ValidationSlot, unknown>> = {};
 
     // Track errors per slot — only populated on failure.
@@ -336,20 +317,18 @@ function validateMethodSlots(
         ctx.validated = validated;
     };
 
-    // Body (gated on the JSON media type — parsed from the raw header so
-    // casing (`Application/JSON`) and parameters (`; charset=utf-8`) can't
-    // bypass or confuse the gate; the media type is lowercased only when it
-    // contains uppercase characters). Skipped for HEAD: a HEAD request
-    // carries no body, so the GET body schema cannot apply.
+    // Body (gated on the JSON media type; skipped for HEAD, which carries
+    // no body). The gate reads the raw header, so casing
+    // (`Application/JSON`) and parameters (`; charset=utf-8`) cannot bypass
+    // it.
     const bodyValidator = methodValidators.body;
     if (bodyValidator && !isHead) {
         const rawContentType = ctx.headers.get('content-type') ?? '';
         const mediaType = mediaTypeOf(rawContentType);
         if (isJsonMediaType(mediaType)) {
-            // Reading the body is the only asynchronous work here; the
-            // returned promise keeps the exact original error handling
-            // (parse failure AND a throwing validator both land in
-            // `errorsBySlot.body`, surfaced as a 422 ValidationError).
+            // Reading the body is the only asynchronous work here;
+            // parse failures and throwing validators both land in
+            // `errorsBySlot.body` (surfaced as a 422 ValidationError).
             return ctx.json().then(
                 (bodyData) => {
                     try {
@@ -418,10 +397,9 @@ function validateMethodSlots(
  * @param config - validation configuration (custom status, error format).
  * @param isDev - reserved for future use (dev diagnostics).
  * @param method - when given, the hook is specialized for that lowercase
- *   method at compile time (no per-request method lookup or `toLowerCase`).
- * @param skipValidatedBag - when true (analyzer proved nothing reads
- *   `ctx.validated`), a method without validators does not allocate the empty
- *   `{}` bag. Only legal with `method` given.
+ *   method at compile time (no per-request method lookup).
+ * @param skipValidatedBag - when true, a method without validators does not
+ *   allocate the empty `{}` bag (only legal with `method` given).
  */
 export function createValidationHook(
     validators: CompiledRouteValidators,
@@ -443,10 +421,8 @@ export function createValidationHook(
                 return undefined;
             };
         }
-        // NOT an `async` function: schemas without a body slot validate
-        // synchronously, and the pipeline (both the interpreter and the
-        // compiled route executor) awaits the result only when a Promise is
-        // returned.
+        // NOT an `async` function: body-less schemas validate synchronously,
+        // and the pipeline awaits the result only when a Promise is returned.
         return (ctx: BurgerContext): void | Promise<void> => {
             if (ctx.validated) return undefined;
             return validateMethodSlots(ctx, methodValidators, isHead, config);

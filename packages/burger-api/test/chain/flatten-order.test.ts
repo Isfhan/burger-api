@@ -1,17 +1,7 @@
 /**
- * Hook-scope ordering is expressed in three places that must agree: the
- * loader's merge order (global hooks merged before route hooks —
- * `compiler/module-loader.ts`), the chain's per-scope buckets
- * (`chain/flattener.ts`), and `AGENTS.md`'s prose description of the
- * lifecycle. Nothing previously asserted these stay in sync — this is
- * exactly how `AGENTS.md` drifted from the real flattener order (see
- * `docs/RELEASE-1.0.0-AUDIT.md`, Phase 2 item 1).
- *
- * This file has two halves:
- * 1. A behavioral test driving `flatten()` directly and asserting the exact
- *    execution order across all four scopes, for both hook directions.
- * 2. A doc-sync test that reads `AGENTS.md` and fails if its stated order no
- *    longer matches the behavioral order above.
+ * Hook-scope ordering is claimed in two places that must agree: the
+ * behavioral order asserted below via `flatten()`, and the prose in
+ * `AGENTS.md`, checked by the doc-sync test.
  */
 import { describe, it, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';

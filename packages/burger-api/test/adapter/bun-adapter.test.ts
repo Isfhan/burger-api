@@ -3,10 +3,8 @@ import { BunAdapter } from '../../src/adapter/bun';
 import type { RuntimeAdapter } from '../../src/adapter/types';
 
 /**
- * M4 tests for the Runtime Adapter seam: the `BunAdapter` boots via the
- * Web-Standard contract, serves static + fetch routes, and stops cleanly.
- * The adapter is the ONLY runtime-specific surface; everything it receives
- * is Web Standard `Request`/`Response`.
+ * Runtime adapter seam: `BunAdapter` boots via the Web Standard contract,
+ * serves static + fetch routes, and stops cleanly.
  */
 
 describe('RuntimeAdapter — BunAdapter contract', () => {
@@ -31,8 +29,7 @@ describe('RuntimeAdapter — BunAdapter contract', () => {
             port: 0, // let Bun pick a free port
         });
 
-        // Discover the assigned port via a short-lived fetch through Bun's
-        // own listener is not exposed; instead assert the handle is stoppable.
+        // Port discovery is not exposed here; just assert the handle stops.
         expect(typeof handle.stop).toBe('function');
         handle.stop();
 

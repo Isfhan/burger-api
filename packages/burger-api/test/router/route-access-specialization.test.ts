@@ -1,8 +1,8 @@
 /**
- * B3 — the RouteAccessAnalyzer may only specialize work when its verdict is
- * `unknown: false`. These tests cover the conservative fallback: a handler
- * that lets the context escape (helper call, destructuring, computed access)
- * must keep receiving fully extracted params, and `debug: true` disables the
+ * The RouteAccessAnalyzer may only specialize work when its verdict is
+ * `unknown: false`. These cover the conservative fallback: a handler that
+ * lets the context escape (helper call, destructuring, computed access)
+ * still receives fully extracted params, and `debug: true` disables the
  * specialization entirely.
  */
 import { describe, it, expect } from 'bun:test';
@@ -17,7 +17,7 @@ function nativeGet(router: Router, path: string) {
     return handlers.GET!;
 }
 
-describe('B3 — route-access specialization fallbacks', () => {
+describe('route-access specialization fallbacks', () => {
     it('keeps params extraction when the context escapes to a helper', async () => {
         const readId = (ctx: BurgerContext) => ctx.params.id;
         const defs = [

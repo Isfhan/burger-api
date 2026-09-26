@@ -59,9 +59,8 @@ describe('generateVirtualEntrySource', () => {
         const getOnly = __handlers({ GET: noop, schema: {} });
         expect(Object.keys(getOnly)).toEqual(['GET']);
 
-        // Core's router compiler adds its own 204 + Allow OPTIONS to every
-        // route and skips beforeRoute for it — the build entry must not
-        // shadow that with a stub of its own.
+        // Core's router adds its own 204 + Allow OPTIONS and skips
+        // beforeRoute for it; the build entry must not shadow that.
         const withPost = __handlers({ GET: noop, POST: noop, PUT: 'nope' });
         expect(Object.keys(withPost).sort()).toEqual(['GET', 'POST']);
         expect(withPost.OPTIONS).toBeUndefined();
@@ -79,7 +78,7 @@ describe('generateVirtualEntrySource', () => {
         expect(__mod(ns)).toBe(ns);
     });
 
-    it('compile: true statically imports BunAdapter and injects it via ServerOptions.adapter (regression: build:exec cannot resolve a computed dynamic import specifier)', () => {
+    it('compile: true statically imports BunAdapter via ServerOptions.adapter (regression: build:exec cannot resolve computed dynamic imports)', () => {
         const source = generateVirtualEntrySource(
             config,
             [
@@ -135,9 +134,9 @@ describe('generateVirtualEntrySource', () => {
         );
 
         expect(source).toContain("import * as _c0 from '/tmp/api/config.ts'");
-        // Bare `_c0` would bind the raw module namespace ({ default: {...} })
-        // as the route's config, so `ctx.config.auth` is always undefined in
-        // production even when config.ts sets `auth: false`.
+        // Bare `_c0` binds the raw namespace ({ default: {...} }), so
+        // ctx.config.auth would be undefined in production even with
+        // `auth: false`.
         expect(source).toContain('config: __mod(_c0),');
         expect(source).not.toContain('config: _c0,');
     });

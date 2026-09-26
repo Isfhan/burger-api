@@ -2,9 +2,7 @@ import type { RequestHandler } from '../types/index.js';
 
 /**
  * Embedded (base64) static assets for production AOT builds. Kept apart from
- * `assets.ts` (which reads the disk in dev) so runtime-portable bundles —
- * `toFetchHandler()` on Workers / Deno / Vercel / Node — never load
- * `node:fs`.
+ * `assets.ts` so portable bundles (`toFetchHandler`) never load `node:fs`.
  */
 
 /** A static asset with its contents base64-embedded (production AOT). */
@@ -17,8 +15,8 @@ export interface EmbeddedAsset {
 }
 
 /**
- * Handler for an embedded asset. The base64 payload is decoded once (with
- * the Web-standard `atob`, so no `Buffer` dependency) and served as bytes.
+ * Handler for an embedded asset: decodes the base64 payload once with the
+ * Web-standard `atob` and serves the bytes.
  */
 export function embeddedAssetHandler(asset: EmbeddedAsset): RequestHandler {
     const binary = atob(asset.data);

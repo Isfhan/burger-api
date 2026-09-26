@@ -1,6 +1,5 @@
 /**
- * WebSocket adapter
- * Integrates WebSocket router with Bun.serve()
+ * Matches upgrade requests to routes and wires sockets to their handlers.
  */
 
 import type { WebSocketRouter } from './router.js';
@@ -74,10 +73,8 @@ export interface WebSocketAdapterOptions {
 
     /**
      * The deployment target declared by `burger-api build --target`, if any.
-     * When present, resolves the upgrade handoff via `RUNTIME_CAPABILITIES`
-     * instead of live `detectWsPlatform` probing — the only way to give an
-     * accurate answer on targets (Node vs. Vercel) that look identical to
-     * `globalThis`-based detection.
+     * When present, resolves the handoff via `RUNTIME_CAPABILITIES` instead of
+     * live probing (Node and Vercel look identical to `globalThis` detection).
      */
     runtimeTarget?: RuntimeTarget;
 }
@@ -101,8 +98,7 @@ export interface WebSocketServeOption {
 }
 
 /**
- * WebSocket adapter
- * Creates Bun.serve() websocket option
+ * WebSocket adapter: upgrade handoff, auth gate and per-connection contexts.
  */
 export class WebSocketAdapter {
     private router: WebSocketRouter;
@@ -137,8 +133,7 @@ export class WebSocketAdapter {
     createWebSocketOption(): WebSocketServeOption {
         const self = this;
 
-        // Forward connection limits to Bun.serve. Only defined keys are
-        // emitted so Bun's defaults apply otherwise.
+        // Forward only defined connection limits; Bun's defaults apply otherwise.
         const option: WebSocketServeOption = {
             open(ws: any) {
                 return self.handleOpen(ws);
@@ -314,14 +309,10 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Handles a possibly-WebSocket request.
-     *
-     * This is THE entry point for WebSocket handling on every runtime. It
-     * detects the platform, matches the route, runs the auth gate, performs
-     * the protocol handoff, and returns an explicit outcome so callers can
-     * never confuse "not an upgrade" with "socket taken over" (the legacy
-     * `undefined`-on-success signal that caused post-upgrade HTTP
-     * fall-through).
+     * Entry point for WebSocket handling on every runtime: detects the
+     * platform, matches the route, runs the auth gate and performs the
+     * protocol handoff. Returns an explicit outcome so callers can never
+     * confuse "not an upgrade" with "socket taken over".
      *
      * @param request incoming request (upgrade or normal)
      * @param server Bun serve handle when running under `Bun.serve`
@@ -354,14 +345,9 @@ export class WebSocketAdapter {
             return this.capabilityUnsupportedResponse(this.runtimeTarget);
         }
 
-        // A declared bun/node/cloudflare/deno target resolves the handoff
-        // directly — it's exactly the ambiguity live detection can't settle
-        // (Node and Vercel are indistinguishable via `globalThis`). No
-        // declared target (dev mode, or a hand-rolled `toFetchHandler` use)
-        // falls back to live probing. `!== 'vercel'` is unreachable in
-        // practice (the capability guard above already returned for it) —
-        // it's here so the type checker can see `WsPlatformName` has no
-        // `'vercel'` member without a cast.
+        // A declared target resolves the handoff directly; otherwise fall back
+        // to live probing. `!== 'vercel'` is unreachable here (the capability
+        // guard above returned already) — it only narrows the type.
         const platform: WsPlatformName =
             this.runtimeTarget && this.runtimeTarget !== 'vercel'
                 ? this.runtimeTarget
@@ -381,12 +367,9 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Route-match + auth, shared by every platform's upgrade handoff (the
-     * fetch-shaped path above, and the Node bridge below — which cannot
-     * reuse {@link handleUpgrade} wholesale since that method always routes
-     * through {@link detectWsPlatform}/{@link acceptWsUpgrade}, and
-     * `detectWsPlatform` falls back to `'node'` whenever no Bun/Cloudflare/
-     * Deno platform object is present — which is always true here).
+     * Route-match + auth, shared by every platform's upgrade handoff. The Node
+     * bridge cannot reuse {@link handleUpgrade} because that always routes
+     * through {@link detectWsPlatform}, which falls back to `'node'` there.
      */
     private async matchAndAuthorize(
         request: Request,
@@ -417,9 +400,9 @@ export class WebSocketAdapter {
             return { ok: false, response: authResult.response };
         }
 
-        // The matched route rides in a non-enumerable symbol slot: internal
-        // (never visible in `ws.data` copies/JSON), but carried by every
-        // platform that attaches `data` to the socket.
+        // The matched route rides in a non-enumerable symbol slot (invisible in
+        // `ws.data` copies/JSON) but travels with every platform that attaches
+        // `data` to the socket.
         const data: Record<string, unknown> = {};
         Object.defineProperty(data, WS_ROUTE, {
             value: { route: match.route, params: match.params },
@@ -447,11 +430,10 @@ export class WebSocketAdapter {
     }
 
     /**
-     * The declared-target counterpart to {@link nodeFetchUpgradeUnsupported}:
-     * a target whose `RUNTIME_CAPABILITIES` entry says `websocket: false`
-     * (today, only `vercel`) gets an honest "not supported here" response
-     * instead of the Node-bridge suggestion, which would be wrong advice —
-     * there is no persistent process on that target to wire a bridge to.
+     * Declared-target counterpart to {@link nodeFetchUpgradeUnsupported}: a
+     * target with `websocket: false` (only `vercel` today) gets a "not
+     * supported here" response — the Node bridge would be wrong advice, since
+     * that target has no persistent process.
      */
     private capabilityUnsupportedResponse(
         target: RuntimeTarget
@@ -479,16 +461,9 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Legacy fetch-shaped wrapper around {@link handleUpgrade}.
-     *
-     * Returns `undefined` for BOTH "not an upgrade" and "Bun took over the
-     * socket" — callers needing the distinction must use `handleUpgrade`.
-     * Kept for backward compatibility with existing integrations.
-     *
-     * Prefer {@link handleUpgrade} directly for any new integration: it
-     * returns a discriminated `{ handled: false }` / `{ handled: true,
-     * response }` outcome, so the ambiguity this wrapper carries never
-     * arises.
+     * Fetch-shaped wrapper around {@link handleUpgrade}, kept for backward
+     * compatibility. Returns `undefined` for BOTH "not an upgrade" and "socket
+     * taken over" — prefer {@link handleUpgrade} when the distinction matters.
      */
     createFetchHandler() {
         return async (
@@ -501,16 +476,10 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Node integration: bridges node:http's `'upgrade'` event into the
-     * framework pipeline using a framing library's `WebSocketServer`
-     * (e.g. the `ws` package) — Node has no fetch-native WebSocket upgrade.
-     *
-     * `toFetchHandler(burger)` returns a `(request: Request) => Promise<Response>`
-     * — feeding it a raw `node:http` `IncomingMessage` doesn't work; bridge
-     * the request/response yourself (headers, method, body stream) or use a
-     * helper that does. `fetchHandler()` must also have run at least once
-     * (it lazily processes routes, including WS ones) before this method —
-     * call it before `createNodeWsBridge()`, not only for the HTTP path:
+     * Node integration: bridges node:http's `'upgrade'` event into the framework
+     * pipeline using a framing library's `WebSocketServer` (e.g. the `ws`
+     * package). `fetchHandler()` must run at least once first — WS routes are
+     * processed there.
      *
      * ```ts
      * import http from 'node:http';
@@ -539,9 +508,8 @@ export class WebSocketAdapter {
                     >;
                 };
 
-                // Real headers, not just `host` — `matchAndAuthorize`'s auth
-                // hooks may read cookies/Authorization, and the `Upgrade`
-                // header check below needs it to be present at all.
+                // Copy real headers, not just `host`: auth hooks may read
+                // cookies/Authorization, and the Upgrade check needs them.
                 const headers = new Headers();
                 for (const [key, value] of Object.entries(raw.headers)) {
                     if (value === undefined) continue;
@@ -563,25 +531,21 @@ export class WebSocketAdapter {
                     return;
                 }
 
-                // Not `adapter.handleUpgrade()`: that method always routes
-                // through `detectWsPlatform`, which falls back to `'node'`
-                // with no Bun/Cloudflare/Deno platform object present (i.e.
-                // always, here) and returns an unconditional 501. Node's
-                // handoff happens below via `wss.handleUpgrade` instead.
+                // Not `adapter.handleUpgrade()`: it would detect `'node'` and
+                // return a 501. Node's handoff happens below via
+                // `wss.handleUpgrade`.
                 const result = await adapter.matchAndAuthorize(request);
                 if (!result.ok) {
                     // Unmatched route or auth rejection — destroy the raw
-                    // socket; there is no Response channel to send it on.
+                    // socket; there is no Response channel.
                     destroy();
                     return;
                 }
 
                 wss.handleUpgrade(req, socket, head, (ws) => {
-                    // `getRouteFromWs` reads `ws.data?.route` — Bun sets
-                    // this natively via `server.upgrade(request, { data })`;
-                    // `ws` package sockets have no such property, so it must
-                    // be attached explicitly for handleOpen/Message/Close to
-                    // find the matched route (and any resolved user).
+                    // `ws` sockets do not carry `data` natively (Bun sets it via
+                    // `server.upgrade`), so attach it for the handlers to find
+                    // the matched route (and any resolved user).
                     (ws as { data?: unknown }).data = result.data;
                     ws.on('message', (...args: any[]) => {
                         void adapter.handleMessage(
@@ -612,16 +576,15 @@ export class WebSocketAdapter {
     }
 
     /**
-     * The route + params matched at upgrade. Read from the socket's data
-     * slot once, then cached per socket — so a handler replacing `ws.data`
-     * cannot orphan the connection from its route.
+     * The route + params matched at upgrade, cached per socket so a handler
+     * replacing `ws.data` cannot orphan the connection from its route.
      */
     private getMatch(ws: any): WsMatch | undefined {
         let match = this.wsMatches.get(ws);
         if (!match) {
             match = ws?.data?.[WS_ROUTE] as WsMatch | undefined;
             // Hand-wired sockets (custom bridges, tests) may still carry the
-            // legacy `data.route` shape.
+            // `data.route` shape.
             const legacy = ws?.data?.route as
                 | (CompiledWebSocketRoute & { params?: Record<string, string> })
                 | undefined;
@@ -634,9 +597,8 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Create (or reuse) the BurgerWS context for a connection.
-     * One context per connection: `ws.data` mutations made in `open`
-     * (or any handler) persist into `message`/`close`.
+     * Creates (or reuses) the BurgerWS context for a connection: one per
+     * connection, so `ws.data` mutations in one handler persist into the next.
      */
     private createBurgerWS(ws: any): BurgerWS {
         let burgerWs = this.wsContexts.get(ws);
@@ -652,10 +614,9 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Run auth hooks during WebSocket upgrade request.
-     * Returns a Response if auth fails, or undefined if auth succeeds.
-     * Platform `env` / `executionCtx` are bound onto the temporary context
-     * so transform hooks can read bindings (e.g. JWT secrets from `env`).
+     * Runs plugin auth hooks during the upgrade; returns a Response when auth
+     * fails. `env` / `executionCtx` are bound onto the temporary context so
+     * transform hooks can read bindings (e.g. JWT secrets).
      */
     private async runAuthHooks(
         request: Request,
@@ -683,15 +644,13 @@ export class WebSocketAdapter {
         );
 
         try {
-            // Always run transform hooks (parse JWT, load user, etc.)
-            // These set ctx.user which may be needed even when auth is disabled
+            // Transform hooks set `ctx.user`, needed even when auth is disabled.
             if (this.pluginTransform) {
                 await applyTransform(ctx, this.pluginTransform);
             }
 
-            // Always run beforeRoute hooks — plugins decide for themselves
-            // whether to act (e.g. rate limiting). Only the required-user
-            // check below is gated on auth being enabled for the route.
+            // beforeRoute hooks always run; plugins decide whether to act
+            // (e.g. rate limiting). Only the required-user check below is gated.
             if (this.pluginBeforeRoute) {
                 for (const hook of this.pluginBeforeRoute) {
                     const result = await hook(ctx);
@@ -721,8 +680,7 @@ export class WebSocketAdapter {
                 };
             }
 
-            // If the route declares roles, the authenticated user must hold
-            // at least one of them — otherwise reject with 403.
+            // Role-scoped routes reject with 403 unless the user holds a role.
             if (authConfig?.roles && authConfig.roles.length > 0) {
                 if (!hasAnyRole(user, authConfig.roles)) {
                     return {

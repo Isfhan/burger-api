@@ -82,8 +82,7 @@ describe('api-key', () => {
         const prefixT = await medianTime(samePrefix);
         const randomT = await medianTime(random);
         // A byte-wise short-circuit comparison would make `random` much
-        // faster than `samePrefix`. Constant-time comparison keeps the
-        // median delta within measurement noise.
+        // faster than `samePrefix`; constant-time comparison stays in noise.
         expect(Math.abs(prefixT - randomT)).toBeLessThan(10);
     });
 });

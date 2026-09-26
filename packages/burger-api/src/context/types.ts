@@ -1,13 +1,11 @@
 /**
- * Internal types for the prototype-based request context.
- *
- * These types are framework-internal. `BurgerContext` (in `./context`)
- * re-exports the public-facing ones (`ContextSet`, `RouteMeta`).
+ * Internal types for the prototype-based request context. `BurgerContext`
+ * re-exports the public ones (`ContextSet`, `RouteMeta`).
  */
 
 /**
- * The closed set of request fields `RouteAccessAnalyzer` can reason about.
- * The list mirrors the lazy surface `BurgerContext` exposes.
+ * The request fields `RouteAccessAnalyzer` can reason about — the lazy
+ * surface `BurgerContext` exposes.
  */
 export type ContextField =
     | 'params'
@@ -23,25 +21,22 @@ export type ContextField =
     | 'wildcardParams';
 
 /**
- * The route-specific data passed from `Router.fetch` into the compiled handler,
- * which seeds `BurgerContext` at creation time. Only the fields relevant to the
- * matched route are populated (a static route has no `params`/`wildcardParams`).
+ * Route-specific data passed from `Router.fetch` when seeding
+ * `BurgerContext`. Only fields relevant to the matched route are populated.
  */
 export interface ContextInit {
     params?: Record<string, string>;
     wildcardParams?: string[];
     route?: RouteMeta;
     /**
-     * Route-definition pattern for natively dispatched matches. When present
-     * (and `route` is not), the `BurgerContext.route` getter derives the
-     * concrete `RouteMeta` lazily on first access — the native path never
-     * parses the request URL just to build a route identity.
+     * Route pattern for natively dispatched matches. When `route` is absent,
+     * the `route` getter derives `RouteMeta` from this lazily.
      */
     pattern?: string;
 }
 
 /**
- * The response-mutation surface exposed through `req.set`.
+ * The response-mutation surface exposed through `ctx.set`.
  * `cookies` is intentionally absent (reserved for a future release).
  */
 export interface ContextSet {
@@ -50,9 +45,8 @@ export interface ContextSet {
 }
 
 /**
- * The immutable information produced by `RouteAccessAnalyzer` describing which
- * request fields and lifecycle hooks a route uses. It is an optimization hint
- * only — the framework never reads it at runtime.
+ * What `RouteAccessAnalyzer` found a route to use (request fields and hook
+ * stages). Frozen; an optimization hint only — never read at runtime.
  */
 export interface RouteAccessInfo {
     /** The set of fields the analyzer determined the route reads. */
@@ -70,9 +64,9 @@ export interface RouteAccessInfo {
 }
 
 /**
- * The matched-route identity exposed as `req.route`.
- * `path` is the concrete requested pathname (never the query string);
- * `pattern` is the route-definition pattern (e.g. `/users/:id`).
+ * The matched-route identity exposed as `ctx.route`. `path` is the concrete
+ * requested pathname (never the query string); `pattern` is the route pattern
+ * (e.g. `/users/:id`).
  */
 export interface RouteMeta {
     path: string;

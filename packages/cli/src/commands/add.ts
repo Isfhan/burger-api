@@ -1,9 +1,4 @@
-/**
- * Add Command
- *
- * Downloads hooks (and later plugins) from the ecosystem into the project.
- * Example: burger-api add cors logger rate-limiter
- */
+/** Add command — downloads ecosystem hooks and plugins into the project. */
 
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
@@ -28,17 +23,11 @@ export function hyphenToCamelCase(name: string): string {
 }
 
 /**
- * Resolves the real exported factory name for a downloaded hook/plugin, by
+ * Resolve the real exported factory name for a downloaded hook/plugin by
  * reading its main file and taking the first `export function <name>(`.
- *
- * A hyphenated directory name doesn't reliably predict its export by simple
- * case conversion — e.g. `rate-limiter` exports `rateLimit`, `compression`
- * exports `compress`, `cache` exports `cacheControl`. By convention every
- * ecosystem package defines its primary configurable factory first, with
- * preset/convenience wrappers (e.g. `noCache`, `strictSecurity`) after it,
- * so the first match is the one users are meant to import by default. Falls
- * back to a hyphen→camelCase guess if the file can't be read or has no
- * `export function` (keeps the printed snippet at least a valid identifier).
+ * Packages export their primary factory first, so the first match is the
+ * default import. Falls back to a hyphenToCamelCase guess when the file
+ * can't be read or has no `export function`.
  */
 export function resolveExportName(mainFilePath: string, packageName: string): string {
     try {
@@ -52,11 +41,9 @@ export function resolveExportName(mainFilePath: string, packageName: string): st
 }
 
 /**
- * Copy-pasteable registration for each official package: the lifecycle
- * stage its README recommends (hooks) and the minimal options it needs to
- * typecheck and actually do something (plugins). Values that must come from
- * the environment are read from `process.env`. Packages not listed here
- * fall back to `<export>()` (hooks under `beforeRoute`).
+ * Copy-pasteable registration hints for official packages: recommended
+ * lifecycle stage and minimal options. Unlisted packages fall back to
+ * `<export>()` (hooks under `beforeRoute`).
  */
 export const USAGE_HINTS: Record<
     string,
@@ -93,17 +80,13 @@ export const USAGE_HINTS: Record<
     session: { call: 'session({ secret: process.env.SESSION_SECRET })' },
 };
 
-/**
- * Create the "add" command
- * Downloads ecosystem components (hooks/plugins) from GitHub into the project
- */
+/** `burger-api add` — download ecosystem hooks/plugins from GitHub. */
 export const addCommand = new Command('add')
     .description('Add a hook or plugin from the ecosystem')
     .argument('<names...>', 'Names of ecosystem packages to add')
     .action(async (packageNames: string[]) => {
         clack.intro('Add ecosystem packages to your project');
 
-        // Make sure we're in a BurgerAPI project
         if (!existsSync('package.json')) {
             clack.outro('Not in a BurgerAPI project');
             logError(
@@ -123,13 +106,12 @@ export const addCommand = new Command('add')
             failed: [] as string[],
             skipped: [] as string[],
         };
-        // Package name -> its real exported factory name (resolved after
-        // download; see `resolveExportName`).
+        // Package name -> resolved export name (see `resolveExportName`).
         const exportNames = new Map<string, string>();
 
         for (const name of packageNames) {
             try {
-                // Check if it exists on GitHub as hook or plugin
+                // Exists on GitHub as hook or plugin?
                 let spin = spinner(`Checking ${name}...`);
 
                 let ecosystemType: 'hook' | 'plugin' | null;
@@ -168,7 +150,6 @@ export const addCommand = new Command('add')
                         results.skipped.push(name);
                         continue;
                     }
-                    // Ask if they want to overwrite
                     const shouldOverwrite = await clack.confirm({
                         message: `${name} already exists. Overwrite?`,
                         initialValue: false,
@@ -220,7 +201,6 @@ export const addCommand = new Command('add')
             }
         }
 
-        // Show summary
         newline();
         if (results.success.length > 0) {
             success(`Successfully added ${results.success.length} package(s):`);

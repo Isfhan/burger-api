@@ -2,14 +2,9 @@ import { describe, it, expect } from 'bun:test';
 import { BurgerContext } from '../../src/context/context';
 
 /**
- * Dead-path elimination.
- *
- * `parseQuery` runs ONLY inside the lazy `query` getter, which is the only
- * place `BurgerContext._query` is assigned. Therefore:
- * - if `req.query` is never read, `_query` stays `undefined` (no parse ran);
- * - the first read assigns `_query`; subsequent reads return the same object
- * (single-parse cache).
- * This proves a route that ignores `query` performs zero query parsing/allocation.
+ * `parseQuery` runs only inside the lazy `query` getter, the only place
+ * `BurgerContext._query` is assigned. If `query` is never read, no parsing
+ * happens; the first read caches the result.
  */
 describe('Dead-path elimination (lazy query)', () => {
     it('never parses query when req.query is never read', () => {

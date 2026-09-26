@@ -1,10 +1,8 @@
 /**
- * Per-method native dispatch (Bun `routes` method objects): 405 + Allow for
- * undefined methods, auto-HEAD Content-Length, auto-OPTIONS, decoded params,
- * handler-return/error handling, lazy `ctx.ip`, and exactly-once `onRequest`.
- *
- * These exercise the REAL Bun native path (`serve()` + method objects), which
- * is where the specialized handlers run; `router.fetch` covers the fallback.
+ * Per-method native dispatch (Bun `routes` method objects): 405 + Allow,
+ * auto-HEAD/OPTIONS, decoded params, handler-return/error handling, lazy
+ * `ctx.ip`, and exactly-once `onRequest`. These exercise the real Bun
+ * `serve()` path; `router.fetch` covers the fallback.
  */
 import { describe, it, expect, beforeAll, afterAll, spyOn } from 'bun:test';
 import { Burger } from '../../src/index';

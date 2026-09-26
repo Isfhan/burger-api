@@ -193,8 +193,7 @@ describe('oidc', () => {
             exp: nowSec() + 600,
         });
 
-        // Prime instance A first — under the old module-level cache this
-        // would poison instance B with A's keys.
+        // Prime instance A first; a shared cache would poison instance B.
         const resA = await run(
             { issuer: providerA.issuer },
             '/api/guarded',

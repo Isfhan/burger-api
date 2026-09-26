@@ -1,7 +1,7 @@
 /**
  * Platform bindings (`ctx.env` / `ctx.executionCtx`) injected through the
- * WinterCG entry point and carried across the lifecycle — including
- * pre-routing `onRequest` re-binding and trie-dispatched dynamic routes.
+ * WinterCG entry point and carried across the lifecycle, including
+ * pre-routing onRequest and trie-dispatched dynamic routes.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger, toFetchHandler } from '../../src/index';

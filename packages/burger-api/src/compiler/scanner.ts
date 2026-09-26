@@ -15,19 +15,16 @@ import type { ScannedRoute, ScanResult } from './route-module.js';
  * Walks a route directory tree and produces a pure inventory of route
  * directories — the first stage of the compiler pipeline.
  *
- * The scanner only enumerates files and computes route paths. It performs
- * **no `import()`** of any module; loading module code is the exclusive
- * responsibility of the Module Loader. This keeps the filesystem walk
- * cheap, deterministic, and side-effect free.
+ * The scanner only enumerates files and computes route paths; it never calls
+ * `import()` (that is the Module Loader's job), keeping the walk cheap,
+ * deterministic, and side-effect free. Each route directory is
+ * self-contained — no group inheritance chain; groups only strip URL paths.
  *
- * Each route directory is **self-contained** — no group inheritance chain.
- * Groups only affect URL path stripping.
- *
- * Convention rules enforced here (fail fast):
+ * Fail-fast rules:
  * - Only recognized convention files are acknowledged; `middleware.ts` is forbidden.
  * - At most one dynamic (`[param]`) and one wildcard (`[...]`) folder per
- * directory level (they may coexist — the trie orders them static > param > wildcard).
- * - Named wildcard folders (`[...slug]`) are skipped (not yet supported).
+ *   level (they may coexist; priority is static > param > wildcard).
+ * - Named wildcard folders (`[...slug]`) are not supported yet.
  */
 export class DirectoryScanner {
     constructor(
@@ -147,7 +144,7 @@ export class DirectoryScanner {
             conventionByStem.set(split.stem, abs);
         }
 
-        // Validate folder-level conflicts (ported from core/api-router.ts).
+        // Validate folder-level conflicts.
         for (const name of subDirs) {
             // Named wildcard folders (`[...slug]`) become literal path
             // segments that can never match — fail loud instead of emitting
@@ -198,8 +195,7 @@ export class DirectoryScanner {
             const routeFilePath = localFiles.route!;
             // Convert from the path *relative to* the scanned root so that the
             // absolute temp/working-directory prefix does not leak into the
-            // route path (mirrors core/api-router.ts, which used the relative
-            // path for this conversion).
+            // route path.
             const relativeFilePath = path.relative(
                 this.routesDir,
                 routeFilePath

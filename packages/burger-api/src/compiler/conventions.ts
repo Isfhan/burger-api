@@ -1,16 +1,14 @@
 /**
  * File-based routing conventions for the compiler pipeline.
  *
- * These are the single source of truth for which sibling files the
- * Directory Scanner recognizes inside a route directory, and which names
- * are explicitly forbidden.
+ * Single source of truth for the sibling files the Directory Scanner
+ * recognizes inside a route directory, and for the names that are forbidden.
  *
- * Locked architecture:
  * - A route directory is self-contained; sibling files are discovered by convention.
  * - There is **no `middleware.ts`**. Infrastructure is written as hooks.
  * - There is **no `use.ts`** or **`webhook.ts`**. Use ecosystem plugins instead.
  * - `config.ts` provides per-route options exposed as `ctx.config`. Core
- *   honors only `responseValidation`; other keys (auth, cache, timeout, …)
+ *   reads only `responseValidation`; other keys (auth, cache, timeout, …)
  *   are data read by plugins / hooks.
  */
 

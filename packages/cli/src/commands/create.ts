@@ -1,10 +1,6 @@
 /**
- * Create Command
- *
- * This command helps users create a new Burger API project.
- * It asks simple questions and sets up everything they need to get started.
- *
- * We use @clack/prompts for beautiful, user-friendly interactive prompts.
+ * Create command — scaffolds a new BurgerAPI project, asking simple
+ * questions via @clack/prompts.
  */
 
 import { Command, Option } from 'commander';
@@ -32,12 +28,7 @@ import {
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 
 /**
- * Create the "create" command
- * This is what runs when users type: burger-api create <projectName>
- */
-/**
- * Validate project name for filesystem compatibility
- * @param name - Project name to validate
+ * Validate a project name for filesystem compatibility.
  * @returns Error message if invalid, undefined if valid
  */
 export function validateProjectName(name: string): string | undefined {
@@ -59,9 +50,7 @@ export function validateProjectName(name: string): string | undefined {
     return undefined;
 }
 
-/**
- * Ensure directory name (apiDir/pageDir) resolves under targetDir/src to prevent path traversal.
- */
+/** Reject a scan dir name that escapes targetDir/src (path traversal). */
 function validateDirUnderSrc(
     targetDir: string,
     dirName: string,
@@ -87,8 +76,8 @@ export const createCommand = new Command('create')
         '-y, --yes',
         'Use default answers for all prompts (non-interactive, alias: --defaults)'
     )
-    // Commander accepts one short + one long flag per option, so `--defaults`
-    // is registered separately (hidden) and folded into `yes` below.
+    // Commander allows only one long flag per option, so `--defaults` is
+    // registered hidden and folded into `yes` below.
     .addOption(new Option('--defaults').hideHelp())
     .option('--pages', 'Include page routes (src/pages)')
     .option('--ws', 'Include file-based WebSocket routes (src/websocket)')
@@ -109,11 +98,9 @@ export const createCommand = new Command('create')
         projectName: string,
         options: CreateCommandOptions
     ) => {
-        // Start with a nice intro
         clack.intro('Create a new BurgerAPI project');
 
         try {
-            // Validate project name
             const nameError = validateProjectName(projectName);
             if (nameError) {
                 clack.outro('Invalid project name');
@@ -127,7 +114,6 @@ export const createCommand = new Command('create')
                 process.exit(1);
             }
 
-            // Check if directory already exists
             const targetDir = join(process.cwd(), projectName);
             if (existsSync(targetDir)) {
                 clack.outro('Directory already exists!');
@@ -135,8 +121,8 @@ export const createCommand = new Command('create')
                 process.exit(1);
             }
 
-            // Ask user questions to configure the project. Feature flags
-            // or a missing TTY mean non-interactive (prompts would hang).
+            // Prompts only run when interactive; flags, --yes or no TTY use
+            // default answers (prompts would hang).
             const hasFeatureFlags =
                 options.pages !== undefined ||
                 options.ws !== undefined ||
@@ -156,7 +142,6 @@ export const createCommand = new Command('create')
                 ? await askQuestions(projectName)
                 : applyFlags(defaultOptions(projectName), options);
 
-            // User cancelled
             if (clack.isCancel(answered)) {
                 clack.outro('Operation cancelled');
                 process.exit(0);
@@ -167,7 +152,6 @@ export const createCommand = new Command('create')
                 lang: options.lang as 'ts' | 'js',
             };
 
-            // Validate apiDir/pageDir stay under targetDir/src (prevent path traversal)
             if (optionsWithLang.useApi) {
                 const apiDirError = validateDirUnderSrc(
                     targetDir,
@@ -205,7 +189,6 @@ export const createCommand = new Command('create')
                 }
             }
 
-            // Show what we're about to create
             info('Creating project with the following configuration:');
             newline();
             console.log(` Name: ${projectName}`);
@@ -226,7 +209,7 @@ export const createCommand = new Command('create')
             }
             newline();
 
-            //  Resolve burger-api from a local source
+            // Optional local burger-api override (BURGER_API_SOURCE, pre-release testing).
             const sourceOverride = burgerApiSourceOverride();
             if (sourceOverride) {
                 info(`Using local burger-api: ${sourceOverride.label}`);
@@ -244,7 +227,6 @@ export const createCommand = new Command('create')
                 throw err;
             }
 
-            // Success! Show them what to do next
             clack.outro('Project created successfully!');
             newline();
             header('Next Steps');
@@ -334,10 +316,7 @@ export function applyFlags(
     return out;
 }
 
-/**
- * Default project options for non-interactive mode (`--yes`).
- * Mirrors the initial values of the interactive prompts.
- */
+/** Default project options for non-interactive mode (`--yes`). */
 function defaultOptions(projectName: string): CreateOptions {
     return {
         name: projectName,
@@ -355,24 +334,18 @@ function defaultOptions(projectName: string): CreateOptions {
 }
 
 /**
- * Ask user questions to configure their project
- * Uses @clack/prompts for beautiful interactive prompts
- *
- * @param projectName - Name of the project
- * @returns Configuration options from user answers
+ * Prompt for project configuration.
+ * @returns Configuration options from the user's answers
  */
 async function askQuestions(projectName: string): Promise<CreateOptions> {
-    // Ask all questions in a nice flow
     const answers = await clack.group(
         {
-            // Question 1: Do you need API routes?
             useApi: () =>
                 clack.confirm({
                     message: 'Do you need API routes?',
                     initialValue: true,
                 }),
 
-            // Question 2: API directory (only if they said yes to API)
             apiDir: ({ results }) =>
                 results.useApi
                     ? clack.text({
@@ -390,7 +363,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('api'),
 
-            // Question 3: API prefix (only if they said yes to API)
             apiPrefix: ({ results }) =>
                 results.useApi
                     ? clack.text({
@@ -400,7 +372,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('/api'),
 
-            // Question 4: Debug mode (only if they said yes to API)
             debug: ({ results }) =>
                 results.useApi
                     ? clack.confirm({
@@ -409,14 +380,12 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve(false),
 
-            // Question 5: Do you need Page routes?
             usePages: () =>
                 clack.confirm({
                     message: 'Do you need Page routes?',
                     initialValue: false,
                 }),
 
-            // Question 6: Page directory (only if they said yes to Pages)
             pageDir: ({ results }) =>
                 results.usePages
                     ? clack.text({
@@ -434,7 +403,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('pages'),
 
-            // Question 7: Page prefix (only if they said yes to Pages)
             pagePrefix: ({ results }) =>
                 results.usePages
                     ? clack.text({
@@ -444,14 +412,12 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('/'),
 
-            // Question 8: Do you need file-based WebSocket routes?
             useWs: () =>
                 clack.confirm({
                     message: 'Do you need WebSocket routes?',
                     initialValue: false,
                 }),
 
-            // Question 9: WebSocket directory (only if they said yes to WS)
             wsDir: ({ results }) =>
                 results.useWs
                     ? clack.text({
@@ -469,7 +435,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                       })
                     : Promise.resolve('websocket'),
 
-            // Question 10: AI agent skills
             addSkills: () =>
                 clack.confirm({
                     message:
@@ -478,7 +443,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
                 }),
         },
         {
-            // Callback when user cancels (Ctrl+C)
             onCancel: () => {
                 clack.cancel('Operation cancelled');
                 process.exit(0);
@@ -486,7 +450,6 @@ async function askQuestions(projectName: string): Promise<CreateOptions> {
         }
     );
 
-    // Return the configuration
     return {
         name: projectName,
         useApi: answers.useApi as boolean,

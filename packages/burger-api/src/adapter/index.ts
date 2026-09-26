@@ -1,9 +1,6 @@
-// Runtime-agnostic adapter contract only — no value exports here. The
-// concrete `BunAdapter` lives at `burger-api/adapter/bun` and imports the
-// `bun` runtime package at module scope, so re-exporting it from this
-// barrel would make plain `burger-api/adapter` crash on import under any
-// non-Bun runtime (Node, Cloudflare Workers, Deno, Vercel). Import
-// `burger-api/adapter/bun` directly when you specifically need `BunAdapter`.
+// Runtime-agnostic adapter contract only — no value exports here. Re-exporting
+// `BunAdapter` would pull in the `bun` package and crash non-Bun runtimes.
+// Import `burger-api/adapter/bun` directly when you need it.
 export type {
     AdapterStartOptions,
     RuntimeAdapter,

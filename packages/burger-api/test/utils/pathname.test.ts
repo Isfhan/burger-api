@@ -1,6 +1,6 @@
 /**
- * B6 — `extractPathnameFromUrl` stops at `?` and `#` in a single scan and
- * preserves the historical fallback for inputs without a path segment.
+ * `extractPathnameFromUrl` stops at `?` and `#` in a single scan; inputs
+ * without a path segment fall back to the full URL.
  */
 import { describe, it, expect } from 'bun:test';
 import { extractPathnameFromUrl } from '../../src/utils/wildcard';

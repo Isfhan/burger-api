@@ -1,12 +1,8 @@
 /**
- * Real, end-to-end tests for `serve()` — booting an actual `node:http`
- * server (port 0 → OS-assigned free port, read back from `server.address()`
- * once listening) and hitting it with the real global `fetch`/`WebSocket`,
- * not synthetic in-process calls. Uses Node's own `node:test` runner
- * (not `bun:test`): this package's runtime target is plain Node, so testing
- * it as Node — not as Bun-emulating-Node — is the more honest check, and it
- * avoids the global `Request`/`Response` type clash between `@types/bun`
- * and `@types/node` that a shared TS program would otherwise hit.
+ * End-to-end tests for `serve()`: boot a real `node:http` server on port 0
+ * and hit it with the global `fetch`/`WebSocket`, not synthetic in-process
+ * calls. Runs on Node's `node:test` (this package targets plain Node) to
+ * avoid the `@types/bun`/`@types/node` Request type clash.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';

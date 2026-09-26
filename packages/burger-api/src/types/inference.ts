@@ -47,9 +47,9 @@ export type InferSchemaOutput<T> = T extends z.ZodTypeAny
       : unknown;
 
 /**
- * The fallback validated shape used when no inference applies. Mirrors the
- * `BurgerValidated` augmentation slots so augmentation remains the escape
- * hatch for anything inference cannot express.
+ * The fallback validated shape used when no inference applies. Matches the
+ * `BurgerValidated` augmentation slots, which remain the escape hatch for
+ * anything inference cannot express.
  */
 export interface DefaultValidated {
     params?: unknown;
@@ -67,13 +67,11 @@ type SlotOutput<T> = T extends SchemaInput ? InferSchemaOutput<T> : unknown;
 
 /**
  * A slot that is ALWAYS populated after validation when the route declares
- * it: `query`, `headers`, `cookies` are validated on every request (even an
- * empty query), `params` whenever the route has `[param]` segments, and
- * `body` on every request that reaches the handler (a non-JSON or missing
- * body is rejected with 415 / 422 before the handler runs). The
- * declared slot is therefore non-optional — `ctx.validated.query.q` compiles
- * without optional chaining. Undeclared slots stay optional (`unknown`):
- * at runtime they are never set.
+ * it: `query`/`headers`/`cookies` validate on every request, `params`
+ * whenever the route has `[param]` segments, and `body` whenever the handler
+ * runs (a non-JSON or missing body is rejected with 415/422 first). Declared
+ * slots are therefore non-optional; undeclared slots stay optional `unknown`
+ * and are never set at runtime.
  */
 type AlwaysSlot<TRoute, K extends keyof RouteMethodSchema> = K extends keyof TRoute
     ? { [P in K]: SlotOutput<TRoute[K]> }

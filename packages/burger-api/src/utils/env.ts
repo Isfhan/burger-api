@@ -1,12 +1,8 @@
 /**
- * `true` unless `process.env.NODE_ENV === 'production'` — the permissive
- * debug-mode default used wherever nothing else (an explicit option) has
- * already decided. Reading `process.env` throws on Deno without
- * `--allow-env` (a `NotCapable` permission error at first access, not just
- * `undefined`), and `process` doesn't exist at all on some WinterCG
- * runtimes (Cloudflare Workers without the `nodejs_compat` flag) — both
- * cases fall back to the same permissive default rather than crashing the
- * request.
+ * `true` unless `NODE_ENV === 'production'` — the permissive debug default
+ * used when no explicit option decided. Reading `process.env` throws on Deno
+ * without `--allow-env`, and `process` may not exist on some runtimes (e.g.
+ * Workers without `nodejs_compat`); both fall back to `true`.
  */
 export function isNotProductionEnv(): boolean {
     if (typeof process === 'undefined') return true;

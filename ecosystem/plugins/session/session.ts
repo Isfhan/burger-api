@@ -1,9 +1,8 @@
 /**
  * Session Plugin for BurgerAPI
  *
- * Official session management plugin that integrates with BurgerAPI's hook system.
- * Parses session ID from cookie, loads session data from configurable store, and
- * attaches session object to context.
+ * Loads session data from a cookie-backed store and attaches it to the
+ * context.
  *
  * @example
  * ```typescript
@@ -70,7 +69,6 @@ export class MemorySessionStore implements SessionStore {
       return null;
     }
 
-    // Check expiration
     if (entry.expires && Date.now() > entry.expires) {
       this.store.delete(id);
       return null;
@@ -177,10 +175,8 @@ async function signSessionId(sessionId: string, secret: string): Promise<string>
 }
 
 /**
- * Verify and extract session ID from signed value
- *
- * The HMAC signature is compared in constant time so an attacker cannot
- * recover it byte-by-byte via response-timing.
+ * Verify and extract the session ID from a signed value. The HMAC is compared
+ * in constant time so the signature cannot leak through timing.
  */
 async function verifySessionId(
     signed: string,
@@ -231,9 +227,8 @@ function buildCookieHeader(
 }
 
 /**
- * Deep-compare two session data records (snapshot vs. current). Both derive
- * from the same store object, so JSON key order is stable unless a handler
- * deleted and re-added keys — an acceptable edge for rotation detection.
+ * Deep-compare the snapshot against current session data. JSON key order is
+ * stable because both come from the same object.
  */
 function dataChanged(a: unknown, b: unknown): boolean {
     return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
@@ -294,14 +289,12 @@ export function session(options: SessionOptions = {}): Plugin {
             _sessionSnapshot?: Record<string, unknown>;
           };
 
-          // Get session ID from cookie
           let sessionId: string | undefined = ctx.cookies[cookie];
 
-          // Verify signature if secret provided
           if (secret && sessionId) {
             const verifiedId = await verifySessionId(sessionId, secret);
             if (!verifiedId) {
-              // Invalid signature - ignore session
+              // Invalid signature — treat as no session
               sessionId = undefined;
             } else {
               sessionId = verifiedId;
@@ -312,15 +305,13 @@ export function session(options: SessionOptions = {}): Plugin {
             return undefined;
           }
 
-          // Load session from store
           const sessionData = await store.get(sessionId);
           if (!sessionData) {
             return undefined;
           }
 
-          // Attach session ID and a deep copy of the data snapshot to context
-          // for later use. The copy (not the reference) is what mapResponse
-          // compares against, so handler mutations are detectable.
+          // Stash the ID and a copy of the data for mapResponse, so handler
+          // mutations are detectable by comparison.
           sessionCtx._sessionId = sessionId;
           sessionCtx._sessionSnapshot = structuredClone(sessionData);
 
@@ -329,7 +320,6 @@ export function session(options: SessionOptions = {}): Plugin {
       },
 
       beforeRoute: (ctx: BurgerContext): void => {
-        // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
@@ -347,8 +337,7 @@ export function session(options: SessionOptions = {}): Plugin {
       },
 
       mapResponse: (ctx: BurgerContext): ((response: Response) => Promise<Response>) => {
-        // 1.0 contract: response hooks return a transform function;
-        // the framework applies it to the response.
+        // Response hooks return a transform the framework applies.
         return async (response: Response): Promise<Response> => {
           const sessionCtx = ctx as unknown as {
             _sessionId?: string;
@@ -357,10 +346,8 @@ export function session(options: SessionOptions = {}): Plugin {
           const sessionId = sessionCtx._sessionId;
           const current = ctx.session;
 
-          // No session on this request. Sessions are created LAZILY: only
-          // when the handler put data in `ctx.session` (e.g. on login) is a
-          // store entry written and a cookie issued. Requests that never
-          // touch the session allocate nothing.
+          // Sessions are created lazily: a store entry and cookie only appear
+          // when the handler put data in `ctx.session` (e.g. on login).
           if (!sessionId) {
             if (!isNonEmptySession(current)) {
               return response;
@@ -368,8 +355,7 @@ export function session(options: SessionOptions = {}): Plugin {
             return issueSession(response, current);
           }
 
-          // Handler cleared the session (`ctx.session = undefined`, e.g. on
-          // logout): destroy it and expire the cookie.
+          // Handler cleared the session (logout): destroy it and expire the cookie.
           if (!current) {
             await store.destroy(sessionId);
             return withCookie(
@@ -382,8 +368,7 @@ export function session(options: SessionOptions = {}): Plugin {
             return response;
           }
 
-          // Session data changed (login/logout/data write). Rotate the ID
-          // (default) — migrating the data so the session survives — or
+          // Data changed: rotate the ID (keeping the data) by default, or
           // write it back under the same ID.
           if (regenerateOnAuth) {
             await store.destroy(sessionId);

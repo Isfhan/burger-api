@@ -67,11 +67,9 @@ interface RateLimitRecord {
 }
 
 /**
- * Creates a rate limiter hook to prevent API abuse.
- *
- * This hook tracks the number of requests from each client within a time window
- * and blocks requests that exceed the specified limit. It uses an in-memory store
- * to track request counts.
+ * Creates a hook that limits each client to `maxRequests` per `windowMs`
+ * (default 100 per minute) using an in-memory counter, and answers
+ * over-limit requests with 429.
  *
  * @param options - Configuration options for rate limiting
  * @returns A hook function that enforces rate limits
@@ -81,23 +79,15 @@ interface RateLimitRecord {
  * // Basic usage: 100 requests per minute
  * const rateLimiter = rateLimit();
  *
- * // Custom limits
+ * // 50 requests per 15 minutes
  * const rateLimiter = rateLimit({
- *   windowMs: 15 * 60 * 1000, // 15 minutes
+ *   windowMs: 15 * 60 * 1000,
  *   maxRequests: 50
  * });
  *
- * // Custom key generator (e.g., by API key)
+ * // Key by API key instead of IP
  * const rateLimiter = rateLimit({
  *   keyGenerator: (ctx) => ctx.headers.get('X-API-Key') || 'anonymous'
- * });
- *
- * // Custom error response
- * const rateLimiter = rateLimit({
- *   handler: (ctx) => Response.json(
- *     { error: 'Too many requests, please try again later' },
- *     { status: 429 }
- *   )
  * });
  * ```
  */
@@ -112,13 +102,12 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         trustProxy = false,
     } = options;
 
-    // In-memory store for rate limit records
     const store = new Map<string, RateLimitRecord>();
 
     // Warn once per limiter when a request carries no client identity.
     let warnedNoIdentity = false;
 
-    // Cleanup old entries periodically (every minute)
+    // Drop expired records every minute.
     const cleanupInterval = setInterval(() => {
         const now = Date.now();
         for (const [key, record] of store.entries()) {
@@ -135,8 +124,7 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         // Not available in every runtime
     }
 
-    // Clean up interval on process exit (for proper cleanup in tests)
-    // Works in both Node.js and Bun.js
+    // Clear the interval on exit so tests don't leak timers.
     if (typeof process !== 'undefined' && process.on) {
         try {
             process.on('exit', () => clearInterval(cleanupInterval));
@@ -153,10 +141,9 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
             rawKey = defaultKeyGenerator(ctx, trustProxy);
         }
 
-        // No identity at all (a runtime that does not expose the client
-        // address, and no trusted proxy header): such requests share ONE
-        // bucket. That still caps anonymous traffic instead of rejecting
-        // every request; warn once so the degradation is not silent.
+        // No identity (no client address, no trusted proxy header): such
+        // requests share ONE bucket. That still caps anonymous traffic;
+        // warn once so the degradation isn't silent.
         if (!rawKey) {
             if (!warnedNoIdentity) {
                 warnedNoIdentity = true;
@@ -172,11 +159,9 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
         const key = await hashKey(rawKey);
         const now = Date.now();
 
-        // Get or create rate limit record
         let record = store.get(key);
 
         if (!record || now > record.resetTime) {
-            // Create new record
             record = {
                 count: 0,
                 resetTime: now + windowMs,
@@ -184,20 +169,15 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
             store.set(key, record);
         }
 
-        // Increment request count
         record.count++;
 
-        // Calculate remaining requests
         const remaining = Math.max(0, maxRequests - record.count);
         const resetTime = record.resetTime;
 
-        // Check if rate limit is exceeded
         if (record.count > maxRequests) {
-            // Return 429 Too Many Requests
             const response = handler(ctx);
             const headers = new Headers(response.headers);
 
-            // Add rate limit headers
             headers.set('X-RateLimit-Limit', maxRequests.toString());
             headers.set('X-RateLimit-Remaining', '0');
             headers.set('X-RateLimit-Reset', Math.ceil(resetTime / 1000).toString());
@@ -210,7 +190,7 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
             });
         }
 
-        // If we should skip counting certain requests, we need to transform the response
+        // Transform the response so skipped requests don't count.
         if (skipFailedRequests || skipSuccessfulRequests) {
             return async (response: Response): Promise<Response> => {
                 const shouldSkip =
@@ -218,11 +198,9 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
                     (skipSuccessfulRequests && response.status >= 200 && response.status < 300);
 
                 if (shouldSkip) {
-                    // Decrement the count since we're skipping this request
                     record!.count--;
                 }
 
-                // Add rate limit headers to response
                 const headers = new Headers(response.headers);
                 headers.set('X-RateLimit-Limit', maxRequests.toString());
                 headers.set('X-RateLimit-Remaining', Math.max(0, maxRequests - record!.count).toString());
@@ -236,7 +214,6 @@ export function rateLimit(options: RateLimiterOptions = {}): (ctx: BurgerContext
             };
         }
 
-        // Add rate limit headers to response for allowed requests
         return (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
             headers.set('X-RateLimit-Limit', maxRequests.toString());

@@ -1,8 +1,7 @@
 import { createServer } from 'net';
 
 /**
- * Allocates an available port on 127.0.0.1 by binding a server to 0
- * and reading the assigned port. Safe for parallel test runs.
+ * Allocates an available port on 127.0.0.1; safe for parallel tests.
  */
 export async function getAvailablePort(): Promise<number> {
     return await new Promise((resolve, reject) => {

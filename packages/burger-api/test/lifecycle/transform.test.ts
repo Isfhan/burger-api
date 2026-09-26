@@ -36,7 +36,7 @@ describe('transform', () => {
         expect(captured.tenant).toBe('acme');
     });
 
-    it('transform runs before beforeRoute (new lifecycle order)', async () => {
+    it('transform runs before beforeRoute', async () => {
         let transformRan = false;
         const plan: HookPlan = {
             beforeRoute: [() => new Response('blocked', { status: 403 })],
@@ -105,7 +105,7 @@ describe('transform', () => {
             beforeRoute: [
                 (req) => {
                     const r = req as unknown as Record<string, unknown>;
-                    // transform HAS run already (new lifecycle order)
+                    // transform has run already
                     expect(r.user).toEqual({ id: 1 });
                     order.push('beforeRoute');
                 },

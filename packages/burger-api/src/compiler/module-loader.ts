@@ -19,11 +19,8 @@ const HTTP_METHOD_SET: ReadonlySet<string> = new Set(HTTP_METHODS);
 
 /**
  * Detects uppercase method exports in a schema module and normalizes them
- * into the method-keyed `RouteSchema` format.
- *
- * If the module exports `GET`, `POST`, etc. (uppercase), they are merged
- * into `{ get: { body, ... }, post: { body, ... } }`. Lowercase keys
- * pass through unchanged for backward compatibility.
+ * into the method-keyed `RouteSchema` format. Lowercase keys pass through
+ * unchanged.
  */
 function normalizeSchema(raw: Record<string, unknown>): RouteSchema {
     const keys = Object.keys(raw);
@@ -47,16 +44,15 @@ function normalizeSchema(raw: Record<string, unknown>): RouteSchema {
 }
 
 /**
- * Normalizes uppercase method exports from an openapi.ts convention file
- * into the lowercase method-keyed format expected by generateOpenAPIDocument.
+ * Normalizes uppercase method exports from `openapi.ts` into the lowercase
+ * method-keyed format expected by `generateOpenAPIDocument`.
  *
  * @example
  * ```ts
  * // openapi.ts — named exports per HTTP method
  * export const GET = { summary: 'List', tags: ['posts'] };
- * export const POST = { summary: 'Create', tags: ['posts'] };
  *
- * // → normalized: { get: {...}, post: {...} }
+ * // → normalized: { get: { summary: 'List', tags: ['posts'] } }
  * ```
  */
 function normalizeOpenapi(raw: Record<string, unknown>): openapi {
@@ -74,18 +70,11 @@ function normalizeOpenapi(raw: Record<string, unknown>): openapi {
 /**
  * The second stage of the compiler pipeline.
  *
- * Consumes the pure inventory produced by {@link DirectoryScanner} and, for
- * each route directory, `import()`s its convention files and assembles one
- * {@link RouteModule}.
- *
- * Each route directory is **self-contained** — no group inheritance merging.
- * Only the route's own files are loaded.
- *
- * Keeps convention data raw — `hooks` are carried through verbatim and
- * compiled downstream. `config` is attached for runtime use.
- *
- * The loader fails fast on duplicate resolved route paths, matching the
- * compiler's "loud and early" contract.
+ * Consumes the inventory from {@link DirectoryScanner} and, for each route
+ * directory, `import()`s its convention files and assembles one
+ * {@link RouteModule}. Each route directory is self-contained — only its own
+ * files are loaded. Convention data stays raw for downstream compilation;
+ * `config` is attached for runtime use. Fails fast on duplicate route paths.
  */
 export class ModuleLoader {
     /**
@@ -256,15 +245,14 @@ export class ModuleLoader {
     }
 
     /**
-     * Merges two already-resolved hook objects (e.g. from `hooks.ts` files and
-     * inline `route.ts` `hooks`). For array-valued hook keys both arrays are
-     * concatenated (base first, then override); scalar/object values are
-     * overridden by `override`. The `transform` key is deep-merged (base then
-     * override). Returns undefined when both are empty.
+     * Merges two resolved hook objects (e.g. `hooks.ts` and inline `route.ts`
+     * `hooks`). Array-valued keys are concatenated (base first); `transform`
+     * is deep-merged; other values are overridden by `override`. Returns
+     * undefined when both are empty.
      *
-     * The single cast here is the dynamic-module boundary: convention files
-     * are imported as `Record<string, unknown>` and only this merge narrows
-     * the shape to `RouteHooks` (the downstream hook compiler trusts it).
+     * The cast here is the dynamic-module boundary: convention files import as
+     * `Record<string, unknown>`, and this merge narrows the shape to
+     * `RouteHooks`.
      */
     private mergeHookObjects(
         base: Record<string, unknown> | RouteHooks | undefined,

@@ -1,13 +1,9 @@
 /**
  * The Zod adapter — the default schema provider for BurgerAPI.
  *
- * Responsibilities:
- * - Compute a stable identity for a Zod schema.
- * - Compile a Zod schema into a reusable `CompiledValidator`.
- * - Normalize Zod `issues` into the common `ValidationIssue[]` shape.
- *
- * This adapter must NOT own Zod's validation semantics (it delegates to
- * `safeParse`) and must NOT own coercion (that is the coercer's role).
+ * Computes a stable identity, compiles a Zod schema into a reusable
+ * `CompiledValidator`, and normalizes Zod `issues` into `ValidationIssue[]`.
+ * Delegates validation to `safeParse` and leaves coercion to the coercer.
  */
 
 import { z } from 'zod';
@@ -53,8 +49,8 @@ function normalizeIssues(error: z.ZodError): ValidationIssue[] {
 export const ZodAdapter: ValidatorAdapter = {
     identity(schema: SchemaInput): string {
         // Zod v4's `toString()` is not stable for object schemas, so use a
-        // deterministic JSON Schema fingerprint as the structural identity
-        // Prefix to namespace under the Zod provider.
+        // deterministic JSON Schema fingerprint as the structural identity.
+        // Prefix it to namespace under the Zod provider.
         const zodSchema = schema as z.ZodTypeAny;
         let fingerprint: string;
         try {
@@ -108,9 +104,8 @@ export const ZodAdapter: ValidatorAdapter = {
         const validate = (value: unknown): ValidationResult => {
             const result = zodSchema.safeParse(value);
             if (result.success) {
-                // Zod's success result already IS the `{ success, data }`
-                // shape — return it directly instead of re-wrapping (one less
-                // allocation per successful slot validation).
+                // Zod's success result already has the `{ success, data }` shape —
+                // return it directly instead of re-wrapping.
                 return result as unknown as ValidationResult;
             }
             return { success: false, issues: normalizeIssues(result.error) };

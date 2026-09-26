@@ -2,12 +2,13 @@ import * as path from 'path';
 
 /**
  * Shared route conventions for CLI scanning and code generation.
- * Must match framework routing rules (packages/burger-api pathConversion). Sync check: bun run test:route-sync (from repo root).
+ * Must match framework routing rules (packages/burger-api pathConversion) —
+ * sync check: `bun run test:route-sync`.
  */
 export const ROUTE_CONSTANTS = {
     SUPPORTED_PAGE_EXTENSIONS: ['.tsx', '.html'],
     PAGE_INDEX_FILES: ['index.tsx', 'index.html'],
-    /** Convention file extensions (route/schema/hooks/openapi/config) per vision. */
+    /** Convention file extensions (route/schema/hooks/openapi/config). */
     CONVENTION_EXTENSIONS: ['.ts', '.js', '.mjs'] as const,
     DYNAMIC_SEGMENT_PREFIX: ':',
     DYNAMIC_FOLDER_START: '[',
@@ -39,11 +40,7 @@ export function splitConventionName(
     return { stem: filename.slice(0, dot), ext };
 }
 
-/**
- * Cleans a prefix by removing leading and trailing slashes.
- * @param prefix The prefix to clean.
- * @returns The cleaned prefix.
- */
+/** Strip leading and trailing slashes from a prefix. */
 function cleanPrefix(prefix: string): string {
     let p = prefix;
     while (p.startsWith('/')) p = p.slice(1);
@@ -52,10 +49,9 @@ function cleanPrefix(prefix: string): string {
 }
 
 /**
- * Converts a file path to an API route path.
+ * Convert a file path to an API route path.
  * @param filePath The file path to convert.
  * @param prefix The prefix to prepend to the route path.
- * @returns The API route path.
  */
 export function filePathToApiRoutePath(
     filePath: string,
@@ -106,10 +102,9 @@ export function filePathToApiRoutePath(
 }
 
 /**
- * Converts a file path to a page route path.
+ * Convert a file path to a page route path.
  * @param filePath The file path to convert.
  * @param prefix The prefix to prepend to the route path.
- * @returns The page route path.
  */
 export function filePathToPageRoutePath(
     filePath: string,
@@ -130,8 +125,8 @@ export function filePathToPageRoutePath(
             segment.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
             segment.includes(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
         ) {
-            // Page dynamic segments are FILENAMES (`[name].tsx`) — the
-            // extension trails the closing bracket, so match on `includes`.
+            // Page dynamic segments are filenames (`[name].tsx`), so the
+            // closing bracket isn't last — match on `includes`.
             const end = segment.indexOf(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END);
             resultSegments.push(
                 ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX + segment.slice(1, end)

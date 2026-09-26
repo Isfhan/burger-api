@@ -22,7 +22,7 @@ describe('BurgerContext (prototype-based request)', () => {
         });
         expect(ctx.params).toEqual({});
         expect(ctx.wildcardParams).toEqual([]);
-        // route is always present in for matched routes.
+        // route is always present for matched routes.
         expect(ctx.route).toEqual({ path: '/', pattern: '/' });
     });
 

@@ -1,15 +1,11 @@
 /**
- * The validator adapter (connector) layer — the only place that decides
- * *which* schema library a schema uses.
+ * The validator adapter layer — the only place that decides which schema
+ * library a schema uses.
  *
- * Responsibilities:
- * - Define the `ValidatorAdapter` interface (produce identity + prepare).
- * - Detect which adapter a schema belongs to (Zod first, then Standard).
- * - Allow registration of additional adapters (future libraries).
- *
- * This module performs detection when the app starts only; it never runs
- * when a request comes in. It does not contain the schema-check
- * logic — that lives in each adapter implementation.
+ * Defines the `ValidatorAdapter` interface, detects which adapter a schema
+ * belongs to (Zod first, then Standard), and allows registering additional
+ * adapters. Detection runs when the app starts only; never when a request
+ * comes in. Schema-check logic lives in each adapter implementation.
  */
 
 import { z } from 'zod';
@@ -22,8 +18,8 @@ import type {
 
 /**
  * A stable connector between BurgerAPI's request flow and a concrete schema
- * library. The coordinator (orchestrator) and cache depend only on this
- * interface, never on a concrete library.
+ * library. The coordinator and cache depend only on this interface, never on
+ * a concrete library.
  */
 export interface ValidatorAdapter {
     /** Stable identity for a schema; drives cache sharing. */
@@ -38,9 +34,8 @@ export interface ValidatorAdapter {
     /**
      * Whether a compiled validator for this schema is safe to cache and
      * share. Adapters return false when the structural identity cannot
-     * faithfully capture the schema's runtime semantics (e.g. refinements
-     * with function checks, self-coercing schemas) — such schemas compile
-     * fresh on every route.
+     * capture the schema's runtime semantics (e.g. refinements with function
+     * checks, self-coercing schemas) — such schemas compile fresh per route.
      */
     cacheable?(schema: SchemaInput): boolean;
 }
@@ -64,11 +59,11 @@ function isStandardSchema(value: unknown): value is StandardSchemaV1 {
     );
 }
 
-/** Registered third-party adapters (future libraries, ). */
+/** Registered additional adapters (checked after the built-in Zod check). */
 const registered: ValidatorAdapter[] = [];
 /** The Zod adapter singleton, set by the Zod adapter module on load. */
 let zodAdapterInstance: ValidatorAdapter | undefined;
-/** The Standard Schema adapter singleton, set by M3 on load. */
+/** The Standard Schema adapter singleton, set on load. */
 let standardAdapterInstance: ValidatorAdapter | undefined;
 
 /** The Zod adapter registers itself here at module load. */
@@ -89,10 +84,9 @@ export function registerAdapter(adapter: ValidatorAdapter): void {
 /**
  * Returns the adapter that should handle `schema`.
  *
- * Detection order (R5): Zod brand first (default provider),
- * then any registered adapter, then the built-in Standard Schema adapter.
- * Throws on unknown schemas to fail fast at compile time —
- * never a request-time surprise.
+ * Detection order: Zod brand first (default provider), then any registered
+ * adapter, then the built-in Standard Schema adapter. Throws on unknown
+ * schemas to fail fast at compile time — never a request-time surprise.
  */
 export function detectAdapter(schema: SchemaInput): ValidatorAdapter {
     if (isZod(schema) && zodAdapterInstance) {

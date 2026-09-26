@@ -23,8 +23,8 @@ import { PluginRegistry } from './plugin/registry.js';
 import type { Plugin, PluginFactory } from './plugin/types.js';
 import type { Scope } from './chain/node.js';
 
-// Import WebSocket modules (scanner/compiler are loaded lazily on the dev
-// filesystem path only — production AOT builds never evaluate them)
+// Import WebSocket router/adapter (scanner/compiler load lazily on the dev
+// filesystem path only).
 import { WebSocketRouter } from './ws/router.js';
 import { WebSocketAdapter } from './ws/adapter.js';
 
@@ -47,20 +47,10 @@ import type {
 } from './ws/platform.js';
 
 /**
- * The narrow surface passed to a `plugins.ts` default export — deliberately
- * excludes the rest of `Burger`. `serve()`/`fetchHandler()` would re-enter
- * route compilation if called this early (the app is still mid-construction
- * at this point — `routesProcessed` isn't set until after `plugins.ts` runs,
- * so the reentrancy guard doesn't stop it); `createNodeWsBridge()` throws
- * unconditionally here (`wsAdapter` doesn't exist yet); `websocket()`/
- * `wsConfig()` are a different concern (WS route registration, not plugin
- * setup). Structurally compatible with `Burger` — this is a type-level
- * restriction only, not a runtime wrapper.
- *
- * Hand-written (not `Pick<Burger, 'usePlugin'>`) so `this` stays polymorphic:
- * an indexed-access type (`Burger['usePlugin']`) would concretize `this` to
- * the full `Burger` instance at extraction time, so a chained call's result
- * would show the entire `Burger` surface again — defeating the narrowing.
+ * The narrow surface passed to a `plugins.ts` default export: only
+ * `usePlugin()`. Registration runs mid-construction, so `serve()` /
+ * `fetchHandler()` etc. are deliberately excluded. Hand-written so `this`
+ * stays polymorphic for chained calls (a type-level restriction only).
  */
 export interface PluginRegistrar {
     usePlugin(
@@ -71,9 +61,8 @@ export interface PluginRegistrar {
 }
 
 /**
- * The narrow surface passed to a `providers.ts` default export. See
- * {@link PluginRegistrar} for why the rest of `Burger` is excluded and why
- * this is hand-written rather than derived via indexed access.
+ * The narrow surface passed to a `providers.ts` default export — see
+ * {@link PluginRegistrar}.
  */
 export interface ProviderRegistrar {
     provide(name: string, service: unknown): this;
@@ -85,10 +74,7 @@ export class Burger {
      */
     private server: Server;
 
-    /**
-     * The resolved API directory (dev path) — retained so the Route Module
-     * pipeline can re-scan it without poking at router internals.
-     */
+    /** The resolved API directory (dev path). */
     private apiDir?: string;
 
     /**
@@ -96,16 +82,10 @@ export class Burger {
      */
     private apiPrefix: string = 'api';
 
-    /**
-     * The page router instance (dev path only — created lazily on first
-     * page-routes scan, so production AOT bundles never load it).
-     */
+    /** Page router (dev path only, created lazily). */
     private pageRouter?: import('./core/page-router.js').PageRouter;
 
-    /**
-     * The page directory (dev path) — retained so the page router can be
-     * created lazily in `processPageRoutes()`.
-     */
+    /** The page directory (dev path). */
     private pageDir?: string;
 
     /**
@@ -114,28 +94,18 @@ export class Burger {
     private pagePrefix = '';
 
     /**
-     * The compiled API router.
-     * Owns static dispatch (Bun map) + dynamic/wildcard dispatch (trie).
+     * The compiled API router: static dispatch (Bun map) plus dynamic and
+     * wildcard dispatch (trie).
      */
     private dynamicRouter?: Router;
 
-    /**
-     * The structural route tree, retained for introspection and
-     * deterministic ordering. Built once from the Module Loader output; not
-     * used on the request hot path.
-     */
+    /** Structural route tree for introspection/ordering; not on the hot path. */
     private routeTree?: import('./compiler/route-tree.js').RouteTree;
 
-    /**
-     * Plugin registry. Populated via `.usePlugin()` before `serve()`;
-     * resolved into `HookChain` nodes during `processApiRoutes()`.
-     */
+    /** Plugin registry, populated via `.usePlugin()` before `serve()`. */
     private pluginRegistry = new PluginRegistry();
 
-    /**
-     * Application services registered via `burger.provide()`. Injected into
-     * `ctx.services` for every request at context creation time.
-     */
+    /** Services from `burger.provide()`, injected into `ctx.services`. */
     private providers = new Map<string, unknown>();
 
     /**
@@ -213,46 +183,35 @@ export class Burger {
     private conventionDefaultsApplied = false;
 
     /**
-     * App-level WebSocket hooks (`onOpen` / `onMessage` / `onClose` from
-     * `src/hooks.ts` / `globalHooks`), applied to every WS route.
+     * App-level WebSocket hooks (`onOpen` / `onMessage` / `onClose`),
+     * applied to every WS route.
      */
     private globalWsHooks?: import('./ws/types.js').WebSocketHooks;
 
     /**
-     * Constructor for the Burger class.
-     * @param options - The options for the server and router.
-     * The options object should contain the following properties:
-     * - port: The port number to listen on.
-     * - apiDir: The directory path to load API routes from.
-     * - pageDir: The directory path to load page routes from.
-     * - wsDir: The directory path to load WebSocket routes from.
+     * @param options Server + router options (port, apiDir, pageDir, wsDir, …).
      */
     constructor(private options: ServerOptions) {
-        // Create server instance (adapter seam: injectable for tests/embed,
-        // otherwise the Bun adapter is loaded lazily on first serve()).
+        // Adapter seam: injectable for tests/embed, else Bun loads lazily.
         this.server = new Server(options, options.adapter);
 
-        // Fast initialization for routers with nullish coalescing
         const { apiDir, apiPrefix, wsDir } = options;
 
         this.apiDir = apiDir;
         // `??`, not `||`: an explicit `apiPrefix: ''` mounts routes at `/`.
         this.apiPrefix = apiPrefix ?? 'api';
 
-        // Pages are resolved lazily on the dev scan path (PageRouter is
-        // loaded on demand so production AOT bundles stay small).
+        // Pages resolve lazily on the dev scan path, keeping AOT bundles small.
         this.pageDir = options.pageDir;
         this.pagePrefix = options.pagePrefix ?? '';
 
-        // Initialize WebSocket directory
         this.wsDir = wsDir;
     }
 
     /**
-     * Registers a plugin. Plugin hooks are compiled into the HookChain for
-     * every route (scoped according to the plugin's scope). The same plugin
-     * (resolved name + seed — factories are resolved first) is deduplicated:
-     * a second registration with the same identity is ignored with a warning.
+     * Registers a plugin; its hooks compile into every route's hook chain with
+     * the plugin's scope. Duplicate registrations (same name + seed) are
+     * ignored with a warning.
      *
      * @param plugin The plugin object or a factory function returning one.
      * @param scope Optional scope override (default: `'plugin'`).
@@ -269,8 +228,8 @@ export class Burger {
     }
 
     /**
-     * Registers an application service. Services are created once at startup
-     * and injected into `ctx.services` for every request.
+     * Registers an application service, injected into `ctx.services` for every
+     * request.
      *
      * @param name Service name (accessed as `ctx.services[name]`).
      * @param service The service instance.
@@ -306,11 +265,10 @@ export class Burger {
     }
 
     /**
-     * Filesystem mode only (no prebuilt `apiRoutes`): directories the app
-     * did not configure default to the CLI build's conventions —
-     * `src/api`, `src/pages`, `src/websocket` — when they exist, so dev and
-     * production mount the same routes. Resolved lazily (the resolver
-     * touches `node:fs`, which AOT bundles never load).
+     * Filesystem mode only (no prebuilt `apiRoutes`): unconfigured directories
+     * default to the CLI build conventions (`src/api`, `src/pages`,
+     * `src/websocket`) when they exist, so dev and production match. Resolved
+     * lazily — `node:fs` is never loaded by AOT bundles.
      */
     private async applyConventionDefaults(): Promise<void> {
         if (this.conventionDefaultsApplied) return;
@@ -335,8 +293,8 @@ export class Burger {
     private withOnRequest(
         handler: (request: Request) => Response | Promise<Response>
     ): RequestHandler {
-        // Non-function values (Bun HTML-import bundles in AOT pageRoutes)
-        // are served natively by Bun and cannot be wrapped.
+        // Non-function values (Bun HTML-import bundles) are served natively,
+        // not wrapped.
         const wrapped =
             this.dynamicRouter && typeof handler === 'function'
                 ? this.dynamicRouter.wrapWithOnRequest(handler)
@@ -349,16 +307,12 @@ export class Burger {
         return (this.pagesProcessed ??= this.processPageRoutes());
     }
 
-    /**
-     * Process the page routes and add them to the routes object
-     * @returns A promise that resolves to a boolean
-     */
+    /** Loads prebuilt or filesystem page routes. */
     private async processPageRoutes(): Promise<boolean> {
         // Production path: use pre-built page routes (no filesystem scan)
         const prebuiltPages = this.options.pageRoutes;
         let hasPages = false;
         if (Array.isArray(prebuiltPages)) {
-            // Sort the prebuilt pages
             const sorted = [...prebuiltPages].sort((a, b) =>
                 compareRoutes(a, b)
             );
@@ -371,16 +325,13 @@ export class Burger {
             }
             hasPages = sorted.length > 0;
         } else if (this.pageDir) {
-            // Dev path: load from filesystem via PageRouter
-            // Lazy-load the page router (dev-only; never evaluated in
-            // production AOT bundles that ship prebuilt pageRoutes).
+            // Dev path: lazy-load the page router (AOT bundles ship prebuilt
+            // pageRoutes, so this module is never evaluated).
             const { PageRouter } = await import('./core/page-router.js');
             const pageRouter = new PageRouter(this.pageDir, this.pagePrefix);
             this.pageRouter = pageRouter;
 
-            // Load pages routes
             await pageRouter.loadPages();
-            // If there are any page routes, add them to the routes object
             const pages = pageRouter.pages;
 
             for (let i = 0; i < pages.length; i++) {
@@ -400,11 +351,8 @@ export class Burger {
     }
 
     /**
-     * Wraps a page handler for registration on Bun's native routes map.
-     *
-     * Dynamic pages (`[param]` → `:param`) need their params extracted from
-     * the URL (Bun matches the pattern but does not expose them), so the
-     * handler is wrapped with a per-request `BurgerContext`. Static pages
+     * Wraps a dynamic page handler with a per-request `BurgerContext` (Bun
+     * matches `:param` patterns but does not expose the params); static pages
      * pass through unchanged.
      */
     private wrapPageHandler(
@@ -412,11 +360,9 @@ export class Burger {
         path: string
     ): RequestHandler {
         if (!path.includes(':')) return handler;
-        // The pattern's segment layout is compiled ONCE per page route, not
-        // per request (the pattern never changes).
+        // Compile the pattern's segments once per route, not per request.
         const compiledPattern = compilePatternSegments(path);
-        // Registered on Bun's native routes map, so this is invoked with the
-        // raw `Request` (mirrors `fetchHandler`'s static dispatch).
+        // Invoked with the raw `Request`, like `fetchHandler`'s static dispatch.
         const wrapped = async (request: Request): Promise<Response> => {
             const ctxInit = extractCtxInitWithSegments(
                 request,
@@ -441,9 +387,8 @@ export class Burger {
     /**
      * Registers static asset routes under `{pagePrefix}/assets/*`.
      *
-     * Production AOT builds embed file contents as base64 (`assetRoutes`
-     * option — emitted by the CLI build), keeping bundles self-contained.
-     * Dev reads files from disk per request so edits show without a restart.
+     * Production AOT embeds base64 contents (`assetRoutes` from the CLI
+     * build); dev reads files from disk per request so edits show.
      */
     private async processAssetRoutes(): Promise<void> {
         const prebuiltAssets = this.options.assetRoutes;
@@ -475,17 +420,11 @@ export class Burger {
     }
 
     /**
-     * Process the API routes and add them to the routes object.
-     *
-     * Routes are compiled by the Router. Static routes and dynamic (`:param` /
-     * `*`) routes are both merged into Bun's native `routes` map; dynamic
-     * routes dispatch directly (the compiled handler self-extracts params from
-     * the URL), avoiding the `fetch` fallback hop. Unmatched, loose-trailing-
-     * slash, and empty-param requests fall through to `Router.fetch` (the trie
-     * fallback). Both paths execute the same compiled handler, so method
-     * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior are identical.
-     *
-     * @returns A promise that resolves to a boolean
+     * Compiles the API routes and merges them into the routes map. Static and
+     * dynamic (`:param` / `*`) routes both go on Bun's native map; unmatched or
+     * loose-trailing-slash requests fall through to `Router.fetch` (the trie).
+     * Both paths run the same compiled handler, so dispatch behavior is
+     * identical.
      */
     private async processApiRoutes(): Promise<boolean> {
         if (this.routesProcessed) return true;
@@ -496,9 +435,9 @@ export class Burger {
         // scope 'global' (identical ordering in dev and AOT).
         let globalRouteHooks: RouteHooks | undefined;
         if (Array.isArray(this.options.apiRoutes)) {
-            // AOT routes may carry `schema.ts` / `openapi.ts` namespaces with
-            // uppercase method keys (GET/POST) — normalize once to the
-            // lowercase form the compiler and OpenAPI generator read.
+            // AOT routes may carry uppercase method keys (GET/POST) in
+            // `schema` / `openapi`; normalize once for the compiler and
+            // OpenAPI generator.
             apiRoutes = this.options.apiRoutes
                 .map((def) => ({
                     ...def,
@@ -567,10 +506,8 @@ export class Burger {
                 }
             }
         } else {
-            // Dev path: Route Module pipeline
-            // (Directory Scanner → Module Loader → RouteModule → Compiler).
-            // Loaded lazily: production AOT builds ship prebuilt apiRoutes
-            // and never evaluate these filesystem modules.
+            // Dev path: Scanner → Module Loader → RouteModule → Compiler,
+            // loaded lazily (AOT builds ship prebuilt apiRoutes).
             await this.applyConventionDefaults();
             if (!this.apiDir) {
                 apiRoutes = [];
@@ -634,16 +571,14 @@ export class Burger {
             }
         }
 
-        // API routes are optional: plugin/global `onRequest` hooks, the `ip`
-        // holder and app services must still reach pages, assets and docs, so
-        // the router is built (and wired) even for a routes-less API tree.
+        // API routes are optional: the router is still built so hooks, the `ip`
+        // holder and app services reach pages, assets and docs.
         const hasApiRoutes = apiRoutes.length > 0;
 
         const config = this.openAPIConfig;
         const openapiEnabled = config?.enabled !== false;
 
-        // Generate the OpenAPI document only when docs are enabled, and load
-        // the generator lazily (it pulls Zod's JSON Schema machinery).
+        // Generate the OpenAPI document lazily and only when docs are enabled.
         if (hasApiRoutes && openapiEnabled) {
             const { generateOpenAPIDocument } = await import('./core/openapi.js');
             this.openApiDoc = generateOpenAPIDocument(
@@ -660,12 +595,11 @@ export class Burger {
             jit: this.options.jit !== false,
             engine: this.options.engine,
         });
-        // M5: resolve plugins into a single list passed to the compiler.
+        // Resolve plugins into a single list for the compiler.
         const allHooks = await this.pluginRegistry.resolveAll();
 
-        // Extract onRequest hooks from plugins — these run before routing
-        // (pre-routing, app-level). They are NOT per-route HookPlan entries.
-        // Order: Framework (internal) → Plugin → Global (src/hooks.ts) → Route
+        // onRequest hooks run before routing, not as per-route HookPlan
+        // entries. Order: Framework → Plugin → Global (src/hooks.ts) → Route.
         const onRequestHooks: import('./lifecycle/types.js').Hook[] = [];
         for (const plugin of allHooks) {
             const h = plugin.hooks.onRequest;
@@ -674,7 +608,6 @@ export class Burger {
                 else onRequestHooks.push(h);
             }
         }
-        // Global onRequest from src/hooks.ts runs after plugins
         onRequestHooks.push(...(globalOnRequest ?? []));
 
         router.compile(
@@ -693,12 +626,9 @@ export class Burger {
             return false;
         }
 
-        // Merge static routes into Bun's native routes map (fast path), then
-        // merge dynamic (`:param` / `*`) routes onto the same native map. Bun
-        // matches `:param` and `*` patterns directly, so dynamic routes dispatch
-        // without the `fetch` fallback hop; the compiled handler self-extracts
-        // params from the URL. Unmatched / loose-slash / empty-param requests
-        // still fall through to `Router.fetch` (the trie), preserving behavior.
+        // Merge static and dynamic routes onto Bun's native routes map (Bun
+        // matches `:param` / `*` directly); unmatched requests fall through to
+        // `Router.fetch` (the trie).
         Object.assign(this.routes, router.staticRoutes());
         Object.assign(this.routes, router.nativeRoutes());
         this.apiRoutePaths = new Set([
@@ -717,9 +647,8 @@ export class Burger {
                       `${config.docsAuth.username}:${config.docsAuth.password}`
                   )
                 : null;
-            // docsAuth guards the spec as well as the UI — protecting only the
-            // HTML page would leave the full API description public. Browsers
-            // resend the Basic credentials to the spec URL automatically.
+            // docsAuth guards the spec as well as the UI: protecting only the
+            // HTML page would leave the API description public.
             const unauthorized = (
                 ctx: { headers?: Headers } | undefined
             ): Response | null => {
@@ -743,8 +672,8 @@ export class Burger {
                     : this.openApiError())
             );
 
-            // Docs UI: use configured provider or default to Swagger UI (loaded
-            // lazily — only needed when the docs route is registered).
+            // Docs UI: configured provider, or Swagger UI by default (loaded
+            // lazily).
             const { swaggerDocs } = await import('./core/docs-providers.js');
             const provider: DocsProvider = config?.provider ?? swaggerDocs();
             this.routes[docsPath] = this.withOnRequest((request: Request) => {
@@ -763,12 +692,8 @@ export class Burger {
         return true;
     }
 
-    /**
-     * Process WebSocket routes and add them to the WebSocket router.
-     * @returns A promise that resolves to a boolean indicating if WebSocket routes were configured
-     */
+    /** Loads WebSocket routes (programmatic, prebuilt or file-based). */
     private async processWebSocketRoutes(): Promise<boolean> {
-        // Create WebSocket router
         this.wsRouter = new WebSocketRouter();
 
         // Extract auth hooks from resolved plugins for WebSocket upgrade
@@ -835,8 +760,7 @@ export class Burger {
                     path: route.path,
                     handlers: route.handlers,
                     hooks: withGlobalWs(route.hooks),
-                    // Deep-merge `auth` so a route-level `auth.roles` does
-                    // not drop the global `auth.required`.
+                    // Deep-merge `auth`, keeping the global `auth.required`.
                     config: mergeWsConfig(this.wsConfigOptions, route.config),
                 });
             }
@@ -878,17 +802,14 @@ export class Burger {
                     }
                 }
 
-                // Set global config
                 if (this.wsConfigOptions) {
                     compiler.setGlobalConfig(this.wsConfigOptions);
                 }
 
-                // Compile all routes
                 const compiledRoutes = await compiler.compileAll(
                     scanResult.routes
                 );
 
-                // Add to router
                 this.wsRouter.addRoutes(compiledRoutes);
             }
         }
@@ -899,18 +820,14 @@ export class Burger {
     /**
      * Builds the Web-Standard fetch handler for this app.
      *
-     * The returned handler dispatches the raw `Request` through the compiled
-     * routes (static map first, then the trie fallback for dynamic/wildcard
-     * routes and loose trailing-slash variants). API routes must be provided
-     * AOT (`apiRoutes` option) or discovered from the filesystem on first
-     * call — never per request.
+     * Dispatches the raw `Request` through the compiled routes (static map
+     * first, then the trie fallback for dynamic/wildcard and loose
+     * trailing-slash variants). API routes must be provided AOT (`apiRoutes`)
+     * or discovered from the filesystem on first call — never per request.
      *
-     * Runtime-agnostic: usable with `Bun.serve`, `Deno.serve`, Vercel,
-     * Cloudflare Workers (`export default { fetch }`), and Node 24+. The
-     * platform bindings (`env`, `executionCtx`) forwarded by WinterCG hosts
-     * are bound onto the per-request `BurgerContext` (`ctx.env`,
-     * `ctx.executionCtx`). Pages and
-     * WebSocket are Bun-only and are not served by this handler.
+     * Runtime-agnostic: Bun.serve, Deno.serve, Vercel, Cloudflare Workers and
+     * Node 24+. WinterCG bindings (`env`, `executionCtx`) are bound onto the
+     * per-request `BurgerContext`. Pages (Bun-only) are not served here.
      *
      * ```ts
      * import { Burger, toFetchHandler } from 'burger-api';
@@ -934,12 +851,10 @@ export class Burger {
         }
         const wsAdapter = this.wsAdapter;
 
-        // Direct lookups are exact static page/asset/docs paths only. API
-        // routes are per-method objects (not callable) and dispatch through
-        // `router.fetch`; native pattern keys (`/api/items/:id`, dynamic
-        // pages) must never match literally either. Bun-only page values
-        // (HTML-import bundles) and dynamic pages are not portable: warn once
-        // instead of silently 404ing.
+        // Direct lookups are exact static page/asset/docs paths only; native
+        // pattern keys (`:param`, `*`) must never match literally. Bun-only
+        // page values and dynamic pages are not portable: warn instead of
+        // silently 404ing.
         const routes = new Map<string, RequestHandler>();
         const bunOnlyPages: string[] = [];
         const apiPaths = this.apiRoutePaths;
@@ -971,11 +886,7 @@ export class Burger {
 
         /**
          * Shared HTTP dispatch: page/asset routes first, then the API router.
-         * The pathname is extracted ONCE (index-based) and reused for both
-         * lookups — `Request` normalizes URLs at construction, so this equals
-         * the URL-parser pathname for every real request. Returns synchronously
-         * when the router can (empty-plan routes); the entry point normalizes
-         * to a Promise because that is the public `fetchHandler()` contract.
+         * The pathname is extracted once and reused for both lookups.
          */
         const dispatchHttp = (
             request: Request,
@@ -1032,9 +943,8 @@ export class Burger {
 
         // No WebSocket adapter: no upgrade probe is needed at all.
         if (!wsAdapter) {
-            // An API-only app also skips the page-map lookup — the router's
-            // `fetch` IS the entry point. (A `Promise` is still returned: that
-            // is the public `fetchHandler()` contract.)
+            // API-only app: the router's `fetch` is the entry point (the
+            // public contract still returns a Promise).
             if (!hasPageRoutes && router) {
                 return (
                     request: Request,
@@ -1067,10 +977,9 @@ export class Burger {
     }
 
     /**
-     * Starts the server and begins listening for incoming requests.
-     * @param port - The port number to listen on. Defaults to `4000`.
-     * @param cb - An optional cb function to be executed when the server is listening.
-     * @returns A Promise that resolves when the server has started listening.
+     * Starts the server and listens for requests.
+     * @param port Port to listen on (default `4000`).
+     * @param cb Called when the server is listening.
      */
     public async serve(port: number = 4000, cb?: () => void): Promise<void> {
         if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -1086,11 +995,9 @@ export class Burger {
             this.processWebSocketRoutes(),
         ]);
 
-        // Flag to track if any routes were loaded
         const routesConfigured =
             pagesConfigured || apiConfigured || wsConfigured;
 
-        // If routes were configured, start the server
         if (routesConfigured) {
             // The adapter records its server handle as the lazy `ctx.ip`
             // source (see the `onServer` hook below) — no per-request work.
@@ -1098,13 +1005,11 @@ export class Burger {
                 ? (request) => this.dynamicRouter!.fetch(request)
                 : () => this.notFound();
 
-            // Get WebSocket handlers and fetch handler if adapter is configured
             const wsOptions = this.wsAdapter?.createWebSocketOption();
             const wsAdapter = this.wsAdapter;
 
-            // Create a combined fetch handler:
-            // 1. Try WebSocket upgrade first (if wsAdapter exists)
-            // 2. Fall through to HTTP only when the request was NOT consumed.
+            // Combined fetch handler: try the WebSocket upgrade first, then
+            // fall through to HTTP only when the request was not consumed.
             const combinedFetch: FetchHandler = wsAdapter
                 ? async (request, server) => {
                       // Cheap header probe first: plain HTTP requests (no
@@ -1120,10 +1025,9 @@ export class Burger {
                           server
                       );
                       if (outcome.handled) {
-                          // The socket was taken over (Bun hijacks it and
-                          // returns 101 itself) or the platform produced the
-                          // protocol response (404 / auth rejection / 101).
-                          // Either way the HTTP pipeline must NOT run.
+                          // Socket taken over (Bun returns 101 itself) or a
+                          // protocol response (404 / auth rejection) — the
+                          // HTTP pipeline must NOT run.
                           return outcome.response as unknown as Response;
                       }
                       return fetchHandler(request, server);
@@ -1150,7 +1054,6 @@ export class Burger {
                     this.dynamicRouter?.setRequestIPSource(server),
             });
         } else {
-            // If no routes were configured, log an error
             console.error(
                 this.emptyApiDir
                     ? `Error: No routes configured — the API directory "${this.emptyApiDir}" has no route files. ` +
@@ -1162,9 +1065,8 @@ export class Burger {
     }
 
     /**
-     * Returns the underlying `Server` instance, or `undefined` if `serve()`
-     * has not started one yet (e.g. no routes were configured). Exposed so
-     * callers (such as benchmark harnesses) can stop the server cleanly.
+     * The underlying `Server` instance, exposed so callers can stop the
+     * server cleanly.
      */
     public getServer(): Server | undefined {
         return this.server;
@@ -1173,10 +1075,8 @@ export class Burger {
     /**
      * Node WebSocket integration: returns a bridge that plugs the framework
      * pipeline into node:http's `'upgrade'` event using a framing library's
-     * `WebSocketServer` (e.g. the `ws` package). Requires WebSocket routes
-     * to be configured (`wsDir`, `wsRoutes`, or `burger.websocket()`) — and
-     * for that route processing to have already run at least once, so
-     * `await`/call `fetchHandler()` (or `serve()`) first, not after.
+     * `WebSocketServer` (e.g. the `ws` package). Call `fetchHandler()` (or
+     * `serve()`) first — WebSocket routes are processed there.
      *
      * ```ts
      * import http from 'node:http';
@@ -1206,15 +1106,9 @@ export class Burger {
 }
 
 /**
- * Merges global and per-route WebSocket config. `auth` is merged deeply
- * so a route-level `auth: { roles: [...] }` keeps a global
- * `auth: { required: true }`; either side being `false` disables auth.
- */
-/**
  * Connection-level WebSocket options (`maxPayloadLength`, `idleTimeout`,
- * `compression`, …) are Bun.serve-wide — a route-level value cannot override
- * what Bun enforces for the whole server. Warn loud instead of silently
- * ignoring the author's intent. (Auth and other per-route keys are honored.)
+ * `compression`, …) are Bun.serve-wide: a route-level value cannot override
+ * what Bun enforces for the whole server, so warn loud instead of ignoring it.
  */
 const WS_TRANSPORT_KEYS = [
     'maxPayloadLength',
@@ -1250,6 +1144,10 @@ function warnTransportLevelWsConfig(
     }
 }
 
+/**
+ * Merges global and per-route config. `auth` is merged deeply so a route-level
+ * `auth.roles` keeps a global `auth.required`; either side `false` disables it.
+ */
 function mergeWsConfig(
     globalConfig: WebSocketConfig | undefined,
     routeConfig: WebSocketConfig | undefined
@@ -1283,8 +1181,7 @@ export type {
     PreValidationHookContext,
 } from './router/define.js';
 
-// Export the runtime-capability model (single source of truth for the CLI
-// build's per-target validation and the docs compatibility page)
+// Export the runtime-capability model (used by the CLI build and docs).
 export { RUNTIME_CAPABILITIES } from './runtime/capabilities.js';
 export type { RuntimeTarget, RuntimeCapability } from './runtime/capabilities.js';
 export type {

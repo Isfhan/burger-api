@@ -1,11 +1,8 @@
 /**
- * Validates that built bundle runs and responds (no runtime fs scan).
- * Run after building the production-app example:
+ * Runs the built bundle and checks it responds (no runtime fs scan).
+ * Set BUILD_BUNDLE_PATH, or build the production-app example first:
  *   cd packages/burger-api/examples/production-app
  *   bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
- *   bun test ../../../cli/test/build-output.test.ts
- *
- * Or run from repo root with BUILD_BUNDLE_PATH set to the app.js path.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn } from 'child_process';

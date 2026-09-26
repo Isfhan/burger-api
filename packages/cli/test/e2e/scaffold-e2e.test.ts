@@ -7,8 +7,8 @@ import { createProject } from '../../src/utils/templates';
 import type { CreateOptions } from '../../src/types';
 import { getAvailablePort } from '../test-utils';
 
-// Absolute path to the local framework package, used as a `file:` dependency
-// below (see `scaffoldProject` for why this replaces `link:`/`bun link`).
+// Local framework package path, used as a `file:` dependency (see
+// `scaffoldProject` for why not `link:`).
 const LOCAL_BURGER_API_PATH = resolve(
     import.meta.dir,
     '../../../burger-api'
@@ -45,9 +45,8 @@ async function killTree(pid: number): Promise<void> {
 }
 
 /**
- * Runs `bun run <script> -- --port <port>` in the project, waits for the
- * server to answer GET /api, kills the process tree, and returns the status.
- * Returns -1 when the server never came up.
+ * Runs `bun run <script>`, waits for GET /api, kills the process tree, and
+ * returns the status (-1 if the server never came up).
  */
 async function bootAndCheck(
     cwd: string,
@@ -83,9 +82,8 @@ async function bootAndCheck(
 }
 
 /**
- * Boots `bun run <script>`, waits for GET `path` to answer, returns its
- * status and parsed JSON body, then kills the process tree. Returns
- * `{ status: -1, body: null }` if the server never came up.
+ * Like `bootAndCheck`, but checks `path` and returns its status and parsed
+ * JSON body; `{ status: -1, body: null }` if the server never came up.
  */
 async function bootAndCheckPath(
     cwd: string,
@@ -120,17 +118,9 @@ async function bootAndCheckPath(
 }
 
 /**
- * Boots `bun run dev`, waits for it to serve GET /api, then creates a
- * brand-new route directory while dev keeps running (never restarting it
- * manually) and polls the new route until it serves or a timeout elapses.
- * Kills the process tree and returns the new route's final status (-1 if
- * dev never came up at all).
- *
- * Regression test for: `bun --watch` only tracks modules already reachable
- * from the entry's import graph, so a route directory that's never been
- * imported is invisible to it — a brand-new route silently 404'd until dev
- * was manually restarted. `dev.ts` now owns its own recursive directory
- * watcher instead of relying on `--watch` alone.
+ * Boots `bun run dev`, creates a brand-new route while it runs, and polls
+ * it until it serves. Regression: `bun --watch` only tracks modules already
+ * imported, so dev needs its own directory watcher to see new routes.
  */
 async function bootAddRouteAndCheck(cwd: string, port: number): Promise<number> {
     const proc = Bun.spawn(['bun', 'run', 'dev', '--', '--port', String(port)], {
@@ -141,9 +131,8 @@ async function bootAddRouteAndCheck(cwd: string, port: number): Promise<number> 
     const outReader = new Response(proc.stdout).text();
     const errReader = new Response(proc.stderr).text();
 
-    // Polls until the route answers 200, not just until it answers at all —
-    // a brand-new route legitimately 404s for a while before the watcher's
-    // restart lands, and that transient 404 is exactly the case under test.
+    // Poll for 200, not just any response — the transient 404 before the
+    // watcher's restart lands is exactly the case under test.
     const waitFor = async (path: string, deadlineMs: number): Promise<number> => {
         const deadline = Date.now() + deadlineMs;
         let lastStatus = -1;
@@ -180,22 +169,12 @@ async function bootAddRouteAndCheck(cwd: string, port: number): Promise<number> 
 }
 
 /**
- * Creates a project scaffold and installs the local burger-api package as a
- * `file:` dependency, then runs `bun install`.
+ * Scaffolds a project, installs the local burger-api package as a `file:`
+ * dependency, and runs `bun install`.
  *
- * Deliberately NOT `link:` / `bun link`: `packages/burger-api/examples/*`
- * all depend on `link:burger-api` against the same global link target. If
- * this test also links `burger-api` into the scaffold, the scaffold's
- * `node_modules/burger-api` (a symlink to `packages/burger-api`) and every
- * example's own `node_modules/burger-api` (symlinks to the same target)
- * form a symlink cycle reachable from the scaffold. `tsc`'s project-file
- * discovery doesn't cycle-detect that, so `bun run typecheck` free-falls
- * into it and crashes with a JS heap OOM (SIGABRT / exit 134) — confirmed by
- * direct repro. `file:` copies the package instead of symlinking it, so the
- * scaffold never sees that cycle. This mirrors the CLI's own documented
- * pre-release testing path (`BURGER_API_SOURCE=<path>`, see
- * `src/utils/templates.ts`'s `burgerApiSourceOverride`), so it's also a more
- * realistic stand-in for what `npm install burger-api` gives a real user.
+ * `file:` not `link:`: linking would form a symlink cycle with
+ * `packages/burger-api/examples/*` (all linked to the same target) and
+ * crash `tsc` project discovery with an OOM.
  */
 async function scaffoldProject(
     name: string,
@@ -297,13 +276,9 @@ describe('E2E scaffold — TypeScript', () => {
     it(
         'a route with config.ts behaves identically in dev and in build+start',
         async () => {
-            // Regression test for the P0 found in Phase 3: config.ts's
-            // default export reached the route as a raw module namespace
-            // ({ default: {...} }) in production builds only, so
-            // `ctx.config.auth` was always undefined after `build && start`
-            // even though the same route worked correctly in `dev`. This
-            // route's hook makes that divergence directly observable in the
-            // response body, not just the status code.
+            // Regression: config.ts's default export must reach the route
+            // unwrapped in production builds, not as a raw module namespace
+            // ({ default: {...} }). The hook makes that visible in the body.
             const dir = trackDir(await scaffoldProject('e2e-config', 'ts'));
             const routeDir = join(dir, 'src', 'api', 'gate');
             await mkdir(routeDir, { recursive: true });
@@ -342,9 +317,8 @@ describe('E2E scaffold — TypeScript', () => {
                 '/api/gate'
             );
             expect(prod.status).toBe(200);
-            // The regression: this used to come back `{ gated: true }` in
-            // production because config.ts's default export never reached
-            // ctx.config there.
+            // Regression: production must also see config.ts's unwrapped
+            // default export.
             expect(prod.body).toEqual({ gated: false });
             expect(prod.body).toEqual(dev.body);
         },
@@ -369,8 +343,8 @@ describe('E2E scaffold — JavaScript (--lang js)', () => {
                 join(dir, 'src', 'api', 'route.js'),
                 'utf8'
             );
-            // Schema-backed JS route uses defineRoute, so ctx.validated is
-            // typed from schema.js without a JSDoc annotation.
+            // defineRoute types ctx.validated from schema.js without a
+            // JSDoc annotation.
             expect(route).toContain('defineRoute(GetSchema, (ctx) =>');
             expect(existsSync(join(dir, 'src', 'openapi.config.js'))).toBe(
                 true

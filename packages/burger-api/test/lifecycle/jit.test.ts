@@ -1,9 +1,8 @@
 /**
- * JIT HookPlan equivalence: for every pipeline semantic the generated
- * function must produce byte-identical outcomes to the interpreter
- * (`executeHookPlan`) — short-circuits, after-mapper reverse order,
- * transform reserved-key drops, validation failures, error dispatch,
- * response hooks, and response validation.
+ * JIT HookPlan equivalence: the generated function must produce
+ * byte-identical outcomes to the interpreter (`executeHookPlan`) —
+ * short-circuits, after-mapper order, transform reserved-key drops,
+ * validation, error dispatch, and response validation.
  */
 import { describe, it, expect, afterEach, spyOn } from 'bun:test';
 import { z } from 'zod';
@@ -240,7 +239,7 @@ describe('jit hook plan — equivalence with interpreter', () => {
     });
 
     it('regression: a body-only schema does not trigger response-clone/parse on the JIT path', async () => {
-        // Guards jit.ts:127 — must key off `plan.validators?.response`, not
+        // Guards a regression: must key off `plan.validators?.response`, not
         // the whole `plan.validators` object (set for ANY schema kind).
         let cloneCalls = 0;
         class SpyResponse extends Response {
@@ -370,7 +369,7 @@ describe('jit hook plan — equivalence with interpreter', () => {
     });
 });
 
-describe('jit async analysis helpers (B2)', () => {
+describe('jit async analysis helpers', () => {
     it('isAsyncFunction detects async declarations and generators', () => {
         expect(isAsyncFunction(async () => {})).toBe(true);
         expect(isAsyncFunction(async function named() {})).toBe(true);
@@ -422,7 +421,7 @@ describe('jit async analysis helpers (B2)', () => {
     });
 });
 
-describe('B2 — sync-first JIT is byte-identical to the interpreter', () => {
+describe('sync-first JIT is byte-identical to the interpreter', () => {
     type Snapshot = {
         status: number;
         headers: Record<string, string>;

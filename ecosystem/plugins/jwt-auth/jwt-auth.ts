@@ -1,9 +1,8 @@
 /**
  * JWT Authentication Plugin for BurgerAPI
  *
- * Official JWT authentication plugin that integrates with BurgerAPI's hook system.
- * Parses JWT from Authorization header, verifies signature, and attaches decoded
- * payload to context.
+ * Verifies a JWT from the Authorization header and attaches its claims to the
+ * context.
  *
  * @example
  * ```typescript
@@ -22,9 +21,8 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, ForbiddenError } from "burger-api";
 
-// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
-// each declares the SAME property type and merges its fields into
-// `BurgerAuthUser`, so several can be installed without type conflicts.
+// All auth plugins declare `ctx.user` with the same type and merge their
+// fields into `BurgerAuthUser`, so they can be installed together.
 declare module "burger-api" {
   interface BurgerContext {
     /** Verified JWT claims, set after signature verification. */
@@ -126,9 +124,8 @@ export interface JwtPayload {
 }
 
 /**
- * Map algorithm string to Web Crypto algorithm name. The algorithm type is
- * derived from the platform (`crypto.subtle.importKey`) so the plugin
- * compiles without the DOM lib (scaffold tsconfigs use `lib: ["ESNext"]`).
+ * Map an algorithm name to its Web Crypto parameters. The type is derived
+ * from the platform so this compiles without the DOM lib.
  */
 type ImportKeyAlgorithm = NonNullable<Parameters<typeof crypto.subtle.importKey>[2]>;
 function getAlgorithmName(
@@ -192,7 +189,7 @@ async function verifySignature(
   let cryptoKey: CryptoKey;
 
   if (typeof key === "string") {
-    // Import string secret as HMAC key
+    // Raw string secret: import as an HMAC key.
     cryptoKey = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(key),
@@ -201,7 +198,6 @@ async function verifySignature(
       ["verify"]
     );
   } else {
-    // Use provided CryptoKey directly
     cryptoKey = key;
   }
 
@@ -247,15 +243,13 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
     requireExpiration = true,
   } = options;
 
-  // Determine the verification key
   const verificationKey = publicKey ?? secret;
 
   if (!verificationKey) {
     throw new Error("JWT plugin requires either `secret` or `publicKey` option");
   }
 
-  // HMAC secrets shorter than 32 bytes are trivially brute-forced — fail
-  // loud at startup instead of at runtime.
+  // HMAC secrets under 32 bytes are trivially brute-forced — fail at startup.
   if (
     algorithm.startsWith("HS") &&
     typeof secret === "string" &&
@@ -272,17 +266,15 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
 
     hooks: {
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean; roles?: string[] } } | undefined;
 
-        // Skip auth check if explicitly disabled.
-        // Note: the token is NOT parsed or attached to ctx.user here —
-        // unverified claims never reach auth-disabled routes.
+        // Skip auth check if explicitly disabled. The token is not parsed
+        // here — unverified claims never reach auth-disabled routes.
         if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 
-        // Consistent token extraction — the prefix must match exactly.
+        // The prefix must match exactly.
         const authHeader = ctx.headers.get(header);
         if (!authHeader?.startsWith(`${prefix} `)) {
           throw new UnauthorizedError("Missing or invalid token");
@@ -293,8 +285,7 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
         if (parts.length !== 3) {
           throw new UnauthorizedError("Malformed token");
         }
-        // The length-3 guard above guarantees both parts; destructure so
-        // noUncheckedIndexedAccess narrows them to strings.
+        // Destructure so noUncheckedIndexedAccess narrows the parts to strings.
         const [encodedHeader, encodedPayload, signature] = parts;
         if (!encodedHeader || !encodedPayload || !signature) {
           throw new UnauthorizedError("Malformed token");
@@ -302,9 +293,8 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
 
         let user: JwtPayload;
         try {
-          // Check the header's alg claim before verifying — a token that
-          // claims a different algorithm than configured must never be
-          // verified with the configured key.
+          // Reject tokens whose `alg` differs from the configured one —
+          // never verify with the wrong key.
           const headerDecoded = JSON.parse(
             new TextDecoder().decode(base64UrlDecode(encodedHeader))
           ) as { alg?: unknown };
@@ -329,8 +319,7 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           throw new UnauthorizedError("Malformed token");
         }
 
-        // Check expiration — reject early rather than risk a non-finite value
-        // passing the comparison.
+        // Check expiration; reject non-finite values before comparing.
         const now = Math.floor(Date.now() / 1000);
         if (user.exp === undefined) {
           if (requireExpiration) {
@@ -346,7 +335,6 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           }
         }
 
-        // Check not-before
         if (user.nbf !== undefined) {
           if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
             throw new UnauthorizedError("Token has invalid not-before claim");
@@ -356,12 +344,12 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           }
         }
 
-        // Check issuer (a configured issuer must match exactly)
+        // A configured issuer must match exactly.
         if (issuer && user.iss !== issuer) {
           throw new UnauthorizedError("Invalid issuer");
         }
 
-        // Check audience — a configured audience must be present AND listed
+        // A configured audience must be present and listed.
         if (audience) {
           if (!user.aud) {
             throw new UnauthorizedError("Invalid audience");
@@ -372,7 +360,6 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           }
         }
 
-        // Check roles if required
         if (config?.auth && typeof config.auth === "object" && config.auth.roles) {
           const userRoles = (user as { roles?: string[] }).roles ?? [];
           const requiredRoles = config.auth.roles;
@@ -383,8 +370,7 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           }
         }
 
-        // Attach verified claims only — handlers and response hooks on this
-        // route can trust ctx.user.
+        // Attach verified claims only, so handlers can trust ctx.user.
         (ctx as { user?: JwtPayload }).user = user;
       },
     },

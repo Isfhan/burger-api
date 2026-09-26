@@ -6,14 +6,9 @@ export const SET_STATUS = 1;
 export const SET_HEADERS = 2;
 
 /**
- * The lazily allocated `ctx.set`, backed by accessors so every assignment
- * flips a flag. `applySet` then knows exactly what changed (status-only vs
- * headers vs both) without re-scanning the object — mirroring Elysia 2's
- * compile-time response modes and Elysia 1's three-property `mapResponse`
- * check (research report item #6).
- *
- * Private fields keep the instance shape invisible to user code
- * (`Object.keys(ctx.set)` does not leak the backing storage).
+ * The lazily allocated `ctx.set`. Accessors flip a flag on every assignment,
+ * so `applySet` knows what changed without re-scanning the object.
+ * Private fields keep the backing storage out of `Object.keys(ctx.set)`.
  */
 export class TrackedContextSet implements ContextSet {
     #flags = 0;

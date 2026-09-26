@@ -81,18 +81,14 @@ export function createBunBuildOptions(options: {
         target: (options.target as 'bun') || 'bun',
         minify: options.minify ?? false,
         splitting: false,
-        // `.html` pages are imported as raw markup (like the dev PageRouter's
-        // `?raw` import). Bun's default HTML loader bundles the page and tries
-        // to resolve its asset URLs, which fails for the root-absolute
-        // `{pagePrefix}/assets/...` paths the scaffold uses (and would bypass
-        // the embedded `assetRoutes` table production relies on).
+        // Import .html pages as raw markup: Bun's HTML loader would try to
+        // resolve the scaffold's root-absolute /assets/... URLs and bypass
+        // the embedded `assetRoutes` table production relies on.
         loader: {
             '.html': 'text',
         },
-        // Bake production mode into the artifact: dev-only diagnostics
-        // (stack traces, response-validation warnings) must never leak when
-        // the bundle is run directly (`bun .build/bundle/app.js`) without
-        // NODE_ENV exported.
+        // Bake production mode in: dev-only diagnostics must never leak when
+        // the bundle runs without NODE_ENV (e.g. `bun .build/bundle/app.js`).
         define: {
             'process.env.NODE_ENV': JSON.stringify('production'),
         },

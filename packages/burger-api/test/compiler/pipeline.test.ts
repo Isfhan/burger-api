@@ -7,12 +7,8 @@ import { ModuleLoader } from '../../src/compiler/module-loader';
 import { Router } from '../../src/router/router';
 
 /**
- * End-to-end pipeline test (no live server):
- * Directory Scanner → Module Loader → RouteModule → RouterCompiler → Router.
- * Verifies the whole pipeline produces a working dispatch table that handles
- * static, dynamic, wildcard, 405+Allow, and auto-HEAD correctly.
- *
- * Each route directory is self-contained — no group inheritance.
+ * End-to-end pipeline test (no live server): scanner → module loader →
+ * router compiler. Verifies static, dynamic, wildcard, 405+Allow, auto-HEAD.
  */
 
 function makeTree(): string {

@@ -6,12 +6,9 @@ import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
 import { getAvailablePort } from './test-utils';
 
 /**
- * Regression (critical): a production build must wire convention exports
- * exactly like dev, whatever syntax they use. The build once regex-guessed
- * exports from source text, so a typed hook
- * (`export const beforeRoute: X = [...]`) or a destructured one
- * (`export const { beforeRoute } = ...`) was silently dropped — auth hooks
- * were bypassed in production while dev enforced them.
+ * Regression: production builds must wire convention exports exactly like
+ * dev, whatever syntax they use — a typed or destructured hook export must
+ * not be silently dropped.
  */
 const DIR = join(import.meta.dir, '__tmp_build_convention_exports');
 const OUTFILE = '.build/bundle/app.js';
@@ -98,9 +95,9 @@ beforeAll(async () => {
 afterAll(async () => {
     const proc = serverProc;
     if (proc && proc.exitCode === null) {
-        // Wait for the child to fully exit before deleting its directory —
-        // on Windows a just-killed process still holds the bundle open for
-        // a moment (EBUSY on rm).
+        // Wait for the child to exit before deleting its directory — on
+        // Windows a just-killed process still holds the bundle open briefly
+        // (EBUSY on rm).
         await new Promise<void>((resolve) => {
             const timer = setTimeout(() => {
                 try {

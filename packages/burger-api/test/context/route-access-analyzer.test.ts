@@ -108,7 +108,7 @@ describe('RouteAccessAnalyzer (optional, compile-time only)', () => {
         expect(info.hooks.has('afterRoute')).toBe(true);
     });
 
-    // --- B3: only "provably safe" access may produce unknown === false ---
+    // Only provably-safe access may produce unknown === false.
 
     it('marks the route unknown when the context escapes to a helper', () => {
         const readId = (ctx: any) => ctx.params.id;

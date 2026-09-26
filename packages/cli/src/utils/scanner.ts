@@ -1,9 +1,9 @@
 /**
- * Build-time route scanner. Discovers route.ts and page files without loading modules.
- * Path conversion rules match the framework (scanner, module-loader).
+ * Build-time route scanner: discovers route and page files without loading
+ * modules. Path conversion matches the framework (scanner, module-loader).
  *
- * Vision: each route directory is self-contained — no group inheritance.
- * Groups only affect URL path stripping.
+ * Each route directory is self-contained — no group inheritance; groups
+ * only affect URL path stripping.
  */
 
 import { readdir } from 'fs/promises';
@@ -19,10 +19,9 @@ import { CONVENTION_DEFAULTS } from './config';
 import { contentTypeFor } from 'burger-api';
 
 /**
- * Ensure BURGER_API_APP_DIR is set for in-process CLI scanning: from the
- * entry file when given (dirname of `src/index.ts` = `src/`), else `<cwd>/src`
- * when a `src/index.*` exists. This powers the entry-relative fallback so
- * `apiDir: 'api'` in burger.build.ts resolves to `src/api`, matching dev.
+ * Ensure BURGER_API_APP_DIR is set for in-process CLI scanning: the entry
+ * file's dir when given, else `<cwd>/src` when `src/index.*` exists. Powers
+ * the entry-relative fallback so `apiDir: 'api'` resolves to `src/api`.
  */
 export function ensureAppDirEnv(entryFile?: string): void {
     if (process.env.BURGER_API_APP_DIR) return;
@@ -37,8 +36,8 @@ export function ensureAppDirEnv(entryFile?: string): void {
 
 /**
  * Resolve a scan dir for CLI scans: project root first, then the entry
- * file's directory (BURGER_API_APP_DIR). Mirrors the framework's
- * `resolveScanDir`. Returns undefined when neither candidate exists.
+ * file's directory (BURGER_API_APP_DIR). Returns undefined when neither
+ * candidate exists.
  */
 function resolveScanDir(cwd: string, dir: string): string | undefined {
     const cwdAbs = path.resolve(cwd, dir);
@@ -52,9 +51,9 @@ function resolveScanDir(cwd: string, dir: string): string | undefined {
 }
 
 /**
- * Resolve a scan dir with a dynamic missing-dir error. Convention-default
- * paths stay silent when missing (e.g. a pages-only app has no `./src/api`);
- * custom paths fail loud so a typo'd apiDir never silently drops routes.
+ * Resolve a scan dir, throwing when a custom path is missing. Convention
+ * defaults stay silent (a pages-only app has no `./src/api`); custom paths
+ * fail loud so a typo'd apiDir never silently drops routes.
  */
 function resolveScanDirOrThrow(
     cwd: string,
@@ -77,9 +76,9 @@ function resolveScanDirOrThrow(
 }
 
 /**
- * Returns the first existing convention file for `stem` in `dir`
+ * Return the first existing convention file for `stem` in `dir`
  * (`route.ts`, `route.js`, `route.mjs` …). Throws when more than one
- * variant exists (fail loud — mirrors the framework scanner).
+ * variant exists.
  */
 function findConventionFile(
     dir: string,
@@ -125,11 +124,10 @@ export interface PageRouteScanEntry {
 }
 
 /**
- * Scan apiDir for route.ts files and return entries for codegen.
- * Uses same path/convention rules as framework DirectoryScanner.
+ * Scan apiDir for route files and return entries for codegen. Path and
+ * convention rules match the framework DirectoryScanner.
  *
- * Each route directory is self-contained — no global tier detection.
- * Groups only affect URL path stripping.
+ * Each route directory is self-contained — groups only affect URL stripping.
  */
 export async function scanApiRoutes(
     cwd: string,
@@ -180,9 +178,9 @@ async function scanApiDir(
                 !entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
             const isWildcard = entry.name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
 
-            // Dynamic and wildcard folders may coexist at the same level —
+            // Dynamic and wildcard folders may coexist at the same level;
             // the router's trie resolves them by priority
-            // (static > `:param` > `*`), mirroring the framework scanner.
+            // (static > `:param` > `*`).
             if (isDynamic && dynamicFolderFound) {
                 throw new Error(
                     `Multiple dynamic route folders in same directory: '${entry.name}' in '${dir}'.`
@@ -203,8 +201,7 @@ async function scanApiDir(
         if (!entry.isFile()) continue;
     }
 
-    // Convention files are resolved per directory (once) across all
-    // accepted extensions (.ts/.js/.mjs).
+    // Resolve convention files once per directory, across .ts/.js/.mjs.
     const routeFile = findConventionFile(dir, 'route');
     if (routeFile) {
         const routePath = filePathToApiRoutePath(
@@ -225,10 +222,8 @@ async function scanApiDir(
         }
         // Capture a sibling hooks file so the build entry can wire
         // lifecycle hooks. Always imported when present — the framework
-        // reads whatever it exports at startup. Guessing from source text
-        // (typed `export const beforeRoute: X = ...`, destructured
-        // `export const { beforeRoute } = ...`, `export { ... }`) once
-        // silently dropped auth hooks from production builds.
+        // reads whatever it exports at startup. Guessing exports from
+        // source text can miss typed, destructured, or named styles.
         const hooksFile = findConventionFile(dir, 'hooks');
         if (hooksFile) {
             scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
@@ -438,7 +433,6 @@ async function scanWsDir(
     if (wsFile) {
         const importPath = wsFile.split(path.sep).join('/');
 
-        // Build route path from directory structure
         const routePath = buildWsRoutePath(basePath);
 
         const scanEntry: WebSocketRouteScanEntry = {
@@ -446,7 +440,6 @@ async function scanWsDir(
             routePath,
         };
 
-        // Check for sibling hooks/config
         const hooksFile = findConventionFile(dir, 'hooks');
         if (hooksFile) {
             scanEntry.hooksPath = hooksFile.split(path.sep).join('/');
@@ -461,8 +454,8 @@ async function scanWsDir(
 }
 
 /**
- * Build WebSocket route path from directory structure.
- * Handles dynamic [param] and group (name) directories.
+ * Build a WebSocket route path from directory structure; handles dynamic
+ * [param] and group (name) directories.
  */
 function buildWsRoutePath(relativePath: string): string {
     if (!relativePath) return '/';

@@ -1,9 +1,7 @@
 /**
- * Real, end-to-end tests for `burger-api inspect --json` and
- * `burger-api doctor --json` — spawns the actual CLI (same pattern as
- * `cli-process-exit.test.ts`) against a real temp project on disk, not an
- * in-process function call, so this exercises the exact thing an
- * agent/tool invoking the CLI would get.
+ * End-to-end tests for `burger-api inspect --json` and `doctor --json`:
+ * spawns the real CLI against a temp project on disk, so tooling gets
+ * exactly what it would get in practice.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';

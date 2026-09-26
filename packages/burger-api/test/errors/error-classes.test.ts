@@ -213,7 +213,7 @@ describe('renderHTTPError', () => {
 });
 
 // ─────────────────────────────────────────────────────
-// ValidationError (backward compat)
+// ValidationError
 // ─────────────────────────────────────────────────────
 
 describe('ValidationError', () => {
@@ -266,7 +266,7 @@ describe('ValidationError', () => {
         expect(body.errors.body).toBeDefined();
     });
 
-    it('honors a custom status from options', async () => {
+    it('applies a custom status from options', async () => {
         const issues = [
             { path: ['n'], message: 'invalid', code: 'invalid_type' },
         ];

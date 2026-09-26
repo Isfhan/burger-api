@@ -3,9 +3,9 @@ import { Router } from '../../src/router/router';
 import type { RouteDefinition } from '../../src/types/index';
 
 /**
- * Verifies that `req.route` is available for static routes served through
- * Bun's native routing. Bun invokes the static handler with ONLY `(request)`,
- * so the router must inject `ctxInit` (see `Router.staticRoutes`).
+ * `req.route` must be available for static routes served through Bun's
+ * native routing. Bun invokes static handlers with only `(request)`, so the
+ * router injects `ctxInit` (see `Router.staticRoutes`).
  */
 describe('Static route req.route (Bun-native dispatch)', () => {
     it('provides req.route.path / req.route.pattern for a static route', async () => {

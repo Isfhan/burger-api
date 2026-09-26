@@ -4,10 +4,9 @@ import { z } from 'zod';
 import type { RouteDefinition } from '../../src/types/index';
 
 /**
- * Concurrency / isolation. Fires 100 concurrent
- * requests that read `req.params`, `req.query`, `req.set`, and `req.validated`,
- * and asserts each request sees ONLY its own data — no cross-request leakage,
- * because every request gets its own `BurgerContext` instance.
+ * Concurrency / isolation: 100 concurrent requests reading `params`,
+ * `query`, `set`, and `validated` must each see only their own data, since
+ * every request gets its own `BurgerContext`.
  */
 describe('BurgerContext isolation (100 concurrent requests)', () => {
     function makeRouter(): Router {

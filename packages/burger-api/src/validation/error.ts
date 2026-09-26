@@ -2,14 +2,11 @@
  * The validation error system — structured `ValidationError` + mode-gated
  * renderers.
  *
- * Responsibilities:
- * - `ValidationError` extends `HTTPError` (status 422).
- * - Carries structured `ValidationIssue[]` per slot.
- * - Renders RFC 9457 Problem Details by default.
- * - Mode-gate: dev shows full issues; production strips internals.
- * - Honor a custom `errorRenderer` override.
- *
- * Production bodies never leak stacks/source/schema internals (R7).
+ * `ValidationError` extends `HTTPError` (status 422) and carries structured
+ * `ValidationIssue[]` per slot. Renders RFC 9457 Problem Details by default;
+ * dev shows full issues, production strips internals. A custom
+ * `errorRenderer` overrides rendering. Production bodies never leak stacks or
+ * schema internals.
  */
 
 import { HTTPError, renderHTTPError } from '../errors/http-error.js';
@@ -75,9 +72,8 @@ export class ValidationError extends HTTPError {
     /**
      * Renders this error into an RFC 9457 Problem Details response.
      *
-     * - In dev mode, includes full issue details.
-     * - In production, strips internal path information.
-     * - Honors a custom `errorRenderer` if provided.
+     * Dev mode includes full issue details; production strips internal path
+     * information. A custom `errorRenderer` takes precedence when provided.
      */
     toResponse(isDev: boolean, config: ValidatorConfig = {}): Response {
         if (config.errorRenderer) {
@@ -140,11 +136,10 @@ export interface RenderContext {
 /**
  * Renders a failed `ValidationResult` into a `Response`.
  *
- * - Custom `errorRenderer` (if provided) fully controls the body.
- * - `problem+json` format emits the RFC 9457 *shape* (path/message only).
- * - `plain` (default) emits `{ errors: { slot: issues } }`.
- * - In production, only `path`/`message` (and `code`) are emitted — no
- * stacks, source paths, or schema internals (R7).
+ * A custom `errorRenderer` fully controls the body. `problem+json` emits the
+ * RFC 9457 shape (path/message only); `plain` emits `{ errors: { slot: issues } }`.
+ * Production emits only `path`/`message` (and `code`) — no stacks, source
+ * paths, or schema internals.
  */
 export function renderValidationError(
     result: ValidationResult,
@@ -185,8 +180,8 @@ export function renderValidationError(
         );
     }
 
-    // Default plain format. In production we strip nothing sensitive beyond
-    // what is already in the normalized issue (path/message/code).
+    // Default plain format. Only normalized issue data
+    // (path/message/code) is emitted.
     const body: Record<string, unknown> = {
         errors: ctx.errorsBySlot
             ? ctx.errorsBySlot

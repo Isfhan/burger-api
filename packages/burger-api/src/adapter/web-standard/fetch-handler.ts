@@ -11,17 +11,12 @@
  *
  * // Deno
  * Deno.serve(toFetchHandler(burger));
- *
- * // Node 24+
- * import { createServer } from 'node:http'; // or any fetch-based server
  * ```
  *
- * WinterCG targets must pass AOT routes (`apiRoutes` / `pageRoutes` for
- * pages is not supported — pages are Bun-only). A filesystem scan happens
- * only in Bun dev when the app was configured with `apiDir` and no
- * `apiRoutes`; on non-Bun runtimes there is no filesystem access, so a
- * scan-based app will fail there. No Bun imports reach this module: the Bun
- * adapter is loaded lazily by `Server` only when `serve()` is called.
+ * WinterCG targets must pass AOT routes (`apiRoutes`); pages are Bun-only.
+ * A filesystem scan happens only in Bun dev when `apiDir` is set without
+ * `apiRoutes`, so a scan-based app fails on non-Bun runtimes. No Bun imports
+ * reach this module.
  */
 
 import type { Burger } from '../../index.js';
@@ -35,10 +30,8 @@ import type {
  * The portable entry shape: a Web-Standard `Request` in, a `Response` out.
  *
  * `env` and `executionCtx` are the second/third arguments a WinterCG host
- * supplies (`fetch(request, env, ctx)` — Cloudflare Workers, Vercel Edge,
- * Deno Deploy). They are bound onto every per-request `BurgerContext`
- * (`ctx.env`, `ctx.executionCtx`) so handlers access platform bindings
- * uniformly across runtimes. Extra positional arguments beyond those two
+ * supplies (`fetch(request, env, ctx)`); they are bound onto every
+ * `BurgerContext` (`ctx.env`, `ctx.executionCtx`). Extra positional arguments
  * are accepted and ignored for forward compatibility.
  */
 export type FetchHandlerEntry = (
@@ -51,9 +44,8 @@ export type FetchHandlerEntry = (
 /**
  * Returns a Web-Standard fetch handler for the given app.
  *
- * Routes are prepared lazily on the first call — AOT `apiRoutes` on deploy
- * targets, or a one-time filesystem scan in Bun dev when `apiDir` is set
- * without `apiRoutes`; every subsequent call dispatches directly. Prefer AOT
+ * Routes are prepared lazily on the first call (AOT `apiRoutes`, or a one-time
+ * filesystem scan in Bun dev); later calls dispatch directly. Prefer AOT
  * `apiRoutes` on WinterCG targets (no filesystem access).
  */
 export function toFetchHandler(burger: Burger): FetchHandlerEntry {

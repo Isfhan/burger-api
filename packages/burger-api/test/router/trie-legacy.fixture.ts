@@ -1,10 +1,7 @@
 /**
- * Legacy segment trie — the differential oracle for `src/router/trie.ts`.
- *
- * Copied verbatim (imports aside) from the pre-radix implementation at
- * commit d42baf2 (snapshot: perf/trie-legacy-snapshot.ts). It must keep
- * behaving exactly as the shipped trie did; `trie-fuzz.test.ts` asserts the
- * current radix matcher produces identical results.
+ * Legacy segment trie kept as a differential oracle for `src/router/trie.ts`.
+ * It must keep behaving exactly as the shipped trie did; `trie-fuzz.test.ts`
+ * asserts the current radix matcher produces identical results.
  */
 import type { CompiledHandler } from '../../src/router/types';
 import { ROUTE_CONSTANTS } from '../../src/utils/routing';
@@ -188,8 +185,8 @@ export class LegacyTrie {
 }
 
 /**
- * Build-time pattern split (used by `insert`): segments are NOT decoded —
- * `:param` / `*` markers and static pattern text are stored verbatim.
+ * Build-time pattern split for `insert`: segments are not decoded, so
+ * `:param` / `*` markers stay verbatim.
  */
 function splitPattern(path: string): string[] {
     const raw = path.split('/');
@@ -204,9 +201,8 @@ function splitPattern(path: string): string[] {
 }
 
 /**
- * Splits a pathname into `out` for matching (no `split()` / `map()` arrays
- * per request). Percent-decodes each segment as it is emitted, but only when
- * it actually contains `%`.
+ * Splits a pathname into `out` without per-request `split()`/`map()` arrays.
+ * Percent-decodes each segment only when it contains `%`.
  */
 function splitPathInto(pathname: string, out: string[]): void {
     let start = pathname.charCodeAt(0) === 47 /* '/' */ ? 1 : 0;

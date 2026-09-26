@@ -10,9 +10,8 @@ interface PreparedEntryOptions {
 const ENTRY_OPTIONS_FILENAME = '__burger_build_options__.ts';
 
 /**
- * Find the index of the closing ')' that matches the '(' at openIndex.
- * Skips strings, template literals, and comments so parens inside them are ignored.
- * Returns -1 if no matching ')' is found.
+ * Find the index of the ')' matching the '(' at openIndex, skipping strings,
+ * template literals, and comments. Returns -1 when unmatched.
  */
 function findMatchingClosingParen(source: string, openIndex: number): number {
     let depth = 1;
@@ -276,13 +275,10 @@ export function extractBurgerOptionsObjectLiteral(
 }
 
 /**
- * Production builds generate their own entry: only the code before
+ * Production builds generate their own entry: only code before
  * `new Burger(...)` (imports, constants) and the options object are kept.
- * Anything else after the constructor — `app.websocket(...)`, extra
- * `console.log`s, a custom port — never runs in the build. The usual
- * `const port = ...` + `app.serve(...)` tail is expected (the generated
- * entry serves on $PORT itself); everything else is reported so it is not
- * dropped silently. Returns the dropped lines (for tests).
+ * Returns the lines after the constructor that would be dropped (minus the
+ * usual `app.serve(...)` tail), so callers can warn about them.
  */
 export function findDroppedEntryCode(source: string): string[] {
     const ctor = source.match(/\bnew\s+Burger\s*\(/);
@@ -291,7 +287,7 @@ export function findDroppedEntryCode(source: string): string[] {
     const close = findMatchingClosingParen(source, open);
     if (close < 0) return [];
     let rest = source.slice(close + 1);
-    // Remove `<name>.serve( ... )` calls with their (multi-line) callbacks.
+    // Strip `<name>.serve( ... )` calls, including their multi-line callbacks.
     for (;;) {
         const m = rest.match(/\b[A-Za-z_$][\w$]*\.serve\s*\(/);
         if (!m || m.index === undefined) break;
@@ -345,8 +341,7 @@ export function prepareEntryOptionsModule(options: {
 
     const burgerCtor = source.match(/\bnew\s+Burger\s*\(/);
     const rawPrelude = source.slice(0, burgerCtor?.index ?? 0).trimEnd();
-    // Remove trailing partial assignment fragments like "const app ="
-    // when the constructor is assigned (e.g. const app = new Burger(...)).
+    // Drop a trailing partial assignment like "const app = new Burger(...)".
     const prelude = rawPrelude
         .replace(
             /(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(?::\s*.*?)?\s*=\s*$/,
@@ -356,8 +351,8 @@ export function prepareEntryOptionsModule(options: {
         .trimEnd();
     warnAboutDroppedEntryCode(source, options.entryFile);
 
-    // JS projects get a `.js` options module (portable targets hand it to
-    // wrangler/deno/vercel as-is, which must not see a .ts file there).
+    // JS projects get a `.js` options module — portable targets
+    // (wrangler/deno/vercel) must not see a .ts file here.
     const optionsFilename = /\.m?js$/.test(entryPath)
         ? ENTRY_OPTIONS_FILENAME.replace(/\.ts$/, '.js')
         : ENTRY_OPTIONS_FILENAME;

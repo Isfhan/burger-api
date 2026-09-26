@@ -12,10 +12,8 @@ import type { Scope } from './node.js';
  * Execution order for request hooks (beforeRoute):
  * Framework → Plugin → Global → Local
  *
- * This is the single source of truth for request-hook ordering — kept in
- * sync with `AGENTS.md`'s lifecycle scope description by
- * `test/chain/flatten-order.test.ts`, which reads that file and fails if the
- * two drift apart.
+ * Single source of truth; `test/chain/flatten-order.test.ts` asserts it stays
+ * in sync with the scope order documented in `AGENTS.md`.
  */
 const SCOPE_ORDER_REQUEST: readonly Scope[] = [
     'framework',
@@ -27,8 +25,7 @@ const SCOPE_ORDER_REQUEST: readonly Scope[] = [
 /**
  * Execution order for response/error hooks (afterRoute, mapResponse,
  * onError): Local → Global → Plugin → Framework (nearest-first).
- *
- * Single source of truth — see {@link SCOPE_ORDER_REQUEST}.
+ * See {@link SCOPE_ORDER_REQUEST}. Single source of truth.
  */
 const SCOPE_ORDER_RESPONSE: readonly Scope[] = [
     'local',

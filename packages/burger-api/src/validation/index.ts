@@ -1,5 +1,5 @@
 /**
- * Validation module for BurgerAPI — the Validation 2.0 surface.
+ * Validation module for BurgerAPI.
  *
  * Precompiled request validation (identity-cached per schema), opt-in
  * coercion, and RFC 9457 error rendering.

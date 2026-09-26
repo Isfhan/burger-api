@@ -27,5 +27,5 @@ if (!hook) {
     process.exit(1);
 }
 
-// Self-contained: dynamic hook selection per route (test fixture pattern).
+// Exposes the TEST_MW-selected hook as a global beforeRoute hook.
 export const beforeRoute = [hook];

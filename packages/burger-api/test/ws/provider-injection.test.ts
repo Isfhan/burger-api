@@ -80,7 +80,6 @@ describe('BurgerWSContext', () => {
                 providers
             );
 
-            // Simulate open handler
             capturedServices = ws.services;
             expect(capturedServices?.db).toBeDefined();
         });
@@ -95,7 +94,6 @@ describe('BurgerWSContext', () => {
                 providers
             );
 
-            // Simulate message handler
             capturedServices = ws.services;
             expect(capturedServices?.cache).toBeDefined();
         });
@@ -110,7 +108,6 @@ describe('BurgerWSContext', () => {
                 providers
             );
 
-            // Simulate close handler
             capturedServices = ws.services;
             expect(capturedServices?.logger).toBeDefined();
         });

@@ -10,11 +10,10 @@ import type { GlobalHooks } from '../lifecycle/types.js';
 /**
  * Holds registered plugins and resolves them (factories are called once).
  *
- * Identity is the plugin's resolved `name` (+ optional `seed`). A plugin
- * object is keyed immediately; a factory is keyed only after it resolves —
- * keying a factory by its function name would collapse every anonymous
- * arrow factory (`name === ''`) into one. Every deduplicated registration
- * is reported with a warning instead of being dropped silently.
+ * Identity is the resolved `name` (+ optional `seed`). A plugin object is
+ * keyed immediately; a factory only after it resolves, since keying by
+ * function name would collapse every anonymous arrow factory into one.
+ * Duplicate registrations warn instead of being dropped silently.
  */
 export class PluginRegistry {
     private entries = new Map<string, PluginEntry>();

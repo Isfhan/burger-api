@@ -1,8 +1,7 @@
 /**
  * Environment Validation Plugin for BurgerAPI
  *
- * Official environment variable validation plugin that validates required
- * environment variables on startup before the server starts.
+ * Validates required environment variables at startup.
  *
  * @example
  * ```typescript
@@ -107,9 +106,8 @@ function validateValue(
   schema: EnvSchema,
   isRequired: boolean
 ): EnvError | null {
-  // Check if required
   if (isRequired && (value === undefined || value === "")) {
-    // A required variable with a default is satisfied by the default.
+    // A default satisfies a required variable.
     if (schema.default !== undefined) {
       process.env[name] = String(schema.default);
       return null;
@@ -123,10 +121,9 @@ function validateValue(
     };
   }
 
-  // Check if optional with default
+  // Not provided: apply the default if there is one.
   if (value === undefined || value === "") {
     if (schema.default !== undefined) {
-      // Apply default
       process.env[name] = String(schema.default);
     }
     return null;
@@ -189,7 +186,6 @@ function validateValue(
     }
   }
 
-  // Custom validation
   if (schema.validate && !schema.validate(value)) {
     return {
       name,
@@ -229,8 +225,8 @@ export function env(options: EnvOptions = {}): Plugin {
     onError,
   } = options;
 
-  // Validate at startup — fail fast at registration time instead of
-  // surprising users on the first request.
+  // Validate at registration so misconfiguration fails at startup,
+  // not on the first request.
   const errors: EnvError[] = [];
 
   for (const [name, schema] of Object.entries(required)) {

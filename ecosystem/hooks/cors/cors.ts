@@ -80,10 +80,9 @@ export interface CorsOptions {
 }
 
 /**
- * Creates a CORS (Cross-Origin Resource Sharing) hook for handling cross-origin requests.
- *
- * This hook enables your API to be accessible from different origins by setting
- * appropriate CORS headers. It handles preflight OPTIONS requests automatically.
+ * Creates a CORS hook that lets your API be called from other origins by
+ * adding the right response headers. Handles preflight `OPTIONS` requests
+ * automatically.
  *
  * @param options - Configuration options for CORS behavior
  * @returns A hook function that adds CORS headers to responses
@@ -93,19 +92,10 @@ export interface CorsOptions {
  * // Allow all origins (default)
  * const corsHook = cors();
  *
- * // Allow specific origin with debugging
- * const corsHook = cors({
- *   origin: 'https://example.com',
- *   credentials: true,
- *   debug: true
- * });
- *
- * // Production configuration with HTTPS enforcement
- * const corsHook = cors({
+ * // Specific origins with credentials
+ * const secure = cors({
  *   origin: ['https://example.com', 'https://app.example.com'],
- *   credentials: true,
- *   enforceHttps: true,
- *   debug: process.env.NODE_ENV !== 'production'
+ *   credentials: true
  * });
  * ```
  */
@@ -127,7 +117,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         enforceHttps = false,
     } = options;
 
-    // --- Configuration Validation (compile-time) ---
+    // --- Validate configuration ---
     if (credentials && origin === '*') {
         throw new Error(
             '[CORS] Invalid config: cannot use credentials with "*" origin.'
@@ -144,7 +134,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         );
     }
 
-    // --- Pre-compute expensive operations ---
+    // --- Pre-compute header values ---
     const isWildcard = origin === '*';
     const isStringOrigin = typeof origin === 'string';
     const isArrayOrigin = Array.isArray(origin);
@@ -157,16 +147,15 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         : null;
     const stringOriginLower = isStringOrigin ? origin.toLowerCase() : null;
 
-    // Pre-compute joined strings to avoid repeated operations
+    // Pre-join header lists once.
     const methodsString = methods.join(', ');
     const allowedHeadersString = allowedHeaders.join(', ');
     const exposedHeadersString =
         exposedHeaders.length > 0 ? exposedHeaders.join(', ') : '';
 
-    // Pre-compute maxAge string
     const maxAgeString = maxAge.toString();
 
-    // Pre-compute common header objects
+    // Pre-built header objects.
     const preflightHeadersBase = {
         'Access-Control-Allow-Methods': methodsString,
         'Access-Control-Max-Age': maxAgeString,
@@ -179,17 +168,17 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         ? { 'Access-Control-Expose-Headers': exposedHeadersString }
         : {};
 
-    // Pre-compute Vary header for non-wildcard origins
+    // Vary: Origin for non-wildcard origins.
     const varyHeader: Record<string, string> = !isWildcard
         ? { Vary: 'Origin' }
         : {};
 
-    // Pre-compute regex for HTTPS enforcement (faster than startsWith)
+    // HTTPS enforcement applies in production only.
     const httpRegex =
         enforceHttps && process.env.NODE_ENV === 'production' ? /^http:/ : null;
 
-    // Pre-compute error responses to avoid repeated JSON.stringify
-    // Rejections always carry Vary: Origin so caches key on the origin.
+    // Pre-serialized error responses. Rejections always carry Vary: Origin
+    // so caches key on the origin.
     const originNotAllowedError = JSON.stringify({
         success: false,
         error: 'Origin not allowed by CORS policy',
@@ -206,16 +195,12 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
     return (ctx: BurgerContext): ForwardHookResult => {
         const requestOrigin = ctx.headers.get('Origin');
 
-        /**
-         * Fast path: no origin header (same-origin request)
-         * Same-origin requests don't need CORS headers - let them pass through
-         */
+        // No Origin header: same-origin request, no CORS headers needed.
         if (!requestOrigin) {
-            // Return undefined to pass through without CORS headers
             return undefined;
         }
 
-        // Fast path: wildcard origin
+        // Wildcard origin accepts every request.
         if (isWildcard) {
             return handlePreflightOrResponse(
                 ctx,
@@ -228,7 +213,6 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             );
         }
 
-        // HTTPS enforcement check (early exit)
         if (httpRegex && httpRegex.test(requestOrigin)) {
             if (debug)
                 console.warn(
@@ -240,7 +224,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             });
         }
 
-        // Validate origin is not empty (after trimming)
+        // Reject empty origins.
         const trimmedOrigin = requestOrigin.trim();
         if (!trimmedOrigin) {
             if (debug) console.warn('[CORS] Rejected: empty origin header');
@@ -250,26 +234,23 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             });
         }
 
-        // Determine allowed origin with optimized branching
+        // Resolve the allowed origin.
         let allowedOrigin: string | null = null;
         const requestTrimmedOriginLower = trimmedOrigin.toLowerCase();
 
         if (isStringOrigin) {
-            // Single string origin - direct comparison
             allowedOrigin =
                 stringOriginLower === requestTrimmedOriginLower
                     ? trimmedOrigin
                     : null;
         } else if (isArrayOrigin) {
-            // Array origin - use pre-computed lowercase array
-            // Safe assertion: isArrayOrigin guarantees originArrayLower is non-null
+            // Safe: isArrayOrigin guarantees originArrayLower is non-null.
             allowedOrigin = originArrayLower!.includes(
                 requestTrimmedOriginLower
             )
                 ? trimmedOrigin
                 : null;
         } else if (isFunctionOrigin) {
-            // Function origin - call once with error handling
             try {
                 allowedOrigin = origin(trimmedOrigin) ? trimmedOrigin : null;
             } catch (error) {
@@ -282,7 +263,6 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             }
         }
 
-        // Reject invalid origins
         if (!allowedOrigin) {
             if (debug) console.warn(`[CORS] Rejected origin: ${trimmedOrigin}`);
             return new Response(originNotAllowedError, {
@@ -302,7 +282,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         );
     };
 
-    // --- Optimized preflight and response handler ---
+    // --- Preflight and response handler ---
     function handlePreflightOrResponse(
         ctx: BurgerContext,
         allowedOrigin: string,
@@ -312,20 +292,17 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
         varyHeader: Record<string, string>,
         debug: boolean
     ): ForwardHookResult {
-        // --- Preflight request optimization ---
+        // --- Preflight (OPTIONS) ---
         if (ctx.method === 'OPTIONS') {
-            // Optimize header parsing - avoid unnecessary operations
             const requestedHeadersRaw = ctx.headers.get(
                 'Access-Control-Request-Headers'
             );
             let requestedHeaders: string[];
 
             if (requestedHeadersRaw) {
-                // Use split with limit to avoid processing too many headers
-                const headers = requestedHeadersRaw.split(',', 20); // Limit to 20 headers max
+                const headers = requestedHeadersRaw.split(',', 20); // Cap at 20 headers
                 requestedHeaders = [];
 
-                // Manual filtering loop (faster than array methods for small arrays)
                 // Only allow headers present in the configured allowlist —
                 // never echo arbitrary requested headers back.
                 for (let i = 0; i < headers.length; i++) {
@@ -349,7 +326,6 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                 });
             }
 
-            // Build response headers efficiently
             const preflightHeaders = {
                 'Access-Control-Allow-Origin': allowedOrigin,
                 'Access-Control-Allow-Headers': requestedHeaders.join(', '),
@@ -365,16 +341,15 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             });
         }
 
-        // Normal request - optimized response transformation
+        // Non-preflight: add CORS headers to the response.
         return async (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
 
-            // Set headers in optimal order (most common first)
             headers.set('Access-Control-Allow-Origin', allowedOrigin);
             headers.set('Access-Control-Allow-Methods', methodsString);
             headers.set('Access-Control-Allow-Headers', allowedHeadersString);
 
-            // Add Vary header using pre-computed object (empty if wildcard)
+            // Vary: Origin unless wildcard.
             if (varyHeader.Vary) {
                 headers.set('Vary', varyHeader.Vary);
             }
@@ -399,7 +374,6 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
                 });
             }
 
-            // Reuse response body stream for better memory efficiency
             return new Response(response.body, {
                 status: response.status,
                 statusText: response.statusText,

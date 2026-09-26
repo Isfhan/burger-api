@@ -1,5 +1,5 @@
 /**
- * Parity tests: CLI scanner produces same route paths as framework conventions.
+ * CLI scanner must produce the same route paths as the framework conventions.
  */
 import { describe, it, expect } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';

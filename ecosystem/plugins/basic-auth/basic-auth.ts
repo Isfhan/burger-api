@@ -1,8 +1,8 @@
 /**
  * Basic Authentication Plugin for BurgerAPI
  *
- * Official HTTP Basic authentication plugin that integrates with BurgerAPI's hook system.
- * Parses Basic auth header, decodes credentials, and validates against provided function.
+ * Decodes the HTTP Basic header and validates credentials with the provided
+ * function.
  *
  * @example
  * ```typescript
@@ -23,9 +23,8 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, renderHTTPError } from "burger-api";
 
-// `ctx.user` is shared by the auth plugins (basic-auth, jwt-auth, oidc):
-// each declares the SAME property type and merges its fields into
-// `BurgerAuthUser`, so several can be installed without type conflicts.
+// All auth plugins declare `ctx.user` with the same type and merge their
+// fields into `BurgerAuthUser`, so they can be installed together.
 declare module "burger-api" {
   interface BurgerContext {
     /** The authenticated user, set by an auth plugin. */
@@ -149,18 +148,16 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
     hooks: {
       transform: {
         user: (ctx: BurgerContext): BasicAuthUser | undefined => {
-          // Extract Basic auth header
           const authHeader = ctx.headers.get(header);
           if (!authHeader) {
             return undefined;
           }
 
-          // Check prefix (scheme is case-insensitive per RFC 7617)
+          // Scheme is case-insensitive (RFC 7617)
           if (!/^basic\s/i.test(authHeader)) {
             return undefined;
           }
 
-          // Decode Base64 credentials
           const encoded = authHeader.slice(6).trim();
           let decoded: string;
           try {
@@ -169,7 +166,6 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
             return undefined;
           }
 
-          // Split username:password
           const colonIndex = decoded.indexOf(":");
           if (colonIndex === -1) {
             return undefined;
@@ -189,7 +185,6 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
       },
 
       beforeRoute: async (ctx: BurgerContext): Promise<Response | void> => {
-        // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
@@ -197,26 +192,22 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
           return;
         }
 
-        // Check if user was already validated in transform
+        // Already validated in transform
         const user = ctx.user;
         if (user) {
           return;
         }
 
-        // Get credentials to validate
         const credentials = (ctx as { _basicAuth?: { username: string; password: string } })._basicAuth;
         if (!credentials) {
-          // No Basic auth provided
           return challenge("Missing Basic authentication");
         }
 
-        // Validate credentials
         const validatedUser = await validate(credentials.username, credentials.password);
         if (!validatedUser) {
           return challenge("Invalid credentials");
         }
 
-        // Attach user to context if enabled
         if (attachToContext) {
           ctx.user = validatedUser;
         }
@@ -226,9 +217,8 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
 
   /**
    * 401 with `WWW-Authenticate` so browsers show their login prompt. Returned
-   * (not thrown) from beforeRoute: a thrown error skips response hooks, so
-   * the header could not be attached. Body is RFC 9457 problem+json, like
-   * the framework's own 401s.
+   * (not thrown) because thrown errors skip response hooks. Body is RFC 9457
+   * problem+json, like the framework's own 401s.
    */
   function challenge(detail: string): Response {
     const response = renderHTTPError(new UnauthorizedError(detail), false);

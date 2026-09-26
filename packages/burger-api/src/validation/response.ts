@@ -2,14 +2,10 @@
  * The response validator — validates a handler's return against declared
  * per-status schemas.
  *
- * Responsibilities:
- * - Select the response schema by status (exact code, then class `2xx`).
- * - Validate the response body.
- * - Apply `dev` (observe, log, pass through) vs `enforce` (safe 500/422).
- *
- * This runs as a step AFTER your handler, inside the same request flow (not a
- * separate flow, ). It is invisible to apps that declare no
- * `response` schema.
+ * Selects the schema by status (exact code, then class `2xx`), validates the
+ * body, and applies `dev` (observe/log) vs `enforce` (safe 500/422). Runs
+ * after the handler in the same request flow; invisible to apps that declare
+ * no `response` schema.
  */
 
 import type {

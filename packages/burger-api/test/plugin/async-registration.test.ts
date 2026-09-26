@@ -1,15 +1,6 @@
 /**
- * Regression test: `plugins.ts`/`providers.ts`' default export must be
- * `await`ed by the framework, not fire-and-forgotten. Found while narrowing
- * the `burger` parameter's type (see `PluginRegistrar`/`ProviderRegistrar`
- * in `src/index.ts`) — an `async` default export that awaits something
- * before calling `usePlugin()`/`provide()` used to lose the race against
- * `router.compile()`/`pluginRegistry.resolveAll()`, which ran a few lines
- * later in the same synchronous continuation. Exercises the AOT
- * (`pluginsModule`/`providersModule`) call site directly — the dev
- * filesystem-scan call site shares the same fix, verified separately by
- * the existing `plugin-macro-smoke.test.ts` integration test still passing
- * (it uses a synchronous default export, so it wouldn't have caught this).
+ * `plugins.ts`/`providers.ts` default exports must be awaited before routes
+ * compile, so an async default export cannot lose the registration race.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';

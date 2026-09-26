@@ -1,8 +1,8 @@
 /**
  * API Key Authentication Plugin for BurgerAPI
  *
- * Official API key authentication plugin that integrates with BurgerAPI's hook system.
- * Parses API key from header and validates against provided list or function.
+ * Reads the API key from a header and validates it against a static list or
+ * a `validate` function.
  *
  * @example
  * ```typescript
@@ -63,7 +63,7 @@ export interface ApiKeyOptions {
 
 /**
  * SHA-256 hex digest. Uses Bun's CryptoHasher when available, falling back
- * to WebCrypto for other runtimes.
+ * to WebCrypto.
  */
 async function sha256Hex(input: string): Promise<string> {
   if (typeof Bun !== "undefined" && Bun.CryptoHasher) {
@@ -115,8 +115,8 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     attachToContext = true,
   } = options;
 
-  // Without keys or a validator every request would fail with 401 — that is
-  // a misconfiguration, not an auth policy. Fail loud at startup.
+  // No keys and no validator would 401 every request — fail at startup
+  // instead of silently locking the API.
   if (keys.length === 0 && typeof validate !== "function") {
     throw new Error(
       "[burger-api/plugin-api-key] apiKey() requires a non-empty `keys` array " +
@@ -124,9 +124,8 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     );
   }
 
-  // SHA-256 digests of the static keys, computed lazily. Comparison happens
-  // on fixed-length digests with timingSafeEqual, so neither the match
-  // position nor the key length is observable.
+  // Digests of the static keys, computed lazily. Comparing fixed-length
+  // digests keeps match position and key length unobservable.
   let keyDigests: string[] | null = null;
 
   async function getKeyDigests(): Promise<string[]> {
@@ -142,7 +141,6 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     hooks: {
       transform: {
         apiKey: async (ctx: BurgerContext): Promise<string | undefined> => {
-          // Extract API key
           let apiKey: string | null;
 
           if (extract) {
@@ -155,9 +153,7 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
             return undefined;
           }
 
-          // Validate against the static list — compare every candidate
-          // against every stored digest (no short-circuit on position or
-          // prefix), then decide.
+          // Compare against every stored digest with no short-circuit.
           const candidateDigest = await sha256Hex(apiKey);
           let matches = 0;
           for (const digest of await getKeyDigests()) {
@@ -175,7 +171,6 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
       },
 
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        // Get config for this route
         const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
 
         // Skip auth check if explicitly disabled
@@ -183,31 +178,27 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
           return;
         }
 
-        // Check if API key was already validated in transform
+        // Already validated in transform
         if (ctx.apiKey) {
           return;
         }
 
-        // Get API key to validate
         const keyToValidate = (ctx as { _apiKeyToValidate?: string })._apiKeyToValidate;
         if (!keyToValidate) {
-          // No API key provided
           throw new UnauthorizedError("Missing API key");
         }
 
-        // Validate with custom function
         if (validate) {
           const isValid = await validate(keyToValidate);
           if (!isValid) {
             throw new UnauthorizedError("Invalid API key");
           }
 
-          // Attach to context if enabled
           if (attachToContext) {
             ctx.apiKey = keyToValidate;
           }
         } else {
-          // No validation function - already checked static list
+          // No validator configured: the static list did not match.
           throw new UnauthorizedError("Invalid API key");
         }
       },

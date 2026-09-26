@@ -3,8 +3,7 @@
  *
  * `await` on a synchronous value still costs a microtask; checking
  * `typeof value.then === 'function'` first lets a step that returned a plain
- * value continue without suspending. Mirrors Elysia's conditional-await
- * guards (`elysia2/dist/compile/handler/utils.js` `awaitGuard`).
+ * value continue without suspending.
  */
 export function isThenable(value: unknown): value is PromiseLike<unknown> {
     return (

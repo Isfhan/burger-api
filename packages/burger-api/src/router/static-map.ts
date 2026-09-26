@@ -11,15 +11,13 @@ export interface StaticEntry {
 }
 
 /**
- * O(1) static dispatch table.
+ * Static dispatch table.
  *
- * Static API routes are served by Bun's native `routes` map (the fast path).
- * This structure holds the framework-side copy of those routes so the Router
- * can enumerate them into Bun's map and can also resolve loose-trailing-slash
- * variants that Bun did not match directly (via the `fetch` fallback).
- *
- * Keyed by path (the same key Bun uses). A single compiled handler serves all
- * methods for a path; method dispatch and 405+Allow happen inside the handler.
+ * Static API routes are served by Bun's native `routes` map (the fast path);
+ * this holds the framework-side copy so the Router can enumerate them into
+ * Bun's map and resolve loose-trailing-slash variants Bun did not match.
+ * Keyed by path; one compiled handler serves all methods, with dispatch and
+ * 405+Allow inside it.
  */
 export class StaticMap {
     private map = new Map<string, StaticEntry>();

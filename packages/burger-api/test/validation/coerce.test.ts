@@ -76,9 +76,8 @@ describe('Coercer', () => {
     it('a non-numeric coercion leaves the raw value so the validator rejects', () => {
         const plan = buildPlan(schema, 'query')!;
         const out = apply(plan, { n: 'abc' });
-        // Number('abc') is NaN; rather than emitting NaN (which produces a
-        // confusing "received nan" error), coercion leaves the original raw
-        // string so the validator (z.number) rejects it with the real input.
+        // Number('abc') is NaN, which would surface as a confusing "received
+        // nan" error; leaving the raw string lets the validator reject it.
         expect(out.n).toBe('abc');
     });
 });

@@ -41,31 +41,25 @@ interface OnRequestOutcome {
     shortCircuit: Response | undefined;
     mappers: ((res: Response) => Response | Promise<Response>)[];
     /**
-     * THE per-request context. Created here so `onRequest` hooks can seed
+     * THE per-request context, created here so `onRequest` hooks can seed
      * state (request IDs, counters, …) that survives into the handler —
-     * the dispatched route binds this same instance instead of allocating
-     * a second context.
+     * the dispatched route binds this same instance, not a second context.
      */
     ctx: BurgerContext;
 }
 
 /**
- * Public router that owns the compiled dispatch state and orchestrates
- * lookup + execution.
+ * Public router: owns the compiled dispatch state and orchestrates lookup
+ * and execution.
  *
- * - Static routes are served by Bun's native `routes` map (via `staticRoutes()`).
- * - Dynamic (`:param`) and wildcard (`*`) routes are ALSO served by Bun's native
- * `routes` map (via `nativeRoutes()`): Bun matches the pattern directly, and
- * the compiled handler self-extracts `params` / `wildcardParams` from the
- * URL. This removes the `fetch` fallback hop for the common dynamic case.
- * - The `fetch` fallback (the `Bun.serve` fallback) still runs for unmatched,
- * and trailing-slash requests (`/foo/` ≡ `/foo`), consulting
- * the internal trie so behavior is fully preserved.
+ * Static, dynamic (`:param`), and wildcard (`*`) routes are all registered
+ * on Bun's native `routes` map; compiled handlers self-extract `params` /
+ * `wildcardParams`. The `fetch` fallback still runs for unmatched and
+ * trailing-slash requests (`/foo/` ≡ `/foo`), consulting the internal trie.
  *
- * Both paths execute exactly the same compiled handler, so method dispatch,
- * 405+Allow, auto-HEAD, and lifecycle behavior are identical. The native table
- * is consumed only by the Bun adapter; non-Bun (WinterCG) adapters dispatch
- * every route through `fetch` + trie (see ).
+ * Both paths execute the same compiled handler, so method dispatch,
+ * 405+Allow, auto-HEAD, and lifecycle behavior are identical. Non-Bun
+ * (WinterCG) adapters dispatch every route through `fetch` + trie.
  */
 export class Router {
     private staticMap = new StaticMap();
@@ -177,10 +171,8 @@ export class Router {
 
     /**
      * Builds the RegExp dispatch matcher for dynamic/wildcard routes when
-     * the configured engine asks for it ('regex'). Benchmarks showed the
-     * radix trie equal-or-faster on fallback dispatch (single-route parity,
-     * ~2% trie edge at 241 routes), so 'auto' stays on the trie and the
-     * matcher is an explicit opt-in.
+     * the configured engine asks for it ('regex'). 'auto' stays on the trie,
+     * so the matcher is an explicit opt-in.
      */
     private buildMatcher(result: {
         trie: Trie;
@@ -224,10 +216,8 @@ export class Router {
     /**
      * Returns the static routes as a `Bun.serve` `routes` map: one **method
      * object** per path (`{ GET: fnGet, POST: fnPost, HEAD: fnHead, ... }`).
-     * Each method is specialized at compile time (handler + hook plan baked
-     * in); Bun invokes it with `(request, server)` and its already-decoded
-     * `request.params`. Methods not present in the object fall through to
-     * `fetch`, which answers 405 + Allow for known paths.
+     * Each method is specialized at compile time; methods not present fall
+     * through to `fetch`, which answers 405 + Allow for known paths.
      */
     staticRoutes(): Record<string, NativeMethodHandlers> {
         if (this.cachedStaticRoutes) return this.cachedStaticRoutes;
@@ -256,10 +246,9 @@ export class Router {
 
     /**
      * Builds the Bun method object for one compiled path. Without hooks each
-     * method is a thin adapter over the compiled core (Bun calls native
-     * handlers with `(request, server)`; only `request` is forwarded). With
-     * hooks each method runs onRequest exactly once before the core and binds
-     * the resulting context onto the route.
+     * method forwards straight to the compiled core; with hooks each method
+     * runs onRequest once before the core and binds the resulting context
+     * onto the route.
      */
     private buildMethods(path: string): NativeMethodHandlers {
         const cores = this.methodCores.get(path)!;
@@ -402,12 +391,9 @@ export class Router {
 
     /**
      * Dynamic / wildcard lookup: the RegExp matcher first (when compiled),
-     * then the radix trie. Both produce identical match shapes (params,
-     * wildcard segments, methods) — verified by the parity test suite.
-     * A match that binds a `:param` to an empty segment is rejected.
-     *
-     * Apps with no dynamic routes at all skip both matchers: the trie is
-     * empty, so every lookup would walk it only to miss.
+     * then the radix trie. Both produce identical match shapes. A match that
+     * binds a `:param` to an empty segment is rejected. Apps with no dynamic
+     * routes skip both matchers.
      */
     private matchDynamic(
         path: string
@@ -437,18 +423,15 @@ export class Router {
     }
 
     /**
-     * The `fetch` fallback handed to `Bun.serve`.
-     * Handles dynamic/wildcard routes via the trie, and resolves
-     * loose-trailing-slash static variants that Bun did not match directly.
+     * The `fetch` fallback handed to `Bun.serve`: dynamic/wildcard routes
+     * via the trie, plus loose-trailing-slash static variants Bun did not
+     * match directly.
      *
-     * `env` / `executionCtx` are optional platform bindings forwarded from
-     * the serving entry point (WinterCG `fetch(request, env, ctx)`). The
-     * signature is intentionally its own shape — NOT the server-oriented
-     * `FetchHandler` — so the platform slots stay unambiguous.
-     *
-     * Sync-first: a route whose compiled executor resolves synchronously
-     * returns a `Response` directly (no Promise allocation); only hook plans
-     * and async handlers produce a Promise. Callers `await` either shape.
+     * `env` / `executionCtx` are optional platform bindings (WinterCG
+     * `fetch(request, env, ctx)`). The signature is its own shape — NOT the
+     * server-oriented `FetchHandler` — so the platform slots stay unambiguous.
+     * Sync-first: a synchronously resolved executor returns a `Response`
+     * directly; only hook plans and async handlers produce a Promise.
      */
     fetch: (
         request: Request,
@@ -472,8 +455,8 @@ export class Router {
 
     /**
      * `fetch` with a pathname the caller already extracted (e.g.
-     * `fetchHandler()` resolved page/asset routes first). Avoids parsing the
-     * URL twice per request; the pathname must come from
+     * `fetchHandler()` resolved page/asset routes first), avoiding a second
+     * URL parse per request. The pathname must come from
      * `extractPathnameFromUrl`.
      */
     fetchWithPath: (
@@ -505,11 +488,9 @@ export class Router {
         executionCtx?: BurgerExecutionContext,
         precomputedPath?: string
     ): Promise<Response> {
-        // Pre-routing: create the one context and run onRequest hooks. Any
-        // hook returning a Response short-circuits the entire pipeline;
-        // mapper functions are collected and applied to the eventual
-        // response. With no hooks, nothing is allocated before a match is
-        // known (the matched route creates its own context).
+        // Pre-routing: create the one context and run onRequest hooks. A hook
+        // returning a Response short-circuits the pipeline; mapper functions
+        // are collected and applied to the eventual response.
         const outcome = await this.runOnRequest(request, env, executionCtx);
         if (outcome.shortCircuit) return outcome.shortCircuit;
         const mappers = outcome.mappers;

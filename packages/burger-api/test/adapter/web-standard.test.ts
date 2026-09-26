@@ -8,9 +8,9 @@ import type { FetchHandlerEntry } from '../../src/adapter/web-standard';
 import { z } from 'zod';
 
 /**
- * WinterCG fetch-entry tests: `toFetchHandler` dispatches Web-Standard
- * `Request` objects with no Bun server, no filesystem scanning, and full
- * lifecycle behavior (validation, errors, docs).
+ * WinterCG fetch-entry tests: `toFetchHandler` dispatches Web Standard
+ * `Request` objects with no Bun server, no filesystem scan, and full
+ * request lifecycle behavior.
  */
 
 const routeDefinitions: RouteDefinition[] = [
@@ -239,10 +239,8 @@ describe('toFetchHandler — WinterCG bundle shape', () => {
             const out = await Bun.file(
                 path.join(dir, 'dist', 'entry.js')
             ).text();
-            // The web-standard entry must not statically pull the Bun adapter.
-            // The adapter is only reachable via a non-static dynamic import
-            // (lazily, on serve()), which bundlers keep external — a bundled
-            // `import { serve } from 'bun'` would fail browser-target builds.
+            // The web-standard entry must not statically pull the Bun adapter;
+            // it is only reached via a lazy dynamic import, kept external.
             expect(out).not.toContain('from "bun"');
             expect(out).not.toContain('from \'bun\'');
         } finally {

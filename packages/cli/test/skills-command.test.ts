@@ -86,7 +86,6 @@ describe('skills command', () => {
         );
         writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
 
-        // Create a fake installed skill
         const skillDir = join(tmpDir, '.agents', 'skills', 'burger-api');
         mkdirSync(skillDir, { recursive: true });
         writeFileSync(

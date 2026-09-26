@@ -7,9 +7,8 @@ import type {
 export type Scope = 'framework' | 'global' | 'plugin' | 'local';
 
 /**
- * A single hook staged in the chain, with the hook function typed to the
- * stage it belongs to. Discriminated on `stage` so the flattener can narrow
- * `fn` without assertions.
+ * A single hook staged in the chain, with `fn` typed to its stage.
+ * Discriminated on `stage` so the flattener can narrow `fn`.
  */
 export type ChainNode =
     | {

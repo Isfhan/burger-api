@@ -138,8 +138,8 @@ describe('doctor checks (via project structure)', () => {
 });
 
 describe('runChecks (JavaScript projects)', () => {
-    // A JS-language project has no tsconfig.json/*.ts files at all — doctor
-    // must recognize the .js equivalents instead of reporting false failures.
+    // JS projects have no tsconfig.json or .ts files; doctor must recognize
+    // the .js equivalents instead of reporting false failures.
     it('passes src/index and tsconfig checks for a .js-only project', async () => {
         await createFile(
             'package.json',
@@ -186,8 +186,8 @@ describe('runChecks (JavaScript projects)', () => {
 });
 
 describe('runChecks (real validation, not just file presence)', () => {
-    // Bun caches modules by path within a process, so every case gets its
-    // own directory (doctor imports burger.build.ts and route files).
+    // Bun caches modules by path, so each case gets its own directory
+    // (doctor imports burger.build.ts and route files).
     let caseDir = '';
     let caseNo = 0;
     beforeEach(async () => {

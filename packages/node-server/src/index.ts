@@ -15,10 +15,15 @@ export interface ServeOptions {
 }
 
 /**
- * Serves a burger-api app on plain Node.js — the official adapter, so
- * consumers don't need to hand-write an `IncomingMessage`⇄`Request` bridge
- * or wire `createNodeWsBridge()` themselves.
+ * Serves a burger-api app on plain Node.js: bridges `node:http` to the
+ * app's Fetch handler and wires WebSocket routes automatically via the
+ * `ws` package. Apps with no WebSocket routes get a plain HTTP server.
  *
+ * Returns the underlying `http.Server` synchronously; `.listen()` runs
+ * once route processing (and WebSocket wiring) is ready, so a request
+ * can't arrive before the app is.
+ *
+ * @example
  * ```ts
  * import { serve } from '@burger-api/node-server';
  * import { Burger } from 'burger-api';
@@ -26,17 +31,6 @@ export interface ServeOptions {
  * const app = new Burger({ apiRoutes });
  * serve(app, { port: 3000 });
  * ```
- *
- * WebSocket routes (`wsRoutes`, `wsDir`, or `app.websocket()`) are wired
- * automatically via `createNodeWsBridge()` and the `ws` package — no
- * separate setup needed. Apps with no WebSocket routes configured just get
- * a plain HTTP server; nothing extra happens.
- *
- * Returns the underlying `http.Server` synchronously (so callers can
- * attach their own `'listening'`/`'error'` listeners), but `.listen()`
- * itself isn't called until route processing (and WebSocket bridge wiring,
- * if applicable) has finished — this closes the exact race that would
- * otherwise let a request arrive before the app is actually ready.
  */
 export function serve(app: Burger, options: ServeOptions = {}): Server {
     const fetchHandler = toFetchHandler(app);
@@ -45,7 +39,7 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
         void (async () => {
             try {
                 const request = toWebRequest(req);
-                // Expose the peer address as ctx.ip (Bun does this natively).
+                // Expose the peer address as ctx.ip (native on Bun).
                 if (req.socket.remoteAddress) {
                     setRequestIP(request, req.socket.remoteAddress);
                 }
@@ -59,11 +53,9 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
         })();
     });
 
-    // `fetchHandler()` lazily processes routes (including WebSocket ones)
-    // the first time it runs, with no per-request hook side effects — this
-    // is the documented way to trigger that ahead of time, so
-    // `createNodeWsBridge()` (which needs it already done) doesn't throw,
-    // and so the server isn't `.listen()`-ing before it's actually ready.
+    // `fetchHandler()` lazily processes routes on first run. Trigger it
+    // first so `createNodeWsBridge()` has what it needs, and so the server
+    // doesn't listen before the app is ready.
     void app
         .fetchHandler()
         .then(() => {
@@ -73,9 +65,7 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
                     void bridge.handleUpgrade(req, socket, head);
                 });
             } catch {
-                // No WebSocket routes configured on this app — nothing to
-                // bridge. createNodeWsBridge() throws in this case; that's
-                // expected and not an error worth surfacing here.
+                // No WebSocket routes: createNodeWsBridge() throws. Expected.
             }
         })
         .finally(() => {

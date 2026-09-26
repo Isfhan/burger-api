@@ -1,7 +1,7 @@
 /**
  * Route/wildcard hardening: non-terminal wildcards and named wildcard
- * folders fail loudly; static pages beat dynamic ones; page params are
- * decoded; OpenAPI paths use `{path+}` with sanitized operationIds.
+ * folders fail loudly; static pages beat dynamic ones; page params decode;
+ * OpenAPI wildcard paths and operationIds are sanitized.
  */
 import { describe, it, expect } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';

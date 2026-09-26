@@ -1,56 +1,44 @@
 /**
- * Beautiful Console Output
- *
- * Makes the CLI look nice with colors and symbols.
- * Uses standard ANSI codes that work in all terminals.
- * Automatically falls back to ASCII on older Windows terminals.
- *
- * No dependencies needed - just plain JavaScript!
+ * Console output helpers: ANSI colors and symbols, with ASCII fallbacks on
+ * older Windows terminals and plain text when piped.
  */
 
-/**
- * Detect if the terminal supports Unicode symbols
- * Returns false for Windows CMD and older PowerShell to use ASCII fallbacks
- */
+/** True when the terminal renders Unicode symbols; ASCII is used otherwise. */
 function supportsUnicode(): boolean {
-    // Check if we're on Windows
     if (process.platform !== 'win32') {
-        return true; // macOS and Linux support Unicode
+        return true;
     }
 
-    // Check for Windows Terminal (supports Unicode)
+    // Windows Terminal
     if (process.env.WT_SESSION) {
         return true;
     }
 
-    // Check for VS Code terminal (supports Unicode)
+    // VS Code
     if (process.env.TERM_PROGRAM === 'vscode') {
         return true;
     }
 
-    // Check for ConEmu/Cmder (supports Unicode)
+    // ConEmu/Cmder
     if (process.env.ConEmuANSI === 'ON') {
         return true;
     }
 
-    // Check for modern terminal emulators
+    // Modern terminal emulators
     if (process.env.TERM && process.env.TERM !== 'dumb') {
         return true;
     }
 
-    // Check for CI environments (usually support Unicode)
+    // CI environments
     if (process.env.CI) {
         return true;
     }
 
-    // Default to ASCII for Windows CMD and older PowerShell
+    // Windows CMD and older PowerShell fall back to ASCII
     return false;
 }
 
-/**
- * ANSI color codes for terminal output
- * These are special character sequences that tell the terminal to change colors
- */
+/** ANSI color codes for terminal output. */
 const ansiColors = {
     reset: '\x1b[0m', // Reset to default color
     bright: '\x1b[1m', // Make text bright/bold
@@ -74,8 +62,7 @@ const ansiColors = {
 };
 
 /**
- * Colors only on a terminal (and never with NO_COLOR); FORCE_COLOR opts
- * back in. Piped/CI output stays plain text.
+ * Colors only on a TTY, and never with NO_COLOR; FORCE_COLOR opts back in.
  */
 const useColor =
     Boolean(process.env.FORCE_COLOR) ||
@@ -84,9 +71,7 @@ const colors = Object.fromEntries(
     Object.entries(ansiColors).map(([k, v]) => [k, useColor ? v : ''])
 ) as typeof ansiColors;
 
-/**
- * Unicode symbols for modern terminals
- */
+/** Unicode symbols for modern terminals. */
 const unicodeSymbols = {
     success: '[OK]',
     error: '[X]',
@@ -97,9 +82,7 @@ const unicodeSymbols = {
     star: '[★]',
 };
 
-/**
- * ASCII fallback symbols for older Windows terminals (CMD, older PowerShell)
- */
+/** ASCII fallback symbols for older Windows terminals. */
 const asciiSymbols = {
     success: '[OK]',
     error: '[X]',
@@ -110,10 +93,7 @@ const asciiSymbols = {
     star: '[*]',
 };
 
-/**
- * Pretty symbols for different message types
- * Automatically uses ASCII fallbacks on older Windows terminals
- */
+/** Symbols for message types; ASCII fallbacks on older Windows terminals. */
 const symbols = supportsUnicode() ? unicodeSymbols : asciiSymbols;
 
 /** Animated output (spinner frames, cursor control) only on a real terminal. */
@@ -123,21 +103,17 @@ const isTTY = Boolean(process.stdout.isTTY);
 let activeSpinner: Spinner | null = null;
 
 /**
- * Clear the spinner's line before printing a message, so log lines written
- * while a spinner runs (e.g. build warnings) start on a clean line. The
- * spinner redraws itself on its next frame.
+ * Clear the spinner's line before printing, so log lines written mid-spin
+ * start clean. The spinner redraws itself on its next frame.
  */
 function clearSpinnerLine(): void {
     if (activeSpinner && isTTY) process.stdout.write('\r\x1B[K');
 }
 
 /**
- * Show a success message (green with checkmark)
- * Use this when something completes successfully
+ * Show a success message (green with checkmark).
  *
  * @param message - The message to display
- * @example
- * success('Project created successfully!')
  */
 export function success(message: string): void {
     clearSpinnerLine();
@@ -145,12 +121,9 @@ export function success(message: string): void {
 }
 
 /**
- * Show an error message (red with X)
- * Use this when something goes wrong
+ * Show an error message (red with X).
  *
  * @param message - The error message to display
- * @example
- * error('Failed to download file')
  */
 export function error(message: string): void {
     clearSpinnerLine();
@@ -158,12 +131,9 @@ export function error(message: string): void {
 }
 
 /**
- * Show an info message (blue with info symbol)
- * Use this for general information
+ * Show an info message (blue with info symbol).
  *
  * @param message - The info message to display
- * @example
- * info('Downloading templates...')
  */
 export function info(message: string): void {
     clearSpinnerLine();
@@ -171,12 +141,9 @@ export function info(message: string): void {
 }
 
 /**
- * Show a warning message (yellow with warning symbol)
- * Use this for warnings that aren't errors
+ * Show a warning message (yellow with warning symbol).
  *
  * @param message - The warning message to display
- * @example
- * warning('This will overwrite existing files')
  */
 export function warning(message: string): void {
     clearSpinnerLine();
@@ -184,25 +151,19 @@ export function warning(message: string): void {
 }
 
 /**
- * Show a message with an arrow
- * Useful for showing steps or progress
+ * Show a step message with an arrow.
  *
  * @param message - The message to display
- * @example
- * step('Installing dependencies...')
  */
 export function step(message: string): void {
     console.log(`${colors.cyan}${symbols.arrow}${colors.reset} ${message}`);
 }
 
 /**
- * Return a highlighted string (bold and bright)
- * Use this for important text that needs attention
+ * Return a highlighted (bold and bright) string.
  *
  * @param message - The message to highlight
  * @returns Formatted string with ANSI codes
- * @example
- * console.log(`Visit ${highlight('http://localhost:4000')}`);
  */
 export function highlight(message: string): string {
     return `${colors.bright}${message}${colors.reset}`;
@@ -214,12 +175,9 @@ export function dimText(message: string): string {
 }
 
 /**
- * Show a dimmed message (gray and dim)
- * Use this for less important information
+ * Show a dimmed message (gray and dim).
  *
  * @param message - The message to dim
- * @example
- * dim('You can skip this step if you want')
  */
 export function dim(message: string): void {
     clearSpinnerLine();
@@ -227,48 +185,31 @@ export function dim(message: string): void {
 }
 
 /**
- * Show a message with a bullet point
- * Useful for lists
+ * Show a bulleted list item.
  *
  * @param message - The message to display
- * @example
- * bullet('CORS hook')
  */
 export function bullet(message: string): void {
     console.log(` ${colors.gray}${symbols.bullet}${colors.reset} ${message}`);
 }
 
-/**
- * Print a blank line
- * Helps with spacing and readability
- */
+/** Print a blank line. */
 export function newline(): void {
     console.log();
 }
 
-/**
- * Get the line character based on terminal support
- */
+/** Line character for separators; ASCII on older Windows terminals. */
 const lineChar = supportsUnicode() ? '─' : '-';
 
-/**
- * Print a horizontal line separator
- * Use this to separate sections
- *
- * @example
- * separator()
- */
+/** Print a horizontal line separator. */
 export function separator(): void {
     console.log(colors.gray + lineChar.repeat(50) + colors.reset);
 }
 
 /**
- * Print a header with a title
- * Makes sections stand out
+ * Print a header with a title and underline.
  *
  * @param title - The header title
- * @example
- * header('Available Hooks and Plugins')
  */
 export function header(title: string): void {
     newline();
@@ -278,12 +219,9 @@ export function header(title: string): void {
 }
 
 /**
- * Show a command that the user can run
- * Displays it in a nice format
+ * Show a command the user can run.
  *
  * @param command - The command to display
- * @example
- * command('bun install')
  */
 export function command(command: string): void {
     console.log(
@@ -292,32 +230,22 @@ export function command(command: string): void {
 }
 
 /**
- * Show code or file content
- * Displays it in a monospace-looking format
+ * Show code or file content in monospace style.
  *
  * @param code - The code to display
- * @example
- * code('import { Burger } from "burger-api"')
  */
 export function code(code: string): void {
     console.log(` ${colors.gray}${code}${colors.reset}`);
 }
 
-/**
- * Spinner frames - Unicode for modern terminals, ASCII for CMD
- */
+/** Spinner frames: Unicode for modern terminals, ASCII for CMD. */
 const spinnerFrames = supportsUnicode()
     ? ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
     : ['|', '/', '-', '\\'];
 
 /**
- * Simple spinner class for showing progress
- * Shows an animated spinner while something is loading
- *
- * @example
- * const spin = spinner('Downloading...');
- * // do some work
- * spin.stop('Done!');
+ * Progress spinner for long-running work. On a non-TTY it prints no frames
+ * or cursor control, only the message passed to {@link Spinner.stop}.
  */
 export class Spinner {
     private frames = spinnerFrames;
@@ -330,36 +258,28 @@ export class Spinner {
         this.start();
     }
 
-    /**
-     * Start the spinner animation
-     */
+    /** Start the spinner animation. */
     private start(): void {
         activeSpinner = this;
-        // Not a terminal (CI, pipes, tests): no frames or cursor control —
-        // just the message once, and the final message on stop().
+        // Non-TTY (CI, pipes, tests): no frames or cursor control.
         if (!isTTY) return;
 
         // Hide cursor
         process.stdout.write('\x1B[?25l');
 
-        // Show first frame
         this.render();
 
-        // Update every 80ms for smooth animation
         this.intervalId = setInterval(() => {
             this.currentFrame = (this.currentFrame + 1) % this.frames.length;
             this.render();
         }, 80);
     }
 
-    /**
-     * Render the current frame
-     */
+    /** Render the current frame. */
     private render(): void {
         if (!isTTY) return;
-        // Clear the line and move cursor to beginning
+        // Clear the line and move the cursor to the beginning
         process.stdout.write('\r\x1B[K');
-        // Write the spinner and message
         process.stdout.write(
             `${colors.cyan}${this.frames[this.currentFrame]}${colors.reset} ${
                 this.message
@@ -368,7 +288,7 @@ export class Spinner {
     }
 
     /**
-     * Update the spinner message
+     * Update the spinner message.
      *
      * @param message - New message to display
      */
@@ -378,7 +298,7 @@ export class Spinner {
     }
 
     /**
-     * Stop the spinner and show final message
+     * Stop the spinner and show the final message.
      *
      * @param finalMessage - Optional message to show when done
      * @param isError - Whether this is an error (shows X instead of checkmark)
@@ -398,7 +318,6 @@ export class Spinner {
             process.stdout.write('\x1B[?25h');
         }
 
-        // Show final message if provided
         if (finalMessage) {
             if (isError) {
                 error(finalMessage);
@@ -410,23 +329,18 @@ export class Spinner {
 }
 
 /**
- * Create and return a new spinner
- * This is a helper function to make it easier to use
+ * Create and start a new spinner.
  *
  * @param message - The message to display while spinning
  * @returns A Spinner instance
- * @example
- * const spin = spinner('Loading...');
- * await doSomething();
- * spin.stop('Done!');
  */
 export function spinner(message: string): Spinner {
     return new Spinner(message);
 }
 
 /**
- * Run an async command with a spinner. On throw, stops the spinner with error state and rethrows.
- * Use so catch blocks do not need to remember to stop the spinner.
+ * Run an async task with a spinner; on throw, stop it with error state and
+ * rethrow, so callers never have to remember to stop the spinner.
  *
  * @param message - Spinner message
  * @param fn - Async callback receiving the spinner
@@ -448,13 +362,10 @@ export async function withSpinner<T>(
 }
 
 /**
- * Format a file size in a human-readable way
- * Converts bytes to KB, MB, etc.
+ * Format bytes as a human-readable size (B, KB, MB, GB).
  *
  * @param bytes - Size in bytes
- * @returns Formatted string like "1.5 MB"
- * @example
- * formatSize(1500000) // "1.43 MB"
+ * @returns Formatted string like "1.43 MB"
  */
 export function formatSize(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';
@@ -474,9 +385,8 @@ const LOGO_TEXT = `
 `.replace(/^\n+|\n+$/g, '');
 
 /**
- * Show ASCII art banner for BurgerAPI CLI
- * Displays when CLI starts
- * Uses ASCII-safe characters for Windows CMD compatibility
+ * Print the BurgerAPI CLI banner.
+ *
  * @param version - CLI version (e.g. from package.json); defaults to '0.0.0'
  */
 export function showBanner(version: string = '0.0.0'): void {
@@ -485,7 +395,6 @@ export function showBanner(version: string = '0.0.0'): void {
     const reset = colors.reset;
     const tagline = `CLI tool for BurgerAPI projects - v${version}`;
 
-    // Unicode banner for modern terminals
     console.log(`${bannerColor}
 ${LOGO_TEXT}
 ${tagline}
@@ -493,20 +402,13 @@ ${reset}`);
 }
 
 /**
- * Create a simple table for displaying data
+ * Print a simple table.
  *
- * @param rows - Array of row data
- * @example
- * table([
- * ['Name', 'Version'],
- * ['burger-api', '0.6.6'],
- * ['bun', '1.3.1']
- * ]);
+ * @param rows - Row data; the first row is the header
  */
 export function table(rows: string[][]): void {
     if (rows.length === 0) return;
 
-    // Calculate column widths
     const colWidths: number[] = [];
     for (let col = 0; col < (rows[0]?.length ?? 0); col++) {
         let maxWidth = 0;
@@ -515,10 +417,9 @@ export function table(rows: string[][]): void {
                 maxWidth = row[col]?.length ?? 0;
             }
         }
-        colWidths.push(maxWidth + 2); // Add padding
+        colWidths.push(maxWidth + 2); // + 2 for padding
     }
 
-    // Print header (first row) with different styling
     const header = rows[0];
     let headerStr = '';
     for (let i = 0; i < (header?.length ?? 0); i++) {
@@ -528,14 +429,12 @@ export function table(rows: string[][]): void {
     }
     console.log(headerStr);
 
-    // Print separator
     console.log(
         colors.gray +
             lineChar.repeat(colWidths.reduce((a, b) => a + b, 0)) +
             colors.reset
     );
 
-    // Print data rows
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         let rowStr = '';

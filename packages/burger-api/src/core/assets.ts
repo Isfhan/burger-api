@@ -1,16 +1,9 @@
 /**
- * Static asset serving for pages.
+ * Static asset serving for pages. Assets live under `<pageDir>/assets/` and
+ * are served at `{pagePrefix}/assets/<relative-path>`.
  *
- * Assets live under `<pageDir>/assets/` and are served at
- * `{pagePrefix}/assets/<relative-path>` with a content-type derived from the
- * file extension.
- *
- * Two registration modes:
- * - **Dev** (`pageDir` set): files are read from disk per request, so edits
- *   show up without a restart.
- * - **Production AOT** (`assetRoutes` option from the CLI build): file
- *   contents are base64-embedded into the bundle by `burger-api build`, so
- *   bundles stay self-contained single files and never touch the filesystem.
+ * Dev (`pageDir` set) reads files from disk per request; production AOT
+ * (`assetRoutes` from the CLI build) embeds base64 contents in the bundle.
  */
 
 import { readdir } from 'node:fs/promises';
@@ -30,8 +23,8 @@ export interface DiskAssetRoute {
 }
 
 /**
- * Walks `<pageDir>/assets/` recursively and returns one route entry per
- * file. Returns an empty array when the assets directory does not exist.
+ * Recursively collects one route entry per file under `<pageDir>/assets/`;
+ * returns `[]` when the directory does not exist.
  */
 export async function collectDiskAssetRoutes(
     pageDir: string,
@@ -69,14 +62,9 @@ export async function collectDiskAssetRoutes(
 }
 
 /**
- * Handler for a disk-backed asset: streams the file via `Bun.file` on every
- * request so dev edits are served without a restart.
- *
- * Dev-mode only in practice — `burger-api dev` always runs under Bun — but
- * `Bun` is undefined on every other runtime, so a guard here fails with a
- * clear message instead of a bare "Bun is not defined" if this handler is
- * ever reached outside Bun (e.g. `apiRoutes` built by hand for a non-Bun
- * target). Matches the guard pattern in `router/compiler.ts`.
+ * Handler for a disk-backed asset: streams the file via `Bun.file` per request
+ * so dev edits show without a restart. Fails loud when Bun is unavailable
+ * instead of a bare "Bun is not defined".
  */
 export function diskAssetHandler(route: DiskAssetRoute): RequestHandler {
     return async () => {

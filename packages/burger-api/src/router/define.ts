@@ -1,20 +1,6 @@
 /**
- * Ergonomic seam over the existing schema→context inference
- * (`types/inference.ts`, `BurgerContext<TRoute>`): `route.ts`/`hooks.ts`
- * still hand-import the sibling `schema.ts` export, but the generic no
- * longer has to be hand-typed onto `BurgerContext`. Passing the schema as
- * the first argument means the type argument and the runtime value can
- * never drift apart — same two-file convention, no new runtime behavior.
- *
- * ```ts
- * // route.ts
- * import { defineRoute } from 'burger-api';
- * import { GET as GetSchema } from './schema';
- *
- * export const GET = defineRoute(GetSchema, (ctx) => {
- *     ctx.validated.query; // inferred, no manual generic
- * });
- * ```
+ * `defineRoute` and `defineHooks`: type helpers that infer `ctx` from a schema.
+ * No runtime behavior; the schema argument keeps types and values in sync.
  */
 
 import type {
@@ -30,7 +16,20 @@ import type {
     RouteHooks,
 } from '../lifecycle/types.js';
 
-/** Identity wrapper: infers `ctx` from `schema`, returns `handler` unchanged. */
+/**
+ * Defines a route handler whose `ctx.validated` is typed from `schema`.
+ * Returns `handler` unchanged.
+ *
+ * ```ts
+ * import { defineRoute } from 'burger-api';
+ * import { GET as GetSchema } from './schema';
+ *
+ * export const GET = defineRoute(GetSchema, (ctx) => {
+ *     const { name } = ctx.validated.query; // typed from the schema
+ *     return Response.json({ message: `Hello, ${name}!` });
+ * });
+ * ```
+ */
 export function defineRoute<T extends MethodSchema>(
     schema: T,
     handler: (ctx: BurgerContext<T>) => Promise<Response> | Response
@@ -41,9 +40,9 @@ export function defineRoute<T extends MethodSchema>(
 /**
  * The `ctx` a {@link defineHooks} hook receives. Unlike a handler (which
  * belongs to ONE method), route hooks run for EVERY method of the route, so
- * each `ctx.validated` slot is typed as possibly `undefined` (`POST`'s
- * `body` is absent on a `GET`). After validation `ctx.validated` itself is
- * always an object, so `ctx.validated.query?.q` needs no extra guard.
+ * each `ctx.validated` slot may be `undefined` (`POST`'s `body` is absent on
+ * a `GET`). After validation `ctx.validated` is always an object, so
+ * `ctx.validated.query?.q` needs no extra guard.
  */
 export type HookContext<T> = Omit<BurgerContext<T>, 'validated'> & {
     validated: Partial<InferValidated<T>> & BurgerValidated;
@@ -74,10 +73,9 @@ type TypedErrorHook<T> = (
 ) => ReturnType<ErrorHook>;
 
 /**
- * The `hooks.ts` counterpart to {@link defineRoute}'s handler typing —
- * same field shapes as {@link RouteHooks}, with `ctx` bound to the route's
- * schema instead of a plain `BurgerContext` (every validated slot possibly
- * `undefined` — see {@link HookContext}).
+ * The `hooks.ts` counterpart to {@link defineRoute}'s handler typing: same
+ * field shapes as {@link RouteHooks}, with `ctx` bound to the route's schema
+ * (every validated slot possibly `undefined` — see {@link HookContext}).
  */
 export interface TypedRouteHooks<T> {
     beforeRoute?: TypedForwardHook<T> | TypedForwardHook<T>[];
@@ -87,7 +85,16 @@ export interface TypedRouteHooks<T> {
     transform?: Record<string, (ctx: PreValidationHookContext<T>) => unknown>;
 }
 
-/** Identity wrapper: infers every hook's `ctx` from `schema`, returns `hooks` unchanged. */
+/**
+ * Defines route hooks whose `ctx.validated` is typed from `schema`.
+ * Returns `hooks` unchanged.
+ *
+ * ```ts
+ * export const { beforeRoute } = defineHooks(GetSchema, {
+ *     beforeRoute: (ctx) => { ctx.validated?.query; },
+ * });
+ * ```
+ */
 export function defineHooks<T extends MethodSchema>(
     schema: T,
     hooks: TypedRouteHooks<T>

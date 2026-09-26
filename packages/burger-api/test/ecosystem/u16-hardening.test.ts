@@ -1,11 +1,6 @@
 /**
- * U16 — ecosystem hardening probes:
- *
- * - basic-auth: case-insensitive "Basic" scheme (RFC 7617)
- * - security-headers: honor explicit `maxAge: 0` in HSTS
- * - cors: `Vary: Origin` on 403; allowlist intersection (no echo) on preflight
- * - env: validation at startup (not first request); `default` honored for required vars
- * - timeout: guard probes (in-budget passes through; overshoot → 408)
+ * Ecosystem hardening probes for basic-auth scheme handling, HSTS maxAge,
+ * cors preflight, env validation, and timeout budgets.
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
@@ -19,10 +14,8 @@ import type { RouteHooks, ForwardHook } from '../../src/lifecycle/types';
 import type { HTTPMethod } from '../../src/utils/routing';
 import type { RequestHandler } from '../../src/types/index';
 
-// Ecosystem hook factories type their return as `Hook` (which may return a
-// response transform). Route `beforeRoute` only promises `ForwardHook` —
-// cast through `unknown` at the registration boundary, exactly as the
-// convention-file loader does at runtime.
+// Hook factories return `Hook` (may return a response transform), but route
+// `beforeRoute` only accepts `ForwardHook` — cast at registration.
 function asForwardHook(hook: unknown): ForwardHook {
     return hook as ForwardHook;
 }
@@ -102,7 +95,7 @@ describe('U16 — basic-auth scheme', () => {
 });
 
 describe('U16 — security-headers HSTS maxAge', () => {
-    it('honors explicit maxAge: 0', async () => {
+    it('keeps explicit maxAge: 0', async () => {
         const res = await runWithHooks(
             {
                 beforeRoute: [

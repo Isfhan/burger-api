@@ -1,10 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-/**
- * Read the project name from package.json.
- * Falls back to 'app' if not found or on any error.
- */
+/** Project name from package.json, or 'app'. */
 export function getProjectName(cwd: string = process.cwd()): string {
     try {
         const packageJsonPath = join(cwd, 'package.json');
@@ -28,9 +25,8 @@ export const DEFAULT_ENTRY_FILES = [
 ] as const;
 
 /**
- * Resolve the app entry file: an explicit value wins, otherwise the first
- * existing `src/index.ts|js|mjs` (JS projects work without `-f`). Falls back
- * to `src/index.ts` so "not found" errors name the conventional path.
+ * Explicit entry file wins; otherwise the first existing `src/index.ts|js|mjs`,
+ * falling back to `src/index.ts` so "not found" errors name the conventional path.
  */
 export function resolveEntryFile(
     explicit: string | undefined,
@@ -60,7 +56,7 @@ export function validatePort(raw: string): { port: string } | { error: string } 
 
 /**
  * Why `cwd` is not a BurgerAPI project, or undefined when it is: needs a
- * package.json that lists `burger-api` (dependencies or devDependencies).
+ * package.json listing `burger-api`.
  */
 export function projectError(cwd: string = process.cwd()): string | undefined {
     const pkgPath = join(cwd, 'package.json');

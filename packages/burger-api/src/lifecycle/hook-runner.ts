@@ -7,9 +7,8 @@ import { isThenable } from '../utils/thenable.js';
 type RunnerHook = ForwardHook | ResponseHook;
 
 /**
- * Runs a single hook followed by the handler.
- * Reused by the router compiler so the compiled handlers share the exact
- * same hook execution semantics.
+ * Runs a single hook followed by the handler. Reused by the router compiler
+ * so compiled handlers share the same hook semantics.
  */
 async function runSingleHook(
     ctx: BurgerContext,
@@ -20,12 +19,12 @@ async function runSingleHook(
     let result = hook(ctx);
     if (isThenable(result)) result = await result;
 
-    // Short-circuit with Response
+    // Response short-circuits the handler.
     if (result instanceof Response) {
         return result;
     }
 
-    // Transform response after handler
+    // A function result maps the handler's response.
     if (typeof result === 'function') {
         let response = handler(ctx);
         if (isThenable(response)) response = await response;
@@ -34,20 +33,15 @@ async function runSingleHook(
         return mapped;
     }
 
-    // Continue to handler
     return handler(ctx);
 }
 
 /**
  * Runs an ordered hook chain followed by the handler.
  *
- * How it works:
- * 1. Run each hook in order
- * 2. If hook returns Response → stop and send that response
- * 3. If hook returns undefined → continue to next hook
- * 4. If hook returns function → save it to transform the final response later
- * 5. After all hooks, run the handler
- * 6. Apply all saved "after" functions to the response (in reverse order)
+ * Each hook may return a `Response` (stop and send it), a function (saved to
+ * transform the eventual response, applied in reverse order after the
+ * handler), or `undefined` (continue).
  */
 async function runHookChain(
     ctx: BurgerContext,

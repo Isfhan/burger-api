@@ -1,12 +1,10 @@
 /**
- * Portable constant-time string comparison.
+ * Portable constant-time string comparison (WinterCG-safe, no `node:crypto`).
  *
- * WinterCG-safe (no `node:crypto`): both strings are encoded to UTF-8 and
- * XOR-compared over the longer length, so byte comparison time does not
- * depend on the match position. Length is still observable through the
- * iteration bound — acceptable for credentials comparison where both sides
- * are server-controlled; equal-length values (e.g. hashed credentials) leak
- * nothing.
+ * XORs UTF-8 bytes over the longer length, so comparison time does not depend
+ * on match position. Length is still observable via the iteration bound —
+ * acceptable for server-controlled credentials; equal-length values (e.g.
+ * hashed credentials) leak nothing.
  */
 export function timingSafeEqual(a: string, b: string): boolean {
     const aBytes = new TextEncoder().encode(a);

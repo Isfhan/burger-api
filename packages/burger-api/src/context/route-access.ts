@@ -1,11 +1,9 @@
 import type { ContextField, RouteAccessInfo } from './types.js';
 
 /**
- * Builds and freezes a `RouteAccessInfo` hint.
- *
- * The returned object is `Object.freeze`d so it can be shared safely across
- * requests. Its `has(field)` reports membership, treating `unknown: true` (the
- * conservative safe default) as "every field is used".
+ * Builds and freezes a `RouteAccessInfo` hint. Frozen so it can be shared
+ * across requests; `unknown: true` (the safe default) makes `has()` report
+ * every field as used.
  */
 export function freezeRouteAccessInfo(
     fields: Iterable<ContextField>,

@@ -1,7 +1,6 @@
 /**
- * Real tests for the ecosystem TTL-file cache — no mocked fs, an isolated
- * temp directory per test (via BURGER_API_CACHE_DIR) so nothing touches a
- * real home directory.
+ * Ecosystem TTL-file cache tests against a real fs: isolated temp dir per
+ * test via BURGER_API_CACHE_DIR, so nothing touches a real home directory.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';

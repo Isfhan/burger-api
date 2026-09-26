@@ -7,21 +7,17 @@ import type {
 import type { BunAdapterStartOptions } from '../adapter/bun/types.js';
 
 /**
- * Non-foldable module id for the Bun adapter. Bundlers keep dynamic imports
- * with non-static specifiers external, so `bun` never enters the graph of
- * WinterCG bundles; at runtime the package self-reference
- * (`burger-api/adapter/bun`, see package.json exports) resolves it.
+ * Non-foldable module id for the Bun adapter: bundlers keep dynamic imports
+ * with non-static specifiers external, so `bun` never enters WinterCG bundles.
  */
 function adapterModuleId(): string {
     return ['burger-api', 'adapter', 'bun'].join('/');
 }
 
 /**
- * Thin server wrapper. Owns the runtime adapter and delegates the actual
- * bootstrap to it, so the framework keeps a single, runtime-agnostic seam.
- * Bun is the default adapter but is loaded lazily (dynamic import on first
- * `start()`) so WinterCG bundles — which only use `toFetchHandler()` — never
- * contain `import { serve } from 'bun'`.
+ * Thin server wrapper. Owns the runtime adapter and delegates bootstrap to it.
+ * The Bun adapter loads lazily on first `start()`, so WinterCG bundles — which
+ * only use `toFetchHandler()` — never contain a `bun` import.
  */
 export class Server {
     private options: ServerOptions;
@@ -34,11 +30,8 @@ export class Server {
     }
 
     /**
-     * Starts the server via the configured adapter.
-     * The Bun adapter is loaded lazily on first start (dynamic import), keeping
-     * the module graph free of `bun` imports for non-Bun targets. The specifier
-     * is intentionally non-static so every bundler (Bun, esbuild, wrangler)
-     * leaves the import external instead of resolving `bun` builtins.
+     * Starts the server via the configured adapter, loading the Bun adapter
+     * lazily on first use.
      * @param opts adapter bootstrap options (static routes, fetch fallback, port).
      */
     public async start(

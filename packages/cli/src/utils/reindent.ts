@@ -1,15 +1,10 @@
 /**
- * Re-indents generated TS/JS source by bracket depth.
+ * Re-indent generated TS/JS source by bracket depth, so templates with
+ * hand-written whitespace are normalized on write. Uses 4 spaces, matching
+ * the scaffold `.prettierrc` (`tabWidth: 4`).
  *
- * Scaffold templates are assembled from string fragments whose leading
- * whitespace is easy to get wrong (and was once collapsed to single spaces
- * repo-wide), so generated files are normalized here on write instead of
- * trusting every template's hand-written indentation. Scaffolds ship a
- * `.prettierrc` with `tabWidth: 4`; this matches it.
- *
- * Deliberately small: it understands strings, template literals and
- * comments well enough not to count brackets inside them, and leaves the
- * inside of multi-line template literals untouched.
+ * Small on purpose: skips brackets inside strings, comments, and template
+ * literals, and leaves multi-line template literal contents untouched.
  */
 
 const INDENT = '    ';
@@ -17,9 +12,8 @@ const OPENERS = '([{';
 const CLOSERS = ')]}';
 
 export function reindent(code: string): string {
-    // One entry per open bracket: the index of the line that opened it.
-    // Indent = number of distinct lines with unclosed brackets, so
-    // `foo({` on one line adds a single level, not two.
+    // One entry per open bracket (the line that opened it). Indent = number
+    // of distinct opening lines, so `foo({` adds one level, not two.
     const open: number[] = [];
     const levels = (n: number) => new Set(open.slice(0, n)).size;
     let inBlockComment = false;
@@ -37,7 +31,7 @@ export function reindent(code: string): string {
         } else if (trimmed === '') {
             out.push('');
         } else if (inBlockComment || trimmed.startsWith('*')) {
-            // JSDoc/block-comment continuation: align the `*` under `/**`.
+            // JSDoc/block-comment continuation: align `*` under `/**`.
             const pad = trimmed.startsWith('*') ? ' ' : '';
             out.push(INDENT.repeat(levels(open.length)) + pad + trimmed);
         } else {
@@ -52,7 +46,7 @@ export function reindent(code: string): string {
             out.push(INDENT.repeat(levels(n)) + trimmed);
         }
 
-        // Update bracket/comment/template state from the line's code chars.
+        // Update bracket/comment/template state from this line.
         let quote: string | null = null;
         for (let i = 0; i < line.length; i++) {
             const ch = line[i]!;

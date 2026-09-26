@@ -99,7 +99,7 @@ describe('auto-HEAD response validation', () => {
     });
 });
 
-describe('B5 — tracked ContextSet fast paths', () => {
+describe('tracked ContextSet fast paths', () => {
     it('tracks flags per assignment', () => {
         const set = new TrackedContextSet();
         expect(set.flags).toBe(0);

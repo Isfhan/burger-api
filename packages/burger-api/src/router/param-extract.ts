@@ -5,17 +5,15 @@ import type { ContextInit } from '../context/types.js';
 /**
  * Web-Standard param extraction for native route dispatch.
  *
- * When a dynamic route is registered directly on Bun's native `routes` map, Bun
- * matches the path but does NOT expose extracted parameters (unlike its trie
- * fallback). This module derives the same `ContextInit` the trie would produce,
- * using only the `Request` URL, so the behavior is identical and the logic stays
- * runtime-agnostic (WinterCG-compatible). Non-Bun adapters that do not use
- * Bun's native `routes` map keep dispatching through `Router.fetch` + trie and
- * never touch this code.
+ * Bun's native `routes` map matches a pattern but does not expose extracted
+ * params, so this derives the same `ContextInit` the trie would produce from
+ * the `Request` URL — identical behavior, and the logic stays
+ * runtime-agnostic (WinterCG). Non-Bun adapters dispatch through
+ * `Router.fetch` + trie and never use it.
  *
- * The pattern's segment layout is compiled ONCE at route-compile time
- * (`compilePatternSegments`); request handling does only one URL scan and
- * decodes a segment when it actually contains `%`.
+ * The pattern's segment layout is compiled once per route
+ * (`compilePatternSegments`); request handling does one URL scan and decodes
+ * only `%`-bearing segments.
  */
 
 /**
@@ -65,7 +63,7 @@ function decodeSegment(segment: string): string {
 /**
  * Splits a pathname into segments, preserving a single trailing empty segment
  * when the path ends with `/` (so `/users/` yields `["users", ""]` and a
- * `:param` captures the empty value, mirroring the trie's behavior).
+ * `:param` captures the empty value, matching the trie).
  */
 function splitPath(pathname: string, out: string[]): string[] {
     let start = pathname.charCodeAt(0) === 47 /* '/' */ ? 1 : 0;
@@ -84,13 +82,10 @@ function splitPath(pathname: string, out: string[]): string[] {
 }
 
 /**
- * Builds the `ContextInit` (params / wildcardParams / route) for a request that
+ * Builds the `ContextInit` (params / wildcardParams / route) for a request
  * Bun dispatched to a native `:param` or `*` route. `pattern` is the
- * route-definition path (e.g. `/users/:id`, `/files/*`).
- *
- * `compiled` is the pattern layout produced by {@link compilePatternSegments}
- * at route-compile time; when omitted it is derived on the spot (kept for
- * callers that only have the raw path string).
+ * route-definition path (e.g. `/users/:id`, `/files/*`); `compiled` is the
+ * layout produced by {@link compilePatternSegments} at route-compile time.
  */
 export function extractCtxInitWithSegments(
     request: Request,
@@ -110,7 +105,7 @@ export function extractCtxInitWithSegments(
         if (name === undefined) continue;
         if (params === undefined) params = {};
         // A pattern segment without a URL segment captures the empty value
-        // (mirrors the trie's `/users/` → `:id === ""` behavior).
+        // (matches the trie's `/users/` → `:id === ""` behavior).
         const raw = pathSegments[i];
         params[name] = raw === undefined ? '' : decodeSegment(raw);
     }

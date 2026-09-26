@@ -1,10 +1,4 @@
-/**
- * Doctor Command
- *
- * Validates project structure and detects issues.
- *
- * Example: burger-api doctor
- */
+/** Doctor command — validates project structure and reports issues. */
 
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
@@ -33,8 +27,8 @@ export interface CheckResult {
     pass: boolean;
     message: string;
     /**
-     * For passing checks: `info` = optional/not applicable (not a success),
-     * `warning` = works but likely a mistake. Absent = plain success.
+     * For passing checks: `info` = optional/not applicable, `warning` =
+     * works but likely a mistake. Absent = plain success.
      */
     severity?: 'info' | 'warning';
 }
@@ -93,7 +87,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
         )
     );
 
-    // 2. burger-api listed AND installed (resolvable from node_modules)
+    // 2. burger-api listed in package.json AND resolvable from the project
     try {
         const pkg = JSON.parse(
             readFileSync(join(cwd, 'package.json'), 'utf-8')
@@ -171,7 +165,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
     );
 
     // 5. API routes under the configured apiDir. A missing default apiDir is
-    // fine (pages-only / WebSocket-only apps); a missing custom one is not.
+    // fine (pages-only apps); a missing custom one is not.
     ensureAppDirEnv(entryFile ? join(cwd, entryFile) : undefined);
     const apiRoot = resolveDir(cwd, config.apiDir);
     if (!apiRoot) {
@@ -205,7 +199,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
                 )
             );
         } else {
-            // Load every route and convention module: catches syntax
+            // Import every route and convention module to catch syntax
             // errors and broken imports before `dev`/`build` do.
             const broken: string[] = [];
             for (const r of routes) {
@@ -246,7 +240,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
         )
     );
 
-    // 7. Legacy config warning
+    // 7. burger.config.* is unsupported — point to burger.build.ts
     const hasLegacyConfig =
         existsSync(join(cwd, 'burger.config.ts')) ||
         existsSync(join(cwd, 'burger.config.js'));
@@ -289,11 +283,8 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
 }
 
 /**
- * Structured, machine-readable doctor result — same checks the formatted
- * console output presents, serialized instead of printed. A real, versioned
- * type (not an ad-hoc object literal) for the same reason as
- * `InspectResult`: a CLI meant for AI-agent/tooling consumption needs a
- * documented contract, not an implicit shape.
+ * Structured, machine-readable doctor result — same checks as the console
+ * output. A documented contract for tooling/agents.
  */
 export interface DoctorResult {
     /** Schema version for this JSON shape — bump on any breaking field change. */

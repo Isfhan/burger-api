@@ -1,11 +1,9 @@
 import type { RouteModule } from './route-module.js';
 
 /**
- * A lightweight structural view of the compiled route set, used for
- * introspection and deterministic ordering. It performs NO dispatch logic
- * (that belongs to the router's `StaticMap`/`Trie`); it only organizes
- * `RouteModule`s by their path so downstream compilation and tooling can walk the
- * application shape predictably.
+ * A lightweight structural view of the compiled route set, for introspection
+ * and deterministic ordering. It performs no dispatch logic (that belongs to
+ * the router's `StaticMap`/`Trie`); it only organizes `RouteModule`s by path.
  *
  * Built once after the Module Loader produces the `RouteModule[]`; frozen for
  * the lifetime of the server (no per-request allocation).

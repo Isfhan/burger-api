@@ -1,9 +1,7 @@
 /**
- * Regression tests for the hands-on tester findings (IDs in the test names
- * match the fix report / CHANGELOG): AOT global hooks, hook scope ordering,
- * JIT/interpreter parity, handler-return checks, error logging, content-type
- * gating, trailing slashes, auto OPTIONS/HEAD, onRequest coverage, plugin
- * dedupe, ctx.json caching, coercion, OpenAPI shape, and more.
+ * Regression tests for early tester findings: hook scope ordering, JIT
+ * parity, handler returns, error logging, body handling, OPTIONS/HEAD,
+ * onRequest coverage, plugin dedupe, and OpenAPI shape.
  */
 import { describe, it, expect, afterEach, spyOn } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -53,7 +51,7 @@ function quiet(method: 'error' | 'warn') {
     return spy;
 }
 
-describe('C2 — AOT applies every global hook with global scope', () => {
+describe('AOT applies every global hook with global scope', () => {
     for (const jit of [true, false]) {
         it(`transform/beforeRoute/afterRoute/mapResponse/onError (jit=${jit})`, async () => {
             const burger = new Burger({
@@ -157,7 +155,7 @@ export const onError = () => new Response('route-error', { status: 500 });`
     });
 });
 
-describe('H2/M2 — scope ordering and no array mutation', () => {
+describe('scope ordering and no array mutation', () => {
     it('response + error hooks run Route → Global → Plugin; user arrays untouched', async () => {
         const routeErrors: ErrorHook[] = [
             () => undefined,
@@ -191,7 +189,7 @@ describe('H2/M2 — scope ordering and no array mutation', () => {
     });
 });
 
-describe('H1 — JIT matches the interpreter on beforeRoute short-circuit', () => {
+describe('JIT matches the interpreter on beforeRoute short-circuit', () => {
     it('short-circuit still runs collected mappers + afterRoute + mapResponse', async () => {
         const bodies: string[] = [];
         for (const jit of [true, false]) {
@@ -224,7 +222,7 @@ describe('H1 — JIT matches the interpreter on beforeRoute short-circuit', () =
     });
 });
 
-describe('H3 — native dynamic routes keep the onRequest context', () => {
+describe('native dynamic routes keep the onRequest context', () => {
     it('state seeded by onRequest reaches the handler', async () => {
         const router = new Router();
         router.compile(
@@ -259,8 +257,8 @@ describe('H3 — native dynamic routes keep the onRequest context', () => {
     });
 });
 
-describe('H5/H6 — non-Response returns and unhandled errors', () => {
-    it('H6: a handler returning a plain object → 500 with a clear message (dev) and a log', async () => {
+describe('non-Response returns and unhandled errors', () => {
+    it('a handler returning a plain object → 500 with a clear message (dev) and a log', async () => {
         const errors = quiet('error');
         const burger = new Burger({
             debug: true,
@@ -280,7 +278,7 @@ describe('H5/H6 — non-Response returns and unhandled errors', () => {
         expect(errors).toHaveBeenCalled();
     });
 
-    it('H6: production hides the message', async () => {
+    it('production hides the message', async () => {
         quiet('error');
         const burger = new Burger({
             debug: false,
@@ -295,7 +293,7 @@ describe('H5/H6 — non-Response returns and unhandled errors', () => {
         );
     });
 
-    it('H5: unhandled 5xx errors are logged with method and path; handled ones are not', async () => {
+    it('unhandled 5xx errors are logged with method and path; handled ones are not', async () => {
         const errors = quiet('error');
         const burger = new Burger({
             apiRoutes: [
@@ -327,7 +325,7 @@ describe('H5/H6 — non-Response returns and unhandled errors', () => {
     });
 });
 
-describe('H4/M1/M13 — body handling', () => {
+describe('body handling', () => {
     const route = (handler: (ctx: BurgerContext) => Promise<Response>, withSchema = true) =>
         new Burger({
             apiRoutes: [
@@ -347,7 +345,7 @@ describe('H4/M1/M13 — body handling', () => {
             body,
         });
 
-    it('H4: text/plain with a declared body schema → 415 problem+json', async () => {
+    it('text/plain with a declared body schema → 415 problem+json', async () => {
         let reached = false;
         const res = await post(
             route(async () => {
@@ -361,7 +359,7 @@ describe('H4/M1/M13 — body handling', () => {
         expect(reached).toBe(false);
     });
 
-    it('M1: ctx.json() after body validation returns the parsed body', async () => {
+    it('ctx.json() after body validation returns the parsed body', async () => {
         const res = await post(
             route(async (ctx) => Response.json(await ctx.json())),
             '{"name":"a"}'
@@ -369,7 +367,7 @@ describe('H4/M1/M13 — body handling', () => {
         expect(await res.json()).toEqual({ name: 'a' });
     });
 
-    it('M13: malformed JSON read by an unvalidated handler → 400', async () => {
+    it('malformed JSON read by an unvalidated handler → 400', async () => {
         const res = await post(
             route(async (ctx) => Response.json(await ctx.json()), false),
             '{bad'
@@ -382,7 +380,7 @@ describe('H4/M1/M13 — body handling', () => {
     });
 });
 
-describe('M3 — async onError is a valid ErrorHook', () => {
+describe('async onError is a valid ErrorHook', () => {
     it('awaits an async onError', async () => {
         const onError: ErrorHook = async () =>
             new Response('async-handled', { status: 503 });
@@ -404,7 +402,7 @@ describe('M3 — async onError is a valid ErrorHook', () => {
     });
 });
 
-describe('M8 — trailing slashes', () => {
+describe('trailing slashes', () => {
     const burger = () =>
         new Burger({
             apiRoutes: [
@@ -423,7 +421,7 @@ describe('M8 — trailing slashes', () => {
     });
 });
 
-describe('M10 — onRequest covers OpenAPI/docs and assets', () => {
+describe('onRequest covers OpenAPI/docs and assets', () => {
     it('runs global onRequest for /openapi.json and embedded assets', async () => {
         const seen: string[] = [];
         const burger = new Burger({
@@ -444,7 +442,7 @@ describe('M10 — onRequest covers OpenAPI/docs and assets', () => {
     });
 });
 
-describe('M11/L6 — auto OPTIONS and HEAD', () => {
+describe('auto OPTIONS and HEAD', () => {
     it('GET-only route answers OPTIONS 204 + Allow, skipping auth beforeRoute', async () => {
         const burger = new Burger({
             apiRoutes: [
@@ -474,7 +472,7 @@ describe('M11/L6 — auto OPTIONS and HEAD', () => {
     });
 });
 
-describe('M5/B3 — OpenAPI request bodies and AOT uppercase schema keys', () => {
+describe('OpenAPI request bodies and AOT uppercase schema keys', () => {
     it('documents input-side bodies and accepts GET/POST keys from AOT namespaces', async () => {
         const burger = new Burger({
             apiRoutes: [
@@ -509,7 +507,7 @@ describe('M5/B3 — OpenAPI request bodies and AOT uppercase schema keys', () =>
     });
 });
 
-describe('M6/M7 — response validation enforce', () => {
+describe('response validation enforce', () => {
     const make = (debug: boolean, config?: Record<string, unknown>) =>
         new Burger({
             debug,
@@ -524,7 +522,7 @@ describe('M6/M7 — response validation enforce', () => {
                 },
             ],
         });
-    it('M6: production answers a generic problem+json 500 and still runs afterRoute', async () => {
+    it('production answers a generic problem+json 500 and still runs afterRoute', async () => {
         quiet('error');
         const res = await fetchVia(make(false), '/api/r');
         expect(res.status).toBe(500);
@@ -534,19 +532,19 @@ describe('M6/M7 — response validation enforce', () => {
         expect(body.detail).toBe('Internal Server Error');
         expect(body.errors).toBeUndefined();
     });
-    it('M6: dev includes the issues', async () => {
+    it('dev includes the issues', async () => {
         quiet('error');
         const body = (await (await fetchVia(make(true), '/api/r')).json()) as Record<string, unknown>;
         expect(body.errors).toBeDefined();
     });
-    it('M7: config.ts responseValidation overrides the global mode per route', async () => {
+    it('config.ts responseValidation overrides the global mode per route', async () => {
         quiet('error');
         const res = await fetchVia(make(false, { responseValidation: 'enforce' }), '/api/r');
         expect(res.status).toBe(500);
     });
 });
 
-describe('M12 — unknown convention exports warn', () => {
+describe('unknown convention exports warn', () => {
     it('warns for a typo in global hooks and onRequest in route hooks', async () => {
         const warn = quiet('warn');
         const burger = new Burger({
@@ -566,7 +564,7 @@ describe('M12 — unknown convention exports warn', () => {
     });
 });
 
-describe('H7 — plugin factories', () => {
+describe('plugin factories', () => {
     it('keeps two anonymous factories and warns on a real duplicate', async () => {
         const warn = quiet('warn');
         const reg = new PluginRegistry();
@@ -579,7 +577,7 @@ describe('H7 — plugin factories', () => {
     });
 });
 
-describe('W1 — onRequest mappers', () => {
+describe('onRequest mappers', () => {
     it('a short-circuit keeps earlier mappers; mappers run in onion order', async () => {
         const burger = new Burger({
             apiRoutes: [{ path: '/api/x', handlers: { GET: () => new Response('x') } }],
@@ -602,7 +600,7 @@ describe('W1 — onRequest mappers', () => {
     });
 });
 
-describe('W2 — ctx.ip', () => {
+describe('ctx.ip', () => {
     it('reports the socket address under serve() and undefined via fetchHandler', async () => {
         const burger = new Burger({
             apiRoutes: [
@@ -624,8 +622,8 @@ describe('W2 — ctx.ip', () => {
     });
 });
 
-describe('L1/L3/L8/B1/serve — small fixes', () => {
-    it('L1: thrown objects with a status get the status phrase as title', async () => {
+describe('small fixes', () => {
+    it('thrown objects with a status get the status phrase as title', async () => {
         const burger = new Burger({
             apiRoutes: [
                 {
@@ -642,7 +640,7 @@ describe('L1/L3/L8/B1/serve — small fixes', () => {
         expect(body.title).toBe('Not Found');
     });
 
-    it('L3: apiPrefix "" mounts routes at the root', async () => {
+    it('apiPrefix "" mounts routes at the root', async () => {
         const root = mkdtempSync(path.join(tmpdir(), 'burger-prefix-'));
         try {
             mkdirSync(path.join(root, 'hello'), { recursive: true });
@@ -657,7 +655,7 @@ describe('L1/L3/L8/B1/serve — small fixes', () => {
         }
     });
 
-    it('L8: coercion handles repeated query keys and "1"/"0" booleans', () => {
+    it('coercion handles repeated query keys and "1"/"0" booleans', () => {
         const plan = buildPlan(
             z.object({ tag: z.array(z.number()), on: z.boolean(), one: z.array(z.string()) }),
             'query'
@@ -668,7 +666,7 @@ describe('L1/L3/L8/B1/serve — small fixes', () => {
         expect(apply(plan, { tag: '3', on: '0', one: ['a'] }).on).toBe(false);
     });
 
-    it('B1: fetchHandler serves prebuilt page routes', async () => {
+    it('fetchHandler serves prebuilt page routes', async () => {
         const burger = new Burger({
             apiRoutes: [{ path: '/api/x', handlers: { GET: () => new Response('x') } }],
             pageRoutes: [{ path: '/about', handler: () => new Response('<h1>about</h1>') }],

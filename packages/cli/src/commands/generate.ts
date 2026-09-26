@@ -1,13 +1,6 @@
 /**
- * Generate Command (alias: g)
- *
- * Scaffolds routes, hooks, and plugins with convention files.
- *
- * Examples:
- * burger-api generate route users
- * burger-api g route products/[id]
- * burger-api generate hook cors
- * burger-api generate plugin jwt
+ * Generate command (alias: `g`) — scaffolds routes, WebSocket handlers, and
+ * local hooks/plugins with convention files.
  */
 
 import { Command } from 'commander';
@@ -57,17 +50,10 @@ const rel = (p: string): string =>
     relative(process.cwd(), p).split('\\').join('/') || '.';
 
 /**
- * Best-effort, non-blocking check: does a real ecosystem hook/plugin
- * already exist under this name? `generate` scaffolds an empty local stub
- * regardless of the answer (see the plan's DRY note — this is an additive
- * hint, not a behavior change) — but a same-named real implementation
- * downloadable via `burger-api add` is worth surfacing before someone
- * fills in a blank file that already exists, tested, in the ecosystem.
- * Uses the cached catalog (`getCachedComponentList`), not a live
- * `detectEcosystemType` call, so this never turns an instant local command
- * into a network-dependent one — and any failure here (offline, cold
- * cache, GitHub down) is swallowed silently rather than blocking or
- * warning about an unrelated network issue.
+ * Best-effort check for a same-named ecosystem package, so users can
+ * `burger-api add` the real implementation instead of filling in a blank
+ * stub. Uses the cached catalog and swallows network failures, so the
+ * command never becomes network-dependent.
  */
 async function warnIfEcosystemComponentExists(name: string): Promise<void> {
     try {
@@ -104,10 +90,7 @@ function fail(message: string, hint?: string): never {
     process.exit(1);
 }
 
-/**
- * Resolve the project language: explicit `--lang` flag wins, otherwise a
- * `jsconfig.json` in the project root marks a JavaScript project.
- */
+/** Resolve the language: `--lang` wins, else jsconfig.json marks JS. */
 function resolveLang(flag: string | undefined): 'ts' | 'js' {
     const lang = flag ?? (existsSync('jsconfig.json') ? 'js' : 'ts');
     if (lang !== 'ts' && lang !== 'js') {
@@ -118,10 +101,8 @@ function resolveLang(flag: string | undefined): 'ts' | 'js' {
 
 /**
  * Validate a route/ws path like `users`, `products/[id]`, `(admin)/stats`,
- * `files/[...]`. Returns an error message, or undefined when valid.
- * Rejects absolute paths, `.`/`..` segments, whitespace and characters
- * that are invalid in file names, and named wildcards (`[...path]`), which
- * the router does not support.
+ * or `files/[...]`.
+ * @returns Error message, or undefined when valid
  */
 export function validateRoutePath(input: string): string | undefined {
     if (!input.trim()) return 'Path cannot be empty.';
@@ -166,10 +147,8 @@ function resolveUnder(root: string, relPath: string): string {
 }
 
 /**
- * Resolve a scan dir the same way scans do (project root, then src/). The
- * app-dir fallback only applies to bare paths — a config value already
- * prefixed with `src/` resolves against the project root (and is created
- * if it does not exist yet).
+ * Resolve a scan dir the way scans do (project root, then src/). The
+ * app-dir fallback only applies to bare paths, not `src/`-prefixed ones.
  */
 function resolveScanRoot(dir: string): string {
     const appDir = process.env.BURGER_API_APP_DIR;
@@ -213,8 +192,8 @@ const routeCommand = new Command('route')
         const lang = resolveLang(options.lang);
         const config = await resolveBuildConfig(process.cwd());
         ensureAppDirEnv();
-        // Resolve apiDir the same way scans do (project root, then src/)
-        // so `generate route x` lands in src/api/x even with `apiDir: 'api'`.
+        // Resolve apiDir the same way scans do, so `generate route x` lands
+        // in src/api/x even with `apiDir: 'api'`.
         const apiRoot = resolveScanRoot(config.apiDir);
         const targetDir = resolveUnder(apiRoot, routePath);
 
@@ -406,8 +385,8 @@ const wsCommand = new Command('ws')
             info('Define route-level hooks in the hooks file.');
         }
 
-        // dev/start only serve file-based WebSocket routes from the wsDir
-        // the entry file configures (or the ./src/websocket default).
+        // dev/start only serve WebSocket routes from the wsDir the entry
+        // file configures (default ./src/websocket).
         const entryFile = resolveEntryFile(undefined);
         const entryOptions = readEntryScanOptions(
             resolvePath(process.cwd(), entryFile)

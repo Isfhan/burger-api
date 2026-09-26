@@ -1,9 +1,9 @@
 /**
  * Configuration for OpenAPI document generation and docs UI.
  *
- * Exported from `openapi.config.ts` (auto-discovered convention file).
- * Lives next to the entry point: `src/openapi.config.ts` when `src/` exists,
- * or root `openapi.config.ts` for flat project structures.
+ * Defined in the `openapi.config.ts` convention file, auto-discovered next to
+ * the entry point: `src/openapi.config.ts` when `src/` exists, or root
+ * `openapi.config.ts` for flat project structures.
  */
 
 /**
@@ -112,7 +112,7 @@ export interface OpenAPIExternalDocs {
  * ```
  */
 export interface OpenAPIConfig {
-    // ── Document metadata (vision §16) ──
+    // ── Document metadata ──
 
     /** API title. Defaults to "Burger API". */
     title?: string;
@@ -173,12 +173,12 @@ export interface OpenAPIConfig {
 
     /**
      * Map of validator library names to their JSON Schema converter functions.
-     * When a route schema is encountered, the framework looks up the converter
-     * by the schema's library identifier and calls it to produce OpenAPI-compatible
-     * JSON Schema.
+     * The framework looks up the converter by the schema's library identifier
+     * and calls it to produce OpenAPI-compatible JSON Schema.
      *
      * Zod 4 schemas with native `toJSONSchema()` are handled automatically.
-     * This option is for other libraries (Valibot, ArkType, Effect Schema, etc.).
+     * This option is for other libraries (Valibot, ArkType, Effect Schema,
+     * etc.).
      *
      * @example
      * ```ts

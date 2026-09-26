@@ -57,17 +57,12 @@ import type {
 } from '../validation/types.js';
 
 /**
- * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`.
- *
- * Responsibilities:
- * - Build the optimized `CompiledHandler` per route (method dispatch + 405/Allow
- * + auto-HEAD + hook pipeline delegation).
- * - Classify each route as static (→ `StaticMap`) or dynamic/wildcard (→ `Trie`).
- * - Populate the `AllowCache`.
- * - Optionally run the `RouteAccessAnalyzer` once per route (compile-time only;
- * its output is baked into `meta` but never read at runtime ).
- * - Fail fast on duplicate or ambiguous routes (compile-time error).
- * - Optionally register constant `OPTIONS` responses via `Bun.nativeStaticResponse`.
+ * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`:
+ * builds one `CompiledHandler` per route (method dispatch + 405/Allow +
+ * auto-HEAD + hook pipeline), classifies routes as static (`StaticMap`) or
+ * dynamic/wildcard (`Trie`), populates the `AllowCache`, optionally runs the
+ * `RouteAccessAnalyzer` (compile-time only; its output is never read at
+ * runtime), and fails fast on duplicate or ambiguous routes.
  */
 export class RouterCompiler {
     private debug?: boolean;
@@ -96,12 +91,11 @@ export class RouterCompiler {
         const staticMap = new StaticMap();
         const trie = new Trie();
         const allowCache = new AllowCache();
-        // Native dispatch table: `:param` / `*` routes keyed by their Bun-native
-        // pattern (e.g. `/users/:id`). These are handed to Bun's `routes` map so
-        // dynamic routes dispatch without the `fetch` fallback hop. The compiled
-        // handler self-extracts params (see param-extract.ts), so behavior is
-        // identical to the trie path. The trie is retained for the `fetch`
-        // fallback (unmatched / loose-slash / empty-param trailing slash).
+        // Native dispatch table: `:param` / `*` routes keyed by their Bun
+        // pattern (e.g. `/users/:id`). Handed to Bun's `routes` map so dynamic
+        // routes skip the `fetch` fallback hop; the compiled handler
+        // self-extracts params (see param-extract.ts). The trie is retained
+        // for the `fetch` fallback (unmatched / loose-slash / empty param).
         const nativeRoutes = new Map<string, CompiledHandler>();
         // Per-route per-method specialized executors (fed to Bun method
         // objects by the Router).
@@ -134,8 +128,7 @@ export class RouterCompiler {
             // reject CORS preflights (onRequest still runs).
             //
             // `rawHandlers` keeps the user function; `handlers` wraps it with
-            // the Response check for the hook pipeline. The empty-plan direct
-            // path performs the check inline instead (same error path).
+            // the Response check for the hook pipeline.
             const rawHandlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
             const handlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
             for (const m of Object.keys(def.handlers) as HTTPMethod[]) {
@@ -160,11 +153,11 @@ export class RouterCompiler {
                 | import('../validation/types.js').CompiledRouteValidators
                 | undefined;
 
-            // Compose the frozen `HookPlan` once at compile time.
-            // The HookChain collects ChainNodes tagged with scope + owner; the
-            // flattener produces the per-hook-point arrays with correct ordering
-            // (global → local for forward hooks, local → global for onError).
-            // Validation is added as global scope so it pins at index 0.
+            // Compose the frozen `HookPlan` once at compile time. The chain
+            // collects nodes tagged with scope + owner; the flattener orders
+            // the per-hook-point arrays (global → local for forward hooks,
+            // local → global for onError). Validation is global scope, so it
+            // pins at index 0.
             const routeHooks = def.hooks;
             const chain = new HookChain();
             if (hasSchema) {
@@ -181,18 +174,16 @@ export class RouterCompiler {
                 });
                 routeValidators = validators;
             }
-            // App-level hooks (`src/hooks.ts` / `globalHooks`) are staged with
-            // scope 'global' and route hooks with scope 'local', so the
-            // flattener owns the ordering: request hooks run
-            // Plugin → Global → Route, response + error hooks run
-            // Route → Global → Plugin (nearest-first). Declared order is kept
-            // within a scope. User arrays are never mutated.
+            // App-level hooks (`src/hooks.ts` / `globalHooks`) stage with scope
+            // 'global', route hooks with scope 'local'; the flattener owns the
+            // ordering: request hooks run Plugin → Global → Route, response +
+            // error hooks Route → Global → Plugin (nearest-first). Declared
+            // order is kept within a scope; user arrays are never mutated.
             addHookStages(chain, globalHooks, 'global', 'app');
             addHookStages(chain, routeHooks, 'local', path);
 
-            // compose plugin hooks into the chain.
-            // Plugin hooks are scoped (plugin by default) and the flattener
-            // orders them between global (validation) and local (route).
+            // Plugin hooks are scoped (plugin by default); the flattener orders
+            // them between global (validation) and local (route).
             if (plugins) {
                 composePluginHooks(chain, plugins, path);
             }
@@ -224,12 +215,11 @@ export class RouterCompiler {
                     ? { ...this.config, responseValidation: routeMode }
                     : this.config;
 
-            // Compile-time-only route field analysis. When it returns
-            // `unknown: false` (every reader provably accesses fields only
-            // through direct member reads), the compiled executor may skip
-            // work for fields nothing reads (see `buildMethodCore`); any
-            // doubt keeps the conservative "all fields used" fallback, and
-            // `debug: true` disables analysis entirely.
+            // Compile-time-only field analysis. A `known` result (every reader
+            // provably accesses fields only through direct member reads) lets
+            // the executor skip work for fields nothing reads; any doubt keeps
+            // the conservative "all fields used" fallback, and `debug: true`
+            // disables analysis entirely.
             const meta: RouteAccessInfo = analyzeRouteAccess(
                 def,
                 this.debug,
@@ -318,14 +308,12 @@ export class RouterCompiler {
     }
 
     /**
-     * Compiles a `RouteModule[]` (the canonical output of the Module Loader)
-     * into the dispatch structures. This is the compiler entry point
-     * for the file-based discovery pipeline
-     * (Directory Scanner → Module Loader → `RouteModule` → Compiler).
+     * Compiles a `RouteModule[]` (the Module Loader's output) into the
+     * dispatch structures — the compiler entry point for the file-based
+     * pipeline (Scanner → Module Loader → `RouteModule` → Compiler).
      *
-     * Each `RouteModule` is normalized to the existing `RouteDefinition` shape
-     * (the stable contract shared with the prod prebuilt path), then compiled
-     * through {@link compile}. Convention data not yet compiled in * (`hooks`) is carried for downstream compilation. `config` is attached for runtime use.
+     * Each module is normalized to the `RouteDefinition` shape, then compiled
+     * through {@link compile}.
      */
     compileModules(modules: RouteModule[]): CompiledRouter {
         return this.compile(modules.map(toRouteDefinition));
@@ -333,11 +321,10 @@ export class RouterCompiler {
 }
 
 /**
- * Normalizes a `RouteModule` (compiler's intermediate) into the existing
- * `RouteDefinition` (the normalized form between the compiler and the runtime).
- *
- * Convention data not yet compiled in (`hooks`) is carried on the
- * `RouteDefinition` for downstream compilation. `config` is attached for runtime use.
+ * Normalizes a `RouteModule` (the compiler's intermediate) into the
+ * `RouteDefinition` shape consumed by the runtime. Convention data
+ * (`hooks`) is carried for downstream compilation; `config` is kept for
+ * runtime use.
  */
 function toRouteDefinition(mod: RouteModule): RouteDefinition {
     return {
@@ -377,7 +364,7 @@ function addHookStages(
 /**
  * Wraps a route handler so a non-`Response` return value fails loud with a
  * clear 500 (message visible in dev, generic in production, always logged)
- * instead of leaking to the runtime (Bun answers "Welcome to Bun!" 200).
+ * instead of leaking to the runtime.
  */
 function requireResponse(
     handler: RequestHandler,
@@ -413,11 +400,10 @@ function describeReturn(result: unknown): string {
 }
 
 /**
- * Builds ONE specialized executor per route+method. Each executor creates (or
- * binds) the request context, runs the hook plan — or, for an empty plan,
- * calls the handler directly with no async wrapper — and merges `ctx.set`
- * into the response. Auto-HEAD (derived from GET) and the framework's auto
- * OPTIONS are baked in here, so the native path never probes at runtime.
+ * Builds one specialized executor per route+method. Each creates (or binds)
+ * the request context, runs the hook plan (or calls the handler directly for
+ * an empty plan), and merges `ctx.set` into the response. Auto-HEAD and the
+ * framework's auto OPTIONS are baked in here.
  */
 function buildRouteCores(
     rawHandlers: Partial<Record<HTTPMethod, RequestHandler>>,
@@ -440,7 +426,7 @@ function buildRouteCores(
         : undefined;
 
     // When the analyzer proved nothing reads `ctx.validated` and a method
-    // declares no validators, the empty `{}` bag is not allocated (B3).
+    // declares no validators, the empty `{}` bag is not allocated.
     const skipValidatedBag = meta.unknown === false && !meta.has('validated');
 
     for (const m of Object.keys(planHandlers) as HTTPMethod[]) {
@@ -486,10 +472,10 @@ function buildRouteCores(
 }
 
 /**
- * Clones a route plan with the validation hook specialized for one method
- * (B4): the method lookup and `toLowerCase()` are resolved at compile time,
- * so the request path runs only the declared slots. Plans without validators
- * are returned as-is (no allocation).
+ * Clones a route plan with the validation hook specialized for one method:
+ * the method lookup and `toLowerCase()` are resolved at compile time, so the
+ * request path runs only the declared slots. Plans without validators are
+ * returned as-is (no allocation).
  */
 function specializePlan(
     plan: HookPlan,
@@ -553,10 +539,9 @@ function collectAccessSources(
 
 /**
  * Builds one method's executor. The empty-plan path calls the handler
- * directly (`r instanceof Promise ? r.then(...) : ...`) with a synchronous
- * try/catch; the Response check and `ctx.set` merge happen in `settle`, and
- * a failure renders through the SAME `dispatchOnError` path the hook
- * pipeline uses.
+ * directly with a synchronous try/catch; the Response check and `ctx.set`
+ * merge happen in `settle`, and failures render through the same
+ * `dispatchOnError` path the hook pipeline uses.
  */
 function buildMethodCore(
     method: HTTPMethod,
@@ -585,12 +570,12 @@ function buildMethodCore(
     // authoritative (extractCtxInit always keyed off it too).
     const hasWildcard = isWildcard || pattern.includes('*');
 
-    // B3: when the analyzer proved (`unknown === false`) that neither the
-    // handler nor any framework-known hook reads params/wildcardParams, and
-    // the method declares no params validator, the per-request extraction
-    // (Bun record copy / URL split + decode) is skipped. `ctx.params` still
-    // materializes lazily as `{}` if unforeseen code reads it, matching the
-    // documented empty-record default.
+    // When the analyzer proved (`unknown === false`) that neither the handler
+    // nor any framework-known hook reads params/wildcardParams, and the method
+    // declares no params validator, per-request extraction (Bun record copy /
+    // URL split + decode) is skipped. `ctx.params` still materializes lazily
+    // as `{}` if unforeseen code reads it, matching the documented
+    // empty-record default.
     const needsParams =
         meta.unknown !== false ||
         meta.has('params') ||
@@ -875,8 +860,8 @@ function mergeTransformRecords(
 
 /**
  * True when the method's compiled validators declare `slot`. HEAD reuses
- * GET's validators (auto-HEAD derives from GET). Used by the B3 gating so a
- * params validator never loses its input.
+ * GET's validators (auto-HEAD derives from GET), so a params validator never
+ * loses its input.
  */
 function methodHasSlot(
     validators: CompiledRouteValidators | undefined,
@@ -904,10 +889,10 @@ function isStaticPath(path: string): boolean {
 
 /**
  * Optionally registers a provably-constant `OPTIONS` (204) response via
- * `Bun.nativeStaticResponse`. Only safe when the route has no hooks,
- * no schema, and uses the framework's auto-generated OPTIONS handler — so the
- * response is identical for every request. The pipeline works correctly without
- * this; it is a pure performance optimization.
+ * `Bun.nativeStaticResponse`. Only safe when the route has no hooks, no
+ * schema, and uses the auto OPTIONS handler, so the response is identical
+ * for every request. Pure performance optimization; the pipeline works
+ * without it.
  */
 function registerNativeOptions(
     path: string,

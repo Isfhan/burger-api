@@ -1,8 +1,6 @@
 /**
- * Precomputed `Allow` header strings for known routes.
- *
- * Avoids rebuilding the comma-joined method list on every 405 response.
- * Built once at compile time and frozen for the lifetime of the server.
+ * Precomputed `Allow` header strings for known routes, built once at compile
+ * time — no comma-joined method list rebuild per 405 response.
  */
 export class AllowCache {
     private cache = new Map<string, string>();

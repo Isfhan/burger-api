@@ -1,8 +1,7 @@
 /**
- * Type-level tests for the public method-key typing and related type
- * contracts. These tests are compile-time assertions: they pass at runtime
- * trivially, but the `tsc` gate checks the `@ts-expect-error` markers and the
- * `Expect`/`Equal` type assertions.
+ * Type-level tests for the public method-key typing. Compile-time
+ * assertions: they pass trivially at runtime, but the `tsc` gate checks the
+ * `@ts-expect-error` markers and the `Expect`/`Equal` assertions.
  */
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
@@ -161,10 +160,8 @@ describe('stage-precise hook contracts', () => {
 
     it('accepts a forward hook returning an after-mapper function', () => {
         // A forward hook may return `(response) => Response` to transform
-        // the eventual response once the handler runs — this is real,
-        // tested runtime behavior (see `test/lifecycle/jit.test.ts`'s
-        // after-mapper tests), distinct from the `transform` hook point
-        // (which injects context values, not response mappers).
+        // the eventual response once the handler runs, distinct from the
+        // `transform` hook point (which injects context values).
         const ok: RouteHooks = {
             beforeRoute: [(ctx) => {
                 void ctx;
@@ -350,13 +347,10 @@ describe('onRequest is app/plugin scope only, never route scope', () => {
 });
 
 describe('PluginRegistrar/ProviderRegistrar narrow the burger parameter in plugins.ts/providers.ts', () => {
-    // Real (not `as`-cast) minimal implementations — `usePlugin`/`provide`
-    // are genuinely callable at runtime, so the "real method" assertions
-    // below exercise actual behavior, not just a type-system fiction. The
-    // `@ts-expect-error` checks are bare property references (never calls)
-    // so an out-of-scope method — which genuinely doesn't exist on these
-    // objects at runtime — never throws; the compiler catches the misuse,
-    // not a runtime crash.
+    // Real (not `as`-cast) minimal implementations, so the "real method"
+    // assertions below exercise actual behavior. The `@ts-expect-error`
+    // checks are bare property references (never calls), so an out-of-scope
+    // method never throws at runtime — the compiler catches the misuse.
     function makePluginRegistrar(): PluginRegistrar {
         const registrar: PluginRegistrar = {
             usePlugin(_plugin, _scope, _seed) {
@@ -401,11 +395,9 @@ describe('PluginRegistrar/ProviderRegistrar narrow the burger parameter in plugi
     });
 
     it('usePlugin()/provide() stay chainable within their own narrow type (this stays polymorphic)', () => {
-        // If the narrow type had concretized `this` to the full `Burger`
-        // class (the bug the hand-written-interface design avoids), the
-        // chained result below would widen back to `Burger` and the
-        // `.provide`/`.usePlugin` cross-scope checks would silently stop
-        // erroring — that's the real regression this test guards.
+        // The chained result must stay PluginRegistrar-narrow; if `this`
+        // widened to `Burger`, the cross-scope checks below would stop
+        // erroring.
         const pluginRegistrar = makePluginRegistrar();
         const chained = pluginRegistrar.usePlugin({ name: 'a' });
         chained.usePlugin({ name: 'b' });

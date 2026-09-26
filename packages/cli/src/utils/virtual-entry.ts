@@ -1,9 +1,9 @@
 /**
- * Generate the in-memory virtual entrypoint source for Bun.build().
- * Uses static imports so the bundler traces and embeds all route modules.
+ * Generate the in-memory virtual entrypoint source for Bun.build(). Static
+ * imports let the bundler trace and embed all route modules.
  *
- * Vision: each route directory is self-contained — no global tier hooks.
- * Groups only affect URL path stripping.
+ * Each route directory is self-contained — no global tier hooks; groups
+ * only affect URL stripping.
  */
 
 import type { BuildConfig, RuntimeTarget } from '../types/index';
@@ -65,20 +65,12 @@ export function generateVirtualEntrySource(
         lines.push("import { serve } from '@burger-api/node-server';");
     }
     if (compile) {
-        // `Server`'s own adapter loader (`core/server.ts`) resolves the Bun
-        // adapter via a deliberately non-static specifier
-        // (`['burger-api','adapter','bun'].join('/')`) so bundlers never pull
-        // `import 'bun'` into WinterCG (Cloudflare/Vercel/Deno) bundles. A
-        // `--compile` binary has no filesystem/node_modules to fall back to
-        // at runtime, though, and Bun's compiler can only embed a dynamic
-        // import whose specifier is a literal string at the call site — a
-        // computed one is left unresolved and crashes on start
-        // ("Cannot find module 'burger-api/adapter/bun'"). `build:exec`
-        // output only ever runs standalone under Bun (that's the point of
-        // compiling it), so it's always safe to import the adapter
-        // statically here and hand it to `Burger` via the existing
-        // `ServerOptions.adapter` injection seam, bypassing that dynamic
-        // import entirely for this one build target.
+        // The adapter loader resolves `burger-api/adapter/bun` through a
+        // computed specifier so WinterCG bundles never pull in `import 'bun'`.
+        // A `--compile` binary has no node_modules at runtime, and Bun's
+        // compiler cannot embed that computed import. Compiled output only
+        // runs under Bun, so import the adapter statically here and inject it
+        // via ServerOptions.adapter.
         lines.push(
             "import { BunAdapter as __BunAdapter } from 'burger-api/adapter/bun';"
         );
@@ -90,11 +82,9 @@ export function generateVirtualEntrySource(
     }
     lines.push('');
     if (target === 'bun') {
-        // Ensure CWD matches the bundle directory so HTML chunk paths
-        // resolve correctly. `import.meta.dir` is a Bun-only extension —
-        // every other target either has no filesystem-relative chunking to
-        // resolve (portable targets) or runs the bundle in a real Node
-        // process where this line would throw, so it's Bun-only.
+        // Make CWD the bundle directory so HTML chunk paths resolve.
+        // `import.meta.dir` is Bun-only: portable targets have no
+        // filesystem-relative chunks and Node would throw on it.
         lines.push('process.chdir(import.meta.dir);');
         lines.push('');
     }
@@ -105,9 +95,9 @@ export function generateVirtualEntrySource(
         pushImportLines(lines, pageEntries, 'p');
     }
 
-    // Import WebSocket route modules and their sibling convention files.
-    // Without this, file-based ws.ts routes are silently dropped from
-    // production builds (they exist only in the dev filesystem scan).
+    // Import WebSocket route modules and siblings — otherwise file-based
+    // ws.ts routes are silently dropped from production builds (they exist
+    // only in the dev filesystem scan).
     if (wsEntries.length) {
         lines.push('');
         wsEntries.forEach((w, i) => {
@@ -121,16 +111,15 @@ export function generateVirtualEntrySource(
         });
     }
 
-    // Import a sibling `hooks.ts` for any route that declares lifecycle hooks
-    //. Each route is self-contained — no global tier merging.
+    // Import sibling hooks files; each route is self-contained (no global
+    // tier merging).
     apiEntries.forEach((e, i) => {
         if (e.hooksPath) {
             lines.push(`import * as _h${i} from '${e.hooksPath}';`);
         }
     });
 
-    // Import per-route convention files (schema, openapi, config) for
-    // build-time merging. These are separate from route.ts.
+    // Import per-route schema/openapi/config files for build-time merging.
     apiEntries.forEach((e, i) => {
         if (e.schemaPath) {
             lines.push(`import * as _s${i} from '${e.schemaPath}';`);
@@ -142,14 +131,10 @@ export function generateVirtualEntrySource(
             lines.push(`import * as _c${i} from '${e.configPath}';`);
         }
     });
-    // Handlers and convention exports are read from the module namespaces
-    // at startup — never guessed from source text at build time — so every
-    // export style (`export const GET: Handler = ...`, `export { GET }`,
-    // `defineRoute(...)`, typed or destructured hooks) behaves as in dev
-    // (framework ModuleLoader: `mod.default ?? mod`, function-valued method
-    // exports). Optional exports are read through a helper parameter, so
-    // bundlers (wrangler, esbuild) don't warn about imports that are
-    // legitimately undefined.
+    // Handlers and convention exports are read from module namespaces at
+    // startup, never guessed from source text, so every export style
+    // behaves as in dev. Optional exports go through a helper so bundlers
+    // (wrangler, esbuild) don't warn about legitimately undefined imports.
     if (apiEntries.length || wsEntries.length) {
         lines.push('');
         lines.push('function __mod(mod) {');
@@ -167,9 +152,8 @@ export function generateVirtualEntrySource(
         lines.push('}');
     }
     if (apiEntries.length) {
-        // The framework adds its own OPTIONS handler (204 + Allow) to every
-        // route at compile time and skips beforeRoute for it — emitting one
-        // here would override that and bypass the router's preflight logic.
+        // The framework adds its own OPTIONS handler (204 + Allow) and skips
+        // beforeRoute for it — emitting one here would bypass that.
         lines.push('function __handlers(mod) {');
         lines.push(
             " return __pick(mod, ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']);"
@@ -186,11 +170,9 @@ export function generateVirtualEntrySource(
         lines.push(' return out;');
         lines.push('}');
     }
-    // HTML pages are imported as raw strings (see bun.ts's `.html` text
-    // loader, matching dev's `?raw` import), but Bun.serve's routes map only
-    // accepts functions/HTMLBundles/Responses. Wrap non-function defaults
-    // into a text/html Response factory — exactly what the dev PageRouter
-    // does for string page modules.
+    // HTML pages load as raw strings (bun.ts `.html` loader, like dev's
+    // `?raw` import), but Bun.serve accepts only functions/HTMLBundles/
+    // Responses — wrap string defaults in a text/html Response factory.
     if (pageEntries.length) {
         lines.push('function __page(mod) {');
         lines.push(' const h = mod.default;');
@@ -289,18 +271,17 @@ export function generateVirtualEntrySource(
 
     lines.push('const app = new Burger({');
     // Declares the deployment target so WebSocket upgrade handling can trust
-    // it over live `globalThis` detection — the only way to give an accurate
-    // answer on targets (Node vs. Vercel) indistinguishable at request time.
+    // it over `globalThis` detection (Node vs. Vercel are indistinguishable
+    // at request time).
     lines.push(` runtimeTarget: ${JSON.stringify(target)},`);
     if (compile) {
-        // Emitted before any user-supplied options so an explicit
-        // `adapter` in burgerOptions.ts (rare, but a valid override) still
-        // wins — object-literal keys resolve last-write-wins.
+        // Emitted before user options so an explicit `adapter` in
+        // burgerOptions.ts still wins (last key wins).
         lines.push(' adapter: new __BunAdapter(),');
     }
-    // Always explicit: an unbundled production entry (deno, vercel,
-    // wrangler dev) must never fall back to dev-mode error output. An
-    // explicit `debug` in the entry file's options still wins (spread last).
+    // Always explicit so an unbundled production entry (deno, vercel,
+    // wrangler dev) never falls back to dev-mode error output; an explicit
+    // `debug` in the entry options still wins (spread last).
     lines.push(` debug: ${config.debug === true},`);
     if (optionsImportPath) {
         lines.push(' ...__burgerOptions,');
@@ -323,8 +304,8 @@ export function generateVirtualEntrySource(
         lines.push(' wsRoutes,');
     }
     if (assetEntries.length) {
-        // Static assets are base64-embedded at build time so the bundle
-        // stays self-contained (no filesystem access at runtime).
+        // Assets are base64-embedded at build time so the bundle stays
+        // self-contained (no filesystem access at runtime).
         lines.push(' assetRoutes: [');
         for (const asset of assetEntries) {
             const data = readFileSync(asset.absolutePath).toString('base64');
@@ -337,10 +318,9 @@ export function generateVirtualEntrySource(
     lines.push('});');
     lines.push('');
     if (isPortableTarget) {
-        // Cloudflare Workers / Deno Deploy / Vercel: no long-running process
-        // to bind a port to — the platform calls `fetch` per request. The
-        // platform's own tool (wrangler / deno / vercel) bundles this file;
-        // Bun.build never runs for this target.
+        // Cloudflare/Deno/Vercel: no long-running process to bind a port to —
+        // the platform calls `fetch` per request and its own tool bundles
+        // this file (Bun.build never runs for this target).
         if (target === 'vercel') {
             // Without this, Vercel defaults to the Edge runtime, which
             // rejects the plain `export default { fetch }` shape.

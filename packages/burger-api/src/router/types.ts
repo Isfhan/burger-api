@@ -7,22 +7,14 @@ import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types.j
 import type { HTTPMethod } from '../utils/routing.js';
 
 /**
- * A compiled route handler.
- * Both static (Bun-dispatched) and dynamic/wildcard (trie-dispatched) routes
- * execute exactly this same handler shape, guaranteeing identical method
- * dispatch, 405+Allow, auto-HEAD, and lifecycle behavior regardless of which
- * lookup mechanism reached it.
+ * A compiled route handler — the same shape for static (Bun-dispatched) and
+ * dynamic/wildcard (trie-dispatched) routes, so method dispatch, 405+Allow,
+ * auto-HEAD, and lifecycle behavior are identical on both paths.
  *
- * The handler receives the raw `Request`, an optional `ctxInit` (seeded by
- * `Router.fetch`) and an optional pre-built `BurgerContext` (created by the
- * router before routing so `onRequest` hooks can seed state). When
- * `prebuilt` is provided, the handler binds it to the matched route instead
- * of allocating a second context — one context per request.
- *
- * `env` / `executionCtx` are the platform bindings forwarded from the
- * serving entry point (`toFetchHandler`); they are bound onto the context
- * at creation time. When a prebuilt context exists they were already bound
- * there — passing them again is harmless (bind carries them over).
+ * `prebuilt` is the pre-routing `BurgerContext` (created before routing so
+ * `onRequest` hooks can seed state); when provided, the handler binds it
+ * instead of allocating a second context. `env` / `executionCtx` are the
+ * platform bindings forwarded from the serving entry point.
  */
 export type CompiledHandler = (
     request: Request,
@@ -33,13 +25,12 @@ export type CompiledHandler = (
 ) => Response | Promise<Response>;
 
 /**
- * A route+method executor specialized at compile time for one HTTP method.
- * May return synchronously — the whole point of the flattening is that a
- * route with an empty hook plan does not force a Promise.
+ * A route+method executor specialized at compile time. May return
+ * synchronously — a route with an empty hook plan does not force a Promise.
  *
  * `ctxInit` is supplied by the `fetch` fallback (trie / loose-slash); the
- * native Bun path omits it and the executor derives params from Bun's
- * already-decoded `request.params`.
+ * native Bun path omits it and derives params from Bun's already-decoded
+ * `request.params`.
  */
 export type RouteCore = (
     request: Request,
@@ -62,9 +53,9 @@ export type NativeMethodHandler = (
 
 /**
  * A Bun `routes` method object: one specialized handler per defined method
- * (including the framework's derived `HEAD` and auto `OPTIONS`). A method not
- * present here falls through to the `fetch` fallback, where the trie/static
- * dispatcher answers 405 + Allow.
+ * (including the framework's derived `HEAD` and auto `OPTIONS`). A method
+ * not present here falls through to the `fetch` fallback, where the
+ * trie/static dispatcher answers 405 + Allow.
  */
 export type NativeMethodHandlers = Partial<Record<HTTPMethod, NativeMethodHandler>>;
 
@@ -78,7 +69,7 @@ export interface CompiledRoute {
     allow: string;
     /** The matched-route identity (`path` + `pattern`), retained for introspection. */
     route?: RouteMeta;
-    /** The optional RouteAccessAnalyzer hint (unused at runtime ). */
+    /** The optional RouteAccessAnalyzer hint (unused at runtime). */
     meta?: RouteAccessInfo;
     /** The precompiled validators for this route. Undefined when the
      * route has no `schema`. Consumed by the validation orchestrator. */
@@ -93,24 +84,21 @@ export interface CompiledRouter {
     trie: import('./trie.js').Trie;
     allowCache: import('./allow-cache.js').AllowCache;
     /**
-     * Native dispatch table for `:param` / `*` routes, keyed by their Bun-native
+     * Native dispatch table for `:param` / `*` routes, keyed by their Bun
      * pattern (e.g. `/users/:id`). Consumed only by the Bun adapter, which
-     * registers them on `Bun.serve`'s `routes` map so dynamic routes skip the
-     * `fetch` fallback. The handlers self-extract params (Web-Standard), so the
-     * logic is runtime-agnostic; non-Bun adapters ignore this and dispatch via
-     * the trie + `fetch` fallback.
+     * registers them on `Bun.serve`'s `routes` map; non-Bun adapters ignore
+     * this and dispatch via the trie + `fetch` fallback.
      */
     nativeRoutes: Map<string, CompiledHandler>;
     /**
-     * Per-route per-method specialized executors, keyed by path. Consumed by
+     * Per-route per-method specialized executors, keyed by path. Used by
      * `Router.staticRoutes()` / `Router.nativeRoutes()` to build Bun method
-     * objects (`{ GET: fn, POST: fn, HEAD: fn, OPTIONS: fn }`); the `fetch`
-     * fallback reuses the same functions through `CompiledHandler`s.
+     * objects; the `fetch` fallback reuses them through `CompiledHandler`s.
      */
     methodCores: Map<string, NativeMethodCores>;
     /**
      * Retained compiled-route metadata (RouteAccessInfo + RouteMeta) keyed by
-     * path. Build-time only; never consulted on the request hot path.
+     * path. Build-time only; never read on the request hot path.
      */
     routes?: Map<string, CompiledRoute>;
 }
@@ -125,12 +113,9 @@ export interface RouterConfig {
     validation?: ValidatorConfig;
     /**
      * Dynamic-route dispatch engine for the `fetch` fallback path.
-     * - `'auto'` (default) and `'trie'`: the radix trie — measured
-     *   equal-or-faster than the compiled alternation (see
-     *   burger-api-benchmarks `optimize/many-*`).
-     * - `'regex'`: opt-in Hono-style RegExp matcher (trie-ordered, parity-
-     *   tested in test/router/regex-parity.test.ts); falls back to the trie
-     *   if its build bails out.
+     * - `'auto'` (default) and `'trie'`: the radix trie.
+     * - `'regex'`: opt-in RegExp matcher (trie-ordered); falls back to the
+     *   trie if its build bails out.
      *
      * Static routes are unaffected — they never reach this dispatch.
      */
@@ -138,8 +123,8 @@ export interface RouterConfig {
     /**
      * JIT-compile each route's HookPlan into one async function
      * (`lifecycle/jit.ts`). ON by default — capability-probed per process;
-     * runtimes without dynamic codegen silently keep the interpreter.
-     * Set `false` to force the interpreter everywhere.
+     * runtimes without dynamic codegen keep the interpreter. Set `false` to
+     * force the interpreter everywhere.
      */
     jit?: boolean;
 }

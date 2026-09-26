@@ -79,13 +79,13 @@ export interface GitHubFile {
 /**
  * Build-time configuration for Burger API (conventions or burger.build.ts).
  * Used by the CLI when generating the virtual entry and scanning routes.
- * Single source of truth: the consumer-facing type exported from `burger-api`.
+ * Single source of truth: the consumer-facing type exported by `burger-api`.
  */
 export type { BuildConfig } from 'burger-api';
 
 /**
  * The five `--target` platforms `burger-api build` supports, and what each
- * one is capable of. Single source of truth: exported from `burger-api`.
+ * one is capable of. Single source of truth: exported by `burger-api`.
  */
 export type { RuntimeTarget, RuntimeCapability } from 'burger-api';
 export { RUNTIME_CAPABILITIES } from 'burger-api';

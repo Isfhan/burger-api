@@ -1,13 +1,4 @@
-/**
- * Start Command
- *
- * Runs the production build without hot reload.
- * Sets NODE_ENV=production for optimized behavior.
- *
- * Example: burger-api start
- * Example: burger-api start --port 8080
- * Example: burger-api start --file dist/index.js
- */
+/** Start command — runs the app in production mode (no hot reload). */
 
 import { Command } from 'commander';
 import { existsSync, readdirSync, statSync } from 'fs';
@@ -62,9 +53,7 @@ export function newestMtime(dir: string): number {
     return newest;
 }
 
-/**
- * Create the "start" command — production server per vision §17.
- */
+/** `burger-api start` — production server (no hot reload). */
 export const startCommand = new Command('start')
     .description('Start production server (no hot reload)')
     .option(

@@ -37,14 +37,10 @@ export interface CompressionOptions {
 }
 
 /**
- * Creates a compression hook for compressing HTTP responses.
- *
- * This hook compresses response bodies using gzip or deflate compression
- * based on the client's Accept-Encoding header. Brotli requests are skipped
- * with a warning. It automatically skips compression for:
- * - Small responses (below threshold)
- * - Already compressed content (images, videos, etc.)
- * - Content without a body
+ * Creates a hook that gzip/deflate-compresses response bodies based on the
+ * client's `Accept-Encoding`. Skips small responses, bodiless responses,
+ * already-compressed content, and excluded content types. Brotli requests
+ * are skipped with a warning.
  *
  * @param options - Configuration options for compression behavior
  * @returns A hook function that compresses responses
@@ -54,19 +50,12 @@ export interface CompressionOptions {
  * // Basic usage with defaults
  * const compression = compress();
  *
- * // Custom threshold
- * const compression = compress({
- *   threshold: 2048 // Only compress responses larger than 2KB
- * });
+ * // Only compress responses larger than 2KB
+ * const compression = compress({ threshold: 2048 });
  *
  * // Only compress specific content types
  * const compression = compress({
  *   contentTypes: ['text/html', 'application/json', 'text/css', 'application/javascript']
- * });
- *
- * // gzip first, deflate as a fallback
- * const compression = compress({
- *   encodings: ['gzip', 'deflate']
  * });
  * ```
  */
@@ -81,7 +70,7 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
     return (ctx: BurgerContext): ForwardHookResult => {
         const acceptEncoding = ctx.headers.get('Accept-Encoding') || '';
 
-        // Determine which encoding to use based on client support and preference
+        // Pick the first configured encoding the client accepts.
         let selectedEncoding: 'gzip' | 'deflate' | 'br' | null = null;
 
         for (const encoding of encodings) {
@@ -91,40 +80,35 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
             }
         }
 
-        // If client doesn't support any of our encodings, don't compress
         if (!selectedEncoding) {
             return undefined;
         }
 
-        // Transform the response to apply compression
         return async (response: Response): Promise<Response> => {
-            // Don't compress if already compressed
+            // Skip already compressed responses.
             if (response.headers.has('Content-Encoding')) {
                 return response;
             }
 
-            // Don't compress if no body
+            // Skip responses with no body.
             if (!response.body || response.status === 204 || response.status === 304) {
                 return response;
             }
 
-            // Check content type
             const contentType = response.headers.get('Content-Type') || '';
 
-            // Skip excluded content types
+            // Apply the exclude list, and the include list when one is set.
             if (shouldExcludeContentType(contentType, excludeContentTypes)) {
                 return response;
             }
 
-            // Only compress specific content types if specified
             if (contentTypes && !shouldIncludeContentType(contentType, contentTypes)) {
                 return response;
             }
 
-            // Read the response body
             const body = await response.arrayBuffer();
 
-            // Don't compress if below threshold
+            // Skip responses below the threshold.
             if (body.byteLength < threshold) {
                 return new Response(body, {
                     status: response.status,
@@ -133,13 +117,12 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
                 });
             }
 
-            // Compress the body
             let compressedBody: ArrayBuffer;
 
             try {
                 compressedBody = await compressData(body, selectedEncoding);
             } catch (error) {
-                // If compression fails, return original response
+                // Compression failed: send the original body.
                 console.error('Compression failed:', error);
                 return new Response(body, {
                     status: response.status,
@@ -148,14 +131,13 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
                 });
             }
 
-            // Only use compressed version if it's actually smaller
+            // Only use the compressed body if it's actually smaller.
             const finalBody = compressedBody.byteLength < body.byteLength
                 ? compressedBody
                 : body;
 
             const shouldUseCompressed = compressedBody.byteLength < body.byteLength;
 
-            // Create new headers
             const headers = new Headers(response.headers);
 
             if (shouldUseCompressed) {
@@ -163,11 +145,10 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
                 headers.set('Vary', 'Accept-Encoding');
             }
 
-            // Update Content-Length
             headers.set('Content-Length', finalBody.byteLength.toString());
 
-            // Remove Content-Length if we're using compressed encoding
-            // (some clients prefer to use Transfer-Encoding: chunked)
+            // Compressed responses are left without Content-Length so they
+            // can be sent chunked.
             if (shouldUseCompressed) {
                 headers.delete('Content-Length');
             }
@@ -188,10 +169,10 @@ async function compressData(
     data: ArrayBuffer,
     encoding: 'gzip' | 'deflate' | 'br'
 ): Promise<ArrayBuffer> {
-    // Check if CompressionStream is available (Bun, Deno, modern browsers)
+    // Available on Bun, Deno and modern browsers.
     if (typeof CompressionStream !== 'undefined') {
-        // This hook does not implement Brotli: warn and return the body
-        // as-is so the caller sends it uncompressed.
+        // This hook does not implement Brotli: warn and send the body
+        // uncompressed.
         if (encoding === 'br') {
             console.warn(
                 '[burger-api/compression] Brotli (br) is not supported by this hook, skipping compression'
@@ -219,7 +200,6 @@ async function compressData(
             chunks.push(value);
         }
 
-        // Combine chunks
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
         const result = new Uint8Array(totalLength);
         let offset = 0;
@@ -231,7 +211,7 @@ async function compressData(
         return result.buffer;
     }
 
-    // Fallback: If CompressionStream is not available, return original data
+    // No CompressionStream: send the body uncompressed.
     console.warn('CompressionStream not available, skipping compression');
     return data;
 }

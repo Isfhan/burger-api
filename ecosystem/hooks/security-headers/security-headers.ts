@@ -131,32 +131,20 @@ export interface SecurityHeadersOptions {
 }
 
 /**
- * Creates a security headers hook to protect against common web vulnerabilities.
- *
- * This hook adds various security-related HTTP headers to responses to help
- * protect your application from attacks like XSS, clickjacking, and more.
+ * Creates a hook that adds security headers (CSP, HSTS, X-Frame-Options,
+ * and more) to protect against XSS, clickjacking, and similar attacks.
  *
  * @param options - Configuration options for security headers
  * @returns A hook function that adds security headers to responses
  *
  * @example
  * ```typescript
- * // Use default security headers
  * const security = securityHeaders();
  *
  * // Custom configuration
  * const security = securityHeaders({
- *   contentSecurityPolicy: {
- *     defaultSrc: ["'self'"],
- *     scriptSrc: ["'self'", "https://cdn.example.com"]
- *   },
+ *   contentSecurityPolicy: { defaultSrc: ["'self'"] },
  *   frameOptions: 'SAMEORIGIN'
- * });
- *
- * // Disable specific headers
- * const security = securityHeaders({
- *   xssProtection: false,
- *   contentSecurityPolicy: false
  * });
  * ```
  */
@@ -175,11 +163,9 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
     } = options;
 
     return (_ctx: BurgerContext): ForwardHookResult => {
-        // Transform response to add security headers
         return (response: Response): Promise<Response> => {
             const headers = new Headers(response.headers);
 
-            // Content Security Policy
             if (contentSecurityPolicy !== false) {
                 if (contentSecurityPolicy) {
                     const cspString = Object.entries(contentSecurityPolicy)
@@ -192,7 +178,6 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
                 }
             }
 
-            // Strict Transport Security (HSTS)
             if (strictTransportSecurity !== false) {
                 const parts = [`max-age=${strictTransportSecurity.maxAge ?? 31536000}`];
                 if (strictTransportSecurity.includeSubDomains) {
@@ -204,27 +189,22 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
                 headers.set('Strict-Transport-Security', parts.join('; '));
             }
 
-            // X-Frame-Options
             if (frameOptions !== false) {
                 headers.set('X-Frame-Options', frameOptions);
             }
 
-            // X-Content-Type-Options
             if (contentTypeOptions !== false) {
                 headers.set('X-Content-Type-Options', contentTypeOptions);
             }
 
-            // X-XSS-Protection (for older browsers)
             if (xssProtection !== false) {
                 headers.set('X-XSS-Protection', xssProtection);
             }
 
-            // Referrer-Policy
             if (referrerPolicy !== false) {
                 headers.set('Referrer-Policy', referrerPolicy);
             }
 
-            // Permissions-Policy (formerly Feature-Policy)
             if (permissionsPolicy !== false && permissionsPolicy) {
                 const policyString = Object.entries(permissionsPolicy)
                     .map(([feature, allowList]) => {
@@ -237,17 +217,14 @@ export function securityHeaders(options: SecurityHeadersOptions = {}): (ctx: Bur
                 headers.set('Permissions-Policy', policyString);
             }
 
-            // X-DNS-Prefetch-Control
             if (dnsPrefetchControl !== false) {
                 headers.set('X-DNS-Prefetch-Control', dnsPrefetchControl);
             }
 
-            // X-Download-Options
             if (downloadOptions !== false) {
                 headers.set('X-Download-Options', downloadOptions);
             }
 
-            // X-Permitted-Cross-Domain-Policies
             if (permittedCrossDomainPolicies !== false) {
                 headers.set('X-Permitted-Cross-Domain-Policies', permittedCrossDomainPolicies);
             }
