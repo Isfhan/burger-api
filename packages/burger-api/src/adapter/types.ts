@@ -1,4 +1,7 @@
-import type { CompiledHandler } from '../router/types.js';
+import type {
+    CompiledHandler,
+    NativeMethodHandlers,
+} from '../router/types.js';
 import type { FetchHandler, RequestHandler } from '../types/index.js';
 
 /**
@@ -17,9 +20,13 @@ import type { FetchHandler, RequestHandler } from '../types/index.js';
 export interface AdapterStartOptions {
     /**
      * Static routes fed to the runtime's native dispatch (Bun's `routes` map).
-     * Built by `Router.staticRoutes()`.
+     * Built by `Router.staticRoutes()` / `Router.nativeRoutes()` as method
+     * objects; page/assets routes may be plain handlers.
      */
-    staticRoutes: Record<string, CompiledHandler | RequestHandler>;
+    staticRoutes: Record<
+        string,
+        CompiledHandler | RequestHandler | NativeMethodHandlers
+    >;
     /** The `fetch` fallback for dynamic/wildcard routes (Router.fetch). */
     fetch: FetchHandler;
     /** The port to listen on. */
@@ -32,6 +39,12 @@ export interface AdapterStartOptions {
     maxRequestBodySize?: number;
     /** Optional callback invoked once the server is listening. */
     onListen?: () => void;
+    /**
+     * Optional callback invoked with the raw runtime server handle right
+     * after it starts. The Bun path uses it to record the server once for
+     * lazy `ctx.ip` resolution (no per-request bookkeeping).
+     */
+    onServer?: (server: unknown) => void;
 }
 
 /**

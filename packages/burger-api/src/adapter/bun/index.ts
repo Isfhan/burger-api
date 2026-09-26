@@ -78,6 +78,10 @@ export class BunAdapter implements RuntimeAdapter {
             throw error;
         }
 
+        // Hand the raw server to the framework once: the router records it as
+        // the lazy `ctx.ip` source (no per-request WeakMap writes).
+        opts.onServer?.(server);
+
         if (opts.onListen) {
             opts.onListen();
         } else {

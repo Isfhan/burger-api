@@ -27,7 +27,9 @@ async function runCli(
     const proc = Bun.spawn(['bun', cliEntry, ...args], {
         stdout: 'pipe',
         stderr: 'pipe',
-        env: process.env,
+        // A parent terminal's FORCE_COLOR would legitimately force ANSI on
+        // the piped streams; drop it so the non-TTY assertions test our logic.
+        env: { ...process.env, FORCE_COLOR: undefined },
         cwd,
     });
     const [exitCode, stdout, stderr] = await Promise.all([

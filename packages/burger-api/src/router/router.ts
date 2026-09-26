@@ -1,7 +1,6 @@
 import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import type { ContextInit } from '../context/types.js';
 import { notFound, methodNotAllowed } from '../utils/response.js';
-import { normalizePath } from '../utils/index.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
 import { RouterCompiler } from './compiler.js';
 import { AllowCache } from './allow-cache.js';
@@ -12,15 +11,30 @@ import {
     type RegexMatch,
     type RegexRouteEntry,
 } from './regex-matcher.js';
-import type { CompiledHandler, CompiledRoute, RouterConfig } from './types.js';
+import type {
+    CompiledHandler,
+    CompiledRoute,
+    NativeMethodCores,
+    NativeMethodHandler,
+    NativeMethodHandlers,
+    RouterConfig,
+} from './types.js';
 import type { ValidatorConfig } from '../validation/types.js';
 import type { ResolvedPlugin } from '../plugin/types.js';
 import type { Hook } from '../lifecycle/types.js';
+import type {
+    BurgerEnv,
+    BurgerExecutionContext,
+    BurgerServices,
+    RequestIPHolder,
+} from '../context/context.js';
 import {
     BurgerContext,
+    EMPTY_SERVICES,
+    createServices,
     isRequestIPSource,
-    setRequestIP,
 } from '../context/context.js';
+import type { HTTPMethod } from '../utils/routing.js';
 
 interface OnRequestOutcome {
     shortCircuit: Response | undefined;
@@ -63,14 +77,22 @@ export class Router {
     private engine?: RouterConfig['engine'];
     /** Native dispatch table for `:param` / `*` routes (Bun `routes` map keys). */
     private nativeRoutesMap = new Map<string, CompiledHandler>();
+    /** Per-path per-method specialized executors (fed to Bun method objects). */
+    private methodCores = new Map<string, NativeMethodCores>();
     /** Retained compiled-route metadata (RouteAccessInfo + RouteMeta). */
     private compiledRoutes?: Map<string, CompiledRoute>;
     /** Memoized `staticRoutes()` result; rebuilt on `compile()`. */
-    private cachedStaticRoutes?: Record<string, CompiledHandler>;
+    private cachedStaticRoutes?: Record<string, NativeMethodHandlers>;
+    /** Memoized `nativeRoutes()` result; rebuilt on `compile()`. */
+    private cachedNativeRoutes?: Record<string, NativeMethodHandlers>;
     /** Pre-routing hooks (Plugin + Global scope). Run before routing in `fetch()`. */
     private onRequestHooks: Hook[] = [];
-    /** App-level providers, bound onto the single per-request context. */
-    private appProviders?: Map<string, unknown>;
+    /** True when pre-routing `onRequest` hooks exist (hot-path flag). */
+    private hasOnRequest = false;
+    /** App services resolved ONCE; shared (frozen) by every request context. */
+    private appServices: BurgerServices = EMPTY_SERVICES;
+    /** Per-app server reference for lazy `ctx.ip` (written once at startup). */
+    private ipHolder: RequestIPHolder = {};
     /**
      * RegExp matcher for dynamic/wildcard routes (WinterCG fast path).
      * Built when the engine setting allows and compilation succeeds;
@@ -100,22 +122,47 @@ export class Router {
         onRequestHooks?: Hook[],
         globalHooks?: import('../lifecycle/types.js').RouteHooks
     ): void {
+        // Services are resolved once here (shared with the compiled handlers,
+        // which receive the already-built object).
+        this.appServices = createServices(providers);
         const result = this.compiler.compile(
             defs,
             plugins,
-            providers,
+            this.appServices,
             onRequestHooks?.length ?? 0,
-            globalHooks
+            globalHooks,
+            this.ipHolder
         );
         this.staticMap = result.staticMap;
         this.trie = result.trie;
         this.allowCache = result.allowCache;
         this.nativeRoutesMap = result.nativeRoutes;
+        this.methodCores = result.methodCores;
         this.compiledRoutes = result.routes;
         this.cachedStaticRoutes = undefined;
+        this.cachedNativeRoutes = undefined;
         this.onRequestHooks = onRequestHooks ?? [];
-        this.appProviders = providers;
+        this.hasOnRequest = this.onRequestHooks.length > 0;
         this.regexMatcher = this.buildMatcher(result);
+    }
+
+    /**
+     * Records the serving runtime's handle (Bun's `Server`) once so `ctx.ip`
+     * can resolve the socket peer lazily — no per-request WeakMap write.
+     * Adapter-facing; called at startup by the Bun serve path.
+     */
+    setRequestIPSource(server: unknown): void {
+        if (isRequestIPSource(server)) {
+            this.ipHolder.server = server;
+        }
+    }
+
+    /**
+     * The per-app `ctx.ip` holder. Non-API contexts (dynamic pages) receive it
+     * so their `ctx.ip` resolves exactly like API routes.
+     */
+    getRequestIPHolder(): RequestIPHolder {
+        return this.ipHolder;
     }
 
     /**
@@ -165,82 +212,74 @@ export class Router {
     }
 
     /**
-     * Returns the static routes as a `Bun.serve` `routes` map
-     * (`path → compiled handler`).
-     *
-     * Bun's native routing invokes each handler with ONLY `(request)`, so the
-     * matched-route metadata cannot be passed as a second argument the way the
-     * trie-dispatched (dynamic/wildcard) routes are in `fetch`. To guarantee
-     * `req.route` is available for **every** matched route.
-     * each static handler is wrapped to inject `ctxInit` with its `route`
-     * identity (`path` === `pattern` for static routes). This preserves Bun's
-     * native dispatch fast path — no router redesign, no perf regression.
+     * Returns the static routes as a `Bun.serve` `routes` map: one **method
+     * object** per path (`{ GET: fnGet, POST: fnPost, HEAD: fnHead, ... }`).
+     * Each method is specialized at compile time (handler + hook plan baked
+     * in); Bun invokes it with `(request, server)` and its already-decoded
+     * `request.params`. Methods not present in the object fall through to
+     * `fetch`, which answers 405 + Allow for known paths.
      */
-    staticRoutes(): Record<string, CompiledHandler> {
+    staticRoutes(): Record<string, NativeMethodHandlers> {
         if (this.cachedStaticRoutes) return this.cachedStaticRoutes;
-        const out: Record<string, CompiledHandler> = {};
-        const hasOnRequest = this.onRequestHooks.length > 0;
-        for (const [path, handler] of this.staticMap.entries()) {
-            out[path] = this.wrapHandler(handler, hasOnRequest, {
-                path,
-                pattern: path,
-            });
+        const out: Record<string, NativeMethodHandlers> = {};
+        for (const [path] of this.staticMap.entries()) {
+            out[path] = this.buildMethods(path);
         }
         this.cachedStaticRoutes = out;
         return out;
     }
 
-    nativeRoutes(): Record<string, CompiledHandler> {
-        const out: Record<string, CompiledHandler> = {};
-        const hasOnRequest = this.onRequestHooks.length > 0;
-        for (const [pattern, handler] of this.nativeRoutesMap.entries()) {
-            out[pattern] = this.wrapHandler(handler, hasOnRequest, undefined);
+    /**
+     * Same method-object shape for `:param` / `*` routes: Bun matches the
+     * pattern natively and passes decoded `request.params`, so no URL
+     * re-parsing happens on the hot path.
+     */
+    nativeRoutes(): Record<string, NativeMethodHandlers> {
+        if (this.cachedNativeRoutes) return this.cachedNativeRoutes;
+        const out: Record<string, NativeMethodHandlers> = {};
+        for (const pattern of this.nativeRoutesMap.keys()) {
+            out[pattern] = this.buildMethods(pattern);
         }
+        this.cachedNativeRoutes = out;
         return out;
     }
 
-    private wrapHandler(
-        handler: CompiledHandler,
-        hasOnRequest: boolean,
-        route: { path: string; pattern: string } | undefined
-    ): CompiledHandler {
-        return async (
-            request: Request,
-            serverOrCtxInit?: ContextInit,
-            prebuilt?: BurgerContext,
-            env?: import('../context/context.js').BurgerEnv,
-            executionCtx?: import('../context/context.js').BurgerExecutionContext
-        ) => {
-            // Bun's native routes pass the server as the 2nd argument.
-            if (isRequestIPSource(serverOrCtxInit)) {
-                setRequestIP(request, serverOrCtxInit);
+    /**
+     * Builds the Bun method object for one compiled path. Without hooks each
+     * method is a thin adapter over the compiled core (Bun calls native
+     * handlers with `(request, server)`; only `request` is forwarded). With
+     * hooks each method runs onRequest exactly once before the core and binds
+     * the resulting context onto the route.
+     */
+    private buildMethods(path: string): NativeMethodHandlers {
+        const cores = this.methodCores.get(path)!;
+        const out: NativeMethodHandlers = {};
+        if (!this.hasOnRequest) {
+            for (const key of Object.keys(cores) as HTTPMethod[]) {
+                const core = cores[key]!;
+                out[key] = (request) => core(request);
             }
-            let outcome: OnRequestOutcome | undefined;
-            if (hasOnRequest) {
-                outcome = await this.runOnRequest(request, env, executionCtx);
+            return out;
+        }
+        for (const key of Object.keys(cores) as HTTPMethod[]) {
+            const core = cores[key]!;
+            const wrapped: NativeMethodHandler = async (request) => {
+                const outcome = await this.runOnRequest(request);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
-            }
-            try {
-                // The onRequest context (if any) is bound by the route in
-                // both branches, so state seeded pre-routing survives. The
-                // incoming second argument is never a ContextInit here (Bun's
-                // native routes pass the server object): dynamic routes
-                // derive params from the URL.
-                const result = await handler(
-                    request,
-                    route ? { route } : undefined,
-                    prebuilt ?? outcome?.ctx,
-                    env,
-                    executionCtx
-                );
-                const mappers = outcome?.mappers;
-                return mappers && mappers.length > 0
-                    ? this.applyMappers(result, mappers)
-                    : result;
-            } catch (error) {
-                return this.renderUnhandled(request, error);
-            }
-        };
+                try {
+                    // The onRequest context is bound by the route, so state
+                    // seeded pre-routing survives (one context per request).
+                    const result = await core(request, undefined, outcome.ctx);
+                    return outcome.mappers.length > 0
+                        ? this.applyMappers(result, outcome.mappers)
+                        : result;
+                } catch (error) {
+                    return this.renderUnhandled(request, error);
+                }
+            };
+            out[key] = wrapped;
+        }
+        return out;
     }
 
     /**
@@ -253,14 +292,11 @@ export class Router {
         if (this.onRequestHooks.length === 0) return handler;
         const wrapped = async (
             request: Request,
-            serverOrCtxInit?: unknown,
+            _serverOrCtxInit?: unknown,
             _prebuilt?: BurgerContext,
-            env?: import('../context/context.js').BurgerEnv,
-            executionCtx?: import('../context/context.js').BurgerExecutionContext
+            env?: BurgerEnv,
+            executionCtx?: BurgerExecutionContext
         ): Promise<Response> => {
-            if (isRequestIPSource(serverOrCtxInit)) {
-                setRequestIP(request, serverOrCtxInit);
-            }
             const outcome = await this.runOnRequest(request, env, executionCtx);
             if (outcome.shortCircuit) return outcome.shortCircuit;
             try {
@@ -287,7 +323,7 @@ export class Router {
     /**
      * Compatibility alias for `staticRoutes()`.
      */
-    get routes(): Record<string, CompiledHandler> {
+    get routes(): Record<string, NativeMethodHandlers> {
         return this.staticRoutes();
     }
 
@@ -309,10 +345,11 @@ export class Router {
             request,
             undefined,
             undefined,
-            this.appProviders,
+            this.appServices,
             undefined,
             env,
-            executionCtx
+            executionCtx,
+            this.ipHolder
         );
         const outcome: OnRequestOutcome = {
             shortCircuit: undefined,
@@ -397,26 +434,35 @@ export class Router {
      */
     fetch: (
         request: Request,
-        env?: import('../context/context.js').BurgerEnv,
-        executionCtx?: import('../context/context.js').BurgerExecutionContext
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
     ) => Promise<Response> = async (
         request: Request,
-        env?: import('../context/context.js').BurgerEnv,
-        executionCtx?: import('../context/context.js').BurgerExecutionContext
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
     ): Promise<Response> => {
-        // Pre-routing: create minimal context and run onRequest hooks.
-        // Any hook returning a Response short-circuits the entire pipeline.
-        // Mapper functions are collected and applied to the eventual response.
-        const outcome = await this.runOnRequest(request, env, executionCtx);
-        if (outcome.shortCircuit) return outcome.shortCircuit;
+        // Pre-routing: create the one context and run onRequest hooks. Any
+        // hook returning a Response short-circuits the entire pipeline;
+        // mapper functions are collected and applied to the eventual
+        // response. With no hooks, nothing is allocated before a match is
+        // known (the matched route creates its own context).
+        let outcome: OnRequestOutcome | undefined;
+        if (this.hasOnRequest) {
+            outcome = await this.runOnRequest(request, env, executionCtx);
+            if (outcome.shortCircuit) return outcome.shortCircuit;
+        }
+        const mappers = outcome?.mappers;
         const apply =
-            outcome.mappers.length > 0
-                ? (res: Response) => this.applyMappers(res, outcome.mappers)
-                : (res: Response) => res;
+            mappers && mappers.length > 0
+                ? (res: Response) => this.applyMappers(res, mappers)
+                : undefined;
+        const prebuilt = outcome?.ctx;
+
         const raw = extractPathnameFromUrl(request.url);
         // Collapse repeated slashes but PRESERVE a single trailing slash (the
         // exact form is tried first; the slash-less form is the fallback).
-        const path = raw.replace(/\/+/g, '/');
+        // The regex runs only when the path actually carries `//`.
+        const path = raw.indexOf('//') === -1 ? raw : raw.replace(/\/+/g, '/');
 
         // 1. Exact static route (slash-preserving — Bun already serves the exact
         // form natively; this catches the trailing-slash variants it missed).
@@ -425,9 +471,14 @@ export class Router {
             // Every matched route gets a `ctxInit` with `route`; static routes
             // have no params/wildcardParams.
             const ctxInit: ContextInit = { route: { path, pattern: path } };
-            return apply(
-                await staticExact(request, ctxInit, outcome.ctx, env, executionCtx)
+            const response = await staticExact(
+                request,
+                ctxInit,
+                prebuilt,
+                env,
+                executionCtx
             );
+            return apply ? apply(response) : response;
         }
 
         // 2. Dynamic / wildcard routes (see matchDynamic). A `:param` never
@@ -435,9 +486,11 @@ export class Router {
         // a trailing slash is retried without it, so `/users/1/` ≡ `/users/1`.
         let routePath = path;
         let match = this.matchDynamic(path);
-        const normalized = normalizePath(raw);
-        if (!match && normalized !== path) {
+        if (!match && path.length > 1 && path.endsWith('/')) {
             // 3. Loose trailing-slash fallback: `/foo/` ≡ `/foo`.
+            // `path` is already slash-collapsed, so stripping the trailing
+            // slash is exactly `normalizePath(raw)`.
+            const normalized = path.slice(0, -1);
             const loose =
                 this.staticMap.get(normalized) ??
                 this.staticMap.get(normalized + '/');
@@ -445,9 +498,14 @@ export class Router {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
                 };
-                return apply(
-                    await loose(request, ctxInit, outcome.ctx, env, executionCtx)
+                const response = await loose(
+                    request,
+                    ctxInit,
+                    prebuilt,
+                    env,
+                    executionCtx
                 );
+                return apply ? apply(response) : response;
             }
             match = this.matchDynamic(normalized);
             routePath = normalized;
@@ -470,12 +528,18 @@ export class Router {
                 params: match.params,
                 wildcardParams: match.wildcardParams,
             };
-            return apply(
-                await match.handler(request, ctxInit, outcome.ctx, env, executionCtx)
+            const response = await match.handler(
+                request,
+                ctxInit,
+                prebuilt,
+                env,
+                executionCtx
             );
+            return apply ? apply(response) : response;
         }
 
-        return apply(notFound());
+        const notFoundResponse = notFound();
+        return apply ? apply(notFoundResponse) : notFoundResponse;
     };
 }
 

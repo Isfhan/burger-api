@@ -24,7 +24,8 @@ import { isNotProductionEnv } from '../utils/env.js';
  * (route → global). If no `onError` handles the error it re-throws so the
  * adapter's `errorResponse` fallback catches it.
  *
- * `applySet` (always last) is applied by the caller (`buildCompiledHandler`).
+ * `applySet` (always last) is applied by the caller — the compiled
+ * route+method executor in `router/compiler.ts`.
  */
 export async function executeHookPlan(
     ctx: BurgerContext,
@@ -39,6 +40,47 @@ export async function executeHookPlan(
     if (headFallback) handler = handlers.GET;
     if (!handler) {
         return methodNotAllowed('');
+    }
+
+    return executeHookPlanForHandler(ctx, plan, handler, request);
+}
+
+/**
+ * Runs the frozen {@link HookPlan} for an already-resolved handler (the
+ * compiled route+method path resolves the handler at compile time, so the
+ * interpreter must not repeat the method lookup).
+ *
+ * Semantics are identical to {@link executeHookPlan} (which delegates here).
+ */
+export async function executeHookPlanForHandler(
+    ctx: BurgerContext,
+    plan: HookPlan,
+    handler: RequestHandler,
+    request: Request
+): Promise<Response> {
+    const method = request.method;
+
+    // Empty plan: the handler runs directly (the compiled route executor
+    // takes this path synchronously; this keeps the interpreter equivalent).
+    if (
+        plan.transform === undefined &&
+        plan.validation === undefined &&
+        plan.validators?.response === undefined &&
+        plan.beforeRoute.length === 0 &&
+        plan.afterRoute.length === 0 &&
+        plan.mapResponse.length === 0
+    ) {
+        try {
+            return await handler(ctx);
+        } catch (error) {
+            return dispatchOnError(
+                error,
+                plan.onError,
+                ctx,
+                plan.debug,
+                plan.validatorConfig
+            );
+        }
     }
 
     try {

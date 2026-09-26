@@ -5,11 +5,8 @@ import { timingSafeEqual } from './utils/timing-safe.js';
 // Import router
 import { Router } from './router/index.js';
 import { extractCtxInit } from './router/param-extract.js';
-import {
-    BurgerContext,
-    isRequestIPSource,
-    setRequestIP,
-} from './context/context.js';
+import { BurgerContext } from './context/context.js';
+import type { NativeMethodHandlers } from './router/types.js';
 
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index.js';
@@ -148,11 +145,18 @@ export class Burger {
     private openAPIConfig?: OpenAPIConfig;
 
     /**
-     * The routes object
+     * The routes object. API routes are per-method objects (`{ GET, … }`);
+     * page/asset/docs routes are plain request handlers.
      */
     private routes: {
-        [key: string]: RequestHandler;
+        [key: string]: RequestHandler | NativeMethodHandlers;
     } = {};
+
+    /**
+     * Every compiled API path (static + dynamic). Used by `fetchHandler()`
+     * to tell API routes apart from Bun-only page entries in `routes`.
+     */
+    private apiRoutePaths?: Set<string>;
 
     /**
      * WebSocket directory (dev path)
@@ -408,7 +412,16 @@ export class Burger {
         // raw `Request` (mirrors `fetchHandler`'s static dispatch).
         const wrapped = async (request: Request): Promise<Response> => {
             const ctxInit = extractCtxInit(request, path, false);
-            const ctx = BurgerContext.create(request, ctxInit);
+            const ctx = BurgerContext.create(
+                request,
+                ctxInit,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                this.dynamicRouter?.getRequestIPHolder()
+            );
             return handler(ctx);
         };
         return wrapped as unknown as RequestHandler;
@@ -659,6 +672,10 @@ export class Burger {
         // still fall through to `Router.fetch` (the trie), preserving behavior.
         Object.assign(this.routes, router.staticRoutes());
         Object.assign(this.routes, router.nativeRoutes());
+        this.apiRoutePaths = new Set([
+            ...Object.keys(router.staticRoutes()),
+            ...Object.keys(router.nativeRoutes()),
+        ]);
 
         // Register OpenAPI and docs routes based on config
         if (openapiEnabled) {
@@ -888,27 +905,28 @@ export class Burger {
         }
         const wsAdapter = this.wsAdapter;
 
-        // Direct lookups are exact static paths only: native pattern keys
-        // (`/api/items/:id`, dynamic pages) must never match literally —
-        // dynamic API routes dispatch through `router.fetch`. Bun-only page
-        // values (HTML-import bundles) and dynamic pages are not portable:
-        // warn once instead of silently 404ing.
+        // Direct lookups are exact static page/asset/docs paths only. API
+        // routes are per-method objects (not callable) and dispatch through
+        // `router.fetch`; native pattern keys (`/api/items/:id`, dynamic
+        // pages) must never match literally either. Bun-only page values
+        // (HTML-import bundles) and dynamic pages are not portable: warn once
+        // instead of silently 404ing.
         const routes = new Map<string, RequestHandler>();
         const bunOnlyPages: string[] = [];
-        const apiPatterns = new Set(
-            Object.keys(this.dynamicRouter?.nativeRoutes() ?? {})
-        );
+        const apiPaths = this.apiRoutePaths;
         for (const [key, handler] of Object.entries(this.routes)) {
-            if (apiPatterns.has(key)) continue;
             if (
-                typeof handler !== 'function' ||
-                key.includes(':') ||
-                key.includes('*')
+                typeof handler === 'function' &&
+                !key.includes(':') &&
+                !key.includes('*')
             ) {
-                bunOnlyPages.push(key);
+                // Exact static path (page / asset / docs route).
+                routes.set(key, handler);
                 continue;
             }
-            routes.set(key, handler);
+            // API routes are per-method objects and dispatch through
+            // `router.fetch`; anything else non-callable is Bun-only.
+            if (apiPaths?.has(key) !== true) bunOnlyPages.push(key);
         }
         if (bunOnlyPages.length > 0) {
             console.warn(
@@ -983,16 +1001,10 @@ export class Burger {
 
         // If routes were configured, start the server
         if (routesConfigured) {
-            // Start the server
-            // The adapter passes its server handle: record it as the
-            // request's peer-address source for `ctx.ip`.
+            // The adapter records its server handle as the lazy `ctx.ip`
+            // source (see the `onServer` hook below) — no per-request work.
             const fetchHandler: FetchHandler = this.dynamicRouter
-                ? (request, server) => {
-                      if (isRequestIPSource(server)) {
-                          setRequestIP(request, server);
-                      }
-                      return this.dynamicRouter!.fetch(request);
-                  }
+                ? (request) => this.dynamicRouter!.fetch(request)
                 : () => this.notFound();
 
             // Get WebSocket handlers and fetch handler if adapter is configured
@@ -1004,6 +1016,14 @@ export class Burger {
             // 2. Fall through to HTTP only when the request was NOT consumed.
             const combinedFetch: FetchHandler = wsAdapter
                 ? async (request, server) => {
+                      // Cheap header probe first: plain HTTP requests (no
+                      // `upgrade: websocket`) skip the async upgrade path.
+                      if (
+                          request.headers.get('upgrade')?.toLowerCase() !==
+                          'websocket'
+                      ) {
+                          return fetchHandler(request, server);
+                      }
                       const outcome = await wsAdapter.handleUpgrade(
                           request,
                           server
@@ -1035,6 +1055,8 @@ export class Burger {
                 websocket: wsOptions,
                 port,
                 onListen: cb,
+                onServer: (server) =>
+                    this.dynamicRouter?.setRequestIPSource(server),
             });
         } else {
             // If no routes were configured, log an error

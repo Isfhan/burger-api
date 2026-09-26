@@ -1,7 +1,11 @@
 import type { RouteDefinition, RequestHandler } from '../types/index.js';
 import type { HTTPMethod } from '../utils/routing.js';
 import type { RouteModule } from '../compiler/route-module.js';
-import type { ContextInit, RouteAccessInfo } from '../context/types.js';
+import type {
+    ContextInit,
+    RouteAccessInfo,
+    RouteMeta,
+} from '../context/types.js';
 import { compileRouteSchema } from '../validation/compiler.js';
 import { createValidationHook } from '../validation/validator.js';
 import {
@@ -10,21 +14,39 @@ import {
     createAutoOptionsHandler,
 } from '../utils/response.js';
 import { HTTPError } from '../errors/http-error.js';
-import { executeHookPlan } from '../lifecycle/executor.js';
+import {
+    dispatchOnError,
+    executeHookPlanForHandler,
+} from '../lifecycle/executor.js';
 import { compileJitHookPlan } from '../lifecycle/jit.js';
 import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types.js';
 import { HookChain } from '../chain/chain.js';
 import { flatten } from '../chain/flattener.js';
 import { composePluginHooks } from '../plugin/composer.js';
 import type { ResolvedPlugin } from '../plugin/types.js';
-import { BurgerContext } from '../context/context.js';
+import {
+    BurgerContext,
+    createServices,
+} from '../context/context.js';
+import type {
+    BurgerEnv,
+    BurgerExecutionContext,
+    BurgerServices,
+    RequestIPHolder,
+} from '../context/context.js';
 import { analyzeRouteAccess } from '../analysis/route-access-analyzer.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
 import { Trie } from './trie.js';
 import { ROUTE_CONSTANTS } from '../utils/routing.js';
 import { extractCtxInit } from './param-extract.js';
-import type { CompiledHandler, CompiledRouter, CompiledRoute } from './types.js';
+import type {
+    CompiledHandler,
+    CompiledRouter,
+    CompiledRoute,
+    NativeMethodCores,
+    RouteCore,
+} from './types.js';
 import type {
     CompiledRouteValidators,
     ValidatorConfig,
@@ -62,9 +84,10 @@ export class RouterCompiler {
     compile(
         defs: RouteDefinition[],
         plugins?: ResolvedPlugin[],
-        providers?: Map<string, unknown>,
+        providers?: Map<string, unknown> | BurgerServices,
         onRequestHooksCount: number = 0,
-        globalHooks?: RouteHooks
+        globalHooks?: RouteHooks,
+        ipHolder?: RequestIPHolder
     ): CompiledRouter {
         const staticMap = new StaticMap();
         const trie = new Trie();
@@ -76,10 +99,15 @@ export class RouterCompiler {
         // identical to the trie path. The trie is retained for the `fetch`
         // fallback (unmatched / loose-slash / empty-param trailing slash).
         const nativeRoutes = new Map<string, CompiledHandler>();
+        // Per-route per-method specialized executors (fed to Bun method
+        // objects by the Router).
+        const methodCores = new Map<string, NativeMethodCores>();
         const registeredPaths = new Set<string>();
         // Retained metadata per route (RouteAccessInfo + RouteMeta). Build-time
         // only; never read on the request hot path.
         const compiledRoutes = new Map<string, CompiledRoute>();
+        // App services resolved ONCE — shared (frozen) by every request.
+        const services = createServices(providers);
 
         for (const def of defs) {
             const path = def.path;
@@ -96,19 +124,27 @@ export class RouterCompiler {
             // also answers OPTIONS: when none is declared the framework adds
             // one (204 + Allow) that skips beforeRoute, so auth hooks never
             // reject CORS preflights (onRequest still runs).
+            //
+            // `rawHandlers` keeps the user function; `handlers` wraps it with
+            // the Response check for the hook pipeline. The empty-plan direct
+            // path performs the check inline instead (same error path).
+            const rawHandlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
             const handlers: Partial<Record<HTTPMethod, RequestHandler>> = {};
             for (const m of Object.keys(def.handlers) as HTTPMethod[]) {
                 const h = def.handlers[m];
                 if (typeof h !== 'function') continue;
+                rawHandlers[m] = h;
                 handlers[m] = (h as { isAutoOptions?: boolean }).isAutoOptions
                     ? h
                     : requireResponse(h, m, path);
             }
             if (!handlers.OPTIONS) {
-                handlers.OPTIONS = createAutoOptionsHandler([
+                const autoOptions = createAutoOptionsHandler([
                     ...allowMethods,
                     'OPTIONS',
                 ]);
+                rawHandlers.OPTIONS = autoOptions as unknown as RequestHandler;
+                handlers.OPTIONS = autoOptions as unknown as RequestHandler;
             }
 
             const hasSchema = !!def.schema;
@@ -186,17 +222,24 @@ export class RouterCompiler {
             const meta: RouteAccessInfo = analyzeRouteAccess(def, this.debug);
 
             const isWildcard = def.isWildcard === true;
-            const compiled = buildCompiledHandler(
+            const isStatic = isStaticPath(path);
+            const cores = buildRouteCores(
+                rawHandlers,
                 handlers,
                 plan,
-                allow,
                 meta,
                 path,
                 isWildcard,
-                providers,
+                isStatic,
                 def.config,
-                this.jit
+                this.jit,
+                services,
+                ipHolder
             );
+            methodCores.set(path, cores);
+            // The `fetch` fallback (trie / loose-slash / undefined method)
+            // dispatches through the same specialized per-method functions.
+            const compiled = buildFallbackHandler(cores, allow);
 
             // Retain compiled-route metadata (RouteAccessInfo + RouteMeta).
             // When a schema exists, also retain the precompiled validators so
@@ -211,7 +254,7 @@ export class RouterCompiler {
                 validators: routeValidators,
             });
 
-            if (isStaticPath(path)) {
+            if (isStatic) {
                 if (registeredPaths.has(path)) {
                     throw new Error(
                         `Duplicate static route registered: "${path}". ` +
@@ -242,9 +285,9 @@ export class RouterCompiler {
                     Object.keys(handlers).map((m) => m.toUpperCase())
                 );
                 trie.insert(path, compiled, methods, isWildcard);
-                // Register on Bun's native router (no `fetch` hop). The handler
-                // carries the route pattern + wildcard flag so it can derive
-                // `params` / `wildcardParams` from the URL itself.
+                // Register on Bun's native router (no `fetch` hop): the
+                // specialized method handlers derive `params` from Bun's
+                // `request.params` (or the URL when invoked directly).
                 nativeRoutes.set(path, compiled);
             }
         }
@@ -254,6 +297,7 @@ export class RouterCompiler {
             trie,
             allowCache,
             nativeRoutes,
+            methodCores,
             routes: compiledRoutes,
         };
     }
@@ -344,31 +388,244 @@ function requireResponse(
     };
 }
 
+/** Describes a non-Response handler return for the fail-loud 500 message. */
+function describeReturn(result: unknown): string {
+    return result === null
+        ? 'null'
+        : Array.isArray(result)
+          ? 'array'
+          : typeof result;
+}
+
 /**
- * Builds a compiled handler that performs method dispatch, 405+Allow,
- * auto-HEAD, creates the single `BurgerContext`, delegates to the hook
- * pipeline, and merges `ctx.set` into the response via `applySet`.
+ * Builds ONE specialized executor per route+method. Each executor creates (or
+ * binds) the request context, runs the hook plan — or, for an empty plan,
+ * calls the handler directly with no async wrapper — and merges `ctx.set`
+ * into the response. Auto-HEAD (derived from GET) and the framework's auto
+ * OPTIONS are baked in here, so the native path never probes at runtime.
  */
-function buildCompiledHandler(
-    handlers: Partial<Record<HTTPMethod, RequestHandler>>,
+function buildRouteCores(
+    rawHandlers: Partial<Record<HTTPMethod, RequestHandler>>,
+    planHandlers: Partial<Record<HTTPMethod, RequestHandler>>,
     plan: HookPlan,
-    allow: string,
     meta: RouteAccessInfo,
-    pattern: string = '',
-    isWildcard: boolean = false,
-    providers?: Map<string, unknown>,
-    config?: Record<string, unknown>,
-    jit = false
-): CompiledHandler {
-    // JIT state: undefined = not yet attempted, null = unavailable/not
-    // worth it, otherwise the compiled dispatcher (lazily built on first
-    // hit so unused routes pay no startup cost).
+    pattern: string,
+    isWildcard: boolean,
+    isStatic: boolean,
+    config: Record<string, unknown> | undefined,
+    jit: boolean,
+    services: BurgerServices,
+    ipHolder: RequestIPHolder | undefined
+): NativeMethodCores {
+    const cores: NativeMethodCores = {};
+    // Static routes share one frozen route identity object; dynamic routes
+    // carry only the pattern and derive `route.path` lazily on first access.
+    const staticRouteMeta: RouteMeta | undefined = isStatic
+        ? Object.freeze({ path: pattern, pattern })
+        : undefined;
+
+    for (const m of Object.keys(planHandlers) as HTTPMethod[]) {
+        cores[m] = buildMethodCore(
+            m,
+            m,
+            rawHandlers[m]!,
+            planHandlers[m]!,
+            plan,
+            meta,
+            pattern,
+            isWildcard,
+            staticRouteMeta,
+            config,
+            jit,
+            services,
+            ipHolder
+        );
+    }
+
+    // Auto-HEAD: derive from GET when no explicit HEAD handler exists. The
+    // GET handler runs through the normal plan; only the exit differs (body
+    // stripped, Content-Length preserved) — see `finishHead`.
+    if (!cores.HEAD && rawHandlers.GET) {
+        cores.HEAD = buildMethodCore(
+            'HEAD',
+            'GET',
+            rawHandlers.GET,
+            planHandlers.GET!,
+            plan,
+            meta,
+            pattern,
+            isWildcard,
+            staticRouteMeta,
+            config,
+            jit,
+            services,
+            ipHolder
+        );
+    }
+
+    return cores;
+}
+
+/**
+ * Builds one method's executor. The empty-plan path calls the handler
+ * directly (`r instanceof Promise ? r.then(...) : ...`) with a synchronous
+ * try/catch; the Response check and `ctx.set` merge happen in `settle`, and
+ * a failure renders through the SAME `dispatchOnError` path the hook
+ * pipeline uses.
+ */
+function buildMethodCore(
+    method: HTTPMethod,
+    errorMethod: string,
+    rawHandler: RequestHandler,
+    planHandler: RequestHandler,
+    plan: HookPlan,
+    meta: RouteAccessInfo,
+    pattern: string,
+    isWildcard: boolean,
+    staticRouteMeta: RouteMeta | undefined,
+    config: Record<string, unknown> | undefined,
+    jit: boolean,
+    services: BurgerServices,
+    ipHolder: RequestIPHolder | undefined
+): RouteCore {
+    // The framework's auto OPTIONS answers directly: no beforeRoute (auth
+    // hooks must not reject CORS preflights) and no context. onRequest hooks
+    // (when configured) run in the router wrapper; their mappers still apply.
+    if ((rawHandler as { isAutoOptions?: boolean }).isAutoOptions) {
+        return () => (rawHandler as unknown as () => Response)();
+    }
+
+    const isHead = method === 'HEAD';
+    // `isWildcard` may be unset on hand-built AOT definitions; the pattern is
+    // authoritative (extractCtxInit always keyed off it too).
+    const hasWildcard = isWildcard || pattern.includes('*');
+
+    const resolveCtxInit = (request: Request): ContextInit => {
+        if (staticRouteMeta) return { route: staticRouteMeta };
+        // Wildcards are not exposed by Bun's `request.params`; the URL is
+        // needed to split the captured segments.
+        if (hasWildcard) return extractCtxInit(request, pattern, true);
+        // Bun decodes `:param` values already; use its record directly (a
+        // plain object with `Record<string,string>` semantics) and keep the
+        // route identity lazy. Direct (non-Bun) invocations fall back to URL
+        // extraction.
+        const bunParams = (request as { params?: Record<string, string> })
+            .params;
+        return bunParams !== undefined
+            ? { params: bunParams, pattern }
+            : extractCtxInit(request, pattern, false);
+    };
+
+    const makeCtx = (
+        request: Request,
+        ctxInit: ContextInit | undefined,
+        prebuilt: BurgerContext | undefined,
+        env: BurgerEnv | undefined,
+        executionCtx: BurgerExecutionContext | undefined
+    ): BurgerContext => {
+        const init = ctxInit ?? resolveCtxInit(request);
+        // One context per request: bind the pre-routing instance (onRequest)
+        // when present, otherwise allocate it here. `meta` is accepted but
+        // ignored at runtime.
+        return prebuilt
+            ? prebuilt.bind(
+                  request,
+                  init,
+                  meta,
+                  undefined,
+                  config,
+                  env,
+                  executionCtx,
+                  ipHolder
+              )
+            : BurgerContext.create(
+                  request,
+                  init,
+                  meta,
+                  services,
+                  config,
+                  env,
+                  executionCtx,
+                  ipHolder
+              );
+    };
+
+    const fail = (ctx: BurgerContext, error: unknown): Promise<Response> =>
+        dispatchOnError(
+            error,
+            plan.onError,
+            ctx,
+            plan.debug,
+            plan.validatorConfig
+        );
+
+    const finish = (ctx: BurgerContext, response: Response): Response =>
+        ctx.hasSet() ? applySet(response, ctx.set) : response;
+
+    /** Auto-HEAD exit: apply `ctx.set`, then strip the body, keeping size. */
+    const finishHead = (mutated: Response): Response | Promise<Response> => {
+        const headers = new Headers(mutated.headers);
+        if (!headers.has('content-length') && mutated.body) {
+            // Report GET's Content-Length: runtimes answer a null body with
+            // `content-length: 0` unless the header is explicit.
+            return mutated.arrayBuffer().then((buffer) => {
+                headers.set('content-length', String(buffer.byteLength));
+                return new Response(null, {
+                    status: mutated.status,
+                    statusText: mutated.statusText,
+                    headers,
+                });
+            });
+        }
+        return new Response(null, {
+            status: mutated.status,
+            statusText: mutated.statusText,
+            headers,
+        });
+    };
+
+    const settle = (
+        ctx: BurgerContext,
+        result: unknown
+    ): Response | Promise<Response> => {
+        if (!(result instanceof Response)) {
+            return fail(
+                ctx,
+                new HTTPError(
+                    500,
+                    `${errorMethod} ${pattern} returned ${describeReturn(
+                        result
+                    )}; route handlers must return a Response`
+                )
+            );
+        }
+        const mutated = finish(ctx, result);
+        return isHead ? finishHead(mutated) : mutated;
+    };
+
+    const runDirect = (ctx: BurgerContext): Response | Promise<Response> => {
+        try {
+            const result: unknown = rawHandler(ctx);
+            return result instanceof Promise
+                ? result.then(
+                      (value) => settle(ctx, value),
+                      (error) => fail(ctx, error)
+                  )
+                : settle(ctx, result);
+        } catch (error) {
+            return fail(ctx, error);
+        }
+    };
+
+    // JIT state: undefined = not yet attempted, null = unavailable, otherwise
+    // the compiled dispatcher (lazily built on first hit so unused routes pay
+    // no startup cost).
     let jitFn:
         | ((
               ctx: BurgerContext,
               handler: RequestHandler,
               method: string
-          ) => Promise<Response>)
+          ) => Response | Promise<Response>)
         | null
         | undefined;
     const runPlan = (
@@ -380,94 +637,79 @@ function buildCompiledHandler(
             if (jitFn === undefined) {
                 jitFn = compileJitHookPlan(plan, plan.debug);
             }
-            const f = jitFn;
-            if (f) return f(ctx, handler, request.method);
-        }
-        return executeHookPlan(ctx, plan, handlers, request);
-    };
-    return async (
-        request: Request,
-        ctxInit?: ContextInit,
-        prebuilt?: BurgerContext,
-        env?: import('../context/context.js').BurgerEnv,
-        executionCtx?: import('../context/context.js').BurgerExecutionContext
-    ): Promise<Response> => {
-        const method = request.method;
-        // `request.method` is a runtime string; the handler map only accepts
-        // the HTTPMethod union. Any non-union method cannot be a defined
-        // handler key, so indexing is safe.
-        let handler = (handlers as Record<string, RequestHandler | undefined>)[
-            method
-        ];
-
-        // When dispatched natively (Bun's `routes` map), no `ctxInit` is
-        // provided, so derive params / wildcardParams / route from the URL.
-        // When dispatched via the `fetch` fallback (trie) or a static wrapper,
-        // `ctxInit` is already populated.
-        const resolvedCtxInit =
-            ctxInit ?? extractCtxInit(request, pattern, isWildcard);
-
-        // Create the one `BurgerContext` for this request. When the router
-        // already created one (for `onRequest` hooks), bind that instance to
-        // this route instead — state seeded pre-routing survives, and there
-        // is still exactly ONE context per request. `meta` is accepted but
-        // ignored at runtime.
-        const ctx = prebuilt
-            ? prebuilt.bind(
-                  request,
-                  resolvedCtxInit,
-                  meta,
-                  providers,
-                  config,
-                  env,
-                  executionCtx
-              )
-            : BurgerContext.create(
-                  request,
-                  resolvedCtxInit,
-                  meta,
-                  providers,
-                  config,
-                  env,
-                  executionCtx
-              );
-
-        // Auto-HEAD: derive from GET when no explicit HEAD handler exists.
-        if (!handler && method === 'HEAD' && handlers.GET) {
-            handler = handlers.GET;
-            const response = await runPlan(ctx, handler, request);
-            // Uniform response mutation: apply `ctx.set`,
-            // then strip the body from the mutated response.
-            const mutated = ctx.hasSet()
-                ? applySet(response, ctx.set)
-                : response;
-            // Report GET's Content-Length: runtimes answer a null body with
-            // `content-length: 0` unless the header is explicit.
-            const headers = new Headers(mutated.headers);
-            if (!headers.has('content-length') && mutated.body) {
-                const size = (await mutated.arrayBuffer()).byteLength;
-                headers.set('content-length', String(size));
+            const compiled = jitFn;
+            if (compiled) {
+                return Promise.resolve(compiled(ctx, handler, request.method));
             }
-            return new Response(null, {
-                status: mutated.status,
-                statusText: mutated.statusText,
-                headers,
-            });
         }
+        return executeHookPlanForHandler(ctx, plan, handler, request);
+    };
 
-        if (!handler) {
-            return methodNotAllowed(allow);
-        }
+    const hasPlanStages =
+        plan.transform !== undefined ||
+        plan.validation !== undefined ||
+        plan.validators?.response !== undefined ||
+        plan.beforeRoute.length > 0 ||
+        plan.afterRoute.length > 0 ||
+        plan.mapResponse.length > 0;
 
-        // The framework's auto OPTIONS answers directly: no beforeRoute
-        // (auth hooks must not reject CORS preflights). onRequest hooks
-        // already ran in the router, so CORS hooks still apply.
-        if ((handler as { isAutoOptions?: boolean }).isAutoOptions) {
-            return handler(ctx);
-        }
+    // Empty plan: handler → finish/fail with no async wrapper when the
+    // handler returns synchronously.
+    if (!hasPlanStages) {
+        return (request, ctxInit, prebuilt, env, executionCtx) =>
+            runDirect(makeCtx(request, ctxInit, prebuilt, env, executionCtx));
+    }
 
-        const response = await runPlan(ctx, handler, request);
-        return ctx.hasSet() ? applySet(response, ctx.set) : response;
+    // Validation-only plans: call the validator, await only if it returned a
+    // promise (schemas without a body slot validate synchronously).
+    if (
+        plan.transform === undefined &&
+        plan.validation !== undefined &&
+        plan.validators?.response === undefined &&
+        plan.beforeRoute.length === 0 &&
+        plan.afterRoute.length === 0 &&
+        plan.mapResponse.length === 0
+    ) {
+        const validation = plan.validation;
+        return (request, ctxInit, prebuilt, env, executionCtx) => {
+            const ctx = makeCtx(request, ctxInit, prebuilt, env, executionCtx);
+            let outcome: ReturnType<typeof validation>;
+            try {
+                outcome = validation(ctx);
+            } catch (error) {
+                return fail(ctx, error);
+            }
+            return outcome instanceof Promise
+                ? outcome.then(
+                      () => runDirect(ctx),
+                      (error) => fail(ctx, error)
+                  )
+                : runDirect(ctx);
+        };
+    }
+
+    return (request, ctxInit, prebuilt, env, executionCtx) => {
+        const ctx = makeCtx(request, ctxInit, prebuilt, env, executionCtx);
+        return runPlan(ctx, planHandler, request).then((response) => {
+            const mutated = finish(ctx, response);
+            return isHead ? finishHead(mutated) : mutated;
+        });
+    };
+}
+
+/**
+ * The `fetch`-facing dispatcher for one route: method lookup against the
+ * precomputed specialized executors (auto-HEAD and auto-OPTIONS included),
+ * otherwise 405 + Allow. The hook plan already ran inside the executor.
+ */
+function buildFallbackHandler(
+    cores: NativeMethodCores,
+    allow: string
+): CompiledHandler {
+    return async (request, ctxInit, prebuilt, env, executionCtx) => {
+        const core = cores[request.method as HTTPMethod];
+        if (!core) return methodNotAllowed(allow);
+        return core(request, ctxInit, prebuilt, env, executionCtx);
     };
 }
 

@@ -1,5 +1,19 @@
 ## 📣 Release Notes - Burger API Framework
 
+### Unreleased
+
+**Performance** (no behavior change; measured with the burger-api-benchmarks battle)
+- Routes are registered with Bun as per-method handlers (`{ GET, POST, ... }`),
+  each specialized at startup: no per-request method lookup.
+- One flattened function per route and method; routes without hooks call the
+  handler directly with no extra `async` layers.
+- Dynamic route params come from Bun's already-decoded `req.params`.
+- `ctx.services` is built once per app (a shared, frozen object) instead of
+  copied on every request.
+- `ctx.ip` is resolved lazily on first read instead of recorded per request.
+- 404/405 bodies are prebuilt; the fallback router allocates nothing before
+  matching when there are no `onRequest` hooks.
+
 ### Version 1.0.0-beta
 
 Released 2026-09-06. First public beta of the vision-locked 1.0.0 API — a

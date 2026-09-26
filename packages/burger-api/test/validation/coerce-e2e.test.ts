@@ -52,7 +52,16 @@ describe('Coercion end-to-end', () => {
         const hook = createValidationHook(validators);
         const ctx = fakeCtx('get', { n: '42' });
         // Without coercion, "42" is not a number => ValidationError.
-        await expect(hook(ctx)).rejects.toThrow(ValidationError);
+        // The hook throws synchronously for schemas without a body slot
+        // (the compiled pipeline catches either form identically); accept
+        // both a sync throw and a rejected promise here.
+        let error: unknown;
+        try {
+            await hook(ctx);
+        } catch (thrown) {
+            error = thrown;
+        }
+        expect(error).toBeInstanceOf(ValidationError);
     });
 
     it('does not build a coercion plan when disabled', () => {

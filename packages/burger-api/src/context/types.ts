@@ -31,6 +31,13 @@ export interface ContextInit {
     params?: Record<string, string>;
     wildcardParams?: string[];
     route?: RouteMeta;
+    /**
+     * Route-definition pattern for natively dispatched matches. When present
+     * (and `route` is not), the `BurgerContext.route` getter derives the
+     * concrete `RouteMeta` lazily on first access — the native path never
+     * parses the request URL just to build a route identity.
+     */
+    pattern?: string;
 }
 
 /**

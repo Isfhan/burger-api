@@ -112,7 +112,10 @@ export function createValidationHook(
     config: ValidatorConfig = {},
     isDev = false
 ): ForwardHook {
-    return async (ctx: BurgerContext): Promise<Response | void | undefined> => {
+    // NOT an `async` function: schemas without a body slot validate
+    // synchronously, and the pipeline (both the interpreter and the compiled
+    // route executor) awaits the result only when a Promise is returned.
+    return (ctx: BurgerContext): Response | void | undefined | Promise<void> => {
         // If the request has already been validated, continue.
         if (ctx.validated) {
             return undefined;
@@ -212,11 +215,27 @@ export function createValidationHook(
             }
         }
 
+        /** Throws a `ValidationError` on failure, else stores `validated`. */
+        const finish = (): void => {
+            if (errorsBySlot) {
+                // Throw into the onError pipeline — the framework renders the
+                // RFC 9457 response via the default onError fallback.
+                const allIssues = Object.values(errorsBySlot).flat();
+                const firstSlot = Object.keys(errorsBySlot)[0] as ValidationSlot;
+                throw new ValidationError(firstSlot, allIssues, {
+                    errorsBySlot,
+                    status: config.status,
+                });
+            }
+            ctx.validated = validated;
+        };
+
         // Body (gated on the JSON media type — parsed from the raw header so
         // casing (`Application/JSON`) and parameters (`; charset=utf-8`)
         // can't bypass or confuse the gate). Skipped for HEAD: a HEAD request
         // carries no body, so the GET body schema cannot apply.
-        if (methodValidators.body && method !== 'head') {
+        const bodyValidator = methodValidators.body;
+        if (bodyValidator && method !== 'head') {
             const rawContentType = ctx.headers.get('content-type') ?? '';
             const mediaType = rawContentType.split(';')[0]!.trim().toLowerCase();
             if (
@@ -224,21 +243,40 @@ export function createValidationHook(
                 (mediaType.startsWith('application/') &&
                     mediaType.endsWith('+json'))
             ) {
-                try {
-                    const bodyData = await ctx.json();
-                    const result = methodValidators.body.validate(bodyData);
-                    if (result.success) {
-                        validated.body = result.data;
-                    } else {
+                // Reading the body is the only asynchronous work here; the
+                // returned promise keeps the exact original error handling
+                // (parse failure AND a throwing validator both land in
+                // `errorsBySlot.body`, surfaced as a 422 ValidationError).
+                return ctx.json().then(
+                    (bodyData) => {
+                        try {
+                            const result = bodyValidator.validate(bodyData);
+                            if (result.success) {
+                                validated.body = result.data;
+                            } else {
+                                if (!errorsBySlot) errorsBySlot = {};
+                                errorsBySlot.body = result.issues;
+                            }
+                        } catch (error: unknown) {
+                            const msg =
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error);
+                            if (!errorsBySlot) errorsBySlot = {};
+                            errorsBySlot.body = [{ path: [], message: msg }];
+                        }
+                        finish();
+                    },
+                    (error: unknown) => {
+                        const msg =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         if (!errorsBySlot) errorsBySlot = {};
-                        errorsBySlot.body = result.issues;
+                        errorsBySlot.body = [{ path: [], message: msg }];
+                        finish();
                     }
-                } catch (error: unknown) {
-                    const msg =
-                        error instanceof Error ? error.message : String(error);
-                    if (!errorsBySlot) errorsBySlot = {};
-                    errorsBySlot.body = [{ path: [], message: msg }];
-                }
+                );
             } else if (rawContentType.trim() === '') {
                 // A body schema is declared but the client sent no
                 // Content-Type — reject rather than silently skipping
@@ -262,18 +300,7 @@ export function createValidationHook(
             }
         }
 
-        if (errorsBySlot) {
-            // Throw into the onError pipeline — the framework renders the
-            // RFC 9457 response via the default onError fallback.
-            const allIssues = Object.values(errorsBySlot).flat();
-            const firstSlot = Object.keys(errorsBySlot)[0] as ValidationSlot;
-            throw new ValidationError(firstSlot, allIssues, {
-                errorsBySlot,
-                status: config.status,
-            });
-        }
-
-        ctx.validated = validated;
+        finish();
         return undefined;
     };
 }

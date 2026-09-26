@@ -1,4 +1,19 @@
 /**
+ * The 404 body is a constant (RFC 9457 Problem Details), so it is serialized
+ * once. A fresh `Response` is still created per request — bodies are
+ * single-use streams — but the `HeadersInit` object is reused: the `Response`
+ * constructor copies it.
+ */
+const NOT_FOUND_BODY = JSON.stringify({
+    type: 'about:blank',
+    title: 'Not Found',
+    status: 404,
+    detail: 'Not Found',
+});
+
+const PROBLEM_JSON_HEADERS = { 'Content-Type': 'application/problem+json' };
+
+/**
  * Builds the framework's 404 response (RFC 9457 Problem Details).
  *
  * A factory (not a shared constant): a `Response` body is a single-use
@@ -6,18 +21,10 @@
  * first hit and return an empty body for every later request.
  */
 export const notFound = (): Response =>
-    new Response(
-        JSON.stringify({
-            type: 'about:blank',
-            title: 'Not Found',
-            status: 404,
-            detail: 'Not Found',
-        }),
-        {
-            status: 404,
-            headers: { 'Content-Type': 'application/problem+json' },
-        }
-    );
+    new Response(NOT_FOUND_BODY, {
+        status: 404,
+        headers: PROBLEM_JSON_HEADERS,
+    });
 
 /**
  * The OpenAPI error response.
@@ -32,27 +39,46 @@ export const openApiError = (): Response =>
             'Please provide an apiDir option when initializing the Burger instance to enable OpenAPI documentation.',
     });
 
+interface MethodNotAllowedTemplate {
+    body: string;
+    headers: Headers;
+}
+
+/**
+ * Per-`Allow` templates: the body string and headers are built once, then each
+ * request gets a fresh `Response` over the same immutable init (bodies are
+ * single-use; a `Headers` instance is copied by the constructor).
+ * Keyed by the precomputed `Allow` value, so the map size is bounded by the
+ * route table.
+ */
+const methodNotAllowedTemplates = new Map<string, MethodNotAllowedTemplate>();
+
 /**
  * Builds a 405 response that includes the `Allow` header listing the methods
  * supported by the matched route. Returns RFC 9457 Problem Details format.
  * @param allow - comma-separated allowed methods, e.g. "GET, POST"
  */
 export function methodNotAllowed(allow: string): Response {
-    return new Response(
-        JSON.stringify({
-            type: 'about:blank',
-            title: 'Method Not Allowed',
-            status: 405,
-            detail: `Supported methods: ${allow}`,
-        }),
-        {
-            status: 405,
-            headers: {
+    let template = methodNotAllowedTemplates.get(allow);
+    if (template === undefined) {
+        template = {
+            body: JSON.stringify({
+                type: 'about:blank',
+                title: 'Method Not Allowed',
+                status: 405,
+                detail: `Supported methods: ${allow}`,
+            }),
+            headers: new Headers({
                 Allow: allow,
                 'Content-Type': 'application/problem+json',
-            },
-        }
-    );
+            }),
+        };
+        methodNotAllowedTemplates.set(allow, template);
+    }
+    return new Response(template.body, {
+        status: 405,
+        headers: template.headers,
+    });
 }
 
 /**

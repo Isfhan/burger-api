@@ -4,6 +4,7 @@ import type {
     ValidatorConfig,
 } from '../validation/types.js';
 import type { ContextInit, RouteAccessInfo, RouteMeta } from '../context/types.js';
+import type { HTTPMethod } from '../utils/routing.js';
 
 /**
  * A compiled route handler.
@@ -30,6 +31,42 @@ export type CompiledHandler = (
     env?: import('../context/context.js').BurgerEnv,
     executionCtx?: import('../context/context.js').BurgerExecutionContext
 ) => Promise<Response>;
+
+/**
+ * A route+method executor specialized at compile time for one HTTP method.
+ * May return synchronously — the whole point of the flattening is that a
+ * route with an empty hook plan does not force a Promise.
+ *
+ * `ctxInit` is supplied by the `fetch` fallback (trie / loose-slash); the
+ * native Bun path omits it and the executor derives params from Bun's
+ * already-decoded `request.params`.
+ */
+export type RouteCore = (
+    request: Request,
+    ctxInit?: ContextInit,
+    prebuilt?: import('../context/context.js').BurgerContext,
+    env?: import('../context/context.js').BurgerEnv,
+    executionCtx?: import('../context/context.js').BurgerExecutionContext
+) => Response | Promise<Response>;
+
+/** Per-method executors for one route, keyed by HTTP method. */
+export type NativeMethodCores = Partial<Record<HTTPMethod, RouteCore>>;
+
+/**
+ * A Bun `routes` method object value: Bun invokes it with `(request, server)`.
+ */
+export type NativeMethodHandler = (
+    request: Request,
+    server?: unknown
+) => Response | Promise<Response>;
+
+/**
+ * A Bun `routes` method object: one specialized handler per defined method
+ * (including the framework's derived `HEAD` and auto `OPTIONS`). A method not
+ * present here falls through to the `fetch` fallback, where the trie/static
+ * dispatcher answers 405 + Allow.
+ */
+export type NativeMethodHandlers = Partial<Record<HTTPMethod, NativeMethodHandler>>;
 
 /**
  * A route compiled into its dispatch structures.
@@ -64,6 +101,13 @@ export interface CompiledRouter {
      * the trie + `fetch` fallback.
      */
     nativeRoutes: Map<string, CompiledHandler>;
+    /**
+     * Per-route per-method specialized executors, keyed by path. Consumed by
+     * `Router.staticRoutes()` / `Router.nativeRoutes()` to build Bun method
+     * objects (`{ GET: fn, POST: fn, HEAD: fn, OPTIONS: fn }`); the `fetch`
+     * fallback reuses the same functions through `CompiledHandler`s.
+     */
+    methodCores: Map<string, NativeMethodCores>;
     /**
      * Retained compiled-route metadata (RouteAccessInfo + RouteMeta) keyed by
      * path. Build-time only; never consulted on the request hot path.

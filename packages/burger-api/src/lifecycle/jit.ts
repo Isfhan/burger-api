@@ -80,7 +80,28 @@ interface JitDeps {
 export function compileJitHookPlan(
     plan: HookPlan,
     debug?: boolean
-): ((ctx: BurgerContext, handler: RequestHandler, method: string) => Promise<Response>) | null {
+): ((
+    ctx: BurgerContext,
+    handler: RequestHandler,
+    method: string
+) => Response | Promise<Response>) | null {
+    // Empty plan: nothing to unwrap or await — call the handler directly.
+    // The caller's exit (Response check + `ctx.set` merge) is unchanged, and
+    // no codegen is needed, so this works even where `new Function` is banned.
+    // A plan carrying `onError` hooks is NOT empty here: this function owns
+    // the error dispatch and must keep the try/catch wrapper.
+    if (
+        plan.onError.length === 0 &&
+        plan.transform === undefined &&
+        plan.validation === undefined &&
+        plan.validators?.response === undefined &&
+        plan.beforeRoute.length === 0 &&
+        plan.afterRoute.length === 0 &&
+        plan.mapResponse.length === 0
+    ) {
+        return (ctx, handler) => handler(ctx);
+    }
+
     if (!canUseJit()) return null;
 
     const bLen = plan.beforeRoute.length;

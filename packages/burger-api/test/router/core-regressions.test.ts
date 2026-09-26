@@ -249,7 +249,7 @@ describe('H3 — native dynamic routes keep the onRequest context', () => {
                 },
             ]
         );
-        const native = router.nativeRoutes()['/api/u/:id']!;
+        const native = router.nativeRoutes()['/api/u/:id']!.GET!;
         // Bun invokes native route handlers with (request, server).
         const res = await native(
             new Request('http://localhost/api/u/7'),
