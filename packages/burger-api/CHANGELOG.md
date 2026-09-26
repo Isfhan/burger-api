@@ -24,6 +24,11 @@
   status-only changes skip copying headers.
 - Pathname parsing and trie matching decode segments only when they contain
   `%`, with no per-request `split`/`map` or param-object copies.
+- The fetch-handler path (`fetchHandler()` / Cloudflare, Deno, Vercel,
+  node-server) is about 75% faster: dynamic routes use a compressed
+  character radix matcher (the segment matcher stays as the exact fallback
+  for encoded paths), static routes dispatch straight to their per-method
+  function, the pathname is parsed once, and 404s clone a prebuilt response.
 
 **Fixed**
 - Apps with pages/assets but no API routes now run global and plugin

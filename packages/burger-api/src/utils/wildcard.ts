@@ -5,26 +5,31 @@
  * @returns The extracted pathname (e.g., "/api/users/123/profile")
  */
 export function extractPathnameFromUrl(url: string): string {
-    // Find where the path starts (after protocol and domain)
-    // Example: "http://localhost:4000/api/..." → protocolEnd = 4 (after "http")
-    const protocolEnd = url.indexOf('://');
+    // Where the authority ends. The two charCode checks skip the generic
+    // `indexOf('://')` scan for the two schemes that dominate real traffic
+    // (http/https) — mirrors Elysia's `authorityEnd`
+    // (`elysia2/dist/utils.js`).
+    const authorityEnd =
+        url.charCodeAt(4) === 58 /* : */
+            ? 7
+            : url.charCodeAt(5) === 58 /* : */
+              ? 8
+              : url.indexOf('://') + 3;
 
-    // Find first "/" after the domain
-    // Example: "http://localhost:4000/api/..." → pathStart = 21 (the "/" before "api")
-    const pathStart = url.indexOf('/', protocolEnd + 3);
+    // First "/" after the authority = path start. `-1` falls back to index 0
+    // so a URL with no path segment keeps the historical result.
+    const found = url.indexOf('/', authorityEnd);
+    const pathStart = found === -1 ? 0 : found;
 
     // Single scan for the terminator. `#` is included for parity with
     // `new Request(url).url` inputs (the URL parser strips fragments, but
     // callers may hand us a raw URL string) — mirrors Hono's `getPath`
     // (`dist/utils/url.js`).
-    for (let i = pathStart < 0 ? 0 : pathStart; i < url.length; i++) {
+    for (let i = pathStart; i < url.length; i++) {
         const code = url.charCodeAt(i);
         if (code === 63 /* ? */ || code === 35 /* # */) {
-            return url.substring(pathStart, i);
+            return url.slice(pathStart, i);
         }
     }
-    // No query params / fragment. `substring` clamps a negative `pathStart`
-    // to 0, preserving the historical fallback for URL strings without a
-    // path segment.
-    return url.substring(pathStart);
+    return url.slice(pathStart);
 }

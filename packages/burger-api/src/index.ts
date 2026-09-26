@@ -14,6 +14,7 @@ import type { NativeMethodHandlers } from './router/types.js';
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index.js';
 import { notFound, openApiError } from './utils/response.js';
+import { extractPathnameFromUrl } from './utils/wildcard.js';
 import { lowercaseMethodKeys } from './utils/routing.js';
 import { warnUnknownHookExports } from './compiler/conventions.js';
 
@@ -964,42 +965,104 @@ export class Burger {
             );
         }
         const router = this.dynamicRouter;
-        return async (
+        // API-only apps (no page/asset/docs routes) skip the page-map lookup
+        // entirely: the router parses the pathname once in `fetch`.
+        const hasPageRoutes = routes.size > 0;
+
+        /**
+         * Shared HTTP dispatch: page/asset routes first, then the API router.
+         * The pathname is extracted ONCE (index-based) and reused for both
+         * lookups — `Request` normalizes URLs at construction, so this equals
+         * the URL-parser pathname for every real request. Returns synchronously
+         * when the router can (empty-plan routes); the entry point normalizes
+         * to a Promise because that is the public `fetchHandler()` contract.
+         */
+        const dispatchHttp = (
+            request: Request,
+            env?: import('./context/context.js').BurgerEnv,
+            executionCtx?: import('./context/context.js').BurgerExecutionContext
+        ): Response | Promise<Response> => {
+            if (hasPageRoutes) {
+                const pathname = extractPathnameFromUrl(request.url);
+                const handler = routes.get(pathname);
+                if (handler) {
+                    return (
+                        handler as unknown as (
+                            req: Request,
+                            ctxInit?: unknown,
+                            prebuilt?: unknown,
+                            env?: unknown,
+                            executionCtx?: unknown
+                        ) => Promise<Response>
+                    )(request, undefined, undefined, env, executionCtx);
+                }
+                if (router) {
+                    return router.fetchWithPath(
+                        request,
+                        pathname,
+                        env,
+                        executionCtx
+                    );
+                }
+                return this.notFound();
+            }
+            if (router) return router.fetch(request, env, executionCtx);
+            return this.notFound();
+        };
+
+        /** Async-only path: a WebSocket upgrade must be awaited. */
+        const handleWsUpgrade = async (
+            request: Request,
+            env?: import('./context/context.js').BurgerEnv,
+            executionCtx?: import('./context/context.js').BurgerExecutionContext
+        ): Promise<Response> => {
+            const outcome = await wsAdapter!.handleUpgrade(
+                request,
+                undefined,
+                env,
+                executionCtx
+            );
+            if (outcome.handled) {
+                return (outcome.response ??
+                    new Response(null, { status: 101 })) as Response;
+            }
+            // Not consumed: fall through to the normal HTTP dispatch.
+            return dispatchHttp(request, env, executionCtx);
+        };
+
+        // No WebSocket adapter: no upgrade probe is needed at all.
+        if (!wsAdapter) {
+            // An API-only app also skips the page-map lookup — the router's
+            // `fetch` IS the entry point. (A `Promise` is still returned: that
+            // is the public `fetchHandler()` contract.)
+            if (!hasPageRoutes && router) {
+                return (
+                    request: Request,
+                    env?: import('./context/context.js').BurgerEnv,
+                    executionCtx?: import('./context/context.js').BurgerExecutionContext
+                ): Promise<Response> =>
+                    Promise.resolve(router.fetch(request, env, executionCtx));
+            }
+            return (
+                request: Request,
+                env?: import('./context/context.js').BurgerEnv,
+                executionCtx?: import('./context/context.js').BurgerExecutionContext
+            ): Promise<Response> =>
+                Promise.resolve(dispatchHttp(request, env, executionCtx));
+        }
+
+        return (
             request: Request,
             env?: import('./context/context.js').BurgerEnv,
             executionCtx?: import('./context/context.js').BurgerExecutionContext
         ): Promise<Response> => {
             // WebSocket upgrades are consumed before HTTP dispatch.
             if (
-                wsAdapter &&
                 request.headers.get('upgrade')?.toLowerCase() === 'websocket'
             ) {
-                const outcome = await wsAdapter.handleUpgrade(
-                    request,
-                    undefined,
-                    env,
-                    executionCtx
-                );
-                if (outcome.handled) {
-                    return (outcome.response ??
-                        new Response(null, { status: 101 })) as Response;
-                }
+                return handleWsUpgrade(request, env, executionCtx);
             }
-            const pathname = new URL(request.url).pathname;
-            const handler = routes.get(pathname);
-            if (handler) {
-                return (
-                    handler as unknown as (
-                        req: Request,
-                        ctxInit?: unknown,
-                        prebuilt?: unknown,
-                        env?: unknown,
-                        executionCtx?: unknown
-                    ) => Promise<Response>
-                )(request, undefined, undefined, env, executionCtx);
-            }
-            if (router) return router.fetch(request, env, executionCtx);
-            return this.notFound();
+            return Promise.resolve(dispatchHttp(request, env, executionCtx));
         };
     }
 

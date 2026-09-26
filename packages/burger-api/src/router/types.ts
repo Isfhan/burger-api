@@ -30,7 +30,7 @@ export type CompiledHandler = (
     prebuilt?: import('../context/context.js').BurgerContext,
     env?: import('../context/context.js').BurgerEnv,
     executionCtx?: import('../context/context.js').BurgerExecutionContext
-) => Promise<Response>;
+) => Response | Promise<Response>;
 
 /**
  * A route+method executor specialized at compile time for one HTTP method.

@@ -2,6 +2,7 @@ import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import type { ContextInit } from '../context/types.js';
 import { notFound, methodNotAllowed } from '../utils/response.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
+import { isThenable } from '../utils/thenable.js';
 import { RouterCompiler } from './compiler.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
@@ -404,10 +405,14 @@ export class Router {
      * then the radix trie. Both produce identical match shapes (params,
      * wildcard segments, methods) — verified by the parity test suite.
      * A match that binds a `:param` to an empty segment is rejected.
+     *
+     * Apps with no dynamic routes at all skip both matchers: the trie is
+     * empty, so every lookup would walk it only to miss.
      */
     private matchDynamic(
         path: string
     ): RegexMatch | import('./trie.js').TrieMatch | null {
+        if (!this.regexMatcher && this.nativeRoutesMap.size === 0) return null;
         let match: RegexMatch | import('./trie.js').TrieMatch | null = null;
         if (this.regexMatcher) match = this.regexMatcher(path);
         if (!match) match = this.trie.match(path);
@@ -440,34 +445,102 @@ export class Router {
      * the serving entry point (WinterCG `fetch(request, env, ctx)`). The
      * signature is intentionally its own shape — NOT the server-oriented
      * `FetchHandler` — so the platform slots stay unambiguous.
+     *
+     * Sync-first: a route whose compiled executor resolves synchronously
+     * returns a `Response` directly (no Promise allocation); only hook plans
+     * and async handlers produce a Promise. Callers `await` either shape.
      */
     fetch: (
         request: Request,
         env?: BurgerEnv,
         executionCtx?: BurgerExecutionContext
-    ) => Promise<Response> = async (
+    ) => Response | Promise<Response> = (
         request: Request,
         env?: BurgerEnv,
         executionCtx?: BurgerExecutionContext
-    ): Promise<Response> => {
+    ): Response | Promise<Response> =>
+        this.hasOnRequest
+            ? this.dispatchWithOnRequest(request, env, executionCtx, undefined)
+            : this.dispatchMatched(
+                  request,
+                  extractPathnameFromUrl(request.url),
+                  undefined,
+                  undefined,
+                  env,
+                  executionCtx
+              );
+
+    /**
+     * `fetch` with a pathname the caller already extracted (e.g.
+     * `fetchHandler()` resolved page/asset routes first). Avoids parsing the
+     * URL twice per request; the pathname must come from
+     * `extractPathnameFromUrl`.
+     */
+    fetchWithPath: (
+        request: Request,
+        pathname: string,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ) => Response | Promise<Response> = (
+        request: Request,
+        pathname: string,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Response | Promise<Response> =>
+        this.hasOnRequest
+            ? this.dispatchWithOnRequest(request, env, executionCtx, pathname)
+            : this.dispatchMatched(
+                  request,
+                  pathname,
+                  undefined,
+                  undefined,
+                  env,
+                  executionCtx
+              );
+
+    /** Pre-routing hook path: context + mappers wrap the matched dispatch. */
+    private async dispatchWithOnRequest(
+        request: Request,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext,
+        precomputedPath?: string
+    ): Promise<Response> {
         // Pre-routing: create the one context and run onRequest hooks. Any
         // hook returning a Response short-circuits the entire pipeline;
         // mapper functions are collected and applied to the eventual
         // response. With no hooks, nothing is allocated before a match is
         // known (the matched route creates its own context).
-        let outcome: OnRequestOutcome | undefined;
-        if (this.hasOnRequest) {
-            outcome = await this.runOnRequest(request, env, executionCtx);
-            if (outcome.shortCircuit) return outcome.shortCircuit;
-        }
-        const mappers = outcome?.mappers;
+        const outcome = await this.runOnRequest(request, env, executionCtx);
+        if (outcome.shortCircuit) return outcome.shortCircuit;
+        const mappers = outcome.mappers;
         const apply =
-            mappers && mappers.length > 0
+            mappers.length > 0
                 ? (res: Response) => this.applyMappers(res, mappers)
                 : undefined;
-        const prebuilt = outcome?.ctx;
+        const path = precomputedPath ?? extractPathnameFromUrl(request.url);
+        return this.dispatchMatched(
+            request,
+            path,
+            outcome.ctx,
+            apply,
+            env,
+            executionCtx
+        );
+    }
 
-        const raw = extractPathnameFromUrl(request.url);
+    /**
+     * Routing + execution against the compiled tables. `prebuilt` is the
+     * pre-routing context (onRequest path) or `undefined`; `apply` wraps the
+     * response in collected onRequest mappers when any exist.
+     */
+    private dispatchMatched(
+        request: Request,
+        raw: string,
+        prebuilt: BurgerContext | undefined,
+        apply: ((res: Response) => Response | Promise<Response>) | undefined,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Response | Promise<Response> {
         // Collapse repeated slashes but PRESERVE a single trailing slash (the
         // exact form is tried first; the slash-less form is the fallback).
         // The regex runs only when the path actually carries `//`.
@@ -475,19 +548,26 @@ export class Router {
 
         // 1. Exact static route (slash-preserving — Bun already serves the exact
         // form natively; this catches the trailing-slash variants it missed).
-        const staticExact = this.staticMap.get(path);
-        if (staticExact) {
-            // Every matched route gets a `ctxInit` with `route`; static routes
-            // have no params/wildcardParams.
-            const ctxInit: ContextInit = { route: { path, pattern: path } };
-            const response = await staticExact(
-                request,
-                ctxInit,
-                prebuilt,
-                env,
-                executionCtx
-            );
-            return apply ? apply(response) : response;
+        const staticEntry = this.staticMap.getEntry(path);
+        if (staticEntry) {
+            // No ctxInit: the compiled executor seeds the route identity from
+            // its own frozen static route meta (no per-request allocation).
+            // A known method dispatches straight to its specialized core
+            // (skips the method-dispatch wrapper); an unknown method falls
+            // through to the wrapper's 405 + Allow.
+            const core = staticEntry.cores?.[request.method as HTTPMethod];
+            const response = core
+                ? core(request, undefined, prebuilt, env, executionCtx)
+                : staticEntry.handler(
+                      request,
+                      undefined,
+                      prebuilt,
+                      env,
+                      executionCtx
+                  );
+            return apply === undefined
+                ? response
+                : applyToResponse(response, apply);
         }
 
         // 2. Dynamic / wildcard routes (see matchDynamic). A `:param` never
@@ -501,20 +581,25 @@ export class Router {
             // slash is exactly `normalizePath(raw)`.
             const normalized = path.slice(0, -1);
             const loose =
-                this.staticMap.get(normalized) ??
-                this.staticMap.get(normalized + '/');
+                this.staticMap.getEntry(normalized) ??
+                this.staticMap.getEntry(normalized + '/');
             if (loose) {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
                 };
-                const response = await loose(
-                    request,
-                    ctxInit,
-                    prebuilt,
-                    env,
-                    executionCtx
-                );
-                return apply ? apply(response) : response;
+                const core = loose.cores?.[request.method as HTTPMethod];
+                const response = core
+                    ? core(request, ctxInit, prebuilt, env, executionCtx)
+                    : loose.handler(
+                          request,
+                          ctxInit,
+                          prebuilt,
+                          env,
+                          executionCtx
+                      );
+                return apply === undefined
+                    ? response
+                    : applyToResponse(response, apply);
             }
             match = this.matchDynamic(normalized);
             routePath = normalized;
@@ -527,7 +612,10 @@ export class Router {
                 const allow =
                     this.allowCache.get(match.pattern) ??
                     [...match.methods].join(', ');
-                return methodNotAllowed(allow);
+                const notAllowed = methodNotAllowed(allow);
+                return apply === undefined
+                    ? notAllowed
+                    : applyToResponse(notAllowed, apply);
             }
 
             // Seed `ctxInit`: `route` is always present; `params` /
@@ -537,19 +625,31 @@ export class Router {
                 params: match.params,
                 wildcardParams: match.wildcardParams,
             };
-            const response = await match.handler(
+            const response = match.handler(
                 request,
                 ctxInit,
                 prebuilt,
                 env,
                 executionCtx
             );
-            return apply ? apply(response) : response;
+            return apply === undefined
+                ? response
+                : applyToResponse(response, apply);
         }
 
         const notFoundResponse = notFound();
-        return apply ? apply(notFoundResponse) : notFoundResponse;
-    };
+        return apply === undefined
+            ? notFoundResponse
+            : applyToResponse(notFoundResponse, apply);
+    }
+}
+
+/** Applies collected onRequest mappers to a sync or async response. */
+function applyToResponse(
+    response: Response | Promise<Response>,
+    apply: (res: Response) => Response | Promise<Response>
+): Response | Promise<Response> {
+    return isThenable(response) ? response.then(apply) : apply(response);
 }
 
 /** True when any matched `:param` captured an empty segment. */

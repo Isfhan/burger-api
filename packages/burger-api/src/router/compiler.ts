@@ -277,7 +277,7 @@ export class RouterCompiler {
                     );
                 }
                 registeredPaths.add(path);
-                staticMap.set(path, compiled);
+                staticMap.set(path, compiled, cores);
 
                 // Optional: cache provably-constant OPTIONS responses natively.
                 // (Loose trailing-slash equivalence is resolved at lookup time in
@@ -826,12 +826,15 @@ function buildMethodCore(
  * The `fetch`-facing dispatcher for one route: method lookup against the
  * precomputed specialized executors (auto-HEAD and auto-OPTIONS included),
  * otherwise 405 + Allow. The hook plan already ran inside the executor.
+ *
+ * Sync-first: a synchronously resolved executor returns its `Response`
+ * directly; only async plans produce a Promise.
  */
 function buildFallbackHandler(
     cores: NativeMethodCores,
     allow: string
 ): CompiledHandler {
-    return async (request, ctxInit, prebuilt, env, executionCtx) => {
+    return (request, ctxInit, prebuilt, env, executionCtx) => {
         const core = cores[request.method as HTTPMethod];
         if (!core) return methodNotAllowed(allow);
         return core(request, ctxInit, prebuilt, env, executionCtx);
