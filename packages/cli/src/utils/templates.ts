@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from 'fs';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
-import { downloadSkill } from './github';
+import { installSkill } from './skills';
 import { reindent, isReindentable } from './reindent';
 
 /** Walks up from `startFile` to the nearest `package.json` and returns its dir. */
@@ -943,14 +943,187 @@ export function generateOpenAPIConfig(options: CreateOptions): string {
 }
 
 /**
+ * AGENTS.md for a new project: commands, layout, and framework rules that
+ * AI agents need. Content follows the create options, so it never points at
+ * files that were not scaffolded.
+ *
+ * @param options - Project configuration from user prompts
+ * @param skillsInstalled - Whether the burger-api skill was downloaded
+ * @returns AGENTS.md content as a string
+ */
+export function generateAgentsMd(
+    options: CreateOptions,
+    skillsInstalled = false
+): string {
+    const ext = options.lang === 'js' ? 'js' : 'ts';
+    const apiDir = options.apiDir || 'api';
+    const apiPrefix = options.apiPrefix || '/api';
+    const pageDir = options.pageDir || 'pages';
+    const pagePrefix = options.pagePrefix || '/';
+    const wsDir = options.wsDir || 'websocket';
+    const lines: string[] = [];
+
+    lines.push('# AGENTS.md');
+    lines.push('');
+    lines.push(
+        'This is a burger-api project (Bun-first API framework, file-based routing).'
+    );
+    lines.push('');
+
+    lines.push('## Commands');
+    lines.push('');
+    lines.push('- `bun run dev` - start the dev server with hot reload');
+    lines.push('- `bun run build` - bundle the project for production');
+    lines.push('- `bun run start` - run the production bundle');
+    lines.push('- `burger-api doctor` - check the project for problems');
+    lines.push(
+        '- `burger-api inspect --json` - list discovered routes, hooks, and plugins'
+    );
+    lines.push(
+        '- `burger-api generate route <path>` - scaffold a route directory'
+    );
+    lines.push('- `burger-api add <name>` - add an ecosystem hook or plugin');
+    lines.push('');
+
+    lines.push('## Project layout');
+    lines.push('');
+    lines.push(
+        `- \`src/index.${ext}\` - app entry: \`new Burger(...)\` and \`app.serve()\``
+    );
+    lines.push(`- \`src/hooks.${ext}\` - global lifecycle hooks`);
+    lines.push(
+        `- \`src/plugins.${ext}\` - plugins, registered with \`burger.usePlugin()\``
+    );
+    lines.push(
+        `- \`src/providers.${ext}\` - services, registered with \`burger.provide()\``
+    );
+    lines.push(`- \`src/openapi.config.${ext}\` - OpenAPI metadata and docs UI`);
+    if (options.useApi) {
+        lines.push(
+            `- \`src/${apiDir}/\` - API routes, served under \`${apiPrefix}\``
+        );
+    }
+    if (options.usePages) {
+        lines.push(
+            `- \`src/${pageDir}/\` - HTML pages, served under \`${pagePrefix}\``
+        );
+    }
+    if (options.useWs) {
+        lines.push(`- \`src/${wsDir}/\` - file-based WebSocket routes`);
+    }
+    lines.push(
+        `- \`burger.build.${ext}\` - build-time config (dirs, prefixes); keep it in sync with \`src/index.${ext}\``
+    );
+    lines.push('');
+
+    lines.push('## Route convention files');
+    lines.push('');
+    lines.push(
+        options.useApi
+            ? `Each route is a folder under \`src/${apiDir}/\` with separate convention files:`
+            : 'API routes are folders with separate convention files:'
+    );
+    lines.push('');
+    lines.push('| File | Purpose |');
+    lines.push('| --- | --- |');
+    lines.push(
+        ext === 'js'
+            ? '| `route.js` | Handlers: `export async function GET(ctx)` |'
+            : '| `route.ts` | Handlers: `export async function GET(ctx: BurgerContext)` |'
+    );
+    lines.push(
+        `| \`schema.${ext}\` | Per-method validation: \`export const GET = { query: ... }\` |`
+    );
+    lines.push(`| \`hooks.${ext}\` | Hooks for this route only |`);
+    lines.push(`| \`openapi.${ext}\` | Per-method OpenAPI metadata |`);
+    lines.push(`| \`config.${ext}\` | Route options: auth, cache, timeout |`);
+    lines.push('');
+    lines.push(
+        'Use per-method named exports (`GET`, `POST`, ...) in route, schema, and openapi files.'
+    );
+    lines.push('');
+
+    lines.push('## Rules');
+    lines.push('');
+    if (ext === 'js') {
+        lines.push(
+            "- Handlers take `ctx` and return a Web `Response`; type it with JSDoc: `@param {import('burger-api').BurgerContext} ctx`."
+        );
+    } else {
+        lines.push(
+            '- Handlers take `ctx: BurgerContext` and return a Web `Response`.'
+        );
+    }
+    lines.push(
+        `- Use \`defineRoute(GetSchema, (ctx) => ...)\` with a \`schema.${ext}\` to type \`ctx.validated\`.`
+    );
+    lines.push(
+        '- The request lifecycle is hooks: `onRequest`, `transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`.'
+    );
+    lines.push(
+        `- Extensions are plugins, registered in \`src/plugins.${ext}\` with \`burger.usePlugin()\`.`
+    );
+    lines.push(
+        '- Do not use middleware or the `BurgerRequest` type; both were removed.'
+    );
+    lines.push(
+        '- Do not export lowercase handler names (`get`); use `GET`, `POST`, and so on.'
+    );
+    lines.push(
+        '- Route folders are self-contained: convention files are never inherited from parent folders, and `(group)` folders only change the URL. Put shared code in a normal module and import it.'
+    );
+    lines.push(
+        '- `ctx.services` is read-only; put per-request data in a `transform` hook.'
+    );
+    lines.push('');
+
+    lines.push('## After changes');
+    lines.push('');
+    lines.push('Run `burger-api doctor`.');
+    lines.push('');
+
+    lines.push('## Learn more');
+    lines.push('');
+    if (skillsInstalled) {
+        lines.push(
+            '- Skill: `.agents/skills/burger-api/` and `.claude/skills/burger-api/`'
+        );
+    } else {
+        lines.push('- Skill: run `burger-api skills install`');
+    }
+    lines.push('- Docs: https://burger-api.com/docs');
+    lines.push('- LLM context: https://burger-api.com/llms.txt');
+    lines.push('');
+
+    return lines.join('\n');
+}
+
+/** CLAUDE.md for a new project: imports the shared rules in AGENTS.md. */
+export function generateClaudeMd(): string {
+    return [
+        '<!-- Claude Code reads this file; the project rules live in AGENTS.md. -->',
+        '@AGENTS.md',
+        '',
+    ].join('\n');
+}
+
+/** Injectable steps for tests; production uses the real implementations. */
+export interface CreateProjectDeps {
+    /** Skill downloader; defaults to the GitHub downloader. */
+    download?: (name: string, targetDir: string) => Promise<number>;
+}
+
+/**
  * Create a new project scaffold.
  *
  * @param targetDir - Where to create the project
  * @param options - Project configuration from user prompts
+ * @param deps - Optional injected steps (for tests)
  */
 export async function createProject(
     targetDir: string,
-    options: CreateOptions
+    options: CreateOptions,
+    deps: CreateProjectDeps = {}
 ): Promise<CreateProjectResult> {
     const spin = spinner('Creating project structure...');
     const lang: 'ts' | 'js' = options.lang === 'js' ? 'js' : 'ts';
@@ -1073,9 +1246,12 @@ export async function createProject(
     const result: CreateProjectResult = {};
     if (options.addSkills) {
         const skillSpin = spinner('Downloading AI agent skills...');
-        const skillTarget = join(targetDir, '.agents', 'skills', 'burger-api');
         try {
-            await downloadSkill('burger-api', skillTarget);
+            // Downloads to .agents/skills/, then copies to .claude/skills/.
+            await installSkill('burger-api', {
+                baseDir: targetDir,
+                download: deps.download,
+            });
             skillSpin.stop('AI agent skills installed');
             result.skillsInstalled = true;
         } catch (err) {
@@ -1085,6 +1261,15 @@ export async function createProject(
                 err instanceof Error ? err.message : 'Unknown error';
         }
     }
+
+    // Always written, also with --no-skills: AGENTS.md holds the project
+    // rules; CLAUDE.md imports it for Claude Code.
+    await Bun.write(
+        join(targetDir, 'AGENTS.md'),
+        generateAgentsMd(options, result.skillsInstalled === true)
+    );
+    await Bun.write(join(targetDir, 'CLAUDE.md'), generateClaudeMd());
+
     return result;
 }
 

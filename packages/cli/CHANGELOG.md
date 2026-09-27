@@ -37,6 +37,9 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 ### 🆕 New
 
+- `create` writes `AGENTS.md` + `CLAUDE.md`: every new project (also with
+  `--no-skills`) gets short, project-specific rules for AI agents, with
+  `CLAUDE.md` importing `AGENTS.md`.
 - `--lang ts|js` and `--yes` / `--defaults` flags on `create`; JS scaffolds use
   `jsconfig.json` (`checkJs: true`) and `.js` convention files with JSDoc
   types.
@@ -85,6 +88,10 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 ### 🐛 Fixes
 
+- Skills are also installed to `.claude/skills/` so Claude Code finds them;
+  `create` and `skills install` write both `.agents/skills/<name>/` and
+  `.claude/skills/<name>/`, and `skills list` shows each skill once with where
+  it is installed.
 - `burger-api add`'s printed "How to Use" snippet showed an invalid identifier
   for any hyphenated package (`jwt-auth` -> `Jwt-auth`) and guessed the wrong
   factory name; it now resolves the real exported name by reading the

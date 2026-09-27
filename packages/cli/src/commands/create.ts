@@ -260,14 +260,19 @@ export const createCommand = new Command('create')
             console.log(` 5. Add hooks and plugins (optional):`);
             command('burger-api add cors logger');
             newline();
+            console.log(` 6. AI agent setup:`);
+            console.log(
+                `    ${highlight('AGENTS.md')}  project rules (CLAUDE.md imports it)`
+            );
             if (created.skillsInstalled) {
-                console.log(` 6. AI skills installed at`);
-                console.log(`    ${highlight('.agents/skills/burger-api/')}`);
+                console.log(
+                    `    Skill installed at ${highlight('.agents/skills/burger-api/')} and ${highlight('.claude/skills/burger-api/')}`
+                );
             } else if (created.skillsInstalled === false) {
-                console.log(` 6. AI skills could not be downloaded — install them later:`);
+                console.log(`    AI skills could not be downloaded — install them later:`);
                 command('burger-api skills install');
             } else {
-                console.log(` 6. Add AI skills (optional):`);
+                console.log(`    Add AI skills (optional):`);
                 command('burger-api skills install');
             }
             newline();

@@ -103,7 +103,8 @@ burger-api create my-api --lang js
 - ✅ `burger.build.ts` generated from your answers (build-time only)
 - ✅ Example routes with schema + openapi files
 - ✅ Ready to run!
-- ✅ AI agent skills installed at `.agents/skills/burger-api/` (when opted in)
+- ✅ `AGENTS.md` (project rules for AI agents) and `CLAUDE.md` (`@AGENTS.md` import), always written
+- ✅ AI agent skills installed at `.agents/skills/burger-api/` and `.claude/skills/burger-api/` (when opted in)
 - ✅ When page routes are enabled, the sample `index.html` matches your choices
   (API prefix for “Try API”, and edit hints for your API/page directories)
 
@@ -240,10 +241,12 @@ burger-api skills list
 burger-api skills available
 ```
 
-**What gets installed:**
+**What gets installed:** the skill is downloaded once into
+`.agents/skills/burger-api/` and copied to `.claude/skills/burger-api/`.
 
 ```
-.agents/skills/burger-api/
+.agents/skills/burger-api/ # Agent Skills standard (OpenCode, Codex, ...)
+.claude/skills/burger-api/ # Claude Code project skills
 ├── SKILL.md # Main skill definition
 └── references/ # Reference documentation
     ├── routing.md
@@ -253,9 +256,10 @@ burger-api skills available
     └── openapi.md
 ```
 
-**Compatible agents:** Skills in `.agents/skills/` are automatically detected by
-Cursor, Claude Code, OpenCode, OpenAI Codex, GitHub Copilot, and any tool
-supporting the agentskills.io standard.
+**Compatible agents:** `Claude Code` reads from `.claude/skills/`. Agents that
+support the Agent Skills standard (OpenCode, Codex, and others) read from
+`.agents/skills/`. `skills list` shows each skill once with both locations when
+it is installed in both places.
 
 ---
 
@@ -467,6 +471,8 @@ When you create a project, this is what you get:
 my-api/
 ├── burger.build.ts # Build-time config (dirs, prefixes, debug)
 ├── tsconfig.json # TypeScript config (jsconfig.json for --lang js)
+├── AGENTS.md # Project rules for AI agents
+├── CLAUDE.md # Imports AGENTS.md for Claude Code
 ├── ecosystem/
 │ └── hooks/
 │     └── index.ts # Installed hooks/plugins land here
@@ -480,7 +486,8 @@ my-api/
 │     ├── route.ts # Example route handler
 │     ├── schema.ts # Per-method Zod schemas
 │     └── openapi.ts # Per-method OpenAPI metadata
-├── .agents/ # AI agent skills (optional)
+├── .agents/skills/ # AI agent skills (optional)
+├── .claude/skills/ # AI agent skills for Claude Code (optional)
 ├── .gitignore
 └── .prettierrc
 ```
@@ -622,8 +629,9 @@ cd my-project
 burger-api skills install
 ```
 
-This downloads the burger-api skill to `.agents/skills/burger-api/` for
-agentic IDEs. The old `ecosystem/.llm-context/` folder can be safely removed.
+This downloads the burger-api skill to `.agents/skills/burger-api/` and
+`.claude/skills/burger-api/` for agentic IDEs. The old
+`ecosystem/.llm-context/` folder can be safely removed.
 
 ---
 

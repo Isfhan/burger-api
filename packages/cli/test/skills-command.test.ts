@@ -100,6 +100,54 @@ describe('skills command', () => {
 
         rmSync(tmpDir, { recursive: true });
     });
+
+    test('skills list dedupes a skill installed in both folders', async () => {
+        const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
+        writeFileSync(
+            join(tmpDir, 'package.json'),
+            JSON.stringify({ name: 'test', version: '0.0.0' })
+        );
+
+        for (const root of ['.agents', '.claude']) {
+            const skillDir = join(tmpDir, root, 'skills', 'dedupe-skill');
+            mkdirSync(skillDir, { recursive: true });
+            writeFileSync(
+                join(skillDir, 'SKILL.md'),
+                '---\ndescription: Listed once\n---\n\n# Skill'
+            );
+        }
+
+        const { exitCode, stdout } = await runCli(['skills', 'list'], tmpDir);
+        expect(exitCode).toBe(0);
+        expect(stdout.match(/dedupe-skill/g)).toHaveLength(1);
+        expect(stdout).toContain(
+            'installed in .agents/skills, .claude/skills'
+        );
+
+        rmSync(tmpDir, { recursive: true });
+    });
+
+    test('skills list shows a skill from .claude/skills/ only', async () => {
+        const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
+        writeFileSync(
+            join(tmpDir, 'package.json'),
+            JSON.stringify({ name: 'test', version: '0.0.0' })
+        );
+
+        const skillDir = join(tmpDir, '.claude', 'skills', 'claude-only');
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(
+            join(skillDir, 'SKILL.md'),
+            '---\ndescription: Claude folder\n---\n\n# Skill'
+        );
+
+        const { exitCode, stdout } = await runCli(['skills', 'list'], tmpDir);
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('claude-only');
+        expect(stdout).toContain('installed in .claude/skills');
+
+        rmSync(tmpDir, { recursive: true });
+    });
 });
 
 describe('parseSkillDescription', () => {

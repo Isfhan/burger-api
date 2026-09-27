@@ -25,6 +25,11 @@ burger-api create my-api
 
 Prompts for: API routes (y/n, default yes), API directory name, API prefix, debug mode, Page routes (y/n, default no), Page directory name, Page prefix, WebSocket routes (y/n, default no), WebSocket directory name, AI agent skills (y/n, default yes).
 
+Every project gets `AGENTS.md` (commands, layout, and framework rules for AI
+agents) and `CLAUDE.md` (`@AGENTS.md`), even with `--no-skills`. When skills
+are opted in, they are installed to both `.agents/skills/burger-api/` and
+`.claude/skills/burger-api/`.
+
 Flags (feature flags imply `--yes`; without a TTY `create` never prompts and uses the defaults plus any flags):
 
 | Flag | Effect |
@@ -61,7 +66,10 @@ burger-api skills install
 burger-api skills install burger-api
 ```
 
-Downloads to `.agents/skills/<name>/`. Compatible with Cursor, Claude Code, opencode, Codex, and other agentic tools.
+Downloads once to `.agents/skills/<name>/`, then copies the folder to
+`.claude/skills/<name>/`. Claude Code reads `.claude/skills/`; agents that
+support the Agent Skills standard (OpenCode, Codex, and others) read
+`.agents/skills/`.
 
 ### `skills list`
 
@@ -71,7 +79,9 @@ List locally installed skills:
 burger-api skills list
 ```
 
-Reads from `.agents/skills/<name>/SKILL.md` frontmatter to show descriptions.
+Reads `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md`
+frontmatter. A skill installed in both folders is listed once, with both
+locations.
 
 ### `skills available`
 

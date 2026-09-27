@@ -1,13 +1,17 @@
 import { Command } from 'commander';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import * as clack from '@clack/prompts';
 import {
     skillExists,
-    downloadSkill,
     getCachedSkillList,
     getSkillInfo,
 } from '../utils/github';
+import {
+    installSkill,
+    isSkillInstalled,
+    listInstalledSkills,
+    skillDirs,
+} from '../utils/skills';
 import {
     spinner,
     success,
@@ -15,17 +19,11 @@ import {
     info,
     newline,
     header,
-    bullet,
     table,
     withSpinner,
     command,
     warning,
 } from '../utils/logger';
-
-/** Path to .agents/skills/ relative to project root */
-function skillsDir(): string {
-    return join(process.cwd(), '.agents', 'skills');
-}
 
 /** Ensure we're in a BurgerAPI project */
 function requireProject(): void {
@@ -37,18 +35,20 @@ function requireProject(): void {
     }
 }
 
-/** Ensure .agents/skills/ directory exists */
-async function ensureSkillsDir(): Promise<void> {
-    const dir = skillsDir();
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+/** Ensure both skill folders (`.agents/skills/` and `.claude/skills/`) exist */
+function ensureSkillDirs(): void {
+    const dirs = skillDirs();
+    for (const dir of [dirs.agents, dirs.claude]) {
+        if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+        }
     }
 }
 
 /** Shared download logic for installing a skill. */
 async function doInstall(skillName: string): Promise<void> {
     requireProject();
-    await ensureSkillsDir();
+    ensureSkillDirs();
 
     let spin = spinner(`Checking ${skillName}...`);
 
@@ -72,13 +72,13 @@ async function doInstall(skillName: string): Promise<void> {
 
     spin.update(`Downloading ${skillName}...`);
 
-    const targetDir = join(skillsDir(), skillName);
-    if (existsSync(targetDir)) {
+    // Installed if either folder has it; overwriting replaces both.
+    if (isSkillInstalled(skillName)) {
         spin.stop();
         if (!process.stdin.isTTY) {
             // No terminal to answer the prompt (CI, pipes) — never hang.
             logError(
-                `${skillName} is already installed at .agents/skills/${skillName}/ — run in a terminal to confirm overwriting, or remove that folder first.`
+                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — run in a terminal to confirm overwriting, or remove those folders first.`
             );
             process.exit(1);
         }
@@ -94,7 +94,7 @@ async function doInstall(skillName: string): Promise<void> {
     }
 
     try {
-        const filesDownloaded = await downloadSkill(skillName, targetDir);
+        const filesDownloaded = await installSkill(skillName);
         spin.stop(`Installed ${skillName} (${filesDownloaded} files)`);
 
         newline();
@@ -104,16 +104,16 @@ async function doInstall(skillName: string): Promise<void> {
         header('What was installed');
         info(`.agents/skills/${skillName}/SKILL.md`);
         info(`.agents/skills/${skillName}/references/`);
+        info(`.claude/skills/${skillName}/SKILL.md`);
+        info(`.claude/skills/${skillName}/references/`);
         newline();
 
         header('Compatible Agents');
         info('This skill is automatically discovered by:');
-        bullet('Cursor — reads from .agents/skills/');
-        bullet('Claude Code — reads from .agents/skills/');
-        bullet('OpenCode — reads from .agents/skills/');
-        bullet('OpenAI Codex — reads from .agents/skills/');
-        bullet('GitHub Copilot — reads from .agents/skills/');
-        bullet('And any agent supporting the agentskills.io standard');
+        info('Claude Code: .claude/skills/');
+        info(
+            'Agents that support the Agent Skills standard (OpenCode, Codex, and others): .agents/skills/'
+        );
         newline();
 
         header('How It Works');
@@ -146,51 +146,25 @@ const listCommand = new Command('list')
     .action(() => {
         requireProject();
 
-        const dir = skillsDir();
-        if (!existsSync(dir)) {
-            clack.intro('Installed skills');
-            info('No skills installed yet.');
-            newline();
-            info('Install the default skill:');
-            info(' burger-api skills install');
-            clack.outro('Done');
-            process.exit(0);
-        }
-
-        const entries = readdirSync(dir, { withFileTypes: true });
-        const skills = entries
-            .filter((e) => e.isDirectory())
-            .map((e) => {
-                const skillPath = join(dir, e.name, 'SKILL.md');
-                if (!existsSync(skillPath)) return null;
-                const raw = readFileSync(skillPath, 'utf-8');
-                const descLine = raw
-                    .split('\n')
-                    .find((l) => l.startsWith('description:'));
-                const description = descLine
-                    ? descLine
-                          .slice('description:'.length)
-                          .trim()
-                          .replace(/^['"]|['"]$/g, '')
-                    : '(no description)';
-                return { name: e.name, description };
-            })
-            .filter(Boolean) as { name: string; description: string }[];
+        const skills = listInstalledSkills();
 
         clack.intro('Installed skills');
         if (skills.length === 0) {
-            info('No valid skills found in .agents/skills/.');
+            info('No skills installed yet.');
             newline();
             info('Install the default skill:');
             info(' burger-api skills install');
         } else {
             for (const s of skills) {
                 info(` ${s.name} — ${s.description}`);
+                info(`   installed in ${s.locations.join(', ')}`);
             }
             newline();
             header('Discovery');
-            info('These skills are automatically detected by agentic IDEs.');
-            info('No additional configuration needed.');
+            info('Claude Code reads .claude/skills/.');
+            info(
+                'Agents that support the Agent Skills standard (OpenCode, Codex, and others) read .agents/skills/.'
+            );
         }
         newline();
         clack.outro('Done');
