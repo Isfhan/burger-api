@@ -2,11 +2,31 @@
 
 All notable changes to the Burger API CLI will be documented in this file.
 
-## Version 1.0.0-beta - (September 6, 2026)
+## Version 1.0.0-beta - (TBD, set at publish)
 
-First public beta, tracking `burger-api@1.0.0-beta`. `npm i -g @burger-api/cli`
-installs this beta by default; pin an exact `0.9.x` version (e.g.
-`npm i -g @burger-api/cli@0.9.9`) if you need the previous stable line.
+The biggest release since `0.9.9`, the last version on npm. 1.0.0-beta tracks
+`burger-api@1.0.0-beta` and adds the new command surface below.
+`npm i -g @burger-api/cli` installs it by default; the `0.9.x` line is still
+on npm (`@burger-api/cli@0.9.9`).
+
+Highlights:
+
+- **`create` flags:** `--lang ts|js`, `--yes`/`--defaults`, `--pages`, `--ws`,
+  and `--no-api`, plus a WebSocket-routes prompt.
+- **`inspect` and `doctor`**, both with `--json` output for tooling and AI
+  agents that need a project's shape.
+- **`generate route|hook|plugin|ws`** scaffolds that follow the project
+  language and check the ecosystem catalog first.
+- **Build targets:** `burger-api build --target=bun|node|cloudflare|deno|vercel`,
+  with early, clear errors (for example when `@burger-api/node-server` is
+  missing for a Node build).
+- **Local ecosystem cache** for `add`/`list`/`skills available`, with a stale
+  cache fallback when GitHub is unreachable.
+- **A more reliable `dev`:** it watches the whole app directory, so a new route
+  directory restarts the server instead of 404ing until a manual restart.
+
+Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
+if anything breaks or feels wrong.
 
 - **Added** – `--lang ts|js` and `--yes`/`--defaults` flags on `create`; JS
   scaffolds use `jsconfig.json` (`checkJs: true`) and `.js` convention files
@@ -115,7 +135,12 @@ installs this beta by default; pin an exact `0.9.x` version (e.g.
   descriptions and kinds (a warm cache makes zero GitHub calls) and warns when
   showing stale data; GitHub 403s surface the status and a `GITHUB_TOKEN` hint.
 
-## Version 0.10.0 - (July 24, 2026)
+### Included from unpublished milestones (0.10.0)
+
+0.10.0 was never published to npm; its changes ship for the first time in
+1.0.0-beta.
+
+### Version 0.10.0 - (July 24, 2026)
 
 - **Changed** – Scanner no longer detects `globalHooksPath` inside `apiDir`.
  Global hooks now live at app root (sibling of `index.ts`), not inside the

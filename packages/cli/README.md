@@ -2,13 +2,13 @@
 
 A Command-Line Tool for Creating and Managing BurgerAPI Projects.
 
-> **⚠️ Beta release — not yet recommended for production.** `npm i -g @burger-api/cli`
-> installs `1.0.0-beta` by default, tracking `burger-api@1.0.0-beta` (a
-> vision-locked rewrite, not an incremental update over the `0.9.x` line; see
-> `CHANGELOG.md` for the full breaking-change list). If you need the
-> previous stable line, pin an exact version, e.g.
-> `npm i -g @burger-api/cli@0.9.9`. See `CHANGELOG.md` for the full list of
-> fixes and known limitations in this beta.
+> **1.0.0-beta is our biggest release yet.** `npm i -g @burger-api/cli`
+> installs it by default, tracking `burger-api@1.0.0-beta`. It is a full
+> rewrite with many new features, so please try it and
+> [open an issue](https://github.com/isfhan/burger-api/issues) if anything
+> breaks or feels wrong. Coming from `0.9.x`? See `CHANGELOG.md` for
+> breaking changes; the `0.9.x` line is still on npm
+> (`@burger-api/cli@0.9.9`).
 
 ## Installation
 

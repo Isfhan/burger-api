@@ -8,13 +8,12 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
 
-> **⚠️ Beta release — not yet recommended for production.** `npm i burger-api`
-> installs `1.0.0-beta` by default: a vision-locked rewrite of the
-> framework, not an incremental update over the `0.9.x` line (see
-> `CHANGELOG.md` for the full breaking-change list). If you need the
-> previous stable line for a production project, pin an exact version,
-> e.g. `npm i burger-api@0.9.7`. See `CHANGELOG.md` for the full list of
-> fixes and known limitations in this beta.
+> **1.0.0-beta is our biggest release yet.** `npm i burger-api` installs it
+> by default. It is a full rewrite with many new features, so please try it
+> and [open an issue](https://github.com/isfhan/burger-api/issues) if
+> anything breaks or feels wrong. Coming from `0.9.x`? See `CHANGELOG.md`
+> for breaking changes; the `0.9.x` line is still on npm
+> (`burger-api@0.9.7`).
 
 **burger-api** is a Bun-first, WinterCG-compatible API framework with
 file-based routing, a hook-based request lifecycle, Standard Schema validation
@@ -185,7 +184,7 @@ your `src/hooks.ts` and `src/plugins.ts`. For more information, visit the
 
 ### Latest Version: 1.0.0-beta
 
-- 🚀 **1.0.0-beta (not stable yet).** Vision-locked architecture: `BurgerContext`, the six
+- 🚀 **1.0.0-beta (public beta).** Vision-locked architecture: `BurgerContext`, the six
  hook points (`onRequest`, `transform`, `beforeRoute`, `afterRoute`,
  `mapResponse`, `onError`), plugins/providers, and WinterCG deploy surface
  (`toFetchHandler`).

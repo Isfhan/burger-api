@@ -2,11 +2,44 @@
 
 ### Version 1.0.0-beta
 
-Release date: TBD (set at publish). First public beta of the vision-locked 1.0.0 API — a
-breaking rewrite of the `0.9.x` line (`BurgerRequest`/`Middleware`-based),
-not an incremental update. `npm i burger-api` installs this beta by
-default; pin an exact `0.9.x` version (e.g. `npm i burger-api@0.9.7`) if you
-need the previous stable line.
+Release date: TBD (set at publish).
+
+The biggest release since `0.9.7`, the last version on npm. 1.0.0-beta is a
+full rewrite of the framework with many new features: a six-point hook
+lifecycle, plugins and providers, Standard Schema validation, automatic
+OpenAPI with a built-in docs UI, file-based WebSocket routes, page routes,
+per-method Bun native routes, first-class JavaScript, and a WinterCG deploy
+surface through `toFetchHandler`.
+
+Highlights:
+
+- **Hooks replace middleware:** `onRequest`, `transform`, `beforeRoute`,
+  `afterRoute`, `mapResponse`, `onError`; global hooks in `src/hooks.ts`, route
+  hooks in `api/**/hooks.ts`.
+- **`BurgerContext`** replaces `BurgerRequest` as the single typed context for
+  every hook and handler.
+- **Plugins and providers:** `burger.usePlugin()` in `src/plugins.ts` and
+  `burger.provide()` in `src/providers.ts` (`ctx.services`).
+- **Standard Schema validation:** Zod default, plus Valibot and ArkType, for
+  query, params, headers, cookies, and body, with optional response validation.
+- **OpenAPI 3.0 + docs UI:** generated from routes and schemas, with Swagger UI,
+  Scalar, and Redoc built in (`/openapi.json`, `/docs`).
+- **WebSocket routes:** file-based under `src/websocket/`, plus
+  `burger.websocket()`.
+- **Page routes and static assets:** file-based pages under `src/pages/`.
+- **Bun-native performance:** routes are registered as per-method native Bun
+  routes, and `burger-api build` prepares routes ahead of time (AOT).
+- **JavaScript is first-class:** `.ts` / `.js` / `.mjs` conventions, `create
+  --lang js`, JSDoc types.
+- **Multi-runtime:** `app.serve()` on Bun; `toFetchHandler(app)` for Node 24+
+  (with the `@burger-api/node-server` adapter), Cloudflare Workers, Deno, and
+  Vercel.
+
+Coming from `0.9.x`? This is a breaking rewrite; see the notes below. The
+`0.9.x` line is still on npm (`burger-api@0.9.7`).
+
+Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
+if anything breaks or feels wrong.
 
 **Breaking changes from 0.9.x**
 - `BurgerRequest` type removed — replaced by `BurgerContext`.
@@ -275,7 +308,12 @@ need the previous stable line.
   HTML-import bundles and dynamic (`[param]`) pages are served only by
   `serve()` on Bun (a startup warning lists them).
 
-### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
+#### Included from unpublished milestones (0.14.0, 0.15.0)
+
+0.14.0 and 0.15.0 were never published to npm; their changes ship for the
+first time in 1.0.0-beta.
+
+#### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
 
 Released 2026-07-24.
 
@@ -302,7 +340,7 @@ Released 2026-07-24.
 - Router compiler normalizes hooks before building the chain.
 - CLI scanner aligned (no `globalHooksPath` inside `apiDir`).
 
-### Version 0.14.0 (Compiler-Driven Core, Request Context & Validation 2.0)
+#### Version 0.14.0 (Compiler-Driven Core, Request Context & Validation 2.0)
 
 Released 2026-07-21. This release is the architecture reset: BurgerAPI now
 compiles your file tree into an immutable, fully-compiled application. The
