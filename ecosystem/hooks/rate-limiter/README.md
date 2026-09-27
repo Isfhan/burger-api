@@ -407,27 +407,13 @@ The hook hashes IP addresses for privacy and efficient storage. On Bun.js, it us
 const hasher = new Bun.CryptoHasher('sha256');
 hasher.update(ipAddress);
 return hasher.digest('hex'); // full 256-bit digest
-
-// ~10x faster than crypto.subtle (which is async)
-// ~100x faster than Node.js crypto module
 ```
 
 **Benefits:**
-- ⚡ **10x faster** than `crypto.subtle` (Web Crypto API)
+- ⚡ **Runtime-optimized**: native hashing on Bun, WebCrypto fallback elsewhere
 - 🔒 **Privacy**: IP addresses are hashed, not stored in plain text
 - 💾 **Fixed-size keys**: every key is a 64-char SHA-256 hex digest
 - 🔄 **Automatic fallback**: Uses WebCrypto `crypto.subtle` SHA-256 on other runtimes
-
-**Performance Impact:**
-
-| Runtime | Hash Time | Throughput |
-|---------|-----------|------------|
-| Bun v1.3.1 (CryptoHasher) | 0.02ms | ~50,000 req/s |
-| Node.js v20 (crypto.subtle) | 0.20ms | ~5,000 req/s |
-
-**Why This Matters:**
-
-Rate limiting is typically applied to *every* request. A 10x improvement in key generation translates to significantly better overall throughput, especially for high-traffic APIs.
 
 ### Implementation Details
 

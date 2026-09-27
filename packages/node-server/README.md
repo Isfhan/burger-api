@@ -6,8 +6,8 @@ handler, and wires WebSocket routes automatically when the app has any.
 
 burger-api ships a Bun adapter and a WinterCG `toFetchHandler` for edge
 runtimes, but nothing to run a real, long-lived server on plain Node. This
-package is that missing piece — modeled directly on
-[`@hono/node-server`](https://github.com/honojs/node-server)'s ergonomics.
+package is that missing piece: a small `node:http` bridge with WebSocket
+wiring included.
 
 ## Install
 
@@ -41,6 +41,13 @@ attach your own `'listening'`/`'error'` listeners. `.listen()` itself isn't
 called until route processing (and WebSocket bridge wiring, if applicable)
 has finished — no window where a request could arrive before the app is
 actually ready.
+
+## `ctx.ip`
+
+Requests through this adapter get `ctx.ip` from the Node socket
+(`req.socket.remoteAddress`), matching Bun's native behavior. Forwarded
+headers are not read; behind a proxy, see the rate-limiter hook's
+`trustProxy` option.
 
 ## WebSocket
 

@@ -1098,13 +1098,13 @@ dev server as a final spot-check: `GET /api/users` still correct.
 this session has followed. Handoff for the two commands still needed:
 
 ```bash
-cd packages/burger-api && npm publish --tag beta
-cd packages/cli && npm publish --tag beta
+cd packages/burger-api && npm publish --tag latest
+cd packages/cli && npm publish --tag latest
 ```
 
 Both packages are at `1.0.0-beta`; publish `burger-api` first (the CLI
 declares no hard dependency on the framework package itself, so order is
 not strictly required, but matches this session's convention throughout).
-A bare `npm i burger-api` / `npm i -g @burger-api/cli` will keep resolving
-today's `0.9.7`/`0.9.9` `latest` — nothing changes for existing users
-until they explicitly opt in with `@beta`.
+The `latest` tag moves to the beta, so a bare `npm i burger-api` /
+`npm i -g @burger-api/cli` installs `1.0.0-beta` once published — existing
+`0.9.x` users are upgraded on their next install.

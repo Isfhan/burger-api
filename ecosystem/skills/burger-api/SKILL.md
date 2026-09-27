@@ -47,7 +47,7 @@ Groups `(name)` only strip from the URL.
 
 | File | Role |
 |------|------|
-| `route.ts` | `export async function GET(ctx: BurgerContext)` |
+| `route.ts` | `export async function GET(ctx: BurgerContext)`; with a schema, `defineRoute(GetSchema, (ctx) => …)` types `ctx.validated` |
 | `schema.ts` | `export const GET = { body, query, params, ... }` |
 | `hooks.ts` | Route hooks |
 | `openapi.ts` | `export const GET = { summary, tags, ... }` |
@@ -83,12 +83,32 @@ export async function GET(ctx: BurgerContext): Promise<Response> {
 }
 ```
 
+With a `schema.ts`, wrap the handler in
+`defineRoute(GetSchema, (ctx) => …)` to type `ctx.validated` (details in
+`references/validation.md`).
+
+## Context (`BurgerContext`)
+
+Handlers and hooks receive `ctx`:
+
+- `ctx.request` — raw `Request`; `ctx.method`, `ctx.url`, `ctx.headers`,
+  `ctx.body` (`ctx.json()` / `ctx.text()`)
+- `ctx.params` — `[param]` segments; `ctx.wildcardParams` — `[...]` segments
+- `ctx.query`, `ctx.cookies` — parsed lazily
+- `ctx.validated` — schema-checked data (see Validation)
+- `ctx.route` — matched route metadata; `ctx.config` — from `config.ts`
+- `ctx.ip` — client socket address, resolved lazily; `undefined` where the
+  runtime exposes no client address (the Node adapter reads the socket)
+- `ctx.set` — response mutations
+- `ctx.env` — platform bindings on WinterCG targets
+- `ctx.services` — app services; app-scoped, shared and frozen (read only)
+
 ## Validation (`schema.ts`)
 
 ```ts
 export const POST = {
   body: z.object({ name: z.string() }),
-  response: z.object({ id: z.string(), name: z.string() }),
+  response: { 201: z.object({ id: z.string(), name: z.string() }) },
 };
 ```
 
@@ -114,10 +134,11 @@ export const onError = (err, ctx) => { /* ... */ };
 ```
 
 Hook return contracts are enforced at compile time: `ForwardHook`
-(`onRequest` / `beforeRoute`) returns `Response` (short-circuit) or
-`undefined` (continue); `ResponseHook` (`afterRoute` / `mapResponse`) may
-also return `(res) => Response` to transform the response; `ErrorHook`
-(`onError`) returns `Response` or `undefined`. Anything else fails to typecheck.
+(`onRequest` / `beforeRoute`) returns `Response` (short-circuit), `undefined`
+(continue), or an after-mapper `(res) => Response` applied to the eventual
+response; `ResponseHook` (`afterRoute` / `mapResponse`) returns `Response`
+(replace), a mapper, or `undefined`; `ErrorHook` (`onError`) returns
+`Response` or `undefined`. Anything else fails to typecheck.
 
 ## Plugins vs hooks
 
@@ -152,6 +173,9 @@ const db = ctx.services.db;
 ```
 
 `ProviderRegistrar` exposes only `provide`, for the same reason.
+
+`ctx.services` is one app-scoped object, shared by every request and frozen:
+read from it, never assign. Per-request data belongs in a `transform` hook.
 
 ## Auth
 
@@ -251,7 +275,7 @@ ecosystem/plugins/<name>/
 
 - `openapi.config.ts` — auto-discovered convention file (metadata, endpoints, docs UI, docs auth)
 - Swagger UI is the default docs UI (CDN-based, no npm dependency)
-- Built-in docs protection via `docsAuth: { username, password }`
+- Built-in docs protection via `docsAuth: { username, password }` — guards `/docs` and `/openapi.json`
 - Per-route `openapi.ts` with per-method exports (override auto-generated responses)
 - `mapJsonSchema` — validator-agnostic schema conversion (Zod, Valibot, ArkType)
 - `/openapi.json`, `/docs` (configurable paths, can be disabled)
@@ -290,4 +314,4 @@ Prefer: `BurgerContext`, vision hook names, `burger.build.ts`, `config.ts`, uppe
 
 ## References
 
-- `references/routing.md`, `validation.md`, `openapi.md`, `cli.md` (update if they lag the docs)
+- `references/routing.md`, `validation.md`, `hooks.md`, `openapi.md`, `cli.md` (update if they lag the docs)

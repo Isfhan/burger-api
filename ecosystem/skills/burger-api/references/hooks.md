@@ -10,7 +10,7 @@ Hook functions can return three values:
 |---|---|
 | `undefined` | Continue to the next hook or route handler |
 | `Response` | Stop processing and send this response immediately |
-| `(response: Response) => Response` | After-hook: transform the final response after the handler runs |
+| `(response: Response) => Response` | Mapper: transforms the eventual response (forward hooks queue it until the handler has run; response hooks apply it at their stage) |
 
 ## Global Hooks (all routes)
 
@@ -18,10 +18,14 @@ Place hooks in the app's root `src/hooks.ts` — they apply to every route:
 
 ```typescript
 // src/hooks.ts
+import { cors } from '../ecosystem/hooks/cors/cors';
+import { logger } from '../ecosystem/hooks/logger/logger';
+import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
+
 export const onRequest = [
     logger(),
     cors({ origin: '*' }),
-    rateLimiter({ max: 100, window: 60000 }),
+    rateLimit({ maxRequests: 100, windowMs: 60000 }),
 ];
 ```
 
@@ -47,7 +51,10 @@ export const beforeRoute = [
 
 ## After-Hooks
 
-When a hook returns a function, that function runs after the route handler (and all subsequent after-hooks run in reverse order):
+When a hook returns a function, that function transforms the response.
+`afterRoute` / `mapResponse` apply theirs at their own stage, in chain order;
+forward hooks (`onRequest` / `beforeRoute`) queue theirs until the handler has
+run, then apply them in reverse collection order:
 
 ```typescript
 // api/<route>/hooks.ts
@@ -68,13 +75,13 @@ This pattern is useful for:
 
 ## Performance
 
-The hook pipeline has specialized fast paths:
-- **0 hooks** — direct handler call, no overhead
-- **1 hook** — single function call, no array iteration
-- **2 hooks** — manual loop unrolling for JIT optimization
-- **3+ hooks** — standard array iteration
-
-Pre-allocated arrays are used to avoid dynamic resizing.
+- Each route+method hook plan is JIT-compiled into one specialized function
+  (lazily, on first hit); runtimes that forbid dynamic code generation fall
+  back to the interpreter.
+- The pipeline is sync-first: `await` happens only when a step really returns
+  a promise.
+- On Bun, `serve()` registers every route as a per-method native Bun route
+  (`{ GET, POST, ... }`), so there is no per-request method lookup.
 
 ## Ecosystem Hooks
 

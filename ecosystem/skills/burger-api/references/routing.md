@@ -16,7 +16,7 @@ Routes are matched in this order:
 ```typescript
 // api/users/[id]/route.ts
 export async function GET(ctx: BurgerContext) {
-    const { id } = ctx.validated?.params || {};
+    const { id } = ctx.params;
     return Response.json({ userId: id });
 }
 ```
@@ -51,7 +51,7 @@ Groups can be nested and are useful for organizing routes by feature, version, o
 ```typescript
 // api/posts/[postId]/comments/[commentId]/route.ts
 export async function GET(ctx: BurgerContext) {
-    const { postId, commentId } = ctx.validated?.params || {};
+    const { postId, commentId } = ctx.params;
     return Response.json({ postId, commentId });
 }
 ```
@@ -116,6 +116,16 @@ export function message(ws: BurgerWS, message: string | Buffer) {
 }
 ```
 
+Dynamic segments work like API routes: `src/websocket/rooms/[roomId]/ws.ts`
+exposes URL-decoded params on `ws.params` (always a `Record<string, string>`,
+empty when the route has none):
+
+```typescript
+export function open(ws: BurgerWS) {
+    const { roomId } = ws.params;
+}
+```
+
 Scaffold with `burger-api generate ws <path>` (see `cli.md`), or opt into a
 sample route at project creation time via `create`'s "Do you need WebSocket
 routes?" prompt. `ws.ts`/`ws.js`/`ws.mjs` are all valid extensions,
@@ -130,17 +140,10 @@ Routes are prepared ahead of time (AOT), i.e. built into the app before it runs.
 3. Bun bundles the app with embedded route metadata
 4. The running server uses these pre-built routes — no filesystem scanning
 
-This means `apiRoutes` and `pageRoutes` arrays can be passed to the Burger constructor instead of `apiDir`/`pageDir`:
-
-```typescript
-import { apiRoutes, pageRoutes } from './.build/routes';
-
-const app = new Burger({
-    apiRoutes,
-    pageRoutes,
-    // ... rest of config
-});
-```
+The CLI build generates this wiring for you. The `Burger` constructor also
+accepts pre-built `apiRoutes` / `pageRoutes` arrays instead of `apiDir` /
+`pageDir` — that is how the generated production entry (and custom AOT
+setups) registers routes without scanning the filesystem.
 
 ## Directory Path Resolution
 

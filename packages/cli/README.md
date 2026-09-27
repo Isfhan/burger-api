@@ -61,14 +61,30 @@ Create a new Burger API project with interactive prompts.
 
 **Questions You Will Be Asked:**
 
-- Do you need API routes? (yes/no)
+- Do you need API routes? (default: yes)
 - API directory name (default: api)
 - API route prefix (default: /api)
-- Enable debug mode? (yes/no)
-- Do you need Page routes? (yes/no)
+- Enable debug mode? (default: no)
+- Do you need Page routes? (default: no)
 - Page directory name (default: pages)
 - Page route prefix (default: /)
+- Do you need WebSocket routes? (default: no)
+- WebSocket directory name (default: websocket)
 - Add AI agent skills? (recommended for agentic IDEs, default: yes)
+
+**Flags:**
+
+- `-l, --lang <ts|js>` - Project language (default: ts)
+- `-y, --yes` - Use default answers for all prompts (alias: `--defaults`)
+- `--pages` - Include page routes (`src/pages`)
+- `--ws` - Include file-based WebSocket routes (`src/websocket`)
+- `--no-api` - Skip API routes
+- `--api-dir <dir>` - API routes directory under `src/` (default: api)
+- `--api-prefix <prefix>` - URL prefix for API routes (default: /api)
+- `--no-skills` - Skip downloading AI agent skills
+
+Feature flags imply `--yes` (no prompts). Without a TTY (CI, pipes) `create`
+never prompts: it uses the defaults plus any flags.
 
 Skip all prompts with default answers:
 

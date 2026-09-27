@@ -480,12 +480,7 @@ This hook is optimized for high-performance applications:
 -   **String optimization**: Pre-joined strings avoid repeated operations
 -   **Regex caching**: HTTPS enforcement uses cached regex patterns
 
-Expected performance improvements over standard CORS hooks:
-
--   60% faster origin validation
--   40% faster header processing
--   30% faster HTTPS checks
--   50% less memory allocation
+All of the above happens once when the hook is created, not per request.
 
 ## Migration Guide
 

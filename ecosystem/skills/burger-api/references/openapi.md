@@ -32,7 +32,7 @@ When `openapi.config.ts` does not exist, defaults apply: minimal metadata, `/ope
 | `GET /openapi.json` | OpenAPI 3.0 specification (JSON) | Always served (configurable path) |
 | `GET /docs` | Documentation UI | Enabled, configurable path |
 
-Paths are configurable via `openapi.config.ts`. Either endpoint can be disabled (`enabled: false`).
+Paths are configurable via `openapi.config.ts`. Both endpoints are disabled with `enabled: false`.
 
 ## Docs UI
 
@@ -54,7 +54,7 @@ Custom providers: any function `(spec: OpenAPIObject) => string | Response`.
 
 ## Docs Protection
 
-Basic auth built into core. When `docsAuth` is set, `/docs` returns `401 Unauthorized` without valid credentials.
+Basic auth built into core. When `docsAuth` is set, both the docs UI (`/docs`) and the spec endpoint (`/openapi.json`) return `401 Unauthorized` without valid credentials.
 
 ```ts
 export default {
@@ -67,10 +67,10 @@ export default {
 
 ## Route Metadata
 
-Customize per-route OpenAPI entries by exporting `openapi` from `route.ts` or a separate `openapi.ts`:
+Customize per-route OpenAPI entries in the route's `openapi.ts`:
 
 ```typescript
-// api/users/route.ts (or openapi.ts)
+// api/users/openapi.ts
 export const GET = {
     summary: 'List all users',
     tags: ['Users'],

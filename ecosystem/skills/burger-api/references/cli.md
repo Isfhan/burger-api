@@ -23,9 +23,20 @@ Scaffold a new BurgerAPI project with interactive prompts:
 burger-api create my-api
 ```
 
-Prompts for: API routes (y/n), API directory name, API prefix, debug mode, page routes (y/n), page directory name, page prefix, WebSocket routes (y/n), WebSocket directory name, AI skills (y/n).
+Prompts for: API routes (y/n, default yes), API directory name, API prefix, debug mode, Page routes (y/n, default no), Page directory name, Page prefix, WebSocket routes (y/n, default no), WebSocket directory name, AI agent skills (y/n, default yes).
 
-Flags: `-l, --lang <ts|js>` (skip the language prompt), `-y, --yes` (accept all defaults, non-interactive).
+Flags (feature flags imply `--yes`; without a TTY `create` never prompts and uses the defaults plus any flags):
+
+| Flag | Effect |
+|------|--------|
+| `-l, --lang <ts\|js>` | Project language (default `ts`) |
+| `-y, --yes` | Accept all defaults, non-interactive (alias `--defaults`) |
+| `--pages` | Include page routes (`src/pages`) |
+| `--ws` | Include file-based WebSocket routes (`src/websocket`) |
+| `--no-api` | Skip API routes |
+| `--api-dir <dir>` | API directory under `src/` (default `api`) |
+| `--api-prefix <prefix>` | URL prefix for API routes (default `/api`) |
+| `--no-skills` | Skip AI agent skills |
 
 ### `add <names...>`
 

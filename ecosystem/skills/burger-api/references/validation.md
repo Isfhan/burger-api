@@ -40,29 +40,31 @@ Schemas are optional. A route without a `schema.ts` skips validation entirely.
 
 ## Accessing Validated Data
 
-Validated data is available on `ctx.validated`, fully typed from the route's
-`schema.ts` via `BurgerContext<typeof GET>` (inference happens automatically):
+Validated data is available on `ctx.validated`, typed from the route's
+`schema.ts` when the handler is wrapped in `defineRoute(GetSchema, …)` (the
+scaffolded pattern). Declared slots are always populated after validation:
 
 ```typescript
 // route.ts
-import type { BurgerContext } from 'burger-api';
-import type { GET, POST } from './schema';
+import { defineRoute } from 'burger-api';
+import { GET as GetSchema, POST as PostSchema } from './schema';
 
-export async function POST(ctx: BurgerContext<typeof POST>) {
+export const POST = defineRoute(PostSchema, (ctx) => {
     const body = ctx.validated.body;  // { name: string, email: string }
     return Response.json(body, { status: 201 });
-}
+});
 
-export async function GET(ctx: BurgerContext<typeof GET>) {
+export const GET = defineRoute(GetSchema, (ctx) => {
     // ctx.validated.params is the typed params channel (schema-typed path
     // parameters); raw ctx.params stays a runtime string record.
-    const page = ctx.validated.query?.page;
+    const page = ctx.validated.query.page;
     return Response.json({ page });
-}
+});
 ```
 
-Invalid slots (e.g. `ctx.validated.unknown`) fail at compile time; slots
-without a schema are `unknown`.
+Typing the parameter as `BurgerContext<typeof GetSchema>` works the same way
+without `defineRoute`. Invalid slots (e.g. `ctx.validated.unknown`) fail at
+compile time; slots without a schema are `unknown`.
 
 ## Sharing Schemas Across Routes
 
@@ -134,12 +136,12 @@ Validation failures throw `ValidationError` → 422 Unprocessable Entity:
 
 ```json
 {
-    "type": "https://httpwg.org/specs/rfc9457.html#status.422",
-    "title": "Unprocessable Entity",
+    "type": "about:blank",
+    "title": "Validation Error",
     "status": 422,
+    "detail": "body: Name is required",
     "errors": {
-        "body": [{ "message": "Name is required" }],
-        "query": [{ "message": "Page must be >= 1" }]
+        "body": [{ "path": ["name"], "message": "Name is required" }]
     }
 }
 ```

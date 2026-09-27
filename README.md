@@ -46,10 +46,11 @@ published to npm.
 
 #### ✨ Key Features
 
--   ⚡ **Bun-Native Hybrid Routing** - Static routes are served by Bun's native
-    `routes` map (the fast path), while `:param` and `*` routes are served by
-    BurgerAPI's optimized internal trie (a tree structure for fast path
-    matching). Both share one request flow (also called a pipeline).
+-   ⚡ **Bun-Native Hybrid Routing** - On Bun, every route (static, `:param`,
+    `*`) is registered as a per-method native Bun route. The fetch path
+    (WinterCG targets, unmatched requests) matches dynamic routes with the
+    radix matcher, falling back to the segment trie. Both share one request
+    flow (also called a pipeline).
 -   📁 **File-Based Routing** - Automatically registers API routes from your
     file structure, including dynamic `[id]` parameters and anonymous `[...]`
     wildcards (captured in `ctx.wildcardParams`)
@@ -251,43 +252,45 @@ BurgerAPI maps your file structure to routes automatically.
 
 ## ⚡ Performance
 
--   **Static routes** use Bun-native routing — the fastest dispatch path, with
-    no framework code in the code that runs on every request (the hot path).
--   **Dynamic routes** use BurgerAPI's optimized internal trie (a tree structure
-    for fast path matching), matched in `O(number of path segments)`.
--   **Shared prepared handlers** run the same hook lifecycle for static and
-    dynamic routes, so behavior (and optimizations) never drift between them.
+-   **On Bun**, `serve()` registers every route — static, `:param`, `*` — as a
+    per-method native Bun route, so dispatch happens without framework code in
+    the hot path.
+-   **Fetch path** (`fetchHandler` on Cloudflare / Deno / Vercel, the
+    node-server adapter, and Bun's fallback): dynamic routes match through the
+    radix matcher, falling back to the segment trie for paths it can't handle.
+-   **Shared prepared handlers** run the same hook lifecycle on both paths, so
+    behavior (and optimizations) never drift.
 -   **Bun-first architecture**: Bun is the primary runtime, with a WinterCG
     adapter (`toFetchHandler`) for non-Bun targets.
 
 ## 🏗️ Architecture
 
 ```
-        Request
-           │
-           ▼
-   ┌───────────────────┐
-   │  Static path?      │
-   └───────────────────┘
-        │          │
-       yes         no
-        │          │
-        ▼          ▼
-  ┌──────────┐  ┌──────────────────────────────┐
-  │ Bun      │  │ Router.fetch (fallback)        │
-  │ routes   │  │   │                            │
-  │ map      │  │   ▼                            │
-  └──────────┘  │  Internal trie (:param, *)     │
-                └───────────────┬────────────────┘
-                                │
-                                 ▼
-                  Shared request flow (hooks → handler)
+                     Request
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │ Bun serve(): per-method native │
+        │ route (static, :param, *)      │
+        └───────────────┬───────────────┘
+                        │ unmatched / other runtimes
+                        ▼
+        ┌───────────────────────────────┐
+        │ fetch path (fetchHandler,      │
+        │ Cloudflare/Deno/Vercel/Node)   │
+        │ radix matcher → segment trie   │
+        └───────────────┬───────────────┘
+                        │
+                        ▼
+        Shared request flow (hooks → handler)
 ```
 
-Static routes are dispatched directly by Bun; dynamic and wildcard routes are
-dispatched by the internal trie via a single `fetch` fallback. Both paths run
-the **same prepared handler**, so method dispatch, `405`/`Allow`, auto-`HEAD`,
-and hook behavior are identical regardless of how the route was matched.
+On Bun, `serve()` registers every route as a per-method native Bun route. The
+`fetch` path — Bun's fallback plus `fetchHandler` on Cloudflare, Deno, Vercel,
+and the node-server adapter — matches dynamic routes with the radix matcher,
+falling back to the segment trie. Both paths run the **same prepared handler**,
+so method dispatch, `405`/`Allow`, auto-`HEAD`, and hook behavior are identical
+regardless of how the route was matched.
 
 ## 🧭 Routing/Build Ownership (Contributor Guide)
 
