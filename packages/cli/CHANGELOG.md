@@ -7,7 +7,7 @@ All notable changes to the Burger API CLI will be documented in this file.
 The biggest release since `0.9.9`, the last version on npm. 1.0.0-beta tracks
 `burger-api@1.0.0-beta` and adds the new command surface below.
 `npm i -g @burger-api/cli` installs it by default; the `0.9.x` line is still
-on npm (`@burger-api/cli@0.9.9`). Includes the never-published 0.10.0.
+on npm (`@burger-api/cli@0.9.9`).
 
 Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
 if anything breaks or feels wrong.
@@ -32,9 +32,6 @@ if anything breaks or feels wrong.
 
 - `burger-api serve` removed: use `burger-api dev`.
 - `burger.config.ts` renamed `burger.build.ts` (build-time only).
-- Only in unreleased development builds: global hooks moved out of the routes
-  directory to `src/hooks.ts`, next to `index.ts`; the scanner no longer reads
-  a hooks file inside `apiDir`.
 
 Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration).
 

@@ -9,8 +9,8 @@ full rewrite of the framework with many new features: a six-point hook
 lifecycle, plugins and providers, Standard Schema validation, automatic
 OpenAPI with a built-in docs UI, file-based WebSocket routes, page routes,
 per-method Bun native routes, first-class JavaScript, and a WinterCG deploy
-surface through `toFetchHandler`. Includes the never-published 0.14.0 and
-0.15.0 milestones. This is a breaking rewrite: the `0.9.x` line stays on npm
+surface through `toFetchHandler`.
+This is a breaking rewrite: the `0.9.x` line stays on npm
 (`burger-api@0.9.7`).
 
 Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
@@ -69,12 +69,6 @@ if anything breaks or feels wrong.
   `transform` and `onError` can see `ctx.validated` itself as `undefined`.
 - WebSocket: `ws.params` holds decoded route params, and the matched compiled
   route is no longer exposed on `ws.data`.
-- Only in unreleased development builds (never on npm), now removed:
-  `beforeHandle` / `afterHandle` / `onResponse` / `provide` hook names (use
-  `beforeRoute` / `afterRoute` / `mapResponse` / `transform`), `Burger.use`
-  (use `burger.usePlugin()`), `burger.macro()` (use a plugin), and a global
-  hooks file inside `apiDir` (it now lives at `src/hooks.ts`, next to
-  `index.ts`).
 
 Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration).
 
@@ -191,7 +185,7 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 #### ⚡ Performance
 
 No behavior change; measured with
-[burger-api-benchmarks](https://github.com/isfhan/buger-api-benchmarks).
+[burger-api-benchmarks](https://github.com/isfhan/burger-api-benchmarks).
 
 - Routes are registered as per-method Bun native handlers, specialized at
   startup: no per-request method lookup.
