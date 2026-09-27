@@ -9,9 +9,14 @@ full rewrite of the framework with many new features: a six-point hook
 lifecycle, plugins and providers, Standard Schema validation, automatic
 OpenAPI with a built-in docs UI, file-based WebSocket routes, page routes,
 per-method Bun native routes, first-class JavaScript, and a WinterCG deploy
-surface through `toFetchHandler`.
+surface through `toFetchHandler`. Includes the never-published 0.14.0 and
+0.15.0 milestones. This is a breaking rewrite: the `0.9.x` line stays on npm
+(`burger-api@0.9.7`).
 
-Highlights:
+Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
+if anything breaks or feels wrong.
+
+#### ✨ Highlights
 
 - **Hooks replace middleware:** `onRequest`, `transform`, `beforeRoute`,
   `afterRoute`, `mapResponse`, `onError`; global hooks in `src/hooks.ts`, route
@@ -35,394 +40,284 @@ Highlights:
   (with the `@burger-api/node-server` adapter), Cloudflare Workers, Deno, and
   Vercel.
 
-Coming from `0.9.x`? This is a breaking rewrite; see the notes below. The
-`0.9.x` line is still on npm (`burger-api@0.9.7`).
+#### ⚠️ Breaking changes (upgrading from 0.9.x)
 
-Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
-if anything breaks or feels wrong.
-
-**Breaking changes from 0.9.x**
-- `BurgerRequest` type removed — replaced by `BurgerContext`.
-- Legacy hook names removed (`beforeHandle`, `afterHandle`, `onResponse`,
-  `provide`) — use `beforeRoute`, `afterRoute`, `mapResponse`, `transform`
-  (plus `onRequest` / `onError`).
-- The middleware system and `Middleware` type removed — replaced by hooks +
-  plugins.
-- `Burger.use` removed — use `burger.usePlugin()`.
-- CLI `serve` command removed — use `burger-api dev`.
-- `burger.config.ts` renamed `burger.build.ts` (build-time only).
-- `use.ts` / `webhook.ts` route convention files removed — use `config.ts`.
+- `BurgerRequest` -> `BurgerContext`: one typed context for every hook and
+  handler.
+- Middleware and the `Middleware` type removed: use hooks and plugins.
+- `middleware.ts` route files are rejected: the framework has no middleware
+  concept.
+- `use.ts` / `webhook.ts` route convention files removed: use `config.ts`.
+- Group/folder inheritance removed: groups strip the URL path only, routes are
+  self-contained.
+- `burger.config.ts` -> `burger.build.ts` (build-time only).
+- CLI `serve` command removed: use `burger-api dev`.
 - Auth factories moved from `ecosystem/hooks/` to `ecosystem/plugins/`
-  (api-key, basic-auth, jwt-auth, session, oidc, env).
+  (api-key, basic-auth, env, jwt-auth, oidc, session).
+- `ctx.services` is one shared, frozen app-level object: assigning keys throws,
+  put per-request data in `transform`.
+- `ctx.set` is a tracked object: `Object.keys` / spread give `{}`,
+  `JSON.stringify` works.
+- `ctx.params` is always an object (`{}` when a route has none) and
+  `ctx.wildcardParams` always an array, typed non-optional.
+- A declared body schema rejects non-JSON bodies with **415 Unsupported Media
+  Type** (validation used to be skipped); `application/*+json` counts as JSON,
+  and `ctx.validated.body` is non-optional in the inferred type when the schema
+  declares `body`.
+- `defineHooks(schema, hooks)` hooks run for every method of a route, so
+  `ctx.validated` slots are typed possibly `undefined` (`HookContext`);
+  `transform` and `onError` can see `ctx.validated` itself as `undefined`.
+- WebSocket: `ws.params` holds decoded route params, and the matched compiled
+  route is no longer exposed on `ws.data`.
+- Only in unreleased development builds (never on npm), now removed:
+  `beforeHandle` / `afterHandle` / `onResponse` / `provide` hook names (use
+  `beforeRoute` / `afterRoute` / `mapResponse` / `transform`), `Burger.use`
+  (use `burger.usePlugin()`), `burger.macro()` (use a plugin), and a global
+  hooks file inside `apiDir` (it now lives at `src/hooks.ts`, next to
+  `index.ts`).
 
-**Full JavaScript support**
-- Same conventions in `.ts` / `.js` / `.mjs` (route, schema, hooks, openapi,
-  config + app-level files). Scanner throws on conflicting extensions
-  (e.g. `route.ts` + `route.js`).
-- `create --lang js` scaffolds a `jsconfig.json` (`checkJs: true`) project
-  with JSDoc-typed `.js` files.
+Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration).
+
+#### 🆕 New features
+
+**Hooks & lifecycle**
+
+- Six hook points: `onRequest`, `transform`, `beforeRoute`, `afterRoute`,
+  `mapResponse`, `onError`.
+- Global hooks in `src/hooks.ts` (auto-discovered, next to `index.ts`), route
+  hooks in `api/**/hooks.ts`; global hooks are loaded once and merged with each
+  route's hooks at compile time.
+- Request hooks run Framework -> Plugin -> Global -> Route; response and error
+  hooks run nearest-first, Route -> Global -> Plugin -> Framework.
+- `defineHooks(schema, hooks)` type helper for typed route hooks.
+- `ErrorHook` may be async (`Promise<Response | void>`).
+- Unknown exports in convention files warn with the file and the valid names
+  (`hooks.ts` typos, `onRequest` in a route `hooks.ts`, lowercase `get` in
+  `route.ts`).
+
+**Context**
+
+- `BurgerContext`: a single, lazily built context per request with a stable
+  prototype, plus dead-path elimination for fields a route never reads.
+- `ctx.query`, `ctx.params`, `ctx.route` (`{ path, pattern }`), `ctx.headers`,
+  `ctx.validated`, `ctx.set`, and the standard `Request` surface.
+- New `ctx.ip`: the socket peer address on Bun, `undefined` on WinterCG `fetch`
+  entries; adapters can supply it via `setRequestIP(request, ip)`. Forwarded
+  headers are never trusted.
+- `ctx.validated` is always an object after validation.
+- `ServerOptions.maxRequestBodySize` (forwarded to `Bun.serve`).
+
+**Validation**
+
+- Standard Schema support: Zod (default), Valibot, and ArkType through the same
+  `schema` export.
+- Compiled validators: prepared once per route and cached by structural key, so
+  identical schemas share one validator.
+- Model registry: define a shape once in `ServerOptions.models` and reference
+  it by name from any route's `schema` slot.
+- Opt-in coercion for query, params, headers, and cookies (`validation.coerce`
+  app-wide or `coerce: true` per route).
+- Response validation: `off` (default), `dev` (observe, never break), or
+  `enforce` (safe error on mismatch).
+- Header and cookie validation via the `headers` / `cookie` schema slots.
+- Problem Details errors (RFC 9457) via `validation.errorFormat`; production
+  error bodies never leak stacks or schema internals.
+- Query/header coercion wraps single values for `z.array(...)` fields, coerces
+  array elements, and accepts `"1"` / `"0"` booleans.
+
+**OpenAPI & docs**
+
+- OpenAPI 3.0 generated from routes and schemas, with Swagger UI, Scalar, and
+  Redoc built in (`/openapi.json`, `/docs`).
+- `src/openapi.config.ts`: OpenAPI metadata, docs UI choice, and docs auth.
+
+**Plugins & providers**
+
+- `burger.usePlugin()` in `src/plugins.ts` and `burger.provide()` in
+  `src/providers.ts` (services on `ctx.services`).
+- `usePlugin()` accepts a plugin factory (`PluginFactory`), and plugin
+  factories are resolved before deduplication.
+
+**Routing & pages**
+
+- File-based routing: `[param]` dynamic routes and `[...]` wildcard routes
+  (`ctx.params`, `ctx.wildcardParams`); groups `(name)` strip the URL path only.
+- Page routes under `src/pages/` and static assets, served next to the API.
+- `config.ts` per route: `auth`, `cache`, `timeout`, and other keys are data for
+  plugins and hooks; core honors a per-route `responseValidation` override.
+- Compiled core: the file tree compiles into an immutable app (`RouteModule` ->
+  `CompiledRoute`); the scanner is a pure filesystem walk that reports routes
+  plus the global hooks path, the loader merges convention files (inline
+  `route.ts` exports win), and duplicate route paths fail fast at compile time.
+- Filesystem mode: unset `apiDir` / `pageDir` / `wsDir` default to `src/api` /
+  `src/pages` / `src/websocket` when those directories exist.
+
+**WebSocket**
+
+- File-based WebSocket routes under `src/websocket/` (or `config.wsDir`), plus
+  programmatic `burger.websocket()`.
+- App-level WS hooks (`onOpen` / `onMessage` / `onClose`) apply to prebuilt and
+  programmatic routes.
+- `createNodeWsBridge()` runs WebSocket routes on Node through the `ws`
+  package.
+
+**JavaScript**
+
+- Same conventions in `.ts` / `.js` / `.mjs`; the scanner fails loud when
+  conflicting extensions coexist (for example `route.ts` + `route.js`).
+- `create --lang js` scaffolds a `jsconfig.json` (`checkJs: true`) project with
+  JSDoc-typed `.js` files.
 - `generate route|hook|plugin|ws` follows the project language (`--lang` or
   `jsconfig.json` detection); `generate ws` honors `config.wsDir`.
 
-**WinterCG deploy surface**
-- `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+.
-- AOT `apiRoutes` required on non-Bun runtimes (no filesystem); core package
-  no longer imports `bun` in shared types (`BunAdapterStartOptions` lives in
-  the Bun adapter).
+**Deploy targets / WinterCG**
+
+- `app.serve()` on Bun; `toFetchHandler(app)` for Node 24+, Cloudflare Workers,
+  Deno, and Vercel.
+- AOT `apiRoutes` required on non-Bun runtimes (no filesystem); shared types no
+  longer import `bun`, and param extraction uses only `Request.url` so it stays
+  WinterCG-safe.
+- `@burger-api/node-server`: `serve(app)` bridges `node:http` to
+  `toFetchHandler` and wires `createNodeWsBridge()` + `ws` automatically.
+- Web Standard `Request` / `Response` throughout; `BunAdapter` is the only
+  runtime-specific surface (Bun's native `routes` map, with a trie fallback).
 
 **Ecosystem**
+
 - Official hooks (cors, logger, rate-limiter, cache, compression,
   security-headers, timeout, body-size-limiter) and plugins (api-key,
   basic-auth, env, jwt-auth, oidc, session), installed via `burger-api add`.
 
-**Performance** (no behavior change; measured with the burger-api-benchmarks battle)
-- Routes are registered with Bun as per-method handlers (`{ GET, POST, ... }`),
-  each specialized at startup: no per-request method lookup.
+#### ⚡ Performance
+
+No behavior change; measured with
+[burger-api-benchmarks](https://github.com/isfhan/buger-api-benchmarks).
+
+- Routes are registered as per-method Bun native handlers, specialized at
+  startup: no per-request method lookup.
 - One flattened function per route and method; routes without hooks call the
   handler directly with no extra `async` layers.
 - Dynamic route params come from Bun's already-decoded `req.params`.
-- `ctx.services` is built once per app (a shared, frozen object) instead of
+- `ctx.services` is built once per app as a shared, frozen object instead of
   copied on every request.
-- `ctx.ip` is resolved lazily on first read instead of recorded per request.
-- 404/405 bodies are prebuilt; the fallback router allocates nothing before
+- `ctx.ip` is resolved lazily on first read.
+- 404/405 bodies are prebuilt, and the fallback router allocates nothing before
   matching when there are no `onRequest` hooks.
 - Query strings are parsed in a single pass and decoded only when they contain
-  `%` or `+`.
+  `%` or `+`, with `URLSearchParams` parity (including `+` to space and
+  malformed-escape leniency).
 - Hooks, transforms and validation run sync-first: `await` only happens when a
-  step really returns a promise, in both the JIT and the interpreter.
+  step really returns a promise, in the JIT and the interpreter.
 - Validation is specialized per method at startup; only the body slot is async.
 - The route-access analyzer skips param extraction and the empty `validated`
-  bag when it can prove a route never reads them (conservative fallback kept).
+  bag when it can prove a route never reads them.
 - `ctx.set` tracks what changed, so untouched responses are returned as is and
   status-only changes skip copying headers.
 - Pathname parsing and trie matching decode segments only when they contain
-  `%`, with no per-request `split`/`map` or param-object copies.
-- The fetch-handler path (`fetchHandler()` / Cloudflare, Deno, Vercel,
-  node-server) is much faster (see burger-api-benchmarks): dynamic routes use
-  a compressed character radix matcher (the segment matcher stays as the exact
-  fallback for encoded paths), static routes dispatch straight to their
-  per-method function, the pathname is parsed once, and 404s clone a prebuilt
-  response.
+  `%`, with no per-request `split` / `map` or param-object copies.
+- The fetch-handler path (`fetchHandler()`, Cloudflare, Deno, Vercel,
+  node-server) uses a compressed character radix matcher for dynamic routes,
+  direct dispatch for static routes, parses the pathname once, and clones a
+  prebuilt 404.
 
-**Fixed**
-- **Cloudflare Workers crash on boot** — a dead, eagerly-evaluated
-  module-level `Response` constant in `utils/response.ts` crashed every
-  Worker before any request was handled ("Disallowed operation... within
-  global scope"). Removed; had zero live references.
-- **`config.ts` silently dropped in production builds** — a route's
-  `config.ts` (auth/cache/timeout) bundled as a raw module namespace
-  instead of unwrapping its default export, so `ctx.config` was always
-  `undefined` after `bun run build && bun run start`, even though the
-  identical route worked correctly in `bun run dev`.
-- **`dist` not resolvable under stock Node ESM** — explicit `.js`
-  extensions added to every relative import, and the build switched to
-  `NodeNext` module resolution; verified by importing the published
-  package under plain `node`, no bundler or loader.
-- **`burger-api build:exec` standalone executables crashed on startup**
-  ("Cannot find module 'burger-api/adapter/bun'") — the Bun adapter's
-  dynamic import specifier is deliberately non-static so bundlers keep
-  `bun` out of WinterCG (Cloudflare/Vercel/Deno) bundles, but that means
-  Bun's `--compile` step (which needs a literal specifier to embed a
-  module into a self-contained binary) could never resolve it. The
-  generated build:exec entry now statically imports the adapter and
-  injects it via the existing `ServerOptions.adapter` seam — scoped
-  strictly to `build:exec`; `bun run build` and WinterCG output are
-  unaffected.
-- Route-level `onRequest` is now a **compile error** instead of a silent
-  no-op — it never ran (pre-routing hooks can't be scoped to one route);
-  declaring it in a route's `hooks.ts` now fails `tsc` instead of quietly
-  doing nothing.
-- `ForwardHookResult` widened to match the runtime's actual behavior — a
-  forward hook (`onRequest`/`beforeRoute`) returning a mapper function
-  (e.g. `cors()` short-circuiting preflight *and* transforming the real
-  response) was always supported by the hook runner but wasn't part of
-  the public type, so every official ecosystem hook failed `tsc` when
-  typed against `GlobalHooks` exactly as the CLI's own scaffold teaches.
-  `BurgerNext` is now `@deprecated`, aliased to `ForwardHookResult`.
-- **`plugins.ts`/`providers.ts` no longer type against the full `Burger`
-  class** — the default-export callback's parameter is now `PluginRegistrar`
-  (`usePlugin` only) / `ProviderRegistrar` (`provide` only), so autocomplete
-  no longer surfaces `serve()`/`fetchHandler()` (which would re-enter route
-  compilation this early) or `createNodeWsBridge()` (throws unconditionally
-  at this point). Both call sites now also `await` the default export's
-  return value — previously fire-and-forgotten, so an `async` `plugins.ts`/
-  `providers.ts` could lose the race against route compilation.
-- **`createNodeWsBridge()` was completely non-functional** — found by
-  actually running it against the real `ws` package for the first time
-  (there was no prior test for this path). Five separate bugs, all fixed:
-  a type mismatch that made the documented pattern fail to compile against
-  `ws`'s real, concretely-typed `.on()` overloads; a synthetic `Request`
-  built with no headers at all, so the bridge's own `Upgrade: websocket`
-  check always failed and destroyed the socket; a routing bug where even a
-  correct upgrade request fell into a platform-detection branch that always
-  resolves to `'node'` and returns an unconditional 501; `ws.data` (where
-  the matched route lives) never being attached to the real socket, so
-  handlers would have silently no-op'd anyway; and text frames arriving as
-  a raw `Buffer` instead of a `string` (Bun's native behavior), since `ws`'s
-  `isBinary` flag was ignored.
-- **`process.env.NODE_ENV` reads could crash every request on Deno** — Deno
-  throws a permission error (`NotCapable`) on the *first* `process.env`
-  access without `--allow-env`, unlike Node/Bun's `undefined`. Three call
-  sites (`lifecycle/jit.ts`, `lifecycle/executor.ts` x2) now go through a
-  guarded helper that treats the throw the same as `process` not existing
-  at all (the existing Cloudflare/browser fallback) — no `--allow-env` flag
-  needed.
-- **`ASSET_MIME`/`contentTypeFor` no longer statically drag in `node:fs`** —
-  `index.ts` re-exported these two pure lookup functions straight from
-  `core/assets.ts`, which also does disk scanning (`readdir`) — so the
-  package's main entry unconditionally pulled filesystem code into its
-  static import graph, regardless of runtime. Split into a new
-  `core/asset-mime.ts` leaf module with zero `node:fs` dependency;
-  `index.ts` now re-exports from there. Also standardized the two remaining
-  bare `'path'` specifiers (`utils/index.ts`, `utils/pathConversion.ts`) to
-  `'node:path'`, matching every other Node-builtin import in the codebase.
-  A new test (`test/adapter/no-static-fs-import.test.ts`) walks the built
-  package's real static import/export graph and fails if `fs`/`node:fs`
-  ever becomes statically reachable again.
-- **Cloudflare Workers still needs `nodejs_compat`, and now more precisely
-  understood why** — confirmed by running `wrangler dev` with the flag
-  removed, both before and after the fix above. `node:fs`/`node:path`
-  become soft *warnings* instead of hard build failures (wrangler treats
-  `node:`-prefixed specifiers as "the runtime will provide this"), but the
-  real `workerd` runtime genuinely has no `node:path` module without the
-  flag — so an unreached-at-runtime `import * as path from 'node:path'` in
-  a dev-time scanner module still crashes on boot. Dynamic `import()` does
-  **not** exempt a module from this: wrangler's bundler still resolves
-  dynamic-import targets at build time for code-splitting, so "lazily
-  loaded" alone isn't enough to keep a module's own top-level imports out
-  of what gets shipped. Fully eliminating the `nodejs_compat` requirement
-  would need dev-only/filesystem-scanning code to be unreachable from the
-  AOT/WinterCG entry point by construction (a separate production-only
-  entry, or build-time conditional exports) — out of scope for this pass;
-  documented as a required `wrangler.toml` setting instead.
-- AOT/production builds now apply **every** global hook from `src/hooks.ts`
-  (`transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`), not
-  just `onRequest` — on every target. Dev and AOT compile global hooks the
-  same way (scope `global`), so ordering is identical.
-- Response hooks now run nearest-first as documented: `afterRoute` /
-  `mapResponse` / `onError` go Route → Global → Plugin → Framework (they
-  ran Global → Route). User hook arrays are never mutated (the old
-  `onError` `.reverse()` flipped the order on every recompile).
-- JIT (default) and interpreter now agree on a `beforeRoute` short-circuit:
-  collected mappers, response validation, `afterRoute` and `mapResponse`
-  still run on the short-circuit response.
-- Dynamic routes served by Bun's native router keep the `onRequest` context
-  (state seeded pre-routing reaches the handler).
-- A handler returning a non-`Response` now fails loud: 500
-  (`"GET /api/x returned object; route handlers must return a Response"` in
-  dev, generic in production) instead of Bun's "Welcome to Bun!" 200.
-- Unhandled errors that produce a 5xx are logged server-side (method, path,
-  error + stack) in dev and production.
-- `ctx.json()` can be called after body validation (the parsed body is
-  cached); malformed JSON read via `ctx.json()` is a 400 Problem Details,
-  not a 500.
-- Plugin factories are resolved before deduplication — two anonymous
-  factories are no longer collapsed into one; deduplicated registrations
-  warn.
-- Trailing slashes: `/api/products/1/` matches `/api/products/:id`; a
-  `:param` never binds an empty segment (`/api/products/` is not
-  `:id = ""`). Same for WebSocket routes, whose params are now URL-decoded.
-- Global/plugin `onRequest` hooks now run for pages, static assets,
-  `/openapi.json` and `/docs` too. An `onRequest` short-circuit keeps the
-  mappers of earlier `onRequest` hooks (e.g. `cors()` + `rateLimit()` → the
-  429 has CORS headers); all mappers apply in onion order.
-- Every route answers `OPTIONS` (204 + `Allow`), and the auto handler skips
-  `beforeRoute`, so auth hooks no longer reject CORS preflights. The auto
-  handler is not documented in OpenAPI.
-- Auto-`HEAD` reports the `GET` response's `Content-Length`.
-- OpenAPI: request bodies are documented input-side (`.default()` fields
-  optional, no `additionalProperties: false` on plain objects); AOT routes
-  whose `schema.ts` / `openapi.ts` namespaces use `GET`/`POST` keys keep
-  their parameters, bodies and metadata.
-- `responseValidation: 'enforce'` answers a generic `application/problem+json`
-  500 in production (issues only in dev), logs the mismatch, and still runs
+#### 🐛 Fixes
+
+- **Cloudflare Workers crashed on boot:** a dead, eagerly-evaluated
+  module-level `Response` constant in `utils/response.ts` crashed every Worker
+  before any request was handled. Removed; it had zero live references.
+- **`config.ts` was silently dropped in production builds:** a route's
+  `config.ts` bundled as a raw module namespace instead of unwrapping its
+  default export, so `ctx.config` was `undefined` after
+  `bun run build && bun run start`.
+- **`dist` was not resolvable under stock Node ESM:** explicit `.js`
+  extensions on every relative import and `NodeNext` module resolution; the
+  published package now imports under plain `node`, no bundler or loader.
+- **`build:exec` standalone executables crashed on startup** ("Cannot find
+  module 'burger-api/adapter/bun'"): the generated entry now statically imports
+  the Bun adapter and injects it through the existing `ServerOptions.adapter`
+  seam.
+- **Route-level `onRequest` is now a compile error:** it never ran, so
+  declaring it in a route's `hooks.ts` fails `tsc` instead of silently doing
+  nothing.
+- **`ForwardHookResult` widened to the runtime's real behavior:** forward hooks
+  returning a mapper are now typed; `BurgerNext` is deprecated, aliased to
+  `ForwardHookResult`.
+- **`plugins.ts` / `providers.ts` type against narrow registrars:** the
+  callback parameter is `PluginRegistrar` / `ProviderRegistrar`, and the
+  default export's return value is now awaited.
+- **`createNodeWsBridge()` was non-functional:** five bugs fixed (types, the
+  upgrade check, routing, `ws.data`, text frames); it now works against the
+  real `ws` package.
+- **`process.env.NODE_ENV` could crash every request on Deno:** reads go
+  through a guarded helper, so no `--allow-env` flag is needed.
+- **`ASSET_MIME` / `contentTypeFor` no longer drag in `node:fs`:** moved to a
+  leaf module (and the remaining bare `'path'` imports moved to `'node:path'`),
+  with a test that walks the built import graph to keep it that way.
+- **Cloudflare Workers still needs `nodejs_compat`:** documented as a required
+  `wrangler.toml` setting, because wrangler resolves dynamic imports at build
+  time.
+- **AOT/production builds now apply every global hook:** `transform`,
+  `beforeRoute`, `afterRoute`, `mapResponse`, and `onError` from
+  `src/hooks.ts`, not just `onRequest`.
+- **Response hooks run nearest-first as documented:** `afterRoute` /
+  `mapResponse` / `onError` go Route -> Global -> Plugin -> Framework, and user
+  hook arrays are never mutated.
+- **JIT and interpreter agree on a `beforeRoute` short-circuit:** collected
+  mappers, response validation, `afterRoute`, and `mapResponse` still run on
+  the short-circuit response.
+- **Dynamic routes keep the `onRequest` context:** state seeded pre-routing
+  reaches the handler on Bun's native router.
+- **A handler returning a non-`Response` fails loud:** 500 with a clear dev
+  message instead of a "Welcome to Bun!" 200.
+- **Unhandled 5xx errors are logged server-side:** method, path, error, and
+  stack, in dev and production.
+- **`ctx.json()` works after body validation:** the parsed body is cached, and
+  malformed JSON is a 400 Problem Details, not a 500.
+- **Plugin factories are resolved before deduplication:** two anonymous
+  factories are no longer collapsed into one; duplicate registrations warn.
+- **Trailing slashes:** `/api/products/1/` matches `/api/products/:id`, a
+  `:param` never binds an empty segment, and WebSocket params are URL-decoded.
+- **Global/plugin `onRequest` runs for pages, assets, and docs:** pages, static
+  assets, `/openapi.json`, and `/docs` now get the hooks; a short-circuit keeps
+  earlier mappers (for example CORS headers on a 429).
+- **Every route answers `OPTIONS`:** 204 + `Allow`, skipping `beforeRoute` so
+  auth hooks do not reject preflights; not documented in OpenAPI.
+- **Auto-`HEAD` reports the `GET` response's `Content-Length`.**
+- **OpenAPI request bodies and AOT namespaces:** bodies are documented
+  input-side (`.default()` fields optional, no `additionalProperties: false`),
+  and AOT routes with `GET` / `POST` keys keep parameters, bodies, and
+  metadata.
+- **`responseValidation: 'enforce'`:** a generic Problem Details 500 in
+  production (issues only in dev), logs the mismatch, and still runs
   `afterRoute` / `mapResponse`.
-- Problem Details `title` is the HTTP status phrase (`"Not Found"`), also
-  for thrown `{ status }` objects and WebSocket 401/403 responses.
-- `apiPrefix: ''` mounts API routes at `/` (it silently became `api`).
-- `toFetchHandler` only matches exact static paths directly (native pattern
-  keys such as `/api/items/:id` are never matched literally), and now also
-  serves prebuilt page routes and embedded assets (Bun-only HTML bundles /
-  dynamic pages log one warning instead of silently 404ing).
-- WebSocket: push platforms (Deno, Cloudflare) now deliver `open`/`message`
-  (the upgrade data was never attached to the socket); app-level WS hooks
-  (`onOpen`/`onMessage`/`onClose`) apply to prebuilt and programmatic
-  routes; a malformed handshake is 400 (was 500); a WS route shadowed by an
-  HTTP route on the same path warns at startup.
-- `serve()` on a busy port prints one line (`Port 4000 is already in use…`)
-  and exits 1 instead of a stack trace; invalid ports throw a clear error.
-- `createNodeWsBridge()` called too early says exactly what to call first.
-- An empty `src/api` explains the expected layout instead of "No routes
+- **Problem Details `title` is the HTTP status phrase**, also for thrown
+  `{ status }` objects and WebSocket 401/403 responses.
+- **`apiPrefix: ''` mounts API routes at `/`** (it silently became `api`).
+- **`toFetchHandler` matches exact static paths only** and now serves prebuilt
+  page routes and embedded assets (Bun-only HTML bundles and dynamic pages log
+  one warning instead of silently 404ing).
+- **WebSocket fixes:** push platforms (Deno, Cloudflare) deliver `open` /
+  `message`, app-level WS hooks apply to prebuilt and programmatic routes, a
+  malformed handshake is 400, and a WS route shadowed by an HTTP route warns at
+  startup.
+- **`serve()` on a busy port** prints one clear line and exits 1; invalid ports
+  throw a clear error.
+- **`createNodeWsBridge()` called too early** now says exactly what to call
+  first.
+- **An empty `src/api`** explains the expected layout instead of "No routes
   configured".
-- Apps with pages/assets but no API routes now run global and plugin
-  `onRequest` hooks for pages, assets, `/openapi.json` and `/docs`.
-- Page handlers now receive `ctx.services` and `ctx.ip`.
-- `transform: { ip }` no longer throws — `ctx.ip` is a getter-only accessor,
-  so `ip` is dropped like the other reserved transform keys.
+- **Pages or assets without API routes** still run global and plugin
+  `onRequest` hooks for pages, assets, `/openapi.json`, and `/docs`.
+- **Page handlers receive `ctx.services` and `ctx.ip`.**
+- **`transform: { ip }` no longer throws:** `ctx.ip` is a getter-only
+  accessor, so `ip` is dropped like the other reserved transform keys.
 
-**Changed**
-- `ctx.services` is one shared, frozen app-level object: assigning keys
-  throws; put per-request data in `transform`.
-- `ctx.set` is a tracked object: `Object.keys`/spread give `{}`,
-  `JSON.stringify` works.
-- A declared body schema now rejects non-JSON bodies (`text/plain`, forms)
-  with **415 Unsupported Media Type** instead of skipping validation
-  (`application/*+json` counts as JSON). `ctx.validated.body` is therefore
-  non-optional in the inferred type when the schema declares `body`.
-- `ctx.params` is always an object (`{}` when the route has none) and
-  `ctx.wildcardParams` always an array, typed non-optional.
-- New `ctx.ip`: the socket peer address (Bun `serve()`); `undefined` on
-  WinterCG `fetch` entries. Forwarded headers are never trusted. Adapters
-  can supply it via `setRequestIP(request, ip)`.
-- WebSocket: decoded route params on `ws.params`; the matched compiled route
-  is no longer exposed on `ws.data`.
-- `defineHooks(schema, hooks)`: hooks run for every method of a route, so
-  each `ctx.validated` slot is typed possibly `undefined` (`HookContext`);
-  `transform`/`onError` also see `ctx.validated` itself as possibly
-  `undefined`. After validation `ctx.validated` is always an object.
-- `ErrorHook` may be async (`Promise<Response | void>`).
-- Filesystem mode: unset `apiDir` / `pageDir` / `wsDir` default to
-  `src/api` / `src/pages` / `src/websocket` when those directories exist
-  (same defaults as the CLI build).
-- `config.ts`: core honors a per-route `responseValidation` override; other
-  keys (`auth`, `cache`, `timeout`, …) are data for plugins/hooks (now
-  documented as such).
-- Unknown exports in convention files warn with the file and the valid
-  names (typos in `hooks.ts`, `onRequest` in a route `hooks.ts`, lowercase
-  `get` in `route.ts`).
-- Query/header coercion (opt-in) wraps single values for `z.array(...)`
-  fields, coerces array elements, and accepts `"1"`/`"0"` booleans.
-- New `ServerOptions.maxRequestBodySize` (forwarded to `Bun.serve`).
-- `usePlugin()` accepts a plugin factory in its type (`PluginFactory`).
+#### 📌 Known limitations
 
-**Removed**
-- `burger.macro()` / `MacroFn` — confirmed zero real usage anywhere in the
-  framework's own examples, ecosystem hooks/plugins, or the CLI. A macro
-  was a named, plugin-scoped hook bundle with no capability `usePlugin()`
-  doesn't already provide; removed before any external dependency could
-  form. Use `burger.usePlugin(...)` instead.
-
-**Known limitations in this beta**
-- **Pages are mostly Bun-only** — on WinterCG targets `toFetchHandler`
-  serves prebuilt function page routes and embedded assets, but Bun
-  HTML-import bundles and dynamic (`[param]`) pages are served only by
-  `serve()` on Bun (a startup warning lists them).
-
-#### Included from unpublished milestones (0.14.0, 0.15.0)
-
-0.14.0 and 0.15.0 were never published to npm; their changes ship for the
-first time in 1.0.0-beta.
-
-#### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
-
-Released 2026-07-24.
-
-**Global hooks**
-- `hooks.ts` at app root (sibling of `index.ts`) auto-discovered by scanner.
-- When `apiDir` is `./src/api`, global hooks in `./src/hooks.ts`.
-- When `apiDir` is `./api`, global hooks in `./hooks.ts`.
-- Global hooks run first, then route hooks (execution priority).
-
-**Hook name aliases**
-- Vision names work: `beforeRoute`, `afterRoute`, `mapResponse`, `transform`.
-- Legacy names worked: `beforeHandle`, `afterHandle`, `onResponse`,
-  `provide` — **removed in 1.0.0**.
-- Normalizer applied at compile time; vision names take precedence when legacy
-  names are absent.
-
-**Self-contained routes (enforced)**
-- Group/folder inheritance removed. Groups only strip URL path.
-- Convention files: `use.ts` and `webhook.ts` removed; `config.ts` added.
-
-**Scanner and module-loader**
-- Scanner returns `ScanResult` with `routes` + `globalHooks` path.
-- ModuleLoader loads global hooks once, merges with each route's hooks.
-- Router compiler normalizes hooks before building the chain.
-- CLI scanner aligned (no `globalHooksPath` inside `apiDir`).
-
-#### Version 0.14.0 (Compiler-Driven Core, Request Context & Validation 2.0)
-
-Released 2026-07-21. This release is the architecture reset: BurgerAPI now
-compiles your file tree into an immutable, fully-compiled application. The
-compiler is the single place that understands your routes. Backward
-compatibility is not a goal (pre-1.0.0 reset).
-
-**Compiler-driven core**
-- Compiler pipeline: `Directory Scanner → Module Loader → RouteModule →
- Compiler → CompiledRoute`. The `RouteModule` is the canonical internal
- representation of one route directory; `CompiledRoute` is the immutable
- runtime artifact.
-- Directory Scanner: a pure filesystem walk that inventories convention files
- (`route.ts`, `schema.ts`, `hooks.ts`, `use.ts`, `openapi.ts`, `webhook.ts`)
- without importing any module. Rejects `middleware.ts` (the v2 architecture
- has no middleware concept).
-- Module Loader: imports convention files, merges group inheritance
- (nearest-last, deterministic), overlays inline `route.ts` exports, and fails
- fast on duplicate route paths. Auto-injects `OPTIONS` for preflight methods.
-- Runtime adapter seam: the framework body speaks only Web Standard
- `Request`/`Response`; `BunAdapter` is the single runtime-specific surface
- (`Bun.serve` + native `routes` map). Static routes dispatch in O(1); dynamic
- and wildcard routes use Bun's native `routes` map with a trie fallback.
-- Native `:param` / `*` dispatch: dynamic and wildcard routes are registered
- directly on Bun's native `routes` map, so they dispatch without the `fetch`
- fallback hop. Param extraction uses only `Request.url` and is WinterCG-safe.
-
-**Request lifecycle (middleware pipeline)**
-- The request lifecycle runs through a single middleware pipeline:
- `globalMiddleware` (from `ServerOptions`) followed by a route's `middleware`
- array. A middleware can stop the request early by returning a `Response`,
- transform the response by returning a function, or continue by returning
- `undefined`. Validation, `405`/`Allow`, auto-`HEAD`, and loose trailing-slash
- are compiled into the runtime.
-- `hooks.ts`, `use.ts`, and `webhook.ts` are discovered and carried through the
- compiler but are reserved (not yet executed at runtime).
-
-**Request context (BurgerContext)**
-- `BurgerContext`: a single, prototype-based request object allocated once per
- request. It lazily exposes `query`, `params`, `route`, `headers`, `validated`,
- `set` and transparently delegates the standard `Request` surface. The shared,
- stable prototype gives every request the same object structure, which the
- JavaScript engine can optimize well.
-- `parseQuery`: a fast, Bun-native querystring parser that replaces the
- per-request `new URL(req.url)`. It matches `URLSearchParams` parity (including
- `+` to space and malformed-escape leniency).
-- `req.route`: `{ path, pattern }` is available on every matched route,
- including static routes served through Bun's native routing.
-- `req.set`: a response-mutation surface (`status` + `headers`) merged into the
- outgoing `Response` by `applySet` at the single exit point of the request
- flow. `applySet` is a no-op (zero allocation) when no mutation is set.
-- Dead-path elimination: lazy getters mean a field a route never reads is never
- parsed and never allocated.
-
-**Validation 2.0**
-- Compiled validators: each route schema is prepared once at startup and reused
- on every request. Identical schemas across routes share one compiled
- validator, so startup cost scales with the number of unique shapes, not the
- number of routes.
-- Validator cache: compiled validators are cached by a structural key, so the
- same schema object (or model reference) is never compiled twice.
-- Model registry: define a shape once in `ServerOptions.models` and reference it
- by name (`"Pagination"`) from any route's `schema` slot.
-- Standard Schema support: any library that follows the Standard Schema
- contract (Zod v4, Valibot, ArkType) works through the same `schema` export.
- Zod remains the default.
-- Automatic type conversion (coercion): set `validation.coerce: true` (app-wide)
- or `coerce: true` on a route to turn `"42"` into `42` and `"true"` into
- `true` for query, params, headers, and cookies. Off by default.
-- Response validation: declare a `response` schema and BurgerAPI checks what
- your handler returns. `validation.responseValidation` is `off` (default),
- `dev` (observe, never break), or `enforce` (returns a safe error on
- mismatch).
-- Headers and cookie validation: validate request headers and cookie values
- with `headers` / `cookie` slots on the route `schema`, attached to
- `req.validated.headers` / `req.validated.cookie`.
-- Problem Details support: choose the error format with
- `validation.errorFormat`: `plain` (simple JSON) or `problem+json` (RFC 9457).
- Production error bodies never leak stacks or schema internals.
-
-**Migration:** None required. Every change is strictly additive. Existing
-`route.ts` files and the `GET(req: BurgerRequest)` signature are unchanged;
-the entire `examples/` suite passes unchanged.
+- **Pages are mostly Bun-only:** on WinterCG targets `toFetchHandler` serves
+  prebuilt function page routes and embedded assets, but Bun HTML-import
+  bundles and dynamic (`[param]`) pages are served only by `serve()` on Bun (a
+  startup warning lists them).
 
 ### Version 0.9.7 (May 16, 2026)
 
