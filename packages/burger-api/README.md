@@ -5,7 +5,7 @@
 </div>
 
 [![Version](https://img.shields.io/badge/version-1.0.0--beta-orange.svg)](https://github.com/isfhan/burger-api/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./packages/burger-api/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
 
 > **⚠️ Beta release — not yet recommended for production.** `npm i burger-api`
@@ -13,11 +13,8 @@
 > framework, not an incremental update over the `0.9.x` line (see
 > `CHANGELOG.md` for the full breaking-change list). If you need the
 > previous stable line for a production project, pin an exact version,
-> e.g. `npm i burger-api@0.9.7`.
-> `burger-api add`/`list`/`skills install` need
-> `BURGER_API_BRANCH=feat/burger-api-v1` set until this branch's ecosystem
-> content lands on `main`. See `CHANGELOG.md` for the full list of fixes
-> and known limitations in this beta.
+> e.g. `npm i burger-api@0.9.7`. See `CHANGELOG.md` for the full list of
+> fixes and known limitations in this beta.
 
 **burger-api** is a Bun-first, WinterCG-compatible API framework with
 file-based routing, a hook-based request lifecycle, Standard Schema validation
@@ -182,13 +179,13 @@ burger-api add jwt-auth
 
 After adding hooks or plugins, the CLI shows you exactly how to wire them into
 your `src/hooks.ts` and `src/plugins.ts`. For more information, visit the
-[CLI documentation](../../packages/cli/README.md).
+[CLI documentation](../cli/README.md).
 
 ## 📣 Changelog
 
-### Latest Version: 1.0.0
+### Latest Version: 1.0.0-beta
 
-- 🚀 **1.0 stable.** Vision-locked architecture: `BurgerContext`, the six
+- 🚀 **1.0.0-beta (not stable yet).** Vision-locked architecture: `BurgerContext`, the six
  hook points (`onRequest`, `transform`, `beforeRoute`, `afterRoute`,
  `mapResponse`, `onError`), plugins/providers, and WinterCG deploy surface
  (`toFetchHandler`).
@@ -199,7 +196,7 @@ your `src/hooks.ts` and `src/plugins.ts`. For more information, visit the
  --lang js`, JSDoc types, lang-aware `generate`.
 - 🔌 **Ecosystem:** official hooks and plugins installable via `burger-api add`.
 
-For previous versions, see the [Changelog](./packages/burger-api/CHANGELOG.md).
+For previous versions, see the [Changelog](./CHANGELOG.md).
 
 ## 🤝 Contributing
 
@@ -210,7 +207,7 @@ something amazing together.
 ## 📄 License
 
 This project is licensed under the MIT License - see the
-[LICENSE](./packages/burger-api/LICENSE) file for details.
+[LICENSE](./LICENSE) file for details.
 
 The MIT License is a permissive license that is short and to the point. It lets
 people do anything they want with your code as long as they provide attribution

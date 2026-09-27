@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/isfhan/burger-api">
-    <img src="https://img.shields.io/badge/version-1.0.0-green.svg" alt="Version 1.0.0" />
+    <img src="https://img.shields.io/badge/version-1.0.0--beta-orange.svg" alt="Version 1.0.0-beta" />
   </a>
   <a href="./LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
@@ -32,8 +32,8 @@ JavaScript are both first-class.
 They are separate concepts.
 
 **📌 Releases:**
-- **burger-api** 1.0.0
-- **@burger-api/cli** 1.0.0
+- **burger-api** 1.0.0-beta
+- **@burger-api/cli** 1.0.0-beta
 
 ## 📦 Packages
 
@@ -51,8 +51,8 @@ published to npm.
     BurgerAPI's optimized internal trie (a tree structure for fast path
     matching). Both share one request flow (also called a pipeline).
 -   📁 **File-Based Routing** - Automatically registers API routes from your
-    file structure, including dynamic `[id]` parameters and `[...slug]`
-    wildcards
+    file structure, including dynamic `[id]` parameters and anonymous `[...]`
+    wildcards (captured in `ctx.wildcardParams`)
 -   🪝 **Hook lifecycle** - `onRequest`, `transform`, `beforeRoute`, `afterRoute`,
      `mapResponse`, `onError`; global hooks in `src/hooks.ts`, route hooks in
      `api/**/hooks.ts`
@@ -240,9 +240,10 @@ BurgerAPI maps your file structure to routes automatically.
 -   **Wildcard routes** (`[...]`) capture the remaining segments into
     `ctx.wildcardParams` (an array). A wildcard route also matches its own base
     path — `/api/files/[...]` matches both `/api/files/a/b/c` and `/api/files`.
--   **Trailing slash** is loose by default: `/api/health` and `/api/health/`
-    resolve to the same route. A trailing slash on a parameter route is treated
-    as an empty parameter value (e.g. `/api/users/` → `ctx.params.id === ""`).
+-   **Trailing slash** is loose by default: a path with a trailing slash is
+    retried without it (`/api/users/1/` matches `/api/users/:id`), and a
+    `:param` never binds an empty segment (`/api/users/` does not match
+    `/api/users/:id`).
 -   **HEAD** is automatic: a `HEAD` request to a route that defines `GET` runs
     the `GET` handler and returns the response with the body removed.
 -   **405** is correct: requesting a known route with an unsupported method
@@ -323,8 +324,9 @@ burger-api/
 │   │   ├── src/             # Source code
 │   │   ├── examples/        # Example projects
 │   │   └── dist/            # Build output
-│   └── cli/                 # CLI tool (published to npm)
-│       └── src/             # CLI source code
+│   ├── cli/                 # CLI tool (published to npm)
+│   │   └── src/             # CLI source code
+│   └── node-server/         # Node.js server adapter (published to npm)
 ├── ecosystem/               # Official hooks + plugins (ready-to-use)
 ├── package.json             # Workspace root configuration
 └── README.md                # This file

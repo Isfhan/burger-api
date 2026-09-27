@@ -19,6 +19,7 @@ const RESERVED = new Set([
     'request',
     'services',
     'config',
+    'ip',
     'env',
     'executionCtx',
     '_raw',

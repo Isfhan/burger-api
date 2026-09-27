@@ -1,43 +1,8 @@
 ## 📣 Release Notes - Burger API Framework
 
-### Unreleased
-
-**Performance** (no behavior change; measured with the burger-api-benchmarks battle)
-- Routes are registered with Bun as per-method handlers (`{ GET, POST, ... }`),
-  each specialized at startup: no per-request method lookup.
-- One flattened function per route and method; routes without hooks call the
-  handler directly with no extra `async` layers.
-- Dynamic route params come from Bun's already-decoded `req.params`.
-- `ctx.services` is built once per app (a shared, frozen object) instead of
-  copied on every request.
-- `ctx.ip` is resolved lazily on first read instead of recorded per request.
-- 404/405 bodies are prebuilt; the fallback router allocates nothing before
-  matching when there are no `onRequest` hooks.
-- Query strings are parsed in a single pass and decoded only when they contain
-  `%` or `+`.
-- Hooks, transforms and validation run sync-first: `await` only happens when a
-  step really returns a promise, in both the JIT and the interpreter.
-- Validation is specialized per method at startup; only the body slot is async.
-- The route-access analyzer skips param extraction and the empty `validated`
-  bag when it can prove a route never reads them (conservative fallback kept).
-- `ctx.set` tracks what changed, so untouched responses are returned as is and
-  status-only changes skip copying headers.
-- Pathname parsing and trie matching decode segments only when they contain
-  `%`, with no per-request `split`/`map` or param-object copies.
-- The fetch-handler path (`fetchHandler()` / Cloudflare, Deno, Vercel,
-  node-server) is about 75% faster: dynamic routes use a compressed
-  character radix matcher (the segment matcher stays as the exact fallback
-  for encoded paths), static routes dispatch straight to their per-method
-  function, the pathname is parsed once, and 404s clone a prebuilt response.
-
-**Fixed**
-- Apps with pages/assets but no API routes now run global and plugin
-  `onRequest` hooks for pages, assets, `/openapi.json` and `/docs`.
-- Page handlers now receive `ctx.services` and `ctx.ip`.
-
 ### Version 1.0.0-beta
 
-Released 2026-09-06. First public beta of the vision-locked 1.0.0 API — a
+Release date: TBD (set at publish). First public beta of the vision-locked 1.0.0 API — a
 breaking rewrite of the `0.9.x` line (`BurgerRequest`/`Middleware`-based),
 not an incremental update. `npm i burger-api` installs this beta by
 default; pin an exact `0.9.x` version (e.g. `npm i burger-api@0.9.7`) if you
@@ -76,6 +41,35 @@ need the previous stable line.
 - Official hooks (cors, logger, rate-limiter, cache, compression,
   security-headers, timeout, body-size-limiter) and plugins (api-key,
   basic-auth, env, jwt-auth, oidc, session), installed via `burger-api add`.
+
+**Performance** (no behavior change; measured with the burger-api-benchmarks battle)
+- Routes are registered with Bun as per-method handlers (`{ GET, POST, ... }`),
+  each specialized at startup: no per-request method lookup.
+- One flattened function per route and method; routes without hooks call the
+  handler directly with no extra `async` layers.
+- Dynamic route params come from Bun's already-decoded `req.params`.
+- `ctx.services` is built once per app (a shared, frozen object) instead of
+  copied on every request.
+- `ctx.ip` is resolved lazily on first read instead of recorded per request.
+- 404/405 bodies are prebuilt; the fallback router allocates nothing before
+  matching when there are no `onRequest` hooks.
+- Query strings are parsed in a single pass and decoded only when they contain
+  `%` or `+`.
+- Hooks, transforms and validation run sync-first: `await` only happens when a
+  step really returns a promise, in both the JIT and the interpreter.
+- Validation is specialized per method at startup; only the body slot is async.
+- The route-access analyzer skips param extraction and the empty `validated`
+  bag when it can prove a route never reads them (conservative fallback kept).
+- `ctx.set` tracks what changed, so untouched responses are returned as is and
+  status-only changes skip copying headers.
+- Pathname parsing and trie matching decode segments only when they contain
+  `%`, with no per-request `split`/`map` or param-object copies.
+- The fetch-handler path (`fetchHandler()` / Cloudflare, Deno, Vercel,
+  node-server) is much faster (see burger-api-benchmarks): dynamic routes use
+  a compressed character radix matcher (the segment matcher stays as the exact
+  fallback for encoded paths), static routes dispatch straight to their
+  per-method function, the pathname is parsed once, and 404s clone a prebuilt
+  response.
 
 **Fixed**
 - **Cloudflare Workers crash on boot** — a dead, eagerly-evaluated
@@ -227,8 +221,17 @@ need the previous stable line.
 - `createNodeWsBridge()` called too early says exactly what to call first.
 - An empty `src/api` explains the expected layout instead of "No routes
   configured".
+- Apps with pages/assets but no API routes now run global and plugin
+  `onRequest` hooks for pages, assets, `/openapi.json` and `/docs`.
+- Page handlers now receive `ctx.services` and `ctx.ip`.
+- `transform: { ip }` no longer throws — `ctx.ip` is a getter-only accessor,
+  so `ip` is dropped like the other reserved transform keys.
 
 **Changed**
+- `ctx.services` is one shared, frozen app-level object: assigning keys
+  throws; put per-request data in `transform`.
+- `ctx.set` is a tracked object: `Object.keys`/spread give `{}`,
+  `JSON.stringify` works.
 - A declared body schema now rejects non-JSON bodies (`text/plain`, forms)
   with **415 Unsupported Media Type** instead of skipping validation
   (`application/*+json` counts as JSON). `ctx.validated.body` is therefore
@@ -271,10 +274,6 @@ need the previous stable line.
   serves prebuilt function page routes and embedded assets, but Bun
   HTML-import bundles and dynamic (`[param]`) pages are served only by
   `serve()` on Bun (a startup warning lists them).
-- `burger-api add` / `list` / `skills install` resolve ecosystem content
-  from GitHub's `main` branch by default, which does not yet have this
-  release's hooks/plugins/skills. Set `BURGER_API_BRANCH=feat/burger-api-v1`
-  until `main` is updated.
 
 ### Version 0.15.0 (Global Hooks, Hook Name Aliases, Self-Contained Routes)
 

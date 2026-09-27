@@ -207,6 +207,22 @@ describe('jit hook plan — equivalence with interpreter', () => {
         expect(ja.env).toBeUndefined();
     });
 
+    it('transform cannot claim the getter-only `ip` accessor', async () => {
+        const plan: HookPlan = {
+            transform: { ip: () => '203.0.113.7' },
+            beforeRoute: [],
+            afterRoute: [],
+            mapResponse: [],
+            onError: [],
+        };
+        const [a, b] = await runBoth(plan, {
+            GET: (ctx) => Response.json({ ip: ctx.ip ?? null }),
+        });
+        // Neither engine throws; the reserved key is dropped.
+        expect(await a.json()).toEqual({ ip: null });
+        expect(await b.json()).toEqual({ ip: null });
+    });
+
     it('validation failure surfaces structured 422 through both engines', async () => {
         // Build a real plan via the compiler so plan.validation is the
         // framework-owned hook.

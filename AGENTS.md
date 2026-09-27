@@ -13,8 +13,9 @@ hook-based request lifecycle, small core + rich ecosystem.
 
 **Tech:** Bun >= 1.3.0 (primary), Node 24+ / edge where practical · TypeScript
 and JavaScript ESM (`.ts` / `.js` / `.mjs` conventions) · Zod ^4 / Standard
-Schema **Packages:** `burger-api`, `@burger-api/cli` **Status:** 1.0.0 —
-vision locked; core uses BurgerContext and vision hook names **Homepage:**
+Schema **Packages:** `burger-api`, `@burger-api/cli`,
+`@burger-api/node-server` **Status:** 1.0.0-beta — vision locked; core uses
+BurgerContext and vision hook names **Homepage:**
 https://burger-api.com
 
 ### Target public architecture (vision)
@@ -85,9 +86,8 @@ ecosystem/skills/ # AI skills
 **Auth:** ecosystem plugins under `ecosystem/plugins/` **only** (auth hooks were
 removed in 1.0), integrating with hooks + `config.ts`. Core is auth-agnostic.
 
-**WebSocket:** file-based router under `src/ws/` (and
-`wsDir`); programmatic `burger.websocket()`. **Macros:** `burger.macro()` for
-reusable hook factories (public API).
+**WebSocket:** file-based router under `src/websocket/` (and
+`wsDir`); programmatic `burger.websocket()`.
 
 ### Legacy code (removed )
 
@@ -125,7 +125,9 @@ bun test
   inspect, doctor (`burger.build.ts`; `create --lang ts|js --defaults`)
 - `ecosystem/hooks/` — official lifecycle hooks
 - `ecosystem/plugins/` — official plugins (add as they land)
-- Hybrid router: Bun static routes + trie (static > `:param` > `*`)
+- Hybrid router: `serve()` registers every route as per-method Bun native
+  routes; the fetch path (`fetchHandler`/WinterCG) uses a radix matcher with
+  the segment trie as fallback
 - AOT route discovery in production builds
 
 ## Related Repositories
