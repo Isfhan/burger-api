@@ -19,7 +19,6 @@ Run **everything** from the repository root (this is the canonical entry
 point):
 
 ```bash
-bun run test          # alias for test:all
 bun run test:all      # full suite + typecheck (route-sync, router, framework, ecosystem, cli, unit)
 ```
 

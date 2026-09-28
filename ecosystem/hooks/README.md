@@ -312,23 +312,6 @@ export function poweredBy(value: string): (ctx: BurgerContext) => unknown {
 }
 ```
 
-### Reusable Factories with `Burger.macro()`
-
-`Burger.macro()` registers a reusable hook factory that composes any hook
-points into one named unit:
-
-```typescript
-// src/plugins.ts
-import { Burger } from 'burger-api';
-import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
-
-const burger = new Burger();
-
-burger.macro('strictLimits', (maxRequests: number) => ({
-    beforeRoute: [rateLimit({ windowMs: 60000, maxRequests })],
-}));
-```
-
 ## Testing
 
 For a step-by-step manual testing guide (curl commands, expected results, and

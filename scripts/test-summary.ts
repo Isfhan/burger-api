@@ -100,6 +100,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'node-server',
+        cmd: ['bun', 'run', '--filter', '@burger-api/node-server', 'test'],
+        kind: 'tests',
+    },
+    {
         label: 'provider',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:provider'],
         kind: 'tests',
@@ -117,11 +122,19 @@ const suites: Suite[] = [
 ];
 
 function parseTestCounts(output: string): { pass: number; fail: number } | null {
-    const passMatches = [...output.matchAll(/(\d+)\s+pass\b/gi)];
-    const failMatches = [...output.matchAll(/(\d+)\s+fail\b/gi)];
+    // bun test prints "12 pass"; node --test prints "# pass 12".
+    const bunPass = [...output.matchAll(/(\d+)\s+pass\b/gi)];
+    const passMatches =
+        bunPass.length > 0
+            ? bunPass
+            : [...output.matchAll(/#\s*pass\s+(\d+)/gi)];
     if (passMatches.length === 0) {
         return null;
     }
+    const failMatches =
+        bunPass.length > 0
+            ? [...output.matchAll(/(\d+)\s+fail\b/gi)]
+            : [...output.matchAll(/#\s*fail\s+(\d+)/gi)];
     const pass = Number(passMatches[passMatches.length - 1][1]);
     const fail =
         failMatches.length > 0

@@ -1,6 +1,6 @@
 # Ecosystem Hooks Example
 
-Catalog of all 10 official lifecycle hooks from `ecosystem/hooks/`.
+Catalog of all 8 official lifecycle hooks from `ecosystem/hooks/`.
 
 ## Hooks Demonstrated
 
@@ -14,8 +14,9 @@ Catalog of all 10 official lifecycle hooks from `ecosystem/hooks/`.
 | `timeout` | Request timeout |
 | `body-size-limiter` | Request body size limits |
 | `cache` | Cache-Control headers |
-| `jwt-auth` | JWT authentication (needs secret) |
-| `api-key-auth` | API key authentication (needs keys) |
+
+Authentication hooks now live in `ecosystem/plugins/` (jwt-auth, api-key, and
+friends).
 
 ## Run
 

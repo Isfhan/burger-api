@@ -1231,7 +1231,6 @@ export type { ServerInfo } from './types/index.js';
 export type {
     ServerOptions,
     RequestHandler,
-    BurgerNext,
     RouteDefinition,
     RouteSchema,
     MethodSchema,

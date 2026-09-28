@@ -29,17 +29,11 @@ export const CONVENTION_DEFAULTS: BuildConfig = {
     target: 'bun',
 };
 
-const CONFIG_NAMES = [
-    'burger.build.ts',
-    'burger.build.js',
-    // older config names, still read as a fallback
-    'burger.config.ts',
-    'burger.config.js',
-];
+const CONFIG_NAMES = ['burger.build.ts', 'burger.build.js'];
 
 /**
  * Resolve build configuration from the project directory: convention
- * defaults, overridden by burger.build.ts (or burger.config.ts) if present.
+ * defaults, overridden by burger.build.ts if present.
  *
  * @param cwd - Project root (e.g. process.cwd())
  * @returns BuildConfig with resolved paths and prefixes

@@ -1,5 +1,5 @@
 /**
- * Config resolution: conventions-first with optional burger.config override.
+ * Config resolution: conventions-first with optional burger.build override.
  */
 import { describe, it, expect } from 'bun:test';
 import { join } from 'path';
@@ -16,7 +16,7 @@ describe('resolveBuildConfig', () => {
         expect(config.pagePrefix).toBe('/');
     });
 
-    it('loads overrides from burger.config.ts when present', async () => {
+    it('loads overrides from burger.build.ts when present', async () => {
         const fixtureDir = join(import.meta.dir, 'fixtures', 'with-config');
         const config = await resolveBuildConfig(fixtureDir);
         expect(config.apiDir).toBe('./api');

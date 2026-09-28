@@ -5,7 +5,7 @@ import type {
     RouteMeta,
 } from './types.js';
 import { parseQuery } from './query-parser.js';
-import { parseCookies } from './cookie-parser.js';
+import { parseCookies } from '../validation/validator.js';
 import { TrackedContextSet } from './context-set.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
 import type { InferValidated } from '../types/inference.js';

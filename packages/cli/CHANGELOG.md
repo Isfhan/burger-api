@@ -31,7 +31,8 @@ if anything breaks or feels wrong.
 ### ⚠️ Breaking changes
 
 - `burger-api serve` removed: use `burger-api dev`.
-- `burger.config.ts` renamed `burger.build.ts` (build-time only).
+- `burger.config.ts` is no longer read: rename it to `burger.build.ts`
+  (build-time only).
 
 Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration).
 

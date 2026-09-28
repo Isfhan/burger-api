@@ -40,7 +40,7 @@ bun run test:examples
 | `page-routing` | File-based page routing — HTML and TSX pages |
 | `production-app` | Auth, rate limiting, CORS, OpenAPI |
 
-### Validation & Errors (3)
+### Validation & Errors (4)
 
 | Name | Feature |
 |------|---------|
@@ -49,11 +49,10 @@ bun run test:examples
 | `error-handling` | ValidationError → 422 RFC 9457 |
 | `error-classes` | NotFoundError, UnauthorizedError, ForbiddenError |
 
-### OpenAPI (2)
+### OpenAPI (1)
 
 | Name | Feature |
 |------|---------|
-| `openapi` | OpenAPI spec + Swagger UI docs |
 | `openapi-config` | `openapi.config.ts` convention, docs auth, custom metadata |
 
 ### Plugins & Providers (2)
@@ -63,11 +62,10 @@ bun run test:examples
 | `plugin` | Plugin system via `src/plugins.ts` convention |
 | `providers` | Service injection via `src/providers.ts` convention |
 
-### Framework Methods (2)
+### Framework Methods (1)
 
 | Name | Feature |
 |------|---------|
-| `macros` | `burger.macro()` reusable hook factories |
 | `build-config` | `burger.build.ts` for CLI/AOT production builds |
 
 ### Context & CORS (2)
@@ -81,7 +79,7 @@ bun run test:examples
 
 | Name | Feature |
 |------|---------|
-| `ecosystem-hooks` | All 10 official lifecycle hooks |
+| `ecosystem-hooks` | All 8 official lifecycle hooks |
 | `ecosystem-plugins` | api-key plugin |
 
 ### WebSocket (1)

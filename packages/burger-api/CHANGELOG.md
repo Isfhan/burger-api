@@ -44,13 +44,15 @@ if anything breaks or feels wrong.
 
 - `BurgerRequest` -> `BurgerContext`: one typed context for every hook and
   handler.
+- `BurgerNext` removed: use `ForwardHookResult` (same shape).
 - Middleware and the `Middleware` type removed: use hooks and plugins.
 - `middleware.ts` route files are rejected: the framework has no middleware
   concept.
 - `use.ts` / `webhook.ts` route convention files removed: use `config.ts`.
 - Group/folder inheritance removed: groups strip the URL path only, routes are
   self-contained.
-- `burger.config.ts` -> `burger.build.ts` (build-time only).
+- `burger.config.ts` is no longer read: rename it to `burger.build.ts`
+  (build-time only).
 - CLI `serve` command removed: use `burger-api dev`.
 - Auth factories moved from `ecosystem/hooks/` to `ecosystem/plugins/`
   (api-key, basic-auth, env, jwt-auth, oidc, session).

@@ -116,8 +116,8 @@ chmod +x dist/burger-api-linux
 # Test build command
 ./dist/burger-api-linux build
 
-# Test serve command
-./dist/burger-api-linux serve
+# Test dev command
+./dist/burger-api-linux dev
 ```
 
 ---

@@ -686,17 +686,10 @@ npm notice 2.0MB dist/
 ```bash
 # Check what's being included
 npm pack --dry-run
-
-# Make sure .npmignore excludes:
-cat .npmignore
-
-# Should contain:
-# src/
-# examples/
-# tests/
-# *.test.ts
-# node_modules/
 ```
+
+The package publishes only `dist/` (`"files": ["dist"]` in package.json), so
+there is no `.npmignore`. If the tarball grows, check what landed in `dist/`.
 
 ---
 
