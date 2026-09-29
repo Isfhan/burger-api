@@ -1,7 +1,7 @@
 /**
  * inspect command — route scanning and convention detection.
  */
-import { afterEach, describe, it, expect } from 'bun:test';
+import { afterEach, beforeEach, describe, it, expect } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -14,6 +14,19 @@ import { detectExportedHookNames } from '../src/utils/route-methods';
 import { makeTempDir, removeDir } from './test-utils';
 
 const simpleFixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
+
+// `ensureAppDirEnv` sets BURGER_API_APP_DIR; save/restore around every test
+// so the value never leaks into later tests or files.
+let originalAppDir: string | undefined;
+
+beforeEach(() => {
+    originalAppDir = process.env.BURGER_API_APP_DIR;
+});
+
+afterEach(() => {
+    if (originalAppDir === undefined) delete process.env.BURGER_API_APP_DIR;
+    else process.env.BURGER_API_APP_DIR = originalAppDir;
+});
 
 describe('scanner discovery from fixtures', () => {
     it('scanApiRoutes discovers routes from fixtures', async () => {
@@ -34,13 +47,6 @@ describe('scanner discovery from fixtures', () => {
 });
 
 describe('scan dir resolution (entry-relative fallback + fail-loud)', () => {
-    const originalAppDir = process.env.BURGER_API_APP_DIR;
-
-    afterEach(() => {
-        if (originalAppDir === undefined) delete process.env.BURGER_API_APP_DIR;
-        else process.env.BURGER_API_APP_DIR = originalAppDir;
-    });
-
     it('resolves a bare apiDir under BURGER_API_APP_DIR (src/ layout)', async () => {
         const root = mkdtempSync(join(tmpdir(), 'burger-cli-scan-'));
         try {

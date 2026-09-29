@@ -2,7 +2,11 @@ import { afterAll, describe, expect, it } from 'bun:test';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { getAvailablePort, killTree } from '../test-utils';
+import {
+    getAvailablePort,
+    killTree,
+    treeKillSpawnOptions,
+} from '../test-utils';
 import { cleanupProjects, run, scaffoldProject } from './helpers';
 
 const E2E_TIMEOUT = 240_000;
@@ -16,7 +20,7 @@ async function bootAndCheck(
 ): Promise<{ status: number; body: unknown }> {
     const proc = Bun.spawn(
         ['bun', 'run', script, '--', '--port', String(port)],
-        { cwd, stdout: 'pipe', stderr: 'pipe' }
+        { cwd, stdout: 'pipe', stderr: 'pipe', ...treeKillSpawnOptions() }
     );
     const outReader = new Response(proc.stdout).text();
     const errReader = new Response(proc.stderr).text();
@@ -51,7 +55,7 @@ async function bootAddRouteAndCheck(
 ): Promise<number> {
     const proc = Bun.spawn(
         ['bun', 'run', 'dev', '--', '--port', String(port)],
-        { cwd, stdout: 'pipe', stderr: 'pipe' }
+        { cwd, stdout: 'pipe', stderr: 'pipe', ...treeKillSpawnOptions() }
     );
     const outReader = new Response(proc.stdout).text();
     const errReader = new Response(proc.stderr).text();

@@ -78,7 +78,7 @@ describe('generateVirtualEntrySource', () => {
         expect(__mod(ns)).toBe(ns);
     });
 
-    it('compile: true statically imports BunAdapter via ServerOptions.adapter (regression: build:exec cannot resolve computed dynamic imports)', () => {
+    it('bundleBunAdapter: true statically imports BunAdapter via ServerOptions.adapter (regression: build:exec cannot resolve computed dynamic imports)', () => {
         const source = generateVirtualEntrySource(
             config,
             [
@@ -102,7 +102,32 @@ describe('generateVirtualEntrySource', () => {
         expect(source).toContain('adapter: new __BunAdapter(),');
     });
 
-    it('compile: false/undefined never imports BunAdapter (must stay dynamic-only for WinterCG targets)', () => {
+    it('node/portable targets never import BunAdapter (must stay dynamic-only for WinterCG targets)', () => {
+        for (const target of ['node', 'cloudflare', 'deno', 'vercel'] as const) {
+            const source = generateVirtualEntrySource(
+                config,
+                [
+                    {
+                        importPath: '/tmp/api/route.ts',
+                        routePath: '/api',
+                        isWildcard: false,
+                    },
+                ],
+                [],
+                undefined,
+                undefined,
+                [],
+                [],
+                false,
+                target
+            );
+
+            expect(source).not.toContain('BunAdapter');
+            expect(source).not.toContain("from 'burger-api/adapter/bun'");
+        }
+    });
+
+    it('bundleBunAdapter: false on bun keeps BunAdapter out (browser passthrough)', () => {
         const source = generateVirtualEntrySource(
             config,
             [
@@ -112,11 +137,16 @@ describe('generateVirtualEntrySource', () => {
                     isWildcard: false,
                 },
             ],
-            []
+            [],
+            undefined,
+            undefined,
+            [],
+            [],
+            false,
+            'bun'
         );
 
         expect(source).not.toContain('BunAdapter');
-        expect(source).not.toContain("from 'burger-api/adapter/bun'");
     });
 
     it('unwraps config.ts default export (regression: config.ts uses a default export, unlike schema/openapi/hooks)', () => {
@@ -242,11 +272,17 @@ describe('generateVirtualEntrySource: --target codegen', () => {
         },
     ];
 
-    it('defaults to bun: app.serve(), no runtimeTarget branch imports', () => {
+    it('defaults to bun: app.serve() with the statically imported BunAdapter', () => {
         const source = generateVirtualEntrySource(config, routeEntries, []);
         expect(source).toContain('runtimeTarget: "bun"');
         expect(source).toContain('app.serve(port,');
         expect(source).toContain('process.chdir(import.meta.dir);');
+        // Bun bundles run without node_modules next to them, so the adapter
+        // must be embedded rather than resolved at runtime.
+        expect(source).toContain(
+            "import { BunAdapter as __BunAdapter } from 'burger-api/adapter/bun';"
+        );
+        expect(source).toContain('adapter: new __BunAdapter(),');
         expect(source).not.toContain("from '@burger-api/node-server'");
         expect(source).not.toContain('toFetchHandler');
     });

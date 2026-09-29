@@ -5,7 +5,7 @@ import type {
     EcosystemComponentInfo,
     SkillInfo,
 } from '../types/index';
-import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync } from 'fs';
+import { mkdirSync, readFileSync, renameSync, rmSync } from 'fs';
 import { dirname, join } from 'path';
 import { withEcosystemCache } from './ecosystem-cache';
 
@@ -323,29 +323,34 @@ export async function downloadComponent(
     try {
         const info = await getComponentInfo(componentName, kind);
 
-        // Create the target directory.
-        await Bun.write(`${targetDir}/.gitkeep`, '');
+        // Stage, then swap: a download that fails halfway never leaves a
+        // partial directory behind (which the next `add` would report as
+        // "already exists"). The target dir only appears once every file
+        // landed, and replacing an existing install stays atomic-ish.
+        const stagingDir = `${targetDir}.download`;
+        rmSync(stagingDir, { recursive: true, force: true });
+        mkdirSync(stagingDir, { recursive: true });
 
         let filesDownloaded = 0;
+        try {
+            // Download every file, README.md included.
+            for (const fileName of info.files) {
+                if (fileName === '.gitkeep') {
+                    continue;
+                }
 
-        // Download every file, README.md included.
-        for (const fileName of info.files) {
-            if (fileName === '.gitkeep') {
-                continue;
+                await downloadFile(
+                    `${info.path}/${fileName}`,
+                    `${stagingDir}/${fileName}`
+                );
+                filesDownloaded++;
             }
 
-            const sourcePath = `${info.path}/${fileName}`;
-            const destPath = `${targetDir}/${fileName}`;
-
-            await downloadFile(sourcePath, destPath);
-            filesDownloaded++;
-        }
-
-        // Remove the .gitkeep placeholder again.
-        try {
-            unlinkSync(`${targetDir}/.gitkeep`);
-        } catch {
-            // Already gone — nothing to do.
+            rmSync(targetDir, { recursive: true, force: true });
+            mkdirSync(dirname(targetDir), { recursive: true });
+            renameSync(stagingDir, targetDir);
+        } finally {
+            rmSync(stagingDir, { recursive: true, force: true });
         }
 
         return filesDownloaded;

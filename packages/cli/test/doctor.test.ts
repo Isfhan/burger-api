@@ -8,8 +8,12 @@ import { runChecks } from '../src/commands/doctor';
 import { makeTempDir, removeDir } from './test-utils';
 
 let tmpDir = '';
+// `runChecks` -> `ensureAppDirEnv` sets BURGER_API_APP_DIR; keep it from
+// leaking into other tests (and files) that read it.
+let originalAppDir: string | undefined;
 
 beforeEach(async () => {
+    originalAppDir = process.env.BURGER_API_APP_DIR;
     tmpDir = makeTempDir('burger-doctor-');
     // An OS temp dir is outside the monorepo, so make the dependency a real
     // (minimal) install for `Bun.resolveSync('burger-api', cwd)`.
@@ -32,6 +36,8 @@ beforeEach(async () => {
 
 afterEach(() => {
     removeDir(tmpDir);
+    if (originalAppDir === undefined) delete process.env.BURGER_API_APP_DIR;
+    else process.env.BURGER_API_APP_DIR = originalAppDir;
 });
 
 async function createFile(path: string, content: string = '') {

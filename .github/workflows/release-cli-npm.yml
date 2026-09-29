@@ -82,7 +82,13 @@ jobs:
             - name: Run CLI tests
               run: |
                   cd packages/cli
-                  bun test --timeout 30000 ./test
+                  bun run test
+              shell: bash
+
+            - name: Run CLI E2E tests
+              run: |
+                  cd packages/cli
+                  bun run test:e2e
               shell: bash
 
             - name: Check what will be published

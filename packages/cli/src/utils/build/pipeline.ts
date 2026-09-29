@@ -196,7 +196,9 @@ export async function runVirtualEntryBuild(options: {
         appConventions,
         wsEntries,
         assetEntries,
-        options.compile,
+        // `--target=browser` bundles client code — never inject the Bun
+        // adapter. Everything else follows the deploy target (bun gets it).
+        options.target === 'browser' ? false : undefined,
         platformTarget
     );
     const hasPages = pageEntries.length > 0;

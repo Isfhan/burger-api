@@ -3,7 +3,13 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
-import { getAvailablePort, killTree, removeDir, waitForServer } from './test-utils';
+import {
+    getAvailablePort,
+    killTree,
+    removeDir,
+    treeKillSpawnOptions,
+    waitForServer,
+} from './test-utils';
 
 /**
  * Regression: file-based WebSocket routes (src/websocket/ws.ts) must be
@@ -67,6 +73,7 @@ beforeAll(async () => {
     serverProc = spawn('bun', [BUNDLE_PATH], {
         env: { ...process.env, PORT: String(port) },
         stdio: 'pipe',
+        ...treeKillSpawnOptions(),
     });
 
     serverProc.on('error', () => {

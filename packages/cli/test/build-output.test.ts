@@ -11,7 +11,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { getAvailablePort, killTree, waitForServer } from './test-utils';
+import {
+    getAvailablePort,
+    killTree,
+    treeKillSpawnOptions,
+    waitForServer,
+} from './test-utils';
 
 let baseUrl = '';
 const REQUIRE_BUNDLE =
@@ -47,6 +52,7 @@ describe.skipIf(!HAS_BUNDLE && !REQUIRE_BUNDLE)(
             serverProc = spawn('bun', [BUNDLE_PATH as string], {
                 env: { ...process.env, PORT: String(port) },
                 stdio: 'pipe',
+                ...treeKillSpawnOptions(),
             });
             serverProc.stderr?.on('data', () => {});
             serverProc.on('error', () => {

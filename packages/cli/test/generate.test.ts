@@ -275,6 +275,31 @@ describe('generate route files to disk', () => {
             removeDir(dir);
         }
     });
+
+    it('generate ws writes the WebSocket convention files to disk', async () => {
+        const dir = makeTempDir('burger-generate-ws-');
+        try {
+            await setupProject(dir);
+
+            const { exitCode, stdout } = await runCli(
+                ['generate', 'ws', 'chat'],
+                { cwd: dir }
+            );
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('WebSocket route "chat" created');
+
+            const targetDir = join(dir, 'src', 'websocket', 'chat');
+            const written = await readdir(targetDir);
+            expect(written).toContain('ws.ts');
+            expect(written).toContain('hooks.ts');
+            expect(written).toContain('config.ts');
+            expect(await readFile(join(targetDir, 'ws.ts'), 'utf-8')).toContain(
+                'export function open'
+            );
+        } finally {
+            removeDir(dir);
+        }
+    });
 });
 
 describe('generate — JavaScript (--lang js)', () => {

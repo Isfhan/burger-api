@@ -29,6 +29,8 @@ function githubMock(
     overrides: {
         /** Path -> successful contents hits allowed before a 500. */
         failContentsAfter?: Record<string, number>;
+        /** Repo-relative raw paths whose download returns 500. */
+        failRaw?: (repoPath: string) => boolean;
     } = {}
 ): (input: string | URL | Request) => Response {
     const rawBase = 'https://raw.githubusercontent.com/isfhan/burger-api/x';
@@ -64,6 +66,9 @@ function githubMock(
 
         const raw = url.pathname.match(/\/ecosystem\/(.+)$/);
         if (raw) {
+            if (overrides.failRaw?.(raw[1]!)) {
+                return new Response('server error', { status: 500 });
+            }
             const [kind, name, ...fileParts] = raw[1]!.split('/');
             const content =
                 repo[kind as 'hooks' | 'plugins']?.[name!]?.files[
@@ -228,5 +233,104 @@ describe('add command flow', () => {
         );
         expect(result.output).toContain('HTTP 500');
         expect(existsSync(join(dir, 'ecosystem'))).toBe(false);
+    });
+
+    it(
+        'a failed second file leaves no dir, and a retry succeeds',
+        async () => {
+            const repo: FakeRepo = {
+                hooks: {
+                    partial: {
+                        files: {
+                            'partial.ts': 'export function partial() {}\n',
+                            'README.md': '# partial\n',
+                        },
+                    },
+                },
+                plugins: {},
+            };
+
+            const failed = await withMockedFetch(
+                githubMock(repo, {
+                    failRaw: (p) => p.endsWith('/README.md'),
+                }),
+                () => runCommandInProcess(addCommand, ['partial'], dir)
+            );
+
+            const target = join(dir, 'ecosystem', 'hooks', 'partial');
+            expect(failed.exitCode).toBe(1);
+            // Neither the target nor its staging dir may survive, or the
+            // next `add` would report "already exists — skipped".
+            expect(existsSync(target)).toBe(false);
+            expect(existsSync(`${target}.download`)).toBe(false);
+
+            const retry = await withMockedFetch(githubMock(repo), () =>
+                runCommandInProcess(addCommand, ['partial'], dir)
+            );
+
+            expect(retry.exitCode).toBeNull();
+            expect(retry.output).not.toContain('already exists');
+            expect(retry.output).toContain('Added partial');
+            expect(readFileSync(join(target, 'partial.ts'), 'utf8')).toBe(
+                'export function partial() {}\n'
+            );
+            expect(readFileSync(join(target, 'README.md'), 'utf8')).toBe(
+                '# partial\n'
+            );
+        }
+    );
+
+    it('adds the good names and exits 1 when one fails', async () => {
+        const repo: FakeRepo = {
+            hooks: {
+                cors: { files: { 'cors.ts': 'export function cors() {}\n' } },
+            },
+            plugins: {},
+        };
+
+        const result = await withMockedFetch(githubMock(repo), () =>
+            runCommandInProcess(addCommand, ['cors', 'nope'], dir)
+        );
+
+        expect(result.exitCode).toBe(1);
+        expect(result.output).toContain('Successfully added 1 package(s)');
+        expect(result.output).toContain('Package "nope" not found');
+        expect(result.output).toContain('Failed to add 1 package(s)');
+        expect(result.output).toContain('Added 1 package(s), 1 failed');
+        expect(
+            existsSync(join(dir, 'ecosystem', 'hooks', 'cors', 'cors.ts'))
+        ).toBe(true);
+    });
+
+    it('reports the connection error when GitHub is unreachable', async () => {
+        const result = await withMockedFetch(
+            () => {
+                throw new Error('connect ECONNREFUSED 127.0.0.1:9');
+            },
+            () => runCommandInProcess(addCommand, ['cors'], dir)
+        );
+
+        expect(result.exitCode).toBe(1);
+        expect(result.output).toContain('Could not connect to GitHub');
+        expect(result.output).toContain('connect ECONNREFUSED');
+        expect(existsSync(join(dir, 'ecosystem'))).toBe(false);
+    });
+
+    it('prints .js usage hints for a JS project (jsconfig.json)', async () => {
+        await Bun.write(join(dir, 'jsconfig.json'), '{}');
+        const repo: FakeRepo = {
+            hooks: {
+                cors: { files: { 'cors.ts': 'export function cors() {}\n' } },
+            },
+            plugins: {},
+        };
+
+        const result = await withMockedFetch(githubMock(repo), () =>
+            runCommandInProcess(addCommand, ['cors'], dir)
+        );
+
+        expect(result.exitCode).toBeNull();
+        expect(result.output).toContain('// src/hooks.js');
+        expect(result.output).not.toContain('// src/hooks.ts');
     });
 });

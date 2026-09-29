@@ -167,10 +167,18 @@ describe('skills install helpers (real downloader)', () => {
             );
             const dirs = skillDirs(dir);
 
-            // Second install fails halfway through the file list.
-            expect(
+            // Second install fails halfway through the file list, after
+            // SKILL.md already downloaded to staging.
+            const updated: FakeSkill = {
+                files: {
+                    'SKILL.md': '---\ndescription: Demo v2\n---\n\n# Demo',
+                    'references/routing.md': '# Routing v2',
+                    'references/nested/cli.md': '# CLI v2',
+                },
+            };
+            await expect(
                 withMockedFetch(
-                    skillGithubMock('demo', DEMO_SKILL, (p) =>
+                    skillGithubMock('demo', updated, (p) =>
                         p.endsWith('routing.md')
                     ),
                     () => installSkill('demo', { baseDir: dir })
@@ -178,9 +186,23 @@ describe('skills install helpers (real downloader)', () => {
             ).rejects.toThrow('Failed to download skill "demo"');
 
             for (const root of [dirs.agents, dirs.claude]) {
-                // Old install intact, no staging leftovers.
-                expect(existsSync(join(root, 'demo', 'SKILL.md'))).toBe(true);
+                // Old install intact — including the old routing.md content,
+                // not the version the failed download staged.
+                expect(
+                    readFileSync(join(root, 'demo', 'SKILL.md'), 'utf8')
+                ).toContain('Demo skill');
+                expect(
+                    readFileSync(
+                        join(root, 'demo', 'references', 'routing.md'),
+                        'utf8'
+                    )
+                ).toBe('# Routing');
                 expect(existsSync(join(root, 'demo.download'))).toBe(false);
+                expect(
+                    existsSync(
+                        join(root, 'demo', 'references', 'nested', 'cli.md')
+                    )
+                ).toBe(true);
             }
         }
     );

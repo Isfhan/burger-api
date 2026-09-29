@@ -10,6 +10,8 @@ import {
     killTree,
     makeTempDir,
     removeDir,
+    runCli,
+    treeKillSpawnOptions,
     waitForServer,
 } from './test-utils';
 
@@ -70,6 +72,7 @@ describe('dev command', () => {
                     cwd: dir,
                     stdout: 'pipe',
                     stderr: 'pipe',
+                    ...treeKillSpawnOptions(),
                 }
             );
             const outReader = new Response(proc.stdout).text();
@@ -120,4 +123,46 @@ describe('dev command', () => {
         },
         DEV_TIMEOUT
     );
+});
+
+describe('dev command — validation before spawning', () => {
+    it('rejects an invalid --port with exit code 2', async () => {
+        const dir = makeTempDir('burger-dev-badport-');
+        try {
+            const result = await runCli(['dev', '--port', 'abc'], {
+                cwd: dir,
+            });
+            expect(result.exitCode).toBe(2);
+            expect(result.stdout).toContain('Invalid port "abc"');
+        } finally {
+            removeDir(dir);
+        }
+    });
+
+    it('rejects an invalid $PORT with exit code 2', async () => {
+        const dir = makeTempDir('burger-dev-badport-');
+        try {
+            const result = await runCli(['dev'], {
+                cwd: dir,
+                env: { PORT: '999999' },
+            });
+            expect(result.exitCode).toBe(2);
+            expect(result.stdout).toContain('(from $PORT)');
+        } finally {
+            removeDir(dir);
+        }
+    });
+
+    it('exits 1 when the entry file is missing', async () => {
+        const dir = makeTempDir('burger-dev-noentry-');
+        try {
+            const result = await runCli(['dev'], { cwd: dir });
+            expect(result.exitCode).toBe(1);
+            expect(result.stdout).toContain(
+                'Entry file not found: src/index.ts'
+            );
+        } finally {
+            removeDir(dir);
+        }
+    });
 });

@@ -6,7 +6,11 @@
 import { afterAll, describe, expect, it } from 'bun:test';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
-import { getAvailablePort, killTree } from '../test-utils';
+import {
+    getAvailablePort,
+    killTree,
+    treeKillSpawnOptions,
+} from '../test-utils';
 import { cleanupProjects, run, scaffoldProject } from './helpers';
 
 const E2E_TIMEOUT = 240_000;
@@ -47,6 +51,7 @@ describe('E2E build:exec', () => {
                 env: { ...process.env, PORT: String(port) },
                 stdout: 'pipe',
                 stderr: 'pipe',
+                ...treeKillSpawnOptions(),
             });
             const outReader = new Response(proc.stdout).text();
             const errReader = new Response(proc.stderr).text();

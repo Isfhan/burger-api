@@ -40,9 +40,18 @@ export async function makeProjectDir(prefix: string): Promise<string> {
     return dir;
 }
 
-/** Runs a command in `cwd` and captures its output. */
-export async function run(cmd: string[], cwd: string): Promise<CmdResult> {
-    const proc = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' });
+/** Runs a command in `cwd` (with optional extra env) and captures its output. */
+export async function run(
+    cmd: string[],
+    cwd: string,
+    env?: Record<string, string | undefined>
+): Promise<CmdResult> {
+    const proc = Bun.spawn(cmd, {
+        cwd,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        ...(env ? { env: { ...process.env, ...env } } : {}),
+    });
     const [code, out, err] = await Promise.all([
         proc.exited,
         new Response(proc.stdout).text(),

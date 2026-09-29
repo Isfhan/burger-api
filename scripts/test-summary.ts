@@ -45,6 +45,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'cli-e2e',
+        cmd: ['bun', 'run', '--filter', '@burger-api/cli', 'test:e2e'],
+        kind: 'tests',
+    },
+    {
         label: 'lifecycle',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:lifecycle'],
         kind: 'tests',

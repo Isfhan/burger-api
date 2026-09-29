@@ -68,7 +68,14 @@ export interface InProcessResult {
 /**
  * Runs a commander command's action in-process, with cwd set to `cwd` and
  * stdin forced non-TTY, so command flows can be tested with a mocked fetch.
- * `process.exit` is turned into a caught error and its code is returned.
+ * `process.exit` is mocked: the code is recorded first, then thrown as a
+ * {@link ProcessExitError}, so `exitCode` is still reported when a command
+ * action catches (swallows) that error itself.
+ *
+ * Limits: the caller reuses the same `Command` instance, and commander keeps
+ * option values between `parseAsync` calls on it. Pass every option on every
+ * call, or only use this helper for commands whose flags cannot leak between
+ * calls (e.g. argument-only commands).
  */
 export async function runCommandInProcess(
     command: Command,
@@ -214,16 +221,39 @@ export interface KillableProcess {
     kill(signal?: string | number): void;
 }
 
-/** Kills a process and its children (taskkill on Windows). */
+/**
+ * Spawn options for processes {@link killTree} must kill:
+ * POSIX children get their own process group (detached), so one negative-pid
+ * signal reaches the whole tree. Windows keeps the default — taskkill /T
+ * walks the tree instead. Pipes still work in both cases.
+ */
+export function treeKillSpawnOptions(): { detached: boolean } {
+    return { detached: process.platform !== 'win32' };
+}
+
+/**
+ * Kills a process and its children: its process group on POSIX, a taskkill
+ * /T tree on Windows.
+ */
 export async function killTree(proc: KillableProcess): Promise<void> {
     try {
+        if (proc.pid !== undefined && process.platform !== 'win32') {
+            try {
+                // Negative pid = the process group created by
+                // treeKillSpawnOptions()'s detached spawn.
+                process.kill(-proc.pid, 'SIGTERM');
+                return;
+            } catch {
+                // No group (spawned without detached) — kill the one process.
+            }
+        }
         if (process.platform === 'win32' && proc.pid !== undefined) {
             spawnSync('taskkill', ['/F', '/T', '/PID', String(proc.pid)], {
                 stdio: 'ignore',
             });
-        } else {
-            proc.kill();
+            return;
         }
+        proc.kill();
     } catch {
         // already dead
     }

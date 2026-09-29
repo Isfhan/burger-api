@@ -72,6 +72,12 @@ describe('list — stale cache fallback', () => {
         expect(stdout + stderr).toContain(
             'Please check your internet connection and try again.'
         );
+        // The underlying connection failure is shown too — an [X] error
+        // line, not only the generic hint.
+        expect(stdout + stderr).toContain('[X]');
+        expect(stdout + stderr).toMatch(
+            /\[X\] Fetching hooks and plugins list from GitHub failed/
+        );
     });
 });
 
