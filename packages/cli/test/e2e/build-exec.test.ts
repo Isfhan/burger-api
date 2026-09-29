@@ -4,13 +4,13 @@
  * injects it via ServerOptions.adapter instead of a runtime dynamic import.
  */
 import { afterAll, describe, expect, it } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createProject } from '../../src/utils/templates';
 import type { CreateOptions } from '../../src/types';
-import { getAvailablePort } from '../test-utils';
+import { getAvailablePort, killTree, removeDir } from '../test-utils';
 
 // `file:` not `link:`, to avoid the packages/burger-api/examples/* symlink
 // cycle (see scaffold-e2e.test.ts).
@@ -27,31 +27,12 @@ async function run(cmd: string[], cwd: string): Promise<{ code: number; err: str
     return { code, err };
 }
 
-async function killTree(pid: number): Promise<void> {
-    try {
-        if (process.platform === 'win32') {
-            await run(['taskkill', '/F', '/T', '/PID', String(pid)], '.');
-        } else {
-            process.kill(pid, 'SIGKILL');
-        }
-    } catch {
-        // already dead
-    }
-}
-
 const createdDirs: string[] = [];
-afterAll(async () => {
+afterAll(() => {
     for (const dir of createdDirs) {
-        // Windows briefly holds the just-run .exe open even after taskkill;
-        // retry the removal instead of failing on a transient EPERM.
-        for (let attempt = 0; attempt < 5; attempt++) {
-            try {
-                await rm(dir, { recursive: true, force: true });
-                break;
-            } catch {
-                await Bun.sleep(300);
-            }
-        }
+        // removeDir retries on transient Windows EPERM/EBUSY while a
+        // just-run .exe is still held open.
+        removeDir(dir);
     }
 });
 
@@ -128,7 +109,7 @@ describe('E2E build:exec', () => {
                     await Bun.sleep(300);
                 }
             }
-            await killTree(proc.pid);
+            await killTree(proc);
             const [stderr] = await Promise.all([errReader, outReader]);
 
             // A failed boot shows "Cannot find module" in stderr and leaves

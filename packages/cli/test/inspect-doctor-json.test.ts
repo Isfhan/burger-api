@@ -4,29 +4,11 @@
  * exactly what it would get in practice.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
+import { makeTempDir, removeDir, runCli } from './test-utils';
 
-const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
-const projectDir = join(import.meta.dir, '__tmp_inspect_doctor_json');
-
-async function runCliIn(
-    cwd: string,
-    args: string[]
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const proc = Bun.spawn(['bun', cliEntry, ...args], {
-        cwd,
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: process.env,
-    });
-    const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-    ]);
-    return { exitCode, stdout, stderr };
-}
+let projectDir = '';
 
 async function writeFileEnsuringDir(path: string, content: string) {
     await mkdir(join(path, '..'), { recursive: true });
@@ -34,7 +16,7 @@ async function writeFileEnsuringDir(path: string, content: string) {
 }
 
 beforeEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
+    projectDir = makeTempDir('burger-inspect-doctor-');
     await mkdir(join(projectDir, 'src', 'api', 'users'), { recursive: true });
 
     await writeFile(
@@ -59,18 +41,33 @@ beforeEach(async () => {
         'export const POST = {};'
     );
     await writeFile(join(projectDir, 'src', 'plugins.ts'), 'export default () => {};');
+
+    // An OS temp dir is outside the monorepo, so make the dependency a real
+    // (minimal) install for `Bun.resolveSync('burger-api', cwd)`.
+    await writeFileEnsuringDir(
+        join(projectDir, 'node_modules', 'burger-api', 'package.json'),
+        JSON.stringify({
+            name: 'burger-api',
+            version: '0.0.0',
+            main: 'index.js',
+        })
+    );
+    await writeFileEnsuringDir(
+        join(projectDir, 'node_modules', 'burger-api', 'index.js'),
+        'export {};'
+    );
 });
 
-afterEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
+afterEach(() => {
+    removeDir(projectDir);
 });
 
 describe('burger-api inspect --json', () => {
     test('emits a valid, versioned InspectResult matching the real project', async () => {
-        const { exitCode, stdout, stderr } = await runCliIn(projectDir, [
-            'inspect',
-            '--json',
-        ]);
+        const { exitCode, stdout, stderr } = await runCli(
+            ['inspect', '--json'],
+            { cwd: projectDir }
+        );
 
         expect(exitCode).toBe(0);
         expect(stderr).toBe('');
@@ -94,29 +91,26 @@ describe('burger-api inspect --json', () => {
     });
 
     test('emits JSON (not colored text) for the "not a project" error case too', async () => {
-        const emptyDir = join(import.meta.dir, '__tmp_inspect_json_empty');
-        await rm(emptyDir, { recursive: true, force: true });
-        await mkdir(emptyDir, { recursive: true });
+        const emptyDir = makeTempDir('burger-inspect-empty-');
         try {
-            const { exitCode, stdout } = await runCliIn(emptyDir, [
-                'inspect',
-                '--json',
-            ]);
+            const { exitCode, stdout } = await runCli(['inspect', '--json'], {
+                cwd: emptyDir,
+            });
             expect(exitCode).toBe(1);
             const result = JSON.parse(stdout);
             expect(result.error).toContain('Not in a BurgerAPI project directory');
         } finally {
-            await rm(emptyDir, { recursive: true, force: true });
+            removeDir(emptyDir);
         }
     });
 });
 
 describe('burger-api doctor --json', () => {
     test('emits a valid, versioned DoctorResult with ok: true for a healthy project', async () => {
-        const { exitCode, stdout, stderr } = await runCliIn(projectDir, [
-            'doctor',
-            '--json',
-        ]);
+        const { exitCode, stdout, stderr } = await runCli(
+            ['doctor', '--json'],
+            { cwd: projectDir }
+        );
 
         expect(exitCode).toBe(0);
         expect(stderr).toBe('');
@@ -141,10 +135,9 @@ describe('burger-api doctor --json', () => {
             JSON.stringify({ name: 'broken' })
         );
 
-        const { exitCode, stdout } = await runCliIn(projectDir, [
-            'doctor',
-            '--json',
-        ]);
+        const { exitCode, stdout } = await runCli(['doctor', '--json'], {
+            cwd: projectDir,
+        });
 
         expect(exitCode).toBe(1);
         const result = JSON.parse(stdout);

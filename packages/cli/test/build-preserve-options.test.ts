@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { existsSync, rmSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
-import { getAvailablePort } from './test-utils';
+import { getAvailablePort, killTree, removeDir, waitForServer } from './test-utils';
 
 const FIXTURE_DIR = join(import.meta.dir, 'fixtures', 'preserve-options');
 const OUTFILE = '.build/bundle/app.js';
@@ -15,7 +15,7 @@ let serverProc: ReturnType<typeof spawn> | null = null;
 beforeAll(async () => {
     const outDir = join(FIXTURE_DIR, '.build');
     if (existsSync(outDir)) {
-        rmSync(outDir, { recursive: true, force: true });
+        removeDir(outDir);
     }
 
     const result = await runVirtualEntryBuild({
@@ -35,49 +35,19 @@ beforeAll(async () => {
         stdio: 'pipe',
     });
 
-    await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => resolve(), 2500);
-
-        serverProc!.stdout?.on('data', (d: Buffer) => {
-            const out = d.toString();
-            if (out.includes('Server running on http://localhost:')) {
-                clearTimeout(timeout);
-                resolve();
-            }
-        });
-
-        serverProc!.on('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        });
+    serverProc.on('error', () => {
+        // waitForServer below fails loud when the process never serves.
     });
+    await waitForServer(`${baseUrl}/api`, 15_000);
 }, 30000);
 
 afterAll(async () => {
     if (serverProc) {
-        const proc = serverProc;
-        await new Promise<void>((resolve) => {
-            let done = false;
-            const finish = () => {
-                if (done) return;
-                done = true;
-                resolve();
-            };
-            proc.once('exit', finish);
-            proc.kill();
-            setTimeout(finish, 1000);
-        });
+        await killTree(serverProc);
     }
     const outDir = join(FIXTURE_DIR, '.build');
     if (existsSync(outDir)) {
-        try {
-            rmSync(outDir, { recursive: true, force: true });
-        } catch (err) {
-            const code = (err as { code?: string })?.code;
-            if (code !== 'EBUSY') {
-                throw err;
-            }
-        }
+        removeDir(outDir);
     }
 });
 
@@ -86,5 +56,15 @@ describe('Build integration: preserve user Burger options', () => {
         const res = await fetch(`${baseUrl}/api`);
         expect(res.status).toBe(418);
         expect(await res.text()).toContain('blocked by global hooks');
+    });
+
+    it('keeps constructor options (title, version) in the built output', async () => {
+        const res = await fetch(`${baseUrl}/openapi.json`);
+        expect(res.status).toBe(200);
+        const doc = (await res.json()) as {
+            info: { title: string; version: string };
+        };
+        expect(doc.info.title).toBe('Preserve Options Test');
+        expect(doc.info.version).toBe('9.9.9');
     });
 });

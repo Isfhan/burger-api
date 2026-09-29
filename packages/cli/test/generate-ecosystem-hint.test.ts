@@ -4,36 +4,16 @@
  * BURGER_API_CACHE_DIR), so it never touches the network.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { writeFile } from 'fs/promises';
 import { join } from 'path';
+import { makeTempDir, removeDir, runCli } from './test-utils';
 
-const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
-const projectDir = join(import.meta.dir, '__tmp_generate_ecosystem_hint');
-const cacheDir = join(import.meta.dir, '__tmp_generate_ecosystem_hint_cache');
-
-async function runCliIn(
-    cwd: string,
-    args: string[]
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const proc = Bun.spawn(['bun', cliEntry, ...args], {
-        cwd,
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: { ...process.env, BURGER_API_CACHE_DIR: cacheDir },
-    });
-    const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-    ]);
-    return { exitCode, stdout, stderr };
-}
+let projectDir = '';
+let cacheDir = '';
 
 beforeEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
-    await rm(cacheDir, { recursive: true, force: true });
-    await mkdir(projectDir, { recursive: true });
-    await mkdir(cacheDir, { recursive: true });
+    projectDir = makeTempDir('burger-generate-hint-');
+    cacheDir = makeTempDir('burger-generate-hint-cache-');
 
     await writeFile(
         join(projectDir, 'package.json'),
@@ -56,14 +36,21 @@ beforeEach(async () => {
     );
 });
 
-afterEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
-    await rm(cacheDir, { recursive: true, force: true });
+afterEach(() => {
+    removeDir(projectDir);
+    removeDir(cacheDir);
 });
+
+function runCliInProject(args: string[]) {
+    return runCli(args, {
+        cwd: projectDir,
+        env: { BURGER_API_CACHE_DIR: cacheDir },
+    });
+}
 
 describe('generate hook/plugin — ecosystem catalog hint', () => {
     test('warns and suggests `add` when a real hook already exists under that name', async () => {
-        const { exitCode, stdout } = await runCliIn(projectDir, [
+        const { exitCode, stdout } = await runCliInProject([
             'generate',
             'hook',
             'cors',
@@ -77,7 +64,7 @@ describe('generate hook/plugin — ecosystem catalog hint', () => {
     });
 
     test('warns and suggests `add` when a real plugin already exists under that name', async () => {
-        const { exitCode, stdout } = await runCliIn(projectDir, [
+        const { exitCode, stdout } = await runCliInProject([
             'generate',
             'plugin',
             'jwt-auth',
@@ -90,7 +77,7 @@ describe('generate hook/plugin — ecosystem catalog hint', () => {
     });
 
     test('says nothing when the name is not in the ecosystem catalog', async () => {
-        const { exitCode, stdout } = await runCliIn(projectDir, [
+        const { exitCode, stdout } = await runCliInProject([
             'generate',
             'hook',
             'my-totally-custom-hook',

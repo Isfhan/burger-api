@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, it } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createProject } from '../../src/utils/templates';
 import type { CreateOptions } from '../../src/types';
-import { getAvailablePort } from '../test-utils';
+import { getAvailablePort, killTree, removeDir } from '../test-utils';
 
 // Local framework package path, used as a `file:` dependency (see
 // `scaffoldProject` for why not `link:`).
@@ -32,17 +32,7 @@ async function run(cmd: string[], cwd: string): Promise<CmdResult> {
     return { code, out, err };
 }
 
-async function killTree(pid: number): Promise<void> {
-    try {
-        if (process.platform === 'win32') {
-            await run(['taskkill', '/F', '/T', '/PID', String(pid)], '.');
-        } else {
-            process.kill(pid, 'SIGKILL');
-        }
-    } catch {
-        // already dead
-    }
-}
+const createdDirs: string[] = [];
 
 /**
  * Runs `bun run <script>`, waits for GET /api, kills the process tree, and
@@ -75,7 +65,7 @@ async function bootAndCheck(
             await Bun.sleep(300);
         }
     }
-    await killTree(proc.pid);
+    await killTree(proc);
     await outReader;
     await errReader;
     return status;
@@ -111,7 +101,7 @@ async function bootAndCheckPath(
             await Bun.sleep(300);
         }
     }
-    await killTree(proc.pid);
+    await killTree(proc);
     await outReader;
     await errReader;
     return { status, body };
@@ -162,7 +152,7 @@ async function bootAddRouteAndCheck(cwd: string, port: number): Promise<number> 
         finalStatus = await waitFor('/api/brand-new-route', 20_000);
     }
 
-    await killTree(proc.pid);
+    await killTree(proc);
     await outReader;
     await errReader;
     return finalStatus;
@@ -181,6 +171,9 @@ async function scaffoldProject(
     lang: 'ts' | 'js'
 ): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), `burger-e2e-${name}-`));
+    // Registered before scaffolding, so a failed create/install is
+    // still cleaned up.
+    createdDirs.push(dir);
     const options: CreateOptions = {
         name,
         useApi: true,
@@ -209,16 +202,9 @@ async function scaffoldProject(
     return dir;
 }
 
-const createdDirs: string[] = [];
-
-function trackDir(dir: string): string {
-    createdDirs.push(dir);
-    return dir;
-}
-
-afterAll(async () => {
+afterAll(() => {
     for (const dir of createdDirs) {
-        await rm(dir, { recursive: true, force: true });
+        removeDir(dir);
     }
 });
 
@@ -226,9 +212,7 @@ describe('E2E scaffold — TypeScript', () => {
     it(
         'create → dev boot → build → start, all serving GET /api',
         async () => {
-            const dir = trackDir(
-                await scaffoldProject('e2e-ts', 'ts')
-            );
+            const dir = await scaffoldProject('e2e-ts', 'ts');
 
             // dev server boots and serves the route
             const devStatus = await bootAndCheck(
@@ -263,7 +247,7 @@ describe('E2E scaffold — TypeScript', () => {
     it(
         'dev picks up a brand-new route directory without a manual restart',
         async () => {
-            const dir = trackDir(await scaffoldProject('e2e-newroute', 'ts'));
+            const dir = await scaffoldProject('e2e-newroute', 'ts');
             const status = await bootAddRouteAndCheck(
                 dir,
                 await getAvailablePort()
@@ -279,7 +263,7 @@ describe('E2E scaffold — TypeScript', () => {
             // Regression: config.ts's default export must reach the route
             // unwrapped in production builds, not as a raw module namespace
             // ({ default: {...} }). The hook makes that visible in the body.
-            const dir = trackDir(await scaffoldProject('e2e-config', 'ts'));
+            const dir = await scaffoldProject('e2e-config', 'ts');
             const routeDir = join(dir, 'src', 'api', 'gate');
             await mkdir(routeDir, { recursive: true });
             await writeFile(
@@ -330,7 +314,7 @@ describe('E2E scaffold — JavaScript (--lang js)', () => {
     it(
         'scaffolds .js files, then dev → build → start all serve GET /api',
         async () => {
-            const dir = trackDir(await scaffoldProject('e2e-js', 'js'));
+            const dir = await scaffoldProject('e2e-js', 'js');
 
             // Scaffold shape: jsconfig.json instead of tsconfig.json
             expect(existsSync(join(dir, 'jsconfig.json'))).toBe(true);

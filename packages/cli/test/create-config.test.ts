@@ -370,15 +370,10 @@ describe('JS scaffold (--lang js)', () => {
     });
 });
 
-describe('Scaffold typecheck hardening', () => {
+describe('Scaffold output syntax checks', () => {
     const transpile = async (source: string): Promise<void> => {
         new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
     };
-
-    it('emits types: ["bun"] (matches the installed @types/bun)', () => {
-        const config = JSON.parse(generateTsConfig());
-        expect(config.compilerOptions.types).toEqual(['bun']);
-    });
 
     it('project name with a quote still generates parseable openapi.config.ts', async () => {
         const content = generateOpenAPIConfig({

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { existsSync, rmSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
-import { getAvailablePort } from './test-utils';
+import { getAvailablePort, killTree, removeDir, waitForServer } from './test-utils';
 
 /**
  * Regression: file-based WebSocket routes (src/websocket/ws.ts) must be
@@ -49,7 +49,7 @@ function waitForMessage(ws: WebSocket, timeoutMs = 3000): Promise<string> {
 beforeAll(async () => {
     const outDir = join(FIXTURE_DIR, '.build');
     if (existsSync(outDir)) {
-        rmSync(outDir, { recursive: true, force: true });
+        removeDir(outDir);
     }
 
     const result = await runVirtualEntryBuild({
@@ -69,49 +69,19 @@ beforeAll(async () => {
         stdio: 'pipe',
     });
 
-    await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => resolve(), 2500);
-
-        serverProc!.stdout?.on('data', (d: Buffer) => {
-            const out = d.toString();
-            if (out.includes('Server running on http://localhost:')) {
-                clearTimeout(timeout);
-                resolve();
-            }
-        });
-
-        serverProc!.on('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        });
+    serverProc.on('error', () => {
+        // waitForServer below fails loud when the process never serves.
     });
+    await waitForServer(`${baseUrl}/api`, 15_000);
 }, 30000);
 
 afterAll(async () => {
     if (serverProc) {
-        const proc = serverProc;
-        await new Promise<void>((resolve) => {
-            let done = false;
-            const finish = () => {
-                if (done) return;
-                done = true;
-                resolve();
-            };
-            proc.once('exit', finish);
-            proc.kill();
-            setTimeout(finish, 1000);
-        });
+        await killTree(serverProc);
     }
     const outDir = join(FIXTURE_DIR, '.build');
     if (existsSync(outDir)) {
-        try {
-            rmSync(outDir, { recursive: true, force: true });
-        } catch (err) {
-            const code = (err as { code?: string })?.code;
-            if (code !== 'EBUSY') {
-                throw err;
-            }
-        }
+        removeDir(outDir);
     }
 });
 

@@ -3,12 +3,15 @@
  * Set BUILD_BUNDLE_PATH, or build the production-app example first:
  *   cd packages/burger-api/examples/production-app
  *   bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
+ *
+ * Missing bundle: skipped locally, hard failure when
+ * REQUIRE_BUILD_BUNDLE=true or CI=true.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { getAvailablePort } from './test-utils';
+import { getAvailablePort, killTree, waitForServer } from './test-utils';
 
 let baseUrl = '';
 const REQUIRE_BUNDLE =
@@ -26,59 +29,43 @@ const BUNDLE_PATH =
         'bundle',
         'app.js'
     );
+const HAS_BUNDLE = existsSync(BUNDLE_PATH);
 
 let serverProc: ReturnType<typeof spawn> | null = null;
 
-beforeAll(async () => {
-    const bundlePath = join(BUNDLE_PATH);
-    if (!existsSync(bundlePath)) {
-        if (REQUIRE_BUNDLE) {
-            throw new Error(
-                `Build output test requires bundle, but none was found at: ${bundlePath}`
-            );
-        }
-        console.warn(
-            'Skipping build-output tests: bundle not found at',
-            bundlePath
-        );
-        return;
-    }
-    const port = await getAvailablePort();
-    baseUrl = `http://localhost:${port}`;
-    serverProc = spawn('bun', [bundlePath as string], {
-        env: { ...process.env, PORT: String(port) },
-        stdio: 'pipe',
-    });
-    await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => resolve(), 2000);
-        serverProc!.stdout?.on('data', (d: Buffer) => {
-            if (d.toString().includes('Server running')) {
-                clearTimeout(t);
-                resolve();
+describe.skipIf(!HAS_BUNDLE && !REQUIRE_BUNDLE)(
+    'Build output (AOT routes)',
+    () => {
+        beforeAll(async () => {
+            if (!HAS_BUNDLE) {
+                throw new Error(
+                    `Build output test requires bundle, but none was found at: ${BUNDLE_PATH}`
+                );
+            }
+            const port = await getAvailablePort();
+            baseUrl = `http://localhost:${port}`;
+            serverProc = spawn('bun', [BUNDLE_PATH as string], {
+                env: { ...process.env, PORT: String(port) },
+                stdio: 'pipe',
+            });
+            serverProc.stderr?.on('data', () => {});
+            serverProc.on('error', () => {
+                // waitForServer below fails loud when the process never serves.
+            });
+            await waitForServer(baseUrl, 15_000);
+        }, 20000);
+
+        afterAll(async () => {
+            if (serverProc) {
+                await killTree(serverProc);
             }
         });
-        serverProc!.stderr?.on('data', () => {});
-        serverProc!.on('error', reject);
-    });
-}, 10000);
 
-afterAll(() => {
-    if (serverProc) {
-        serverProc.kill();
+        it('responds to GET /api without runtime filesystem scan', async () => {
+            const res = await fetch(`${baseUrl}/api`);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data).toHaveProperty('message');
+        });
     }
-});
-
-describe('Build output (AOT routes)', () => {
-    it('responds to GET /api without runtime filesystem scan', async () => {
-        const bundlePath = join(BUNDLE_PATH);
-        if (!existsSync(bundlePath)) {
-            // Local convenience mode only; CI path fails in beforeAll.
-            expect(REQUIRE_BUNDLE).toBe(false);
-            return;
-        }
-        const res = await fetch(`${baseUrl}/api`);
-        expect(res.status).toBe(200);
-        const data = await res.json();
-        expect(data).toHaveProperty('message');
-    });
-});
+);

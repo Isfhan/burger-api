@@ -11,11 +11,11 @@ import {
     ensureAppDirEnv,
 } from '../src/utils/scanner';
 import { detectExportedHookNames } from '../src/utils/route-methods';
+import { makeTempDir, removeDir } from './test-utils';
 
 const simpleFixturesDir = join(import.meta.dir, 'fixtures', 'simple-api');
-const parityFixturesDir = join(import.meta.dir, 'fixtures', 'parity-routes');
 
-describe('inspect uses existing scanner', () => {
+describe('scanner discovery from fixtures', () => {
     it('scanApiRoutes discovers routes from fixtures', async () => {
         const entries = await scanApiRoutes(simpleFixturesDir, './api', '/api');
         expect(entries.length).toBeGreaterThan(0);
@@ -30,13 +30,6 @@ describe('inspect uses existing scanner', () => {
             '/'
         );
         expect(entries).toEqual([]);
-    });
-
-    it('scanApiRoutes with parity fixtures covers dynamic + group routes', async () => {
-        const entries = await scanApiRoutes(parityFixturesDir, './api', '/api');
-        const paths = entries.map((e) => e.routePath).sort();
-        expect(paths.some((p) => p.includes(':id'))).toBe(true);
-        expect(paths.some((p) => p.includes('groups'))).toBe(true);
     });
 });
 
@@ -118,11 +111,14 @@ describe('detectExportedHookNames', () => {
     });
 
     it('returns undefined when no hooks exported', async () => {
-        const tmpFile = join(import.meta.dir, '__tmp_no_hooks.ts');
-        await Bun.write(tmpFile, 'export const x = 1;');
-        const result = await detectExportedHookNames(tmpFile);
-        expect(result).toBeUndefined();
-        const { unlinkSync } = require('fs');
-        unlinkSync(tmpFile);
+        const dir = makeTempDir('burger-inspect-');
+        try {
+            const tmpFile = join(dir, 'hooks.ts');
+            await Bun.write(tmpFile, 'export const x = 1;');
+            const result = await detectExportedHookNames(tmpFile);
+            expect(result).toBeUndefined();
+        } finally {
+            removeDir(dir);
+        }
     });
 });

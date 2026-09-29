@@ -1,9 +1,8 @@
 /**
  * generate command templates and route scaffolding.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdir, rm, readFile, readdir } from 'fs/promises';
-import { existsSync } from 'fs';
+import { describe, it, expect } from 'bun:test';
+import { mkdir, readFile, readdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import {
     generateRouteFiles,
@@ -16,17 +15,20 @@ import {
     validateComponentName,
     validateRoutePath,
 } from '../src/commands/generate';
+import { makeTempDir, removeDir, runCli } from './test-utils';
 
-const tmpDir = join(import.meta.dir, '__tmp_generate');
-
-beforeEach(async () => {
-    await rm(tmpDir, { recursive: true, force: true });
-    await mkdir(tmpDir, { recursive: true });
-});
-
-afterEach(async () => {
-    await rm(tmpDir, { recursive: true, force: true });
-});
+/** Minimal project for the real `generate` command. */
+async function setupProject(dir: string): Promise<void> {
+    await writeFile(
+        join(dir, 'package.json'),
+        JSON.stringify({
+            name: 'generate-fixture',
+            dependencies: { 'burger-api': '^1.0.0-beta' },
+        })
+    );
+    await mkdir(join(dir, 'src', 'api'), { recursive: true });
+    await writeFile(join(dir, 'src', 'index.ts'), 'export {};');
+}
 
 describe('generateRouteFiles', () => {
     it('generates all convention files by default', () => {
@@ -209,26 +211,69 @@ describe('validateRoutePath / validateComponentName', () => {
 
 describe('generate route files to disk', () => {
     it('writes all files to the target directory', async () => {
-        const targetDir = join(tmpDir, 'users');
-        await mkdir(targetDir, { recursive: true });
+        const dir = makeTempDir('burger-generate-');
+        try {
+            await setupProject(dir);
 
-        const files = generateRouteFiles('users');
-        for (const [filename, content] of Object.entries(files)) {
-            await Bun.write(join(targetDir, filename), content);
+            const { exitCode, stdout } = await runCli(
+                ['generate', 'route', 'users'],
+                { cwd: dir }
+            );
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('created');
+
+            const targetDir = join(dir, 'src', 'api', 'users');
+            const written = await readdir(targetDir);
+            expect(written).toContain('route.ts');
+            expect(written).toContain('schema.ts');
+            expect(written).toContain('openapi.ts');
+            expect(written).toContain('hooks.ts');
+            expect(written).toContain('config.ts');
+
+            const routeContent = await readFile(
+                join(targetDir, 'route.ts'),
+                'utf-8'
+            );
+            expect(routeContent).toContain('export const GET = defineRoute(');
+        } finally {
+            removeDir(dir);
         }
+    });
 
-        const written = await readdir(targetDir);
-        expect(written).toContain('route.ts');
-        expect(written).toContain('schema.ts');
-        expect(written).toContain('openapi.ts');
-        expect(written).toContain('hooks.ts');
-        expect(written).toContain('config.ts');
+    it('refuses when the target directory already exists', async () => {
+        const dir = makeTempDir('burger-generate-');
+        try {
+            await setupProject(dir);
 
-        const routeContent = await readFile(
-            join(targetDir, 'route.ts'),
-            'utf-8'
-        );
-        expect(routeContent).toContain('export const GET = defineRoute(');
+            const first = await runCli(['generate', 'route', 'users'], {
+                cwd: dir,
+            });
+            expect(first.exitCode).toBe(0);
+
+            const second = await runCli(['generate', 'route', 'users'], {
+                cwd: dir,
+            });
+            expect(second.exitCode).not.toBe(0);
+            expect(second.stdout + second.stderr).toContain('already exists');
+        } finally {
+            removeDir(dir);
+        }
+    });
+
+    it('rejects a path traversal name', async () => {
+        const dir = makeTempDir('burger-generate-');
+        try {
+            await setupProject(dir);
+
+            const { exitCode, stdout, stderr } = await runCli(
+                ['generate', 'route', '../evil'],
+                { cwd: dir }
+            );
+            expect(exitCode).not.toBe(0);
+            expect(stdout + stderr).toContain('".."');
+        } finally {
+            removeDir(dir);
+        }
     });
 });
 

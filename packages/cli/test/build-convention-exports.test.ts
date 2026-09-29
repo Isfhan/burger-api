@@ -1,17 +1,33 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import {
+    existsSync,
+    mkdirSync,
+    symlinkSync,
+    writeFileSync,
+} from 'fs';
+import { dirname, join, resolve } from 'path';
 import { runVirtualEntryBuild } from '../src/utils/build/pipeline';
-import { getAvailablePort } from './test-utils';
+import { getAvailablePort, makeTempDir, removeDir, waitForServer } from './test-utils';
 
 /**
  * Regression: production builds must wire convention exports exactly like
  * dev, whatever syntax they use — a typed or destructured hook export must
  * not be silently dropped.
  */
-const DIR = join(import.meta.dir, '__tmp_build_convention_exports');
+const BURGER_API_PKG = resolve(import.meta.dir, '..', '..', 'burger-api');
+let DIR = '';
 const OUTFILE = '.build/bundle/app.js';
+
+/** The temp project lives outside the repo, so link the local package in. */
+function linkBurgerApi(dir: string): void {
+    mkdirSync(join(dir, 'node_modules'), { recursive: true });
+    symlinkSync(
+        BURGER_API_PKG,
+        join(dir, 'node_modules', 'burger-api'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+    );
+}
 
 const DENY = "() => new Response('denied', { status: 401 })";
 
@@ -60,7 +76,8 @@ let baseUrl = '';
 let serverProc: ReturnType<typeof spawn> | null = null;
 
 beforeAll(async () => {
-    rmSync(DIR, { recursive: true, force: true });
+    DIR = makeTempDir('burger-convention-exports-');
+    linkBurgerApi(DIR);
     for (const [rel, content] of Object.entries(FILES)) {
         const full = join(DIR, rel);
         mkdirSync(dirname(full), { recursive: true });
@@ -82,14 +99,7 @@ beforeAll(async () => {
         env: { ...process.env, PORT: String(port) },
         stdio: 'pipe',
     });
-    for (let i = 0; i < 50; i++) {
-        try {
-            await fetch(`${baseUrl}/api/annotated`);
-            break;
-        } catch {
-            await Bun.sleep(100);
-        }
-    }
+    await waitForServer(`${baseUrl}/api/annotated`, 15_000);
 }, 60_000);
 
 afterAll(async () => {
@@ -98,30 +108,23 @@ afterAll(async () => {
         // Wait for the child to exit before deleting its directory — on
         // Windows a just-killed process still holds the bundle open briefly
         // (EBUSY on rm).
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolveExit) => {
             const timer = setTimeout(() => {
                 try {
                     proc.kill('SIGKILL');
                 } catch {
                     // already gone
                 }
-                resolve();
+                resolveExit();
             }, 5000);
             proc.once('exit', () => {
                 clearTimeout(timer);
-                resolve();
+                resolveExit();
             });
             proc.kill();
         });
     }
-    for (let i = 0; i < 10; i++) {
-        try {
-            rmSync(DIR, { recursive: true, force: true });
-            return;
-        } catch {
-            await Bun.sleep(200);
-        }
-    }
+    removeDir(DIR);
 }, 30_000);
 
 describe('production build wires convention exports of any syntax', () => {

@@ -5,23 +5,27 @@
  * pre-warms the cache so there is something to fall back to.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { writeFile } from 'fs/promises';
 import { join } from 'path';
+import { makeTempDir, removeDir, runCli } from './test-utils';
 
-const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
-const projectDir = join(import.meta.dir, '__tmp_list_skills_stale');
-const cacheDir = join(import.meta.dir, '__tmp_list_skills_stale_cache');
+let projectDir = '';
+let cacheDir = '';
 
-async function runCliIn(
-    cwd: string,
-    args: string[]
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const proc = Bun.spawn(['bun', cliEntry, ...args], {
-        cwd,
-        stdout: 'pipe',
-        stderr: 'pipe',
+beforeEach(() => {
+    projectDir = makeTempDir('burger-stale-cache-');
+    cacheDir = makeTempDir('burger-stale-cache-cache-');
+});
+
+afterEach(() => {
+    removeDir(projectDir);
+    removeDir(cacheDir);
+});
+
+function runCliInProject(args: string[]) {
+    return runCli(args, {
+        cwd: projectDir,
         env: {
-            ...process.env,
             BURGER_API_CACHE_DIR: cacheDir,
             // A nonexistent repo — live refresh always 404s, exercising
             // the stale-fallback path for real.
@@ -29,25 +33,7 @@ async function runCliIn(
             BURGER_API_REPO_NAME: 'burger-api-does-not-exist-xyz',
         },
     });
-    const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-    ]);
-    return { exitCode, stdout, stderr };
 }
-
-beforeEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
-    await rm(cacheDir, { recursive: true, force: true });
-    await mkdir(projectDir, { recursive: true });
-    await mkdir(cacheDir, { recursive: true });
-});
-
-afterEach(async () => {
-    await rm(projectDir, { recursive: true, force: true });
-    await rm(cacheDir, { recursive: true, force: true });
-});
 
 describe('list — stale cache fallback', () => {
     test('serves the cached component list and warns when GitHub is unreachable', async () => {
@@ -65,7 +51,7 @@ describe('list — stale cache fallback', () => {
             })
         );
 
-        const { exitCode, stdout } = await runCliIn(projectDir, ['list']);
+        const { exitCode, stdout } = await runCliInProject(['list']);
 
         expect(exitCode).toBe(0);
         expect(stdout).toContain('cached list');
@@ -76,13 +62,12 @@ describe('list — stale cache fallback', () => {
     });
 
     test('with no cache at all, fails loud instead of showing an empty list', async () => {
-        const { exitCode, stdout, stderr } = await runCliIn(projectDir, [
-            'list',
-        ]);
+        const { exitCode, stdout, stderr } = await runCliInProject(['list']);
 
         expect(exitCode).not.toBe(0);
         // Fails loud (an error), never silently renders an empty table.
         expect(stdout + stderr).not.toContain('Available Hooks and Plugins');
+        expect(stdout + stderr).toContain('GitHub request failed (HTTP 404');
     });
 });
 
@@ -96,7 +81,7 @@ describe('skills available — stale cache fallback', () => {
             })
         );
 
-        const { exitCode, stdout } = await runCliIn(projectDir, [
+        const { exitCode, stdout } = await runCliInProject([
             'skills',
             'available',
         ]);
