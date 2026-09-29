@@ -47,9 +47,11 @@ bun test ./test/e2e
 - `generate-ecosystem-hint.test.ts` — `generate hook/plugin` ecosystem-catalog
   hint via a pre-warmed cache (offline).
 - `list-skills-stale-cache.test.ts` — stale-cache fallback when GitHub is
-  unreachable (offline, uses a nonexistent repo name).
+  unreachable (offline, via a closed-port proxy).
 - `add.test.ts` — `add` command helpers (`hyphenToCamelCase`,
   `resolveExportName`).
+- `add-flow.test.ts` — real `add` command flow (mocked GitHub): hook/plugin
+  installs, skip-existing, unknown name, failed download.
 - `create.test.ts` — `validateProjectName` and `applyFlags` pure functions.
 - `create-config.test.ts` — scaffolded config file generation.
 - `create-agents.test.ts` — generated AGENTS.md/CLAUDE.md content.
@@ -57,6 +59,14 @@ bun test ./test/e2e
 - `skills-command.test.ts` — `skills` subcommands and skill helpers
   (`parseSkillDescription`, `flattenSkillFiles` with a mocked fetch).
 - `skills-install.test.ts` — skill install/list helpers.
+- `skills-install-flow.test.ts` — real skill download/install into both
+  folders, failure cleanup, and the `skills install` command (mocked GitHub).
+- `github-helpers.test.ts` — GitHub helpers with a mocked fetch
+  (`isPrereleaseBuild`, `detectEcosystemType`, downloads, error messages).
+- `platform-config.test.ts` — wrangler/deno/vercel config scaffolding
+  (content and never-overwrite behavior).
+- `dev-command.test.ts` — `dev` boots a temp project and hot-reloads an
+  edited route (local package linked, no `bun install`).
 - `ecosystem-cache.test.ts` — `withEcosystemCache` freshness/stale behavior.
 - `cli-process-exit.test.ts` — ephemeral commands exit without orphaned
   handles; no ANSI escapes on piped output.
@@ -75,6 +85,8 @@ bun test ./test/e2e
 - `e2e/build-exec.test.ts` — a compiled executable boots standalone.
 - `e2e/build-target.test.ts` — `--target=cloudflare/vercel` output and
   target validation.
+- `e2e/helpers.ts` — shared E2E scaffolding (`scaffoldProject`, `run`,
+  `cleanupProjects`); not a test file.
 
 ## E2E tests (slow, need network)
 

@@ -3,8 +3,128 @@ import { mkdtempSync, rmSync } from 'fs';
 import { createServer } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { Command } from 'commander';
+import type { CreateOptions } from '../src/types';
 
 const CLI_ENTRY = join(import.meta.dir, '..', 'src', 'index.ts');
+
+/** Default `CreateOptions` for tests, overridable per field. */
+export function baseCreateOptions(
+    overrides: Partial<CreateOptions> = {}
+): CreateOptions {
+    return {
+        name: 'demo',
+        useApi: true,
+        apiDir: 'api',
+        apiPrefix: '/api',
+        debug: false,
+        usePages: false,
+        pageDir: 'pages',
+        pagePrefix: '/',
+        useWs: false,
+        wsDir: 'websocket',
+        addSkills: false,
+        lang: 'ts',
+        ...overrides,
+    };
+}
+
+/** Runs `fn` with `globalThis.fetch` replaced, restoring it afterwards. */
+export async function withMockedFetch<T>(
+    mock: (
+        input: string | URL | Request,
+        init?: RequestInit
+    ) => Response | Promise<Response>,
+    fn: () => Promise<T>
+): Promise<T> {
+    const original = globalThis.fetch;
+    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) =>
+        mock(input, init)) as typeof fetch;
+    try {
+        return await fn();
+    } finally {
+        globalThis.fetch = original;
+    }
+}
+
+/** Thrown by {@link runCommandInProcess} in place of a real `process.exit`. */
+export class ProcessExitError extends Error {
+    constructor(public readonly code: number) {
+        super(`process.exit(${code})`);
+        this.name = 'ProcessExitError';
+    }
+}
+
+export interface InProcessResult {
+    /**
+     * Exit code passed to `process.exit`, or null when the action finished
+     * without exiting.
+     */
+    exitCode: number | null;
+    /** Everything the action wrote to console.log/error and stdout/stderr. */
+    output: string;
+}
+
+/**
+ * Runs a commander command's action in-process, with cwd set to `cwd` and
+ * stdin forced non-TTY, so command flows can be tested with a mocked fetch.
+ * `process.exit` is turned into a caught error and its code is returned.
+ */
+export async function runCommandInProcess(
+    command: Command,
+    args: string[],
+    cwd: string
+): Promise<InProcessResult> {
+    const originalExit = process.exit;
+    const originalCwd = process.cwd();
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalStdoutWrite = process.stdout.write;
+    const originalStderrWrite = process.stderr.write;
+    const stdinTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    let exitCode: number | null = null;
+    let output = '';
+
+    const capture = (...parts: unknown[]): void => {
+        output += parts.map((p) => String(p)).join(' ') + '\n';
+    };
+    const captureWrite = (chunk: unknown): boolean => {
+        output += typeof chunk === 'string' ? chunk : String(chunk);
+        return true;
+    };
+
+    process.exit = ((code?: number) => {
+        exitCode = code ?? 0;
+        throw new ProcessExitError(exitCode);
+    }) as never;
+    console.log = capture;
+    console.error = capture;
+    process.stdout.write = captureWrite as never;
+    process.stderr.write = captureWrite as never;
+    Object.defineProperty(process.stdin, 'isTTY', {
+        value: false,
+        configurable: true,
+    });
+    process.chdir(cwd);
+    try {
+        await command.parseAsync(args, { from: 'user' });
+    } catch (err) {
+        if (!(err instanceof ProcessExitError)) throw err;
+    } finally {
+        process.chdir(originalCwd);
+        if (stdinTty) {
+            Object.defineProperty(process.stdin, 'isTTY', stdinTty);
+        } else {
+            delete (process.stdin as { isTTY?: boolean }).isTTY;
+        }
+        console.log = originalLog;
+        console.error = originalError;
+        process.stdout.write = originalStdoutWrite;
+        process.stderr.write = originalStderrWrite;
+        process.exit = originalExit;
+    }
+    return { exitCode, output };
+}
 
 /**
  * Allocates an available port on 127.0.0.1; safe for parallel tests.

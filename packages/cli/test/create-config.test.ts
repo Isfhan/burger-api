@@ -11,20 +11,14 @@ import {
     generatePackageJson,
     generatePluginTemplate,
 } from '../src/utils/templates';
-import type { CreateOptions } from '../src/types';
+import { baseCreateOptions } from './test-utils';
 
 describe('generateBurgerConfig', () => {
     it('generates config with default-like values', () => {
-        const options: CreateOptions = {
+        const options = baseCreateOptions({
             name: 'my-api',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
             usePages: true,
-            pageDir: 'pages',
-            pagePrefix: '/',
-        };
+        });
 
         const content = generateBurgerConfig(options);
 
@@ -36,28 +30,16 @@ describe('generateBurgerConfig', () => {
     });
 
     it('omits wsDir when useWs is not set', () => {
-        const content = generateBurgerConfig({
-            name: 'my-api',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
-            usePages: false,
-        });
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'my-api' })
+        );
         expect(content).not.toContain('wsDir');
     });
 
     it('includes wsDir when useWs is set, like pageDir/usePages', () => {
-        const content = generateBurgerConfig({
-            name: 'my-api',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
-            usePages: false,
-            useWs: true,
-            wsDir: 'websocket',
-        });
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'my-api', useWs: true })
+        );
         expect(content).toContain("wsDir: './src/websocket'");
     });
 
@@ -65,17 +47,9 @@ describe('generateBurgerConfig', () => {
         // A scaffold only writes enabled features (no pageDir when pages are
         // off), so the config is deliberately partial; the CLI merges in
         // convention defaults.
-        const content = generateBurgerConfig({
-            name: 'x',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
-            usePages: true,
-            pageDir: 'pages',
-            pagePrefix: '/',
-            lang: 'ts',
-        } as CreateOptions);
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'x', usePages: true })
+        );
 
         expect(content).toContain(
             "import type { BuildConfig } from 'burger-api';"
@@ -84,17 +58,9 @@ describe('generateBurgerConfig', () => {
     });
 
     it('types the JS config with a partial JSDoc BuildConfig hint', () => {
-        const content = generateBurgerConfig({
-            name: 'x',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
-            usePages: true,
-            pageDir: 'pages',
-            pagePrefix: '/',
-            lang: 'js',
-        } as CreateOptions);
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'x', usePages: true, lang: 'js' })
+        );
 
         expect(content).toContain(
             "/** @type {Partial<import('burger-api').BuildConfig>} */"
@@ -102,16 +68,15 @@ describe('generateBurgerConfig', () => {
     });
 
     it('generates config with custom values from prompts', () => {
-        const options: CreateOptions = {
+        const options = baseCreateOptions({
             name: 'custom-app',
-            useApi: true,
             apiDir: 'backend',
             apiPrefix: '/v1',
             debug: true,
             usePages: true,
             pageDir: 'site',
             pagePrefix: '/web',
-        };
+        });
 
         const content = generateBurgerConfig(options);
 
@@ -124,14 +89,7 @@ describe('generateBurgerConfig', () => {
 });
 
 describe('generateIndexFile', () => {
-    const base: CreateOptions = {
-        name: 'my-api',
-        useApi: true,
-        apiDir: 'api',
-        apiPrefix: '/api',
-        debug: false,
-        usePages: false,
-    };
+    const base = baseCreateOptions({ name: 'my-api' });
 
     it('omits wsDir from the Burger() call when useWs is not set', () => {
         const content = generateIndexFile(base);
@@ -223,17 +181,7 @@ describe('generatePackageJson BURGER_API_SOURCE', () => {
 });
 
 describe('JS scaffold (--lang js)', () => {
-    const jsOptions: CreateOptions = {
-        name: 'my-api',
-        useApi: true,
-        apiDir: 'api',
-        apiPrefix: '/api',
-        debug: false,
-        usePages: false,
-        pageDir: 'pages',
-        pagePrefix: '/',
-        lang: 'js',
-    };
+    const jsOptions = baseCreateOptions({ name: 'my-api', lang: 'js' });
 
     it('generateJsConfig enables checkJs and strict JSDoc checking', () => {
         const config = JSON.parse(generateJsConfig());
@@ -376,16 +324,15 @@ describe('Scaffold output syntax checks', () => {
     };
 
     it('project name with a quote still generates parseable openapi.config.ts', async () => {
-        const content = generateOpenAPIConfig({
-            name: "Bob's API",
-            lang: 'ts',
-        } as CreateOptions);
+        const content = generateOpenAPIConfig(
+            baseCreateOptions({ name: "Bob's API" })
+        );
         expect(content).toContain('"Bob\'s API"');
         await transpile(content);
     });
 
     it('openapi.config.ts without a name falls back to a safe default', async () => {
-        const content = generateOpenAPIConfig({ lang: 'ts' } as CreateOptions);
+        const content = generateOpenAPIConfig(baseCreateOptions({ name: '' }));
         await transpile(content);
         expect(content).toContain('"Burger API"');
     });
@@ -398,16 +345,14 @@ describe('Scaffold output syntax checks', () => {
     });
 
     it('burger config with quoted prefixes still parses', async () => {
-        const content = generateBurgerConfig({
-            name: 'x',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: "/api-'s",
-            debug: false,
-            usePages: true,
-            pageDir: 'pages',
-            pagePrefix: "/p-'s",
-        } as CreateOptions);
+        const content = generateBurgerConfig(
+            baseCreateOptions({
+                name: 'x',
+                apiPrefix: "/api-'s",
+                usePages: true,
+                pagePrefix: "/p-'s",
+            })
+        );
         await transpile(content);
     });
 

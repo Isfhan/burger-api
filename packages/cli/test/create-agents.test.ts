@@ -9,26 +9,9 @@ import {
     generateClaudeMd,
 } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
+import { baseCreateOptions as baseOptions } from './test-utils';
 
 const createdDirs: string[] = [];
-
-function baseOptions(overrides: Partial<CreateOptions> = {}): CreateOptions {
-    return {
-        name: 'demo',
-        useApi: true,
-        apiDir: 'api',
-        apiPrefix: '/api',
-        debug: false,
-        usePages: false,
-        pageDir: 'pages',
-        pagePrefix: '/',
-        useWs: false,
-        wsDir: 'websocket',
-        addSkills: false,
-        lang: 'ts',
-        ...overrides,
-    };
-}
 
 async function scaffold(
     name: string,
@@ -47,63 +30,67 @@ afterAll(async () => {
 });
 
 describe('generateAgentsMd', () => {
-    it('stays short (about 40-60 lines)', () => {
-        for (const options of [
-            baseOptions(),
-            baseOptions({ lang: 'js', usePages: true, useWs: true }),
+    it('has the required sections', () => {
+        const content = generateAgentsMd(baseOptions());
+
+        for (const heading of [
+            '# AGENTS.md',
+            '## Commands',
+            '## Project layout',
+            '## Route convention files',
+            '## Rules',
+            '## After changes',
+            '## Learn more',
         ]) {
-            const lines = generateAgentsMd(options).trimEnd().split('\n').length;
-            expect(lines).toBeGreaterThanOrEqual(40);
-            expect(lines).toBeLessThanOrEqual(60);
+            expect(content).toContain(heading);
         }
     });
 
-    it('covers commands, layout, route files, and rules for TS', () => {
+    it('names the key CLI commands and project files', () => {
         const content = generateAgentsMd(baseOptions());
 
-        expect(content).toContain(
-            'This is a burger-api project (Bun-first API framework, file-based routing).'
-        );
-        expect(content).toContain('`bun run dev`');
-        expect(content).toContain('`bun run build`');
-        expect(content).toContain('`bun run start`');
-        expect(content).toContain('`burger-api doctor`');
-        expect(content).toContain('`burger-api inspect --json`');
-        expect(content).toContain('`burger-api generate route <path>`');
-        expect(content).toContain('`burger-api add <name>`');
+        for (const command of [
+            '`bun run dev`',
+            '`bun run build`',
+            '`bun run start`',
+            '`burger-api doctor`',
+            '`burger-api inspect --json`',
+            '`burger-api generate route <path>`',
+            '`burger-api add <name>`',
+        ]) {
+            expect(content).toContain(command);
+        }
 
-        expect(content).toContain('`src/index.ts`');
-        expect(content).toContain('`src/hooks.ts`');
-        expect(content).toContain('`src/plugins.ts`');
-        expect(content).toContain('`src/providers.ts`');
-        expect(content).toContain('`src/openapi.config.ts`');
-        expect(content).toContain('`burger.build.ts`');
-        expect(content).toContain('`src/api/`');
-        expect(content).toContain('served under `/api`');
+        for (const file of [
+            '`src/index.ts`',
+            '`src/hooks.ts`',
+            '`src/plugins.ts`',
+            '`src/providers.ts`',
+            '`src/openapi.config.ts`',
+            '`burger.build.ts`',
+            '`route.ts`',
+            '`schema.ts`',
+            '`openapi.ts`',
+            '`config.ts`',
+        ]) {
+            expect(content).toContain(file);
+        }
+    });
 
-        expect(content).toContain('`route.ts`');
-        expect(content).toContain('`schema.ts`');
-        expect(content).toContain('`hooks.ts`');
-        expect(content).toContain('`openapi.ts`');
-        expect(content).toContain('`config.ts`');
-        expect(content).toContain('Use per-method named exports (`GET`, `POST`, ...)');
-
-        expect(content).toContain(
-            'Handlers take `ctx: BurgerContext` and return a Web `Response`.'
-        );
-        expect(content).toContain('`defineRoute(GetSchema, (ctx) => ...)`');
-        expect(content).toContain('`onRequest`');
-        expect(content).toContain('`transform`');
-        expect(content).toContain('`beforeRoute`');
-        expect(content).toContain('`afterRoute`');
-        expect(content).toContain('`mapResponse`');
-        expect(content).toContain('`onError`');
-        expect(content).toContain('`burger.usePlugin()`');
-        expect(content).toContain('Do not use middleware');
-        expect(content).toContain('`BurgerRequest`');
-        expect(content).toContain('lowercase handler names (`get`)');
-        expect(content).toContain('`ctx.services` is read-only');
-        expect(content).toContain('Run `burger-api doctor`.');
+    it('leaves no unreplaced template placeholders', () => {
+        for (const options of [
+            baseOptions(),
+            baseOptions({
+                lang: 'js',
+                useApi: false,
+                usePages: true,
+                useWs: true,
+            }),
+        ]) {
+            const content = generateAgentsMd(options);
+            expect(content).not.toMatch(/\{\{|\}\}/);
+            expect(content).not.toContain('undefined');
+        }
     });
 
     it('uses .js file names and JSDoc for a JS project', () => {

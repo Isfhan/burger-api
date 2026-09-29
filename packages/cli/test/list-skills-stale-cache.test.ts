@@ -1,8 +1,8 @@
 /**
  * End-to-end tests for `list`/`skills available`'s stale-cache fallback.
- * Points BURGER_API_REPO_OWNER at a repo that does not exist — a real
- * deterministic 404, not a mock — so a live refresh always fails, and
- * pre-warms the cache so there is something to fall back to.
+ * No network: HTTPS_PROXY points at a closed local port, so a live refresh
+ * always fails; the cache is pre-warmed so there is something to fall back
+ * to. The nonexistent repo name guards the case where a proxy is bypassed.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { writeFile } from 'fs/promises';
@@ -27,8 +27,10 @@ function runCliInProject(args: string[]) {
         cwd: projectDir,
         env: {
             BURGER_API_CACHE_DIR: cacheDir,
-            // A nonexistent repo — live refresh always 404s, exercising
-            // the stale-fallback path for real.
+            // Closed local port — fetch fails immediately, no network.
+            HTTPS_PROXY: 'http://127.0.0.1:9',
+            // A nonexistent repo — live refresh 404s (or 403s when the
+            // runner's IP is rate limited) if the proxy were bypassed.
             BURGER_API_REPO_OWNER: 'isfhan',
             BURGER_API_REPO_NAME: 'burger-api-does-not-exist-xyz',
         },
@@ -67,7 +69,9 @@ describe('list — stale cache fallback', () => {
         expect(exitCode).not.toBe(0);
         // Fails loud (an error), never silently renders an empty table.
         expect(stdout + stderr).not.toContain('Available Hooks and Plugins');
-        expect(stdout + stderr).toContain('GitHub request failed (HTTP 404');
+        expect(stdout + stderr).toContain(
+            'Please check your internet connection and try again.'
+        );
     });
 });
 

@@ -102,7 +102,7 @@ async function throwForGitHubError(response: Response): Promise<never> {
     );
 }
 
-function wrapFetchError(err: unknown, fallbackMessage: string): Error {
+export function wrapFetchError(err: unknown, fallbackMessage: string): Error {
     if (err instanceof Error && err.name === 'AbortError') {
         return new Error(
             'Request timed out. Please check your internet connection.'

@@ -43,7 +43,7 @@ describe.skipIf(!HAS_BUNDLE && !REQUIRE_BUNDLE)(
                 );
             }
             const port = await getAvailablePort();
-            baseUrl = `http://localhost:${port}`;
+            baseUrl = `http://127.0.0.1:${port}`;
             serverProc = spawn('bun', [BUNDLE_PATH as string], {
                 env: { ...process.env, PORT: String(port) },
                 stdio: 'pipe',
