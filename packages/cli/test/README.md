@@ -116,6 +116,9 @@ bun test ./test/e2e
   target validation.
 - `e2e/create-e2e.test.ts` — the real `create` command: scaffold + install
   success, and rollback when install fails.
+- `e2e/real-console.test.ts` — Windows only: `create` in a real (minimized)
+  console window must wait at the first prompt, not crash. Fake-TTY tests
+  cannot catch prompt write errors on a real console.
 - `e2e/helpers.ts` — shared E2E scaffolding (`scaffoldProject`, `run`,
   `cleanupProjects`); not a test file.
 
