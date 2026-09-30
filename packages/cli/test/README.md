@@ -59,10 +59,16 @@ bun test ./test/e2e
   `resolveExportName`).
 - `add-flow.test.ts` — real `add` command flow (mocked GitHub): hook/plugin
   installs, skip-existing, unknown name, failed download.
+- `add-prompt.test.ts` — interactive `add`: the overwrite confirm with a
+  scripted `@clack/prompts` mock (`clack-mock.ts`); yes replaces, no/cancel
+  leave the install untouched and download nothing.
 - `create.test.ts` — `validateProjectName` and `applyFlags` pure functions.
 - `create-command.test.ts` — `create` validation paths that exit before
   scaffolding/installing (offline: bad `--lang`, existing dir, traversal,
   bad name).
+- `create-prompt.test.ts` — interactive `create` without `--yes`: prompts
+  run and a cancelled prompt exits 0 before scaffolding (scripted
+  `@clack/prompts` mock; a full answer flow would run `bun install`).
 - `create-config.test.ts` — scaffolded config file generation.
 - `create-agents.test.ts` — generated AGENTS.md/CLAUDE.md content.
 - `create-index-page.test.ts` — generated landing page.
@@ -71,6 +77,9 @@ bun test ./test/e2e
 - `skills-install.test.ts` — skill install/list helpers.
 - `skills-install-flow.test.ts` — real skill download/install into both
   folders, failure cleanup, and the `skills install` command (mocked GitHub).
+- `skills-install-prompt.test.ts` — interactive `skills install`: the
+  overwrite confirm with a scripted `@clack/prompts` mock; yes replaces
+  both copies, no/cancel keep them and download nothing.
 - `github-helpers.test.ts` — GitHub helpers with a mocked fetch
   (`isPrereleaseBuild`, `detectEcosystemType`, downloads, error messages).
 - `platform-config.test.ts` — wrangler/deno/vercel config scaffolding
@@ -78,6 +87,8 @@ bun test ./test/e2e
 - `dev-command.test.ts` — `dev` boots a temp project and hot-reloads an
   edited route (local package linked, no `bun install`), plus port/entry
   validation before spawning.
+- `dev-crash.test.ts` — `dev` keeps the CLI alive after the server crashes
+  on startup and respawns it when the entry file is fixed and saved.
 - `ecosystem-cache.test.ts` — `withEcosystemCache` freshness/stale behavior.
 - `cli-process-exit.test.ts` — ephemeral commands exit without orphaned
   handles; no ANSI escapes on piped output.
@@ -89,8 +100,9 @@ bun test ./test/e2e
   target's portable entry + wrangler.toml (offline).
 - `build-self-contained.test.ts` — a bun bundle copied away from its project
   runs with no node_modules (embedded Bun adapter).
-- `build-output.test.ts` — runs a pre-built production bundle (skipped when
-  missing; see below).
+- `build-output.test.ts` — runs the production-app example bundle; when the
+  bundle is missing it builds it here, offline, from a temp copy of the
+  example with the local package linked (see below).
 - `build-preserve-options.test.ts` — a production build keeps route hooks and
   constructor options (built from `fixtures/preserve-options`).
 - `build-ws.test.ts` — production builds embed file-based WebSocket routes
@@ -123,10 +135,8 @@ They are not part of the default suite: `bun run test` ignores
 ## Optional environment variables
 
 - `BUILD_BUNDLE_PATH`
-  - Custom path to the built bundle used by `build-output.test.ts`.
-- `REQUIRE_BUILD_BUNDLE=true`
-  - `build-output.test.ts` fails (instead of skipping) when the bundle is
-    missing. `CI=true` does the same.
+  - Custom path to the bundle run by `build-output.test.ts`; the example is
+    built on demand there when the file is missing.
 - `BURGER_API_CLI_LIST_EXIT_TEST=1`
   - Runs the GitHub-backed `burger-api ls` exit test (skipped by default).
 - `BURGER_API_CLI_SKILLS_EXIT_TEST=1`
@@ -135,12 +145,23 @@ They are not part of the default suite: `bun run test` ignores
 
 ## Building the bundle for `build-output.test.ts`
 
+`build-output.test.ts` never skips: when the bundle below is missing it
+copies the production-app example into a temp dir, links the local
+`burger-api` package there (no `bun install`, no network), runs the CLI
+build from there, and copies the bundle to the expected path.
+
 ```bash
+# Optional: build it by hand instead (requires the framework dist):
 cd packages/burger-api/examples/production-app
 bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
 cd ../../../cli
 bun test test/build-output.test.ts
 ```
 
-Without a bundle the file is reported as skipped; set
-`REQUIRE_BUILD_BUNDLE=true` to make it a hard failure.
+## Interactive prompt tests and module mocks
+
+Bun 1.4 does not isolate `mock.module()` per test file, and
+`mock.restore()` does not undo a module mock. The prompt tests therefore
+live in their own files, install the mock before importing the command
+under test (`clack-mock.ts`), and re-register the real module in `afterAll`
+so later files in the same process see it untouched.

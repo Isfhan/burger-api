@@ -8,93 +8,16 @@ import { join } from 'path';
 import { skillsCommand } from '../src/commands/skills';
 import { installSkill, skillDirs } from '../src/utils/skills';
 import {
+    DEMO_SKILL,
+    skillGithubMock,
+    type FakeSkill,
+} from './github-mocks';
+import {
     makeTempDir,
     removeDir,
     runCommandInProcess,
     withMockedFetch,
 } from './test-utils';
-
-/** A fake skill as a flat map of repo-relative path -> content. */
-interface FakeSkill {
-    files: Record<string, string>;
-}
-
-/** Immediate children of `dir` for a flat file map (GitHub's contents API). */
-function listEntries(
-    files: Record<string, string>,
-    dir: string
-): Array<{ name: string; type: 'file' | 'dir' }> {
-    const seen = new Map<string, 'file' | 'dir'>();
-    for (const path of Object.keys(files)) {
-        if (dir && !path.startsWith(`${dir}/`)) continue;
-        const rest = dir ? path.slice(dir.length + 1) : path;
-        const [head, ...tail] = rest.split('/');
-        if (!head) continue;
-        seen.set(head, tail.length > 0 ? 'dir' : 'file');
-    }
-    return [...seen.entries()].map(([name, type]) => ({ name, type }));
-}
-
-/**
- * Serves the GitHub endpoints a skill download uses from an in-memory skill.
- * `failRaw` can fail the raw download of a single file path.
- */
-function skillGithubMock(
-    skillName: string,
-    skill: FakeSkill,
-    failRaw?: (path: string) => boolean
-): (input: string | URL | Request) => Response {
-    const prefix = `ecosystem/skills/${skillName}`;
-    const rawBase = 'https://raw.githubusercontent.com/isfhan/burger-api/x';
-    return (input: string | URL | Request): Response => {
-        const url = new URL(String(input));
-        const contents = url.pathname.match(/\/contents\/(.+)$/);
-        if (contents) {
-            const repoPath = decodeURIComponent(contents[1]!);
-            if (repoPath !== prefix && !repoPath.startsWith(`${prefix}/`)) {
-                return new Response('not found', { status: 404 });
-            }
-            const dir =
-                repoPath === prefix ? '' : repoPath.slice(prefix.length + 1);
-            return Response.json(
-                listEntries(skill.files, dir).map((entry) => ({
-                    name: entry.name,
-                    path: `${repoPath}/${entry.name}`,
-                    type: entry.type,
-                    ...(entry.type === 'file' && {
-                        download_url: `${rawBase}/${repoPath}/${entry.name}`,
-                    }),
-                    size: 1,
-                }))
-            );
-        }
-
-        const raw = url.pathname.match(
-            new RegExp(`/ecosystem/skills/${skillName}/(.+)$`)
-        );
-        if (raw) {
-            const filePath = raw[1]!;
-            if (failRaw?.(filePath)) {
-                return new Response('server error', { status: 500 });
-            }
-            const content = skill.files[filePath];
-            if (content === undefined) {
-                return new Response('not found', { status: 404 });
-            }
-            return new Response(content);
-        }
-
-        return new Response(`unexpected URL: ${url.href}`, { status: 500 });
-    };
-}
-
-const DEMO_SKILL: FakeSkill = {
-    files: {
-        'SKILL.md': '---\ndescription: Demo skill\n---\n\n# Demo',
-        'references/routing.md': '# Routing',
-        'references/nested/cli.md': '# CLI',
-    },
-};
 
 let dir = '';
 

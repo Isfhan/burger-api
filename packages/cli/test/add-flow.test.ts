@@ -6,83 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { addCommand } from '../src/commands/add';
+import { githubMock, type FakeRepo } from './github-mocks';
 import {
     makeTempDir,
     removeDir,
     runCommandInProcess,
     withMockedFetch,
 } from './test-utils';
-
-interface FakePackage {
-    /** File name -> file content. */
-    files: Record<string, string>;
-}
-
-interface FakeRepo {
-    hooks: Record<string, FakePackage>;
-    plugins: Record<string, FakePackage>;
-}
-
-/** Serves the two GitHub endpoints `add` uses from an in-memory repo. */
-function githubMock(
-    repo: FakeRepo,
-    overrides: {
-        /** Path -> successful contents hits allowed before a 500. */
-        failContentsAfter?: Record<string, number>;
-        /** Repo-relative raw paths whose download returns 500. */
-        failRaw?: (repoPath: string) => boolean;
-    } = {}
-): (input: string | URL | Request) => Response {
-    const rawBase = 'https://raw.githubusercontent.com/isfhan/burger-api/x';
-    const contentsHits = new Map<string, number>();
-    return (input: string | URL | Request): Response => {
-        const url = new URL(String(input));
-        const contents = url.pathname.match(/\/contents\/(.+)$/);
-        if (contents) {
-            const repoPath = decodeURIComponent(contents[1]!);
-            const allowed = overrides.failContentsAfter?.[repoPath];
-            if (allowed !== undefined) {
-                const hits = contentsHits.get(repoPath) ?? 0;
-                contentsHits.set(repoPath, hits + 1);
-                if (hits >= allowed) {
-                    return new Response(JSON.stringify({ message: 'boom' }), {
-                        status: 500,
-                    });
-                }
-            }
-            const [, kind, name] = repoPath.split('/');
-            const pkg = repo[kind as 'hooks' | 'plugins']?.[name!];
-            if (!pkg) return new Response('not found', { status: 404 });
-            return Response.json(
-                Object.entries(pkg.files).map(([fileName, content]) => ({
-                    name: fileName,
-                    path: `${repoPath}/${fileName}`,
-                    type: 'file',
-                    download_url: `${rawBase}/${repoPath}/${fileName}`,
-                    size: content.length,
-                }))
-            );
-        }
-
-        const raw = url.pathname.match(/\/ecosystem\/(.+)$/);
-        if (raw) {
-            if (overrides.failRaw?.(raw[1]!)) {
-                return new Response('server error', { status: 500 });
-            }
-            const [kind, name, ...fileParts] = raw[1]!.split('/');
-            const content =
-                repo[kind as 'hooks' | 'plugins']?.[name!]?.files[
-                    fileParts.join('/')
-                ];
-            if (content === undefined) {
-                return new Response('not found', { status: 404 });
-            }
-            return new Response(content);
-        }
-
-        return new Response(`unexpected URL: ${url.href}`, { status: 500 });
-    };
-}
 
 let dir = '';
 

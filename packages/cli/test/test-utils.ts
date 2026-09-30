@@ -65,12 +65,23 @@ export interface InProcessResult {
     output: string;
 }
 
+export interface RunCommandOptions {
+    /**
+     * Force `process.stdin.isTTY = true` so TTY-only prompt paths run.
+     * Default false: stdin is forced non-TTY.
+     */
+    tty?: boolean;
+}
+
 /**
  * Runs a commander command's action in-process, with cwd set to `cwd` and
- * stdin forced non-TTY, so command flows can be tested with a mocked fetch.
- * `process.exit` is mocked: the code is recorded first, then thrown as a
- * {@link ProcessExitError}, so `exitCode` is still reported when a command
- * action catches (swallows) that error itself.
+ * stdin forced non-TTY (see {@link RunCommandOptions.tty}), so command flows
+ * can be tested with a mocked fetch. `process.exit` is mocked: the code is
+ * recorded first, then thrown as a {@link ProcessExitError}, so `exitCode` is
+ * still reported when a command action catches (swallows) that error itself.
+ * Only the first exit call counts — a real process terminates there, so code
+ * that catches the mock's throw and exits again (e.g. an action's catch block)
+ * cannot change the recorded code.
  *
  * Limits: the caller reuses the same `Command` instance, and commander keeps
  * option values between `parseAsync` calls on it. Pass every option on every
@@ -80,7 +91,8 @@ export interface InProcessResult {
 export async function runCommandInProcess(
     command: Command,
     args: string[],
-    cwd: string
+    cwd: string,
+    options: RunCommandOptions = {}
 ): Promise<InProcessResult> {
     const originalExit = process.exit;
     const originalCwd = process.cwd();
@@ -101,15 +113,17 @@ export async function runCommandInProcess(
     };
 
     process.exit = ((code?: number) => {
-        exitCode = code ?? 0;
-        throw new ProcessExitError(exitCode);
+        // A real process exits on the first call; remember it so later exits
+        // (unreachable in production) cannot override the reported code.
+        if (exitCode === null) exitCode = code ?? 0;
+        throw new ProcessExitError(code ?? 0);
     }) as never;
     console.log = capture;
     console.error = capture;
     process.stdout.write = captureWrite as never;
     process.stderr.write = captureWrite as never;
     Object.defineProperty(process.stdin, 'isTTY', {
-        value: false,
+        value: options.tty === true,
         configurable: true,
     });
     process.chdir(cwd);
