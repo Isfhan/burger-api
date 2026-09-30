@@ -177,6 +177,25 @@ export function generateVirtualEntrySource(
         lines.push(' }');
         lines.push(' return out;');
         lines.push('}');
+        // config.ts mixes a route-wide default export with per-method named
+        // exports (e.g. `export const POST = {...}`); keep both so the
+        // framework can merge the method overrides at startup.
+        lines.push('function __config(mod) {');
+        lines.push(' if (!mod) return mod;');
+        lines.push(
+            ' if (mod.default === undefined || mod.default === null || typeof mod.default !== "object") return __mod(mod);'
+        );
+        lines.push(' let out = mod.default;');
+        lines.push(' for (const k of Object.keys(mod)) {');
+        lines.push(
+            '  if (/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(k)) {'
+        );
+        lines.push('   if (out === mod.default) out = { ...out };');
+        lines.push('   out[k] = mod[k];');
+        lines.push('  }');
+        lines.push(' }');
+        lines.push(' return out;');
+        lines.push('}');
     }
     // HTML pages load as raw strings (bun.ts `.html` loader, like dev's
     // `?raw` import), but Bun.serve accepts only functions/HTMLBundles/
@@ -229,7 +248,7 @@ export function generateVirtualEntrySource(
             ` openapi: ${e.openapiPath ? `__normOpenapi(__mod(_o${i}))` : `__get(_r${i}, 'openapi')`},`
         );
         lines.push(
-            ` config: ${e.configPath ? `__mod(_c${i})` : `__get(_r${i}, 'config')`},`
+            ` config: ${e.configPath ? `__config(_c${i})` : `__get(_r${i}, 'config')`},`
         );
         lines.push(
             ` hooks: ${e.hooksPath ? `__mod(_h${i})` : `__get(_r${i}, 'hooks')`},`

@@ -79,6 +79,10 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
 
     it('completes the handshake and delivers open/message/close', async () => {
         let openCount = 0;
+        const openView: { href: string; room: string | null } = {
+            href: '',
+            room: null,
+        };
         const receivedMessages: (string | Buffer)[] = [];
         const closeResult: {
             value: { code: number; reason: string } | null;
@@ -90,8 +94,10 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
                 {
                     path: '/chat',
                     handlers: {
-                        open: () => {
+                        open: (ws) => {
                             openCount++;
+                            openView.href = ws.url.href;
+                            openView.room = ws.query.get('room');
                         },
                         message: (_ws, message) => {
                             receivedMessages.push(message);
@@ -112,7 +118,7 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
         let destroyed = false;
         const fakeSocket = { destroy: () => (destroyed = true) };
         await bridge.handleUpgrade(
-            fakeUpgradeRequest('/chat'),
+            fakeUpgradeRequest('/chat?room=lobby'),
             fakeSocket,
             Buffer.alloc(0)
         );
@@ -121,6 +127,9 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
         // library's handleUpgrade fires and the open handler runs.
         expect(destroyed).toBe(false);
         expect(openCount).toBe(1);
+        // The Node bridge captures the upgrade URL like the other platforms.
+        expect(openView.href).toBe('http://localhost/chat?room=lobby');
+        expect(openView.room).toBe('lobby');
 
         const wsInstance =
             FakeWebSocketServer.instances[

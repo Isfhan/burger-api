@@ -165,6 +165,37 @@ describe('WebSocket integration', () => {
         ws.close();
     });
 
+    it('programmatic route: ws.url and ws.query', async () => {
+        port = await getAvailablePort();
+
+        server = new Burger({ debug: true });
+        server.websocket('/inspect/:room', {
+            open(ws: BurgerWS) {
+                ws.send(
+                    JSON.stringify({
+                        pathname: ws.url.pathname,
+                        room: ws.params.room,
+                        queryRoom: ws.query.get('room'),
+                    })
+                );
+            },
+        });
+
+        await server.serve(port);
+
+        const ws = new WebSocket(
+            `ws://localhost:${port}/inspect/lobby?room=general&x=1`
+        );
+        await waitForOpen(ws);
+
+        const msg = JSON.parse(await waitForMessage(ws));
+        expect(msg.pathname).toBe('/inspect/lobby');
+        expect(msg.room).toBe('lobby');
+        expect(msg.queryRoom).toBe('general');
+
+        ws.close();
+    });
+
     it('HTTP routes still work alongside WebSocket', async () => {
         port = await getAvailablePort();
 
@@ -192,5 +223,79 @@ describe('WebSocket integration', () => {
         expect(msg).toBe('alive');
 
         ws.close();
+    });
+
+    it('ctx.publish delivers to topic subscribers (HTTP route → WS client)', async () => {
+        port = await getAvailablePort();
+
+        server = new Burger({
+            debug: true,
+            apiRoutes: [
+                {
+                    path: '/api/broadcast',
+                    handlers: {
+                        POST: (ctx) => {
+                            const sent = ctx.publish('room', 'hello-room');
+                            return Response.json({ sent });
+                        },
+                    },
+                },
+            ],
+        });
+        server.websocket('/sub', {
+            open(ws: BurgerWS) {
+                ws.subscribe('room');
+                ws.send('subscribed');
+            },
+        });
+
+        await server.serve(port);
+
+        const ws = new WebSocket(`ws://localhost:${port}/sub`);
+        await waitForOpen(ws);
+        expect(await waitForMessage(ws)).toBe('subscribed');
+
+        // Arm the listener before the POST so a fast delivery is not missed.
+        const roomMessage = waitForMessage(ws);
+        const res = await fetch(
+            `http://localhost:${port}/api/broadcast`,
+            { method: 'POST' }
+        );
+        expect(res.status).toBe(200);
+        // Bun reports a send status; the message must have been delivered.
+        expect(typeof (await res.json()).sent).toBe('number');
+
+        expect(await roomMessage).toBe('hello-room');
+        ws.close();
+    });
+
+    it('ctx.publish fails loud on the fetch path (no Bun server)', async () => {
+        const app = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/pub-error',
+                    handlers: {
+                        GET: (ctx) => {
+                            try {
+                                ctx.publish('room', 'x');
+                                return Response.json({ message: 'no error' });
+                            } catch (error) {
+                                return Response.json({
+                                    message: (error as Error).message,
+                                });
+                            }
+                        },
+                    },
+                },
+            ],
+        });
+        const handler = await app.fetchHandler();
+
+        const res = await handler(
+            new Request('http://localhost/api/pub-error')
+        );
+        const body = await res.json();
+        expect(body.message).toContain('ctx.publish("room")');
+        expect(body.message).toContain('app.serve()');
     });
 });

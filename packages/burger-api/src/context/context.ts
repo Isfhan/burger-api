@@ -80,12 +80,29 @@ export interface RequestIPSource {
 }
 
 /**
- * Per-app mutable reference to the serving runtime's IP source. The adapter
+ * A server handle that can publish to WebSocket topic subscribers (Bun's
+ * `Server`). Reached through the same per-app holder as {@link RequestIPSource}
+ * so `ctx.publish` resolves lazily without per-request bookkeeping.
+ */
+export interface PublishSource {
+    /**
+     * @returns Bun's send status: bytes sent, `0` when dropped, `-1` on
+     * backpressure.
+     */
+    publish(
+        topic: string,
+        message: string | Uint8Array,
+        compress?: boolean
+    ): number;
+}
+
+/**
+ * Per-app mutable reference to the serving runtime's server. The adapter
  * writes the server once at startup (stable for the life of the server), so
- * `ctx.ip` resolves lazily with no per-request bookkeeping.
+ * `ctx.ip` and `ctx.publish` resolve lazily with no per-request bookkeeping.
  */
 export interface RequestIPHolder {
-    server?: RequestIPSource;
+    server?: RequestIPSource & Partial<PublishSource>;
 }
 
 /**
@@ -414,6 +431,31 @@ export class BurgerContext<TRoute = unknown> {
         const server = this._ipHolder?.server;
         this._ip = server ? (server.requestIP(this._raw)?.address ?? null) : null;
         return this._ip ?? undefined;
+    }
+
+    /**
+     * Publish a message to every WebSocket socket subscribed to `topic`
+     * (Bun only — `server.publish`). Unlike `ws.publish`, delivery is not
+     * tied to a publishing socket, so the sender is included when subscribed.
+     *
+     * @returns Bun's send status: bytes sent, `0` when the message was
+     * dropped, `-1` on backpressure.
+     * @throws when the app is not served by Bun (`app.serve()`), or before
+     * the server has started.
+     */
+    publish(topic: string, message: string | Buffer): number {
+        const server = this._ipHolder?.server;
+        const publish = server?.publish;
+        if (typeof publish !== 'function') {
+            throw new Error(
+                `[burger-api] ctx.publish("${topic}") requires a running Bun ` +
+                    'server with WebSocket handlers (app.serve()); none is ' +
+                    'available on this runtime or at this point in the ' +
+                    'lifecycle. Use ws.publish() inside a WebSocket handler ' +
+                    'when no HTTP context is available.'
+            );
+        }
+        return publish.call(server, topic, message);
     }
 
     /** The underlying raw `Request`. */

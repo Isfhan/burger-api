@@ -147,9 +147,7 @@ export class ModuleLoader {
             route.localFiles.hooks
         );
         warnUnknownHookExports(hooks, route.localFiles.hooks ?? '', 'route');
-        const config = await this.loadOptional<Record<string, unknown>>(
-            route.localFiles.config
-        );
+        const config = await this.loadConfig(route.localFiles.config);
 
         // 3. Overlay inline exports from route.ts. Route-local inline wins
         // over separate files.
@@ -210,6 +208,43 @@ export class ModuleLoader {
         if (!filePath) return undefined;
         const mod = await import(filePath);
         return (mod.default ?? mod) as T;
+    }
+
+    /**
+     * Loads `config.ts`. The default export (or the module namespace when
+     * there is no default) carries route-wide options; uppercase method
+     * exports are per-method overrides, kept under their uppercase keys and
+     * resolved per method at route compile time.
+     *
+     * A file with only a default export returns that object unchanged, so
+     * `ctx.config` keeps the exact object identity it had before.
+     */
+    private async loadConfig(
+        filePath?: string
+    ): Promise<Record<string, unknown> | undefined> {
+        if (!filePath) return undefined;
+        const mod = (await import(filePath)) as Record<string, unknown>;
+        const hasMethodExport = Object.keys(mod).some((key) =>
+            HTTP_METHOD_SET.has(key)
+        );
+        if (!hasMethodExport) {
+            return (mod.default ?? mod) as Record<string, unknown>;
+        }
+
+        const base = mod.default;
+        const merged: Record<string, unknown> = {};
+        if (base !== null && typeof base === 'object') {
+            Object.assign(merged, base);
+        } else if (base === undefined) {
+            // No default: non-method named exports stay route-wide.
+            for (const [key, value] of Object.entries(mod)) {
+                if (!HTTP_METHOD_SET.has(key)) merged[key] = value;
+            }
+        }
+        for (const [key, value] of Object.entries(mod)) {
+            if (HTTP_METHOD_SET.has(key)) merged[key] = value;
+        }
+        return merged;
     }
 
     /**

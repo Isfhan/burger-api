@@ -28,7 +28,8 @@ Prompts for: API routes (y/n, default yes), API directory name, API prefix, debu
 Every project gets `AGENTS.md` (commands, layout, and framework rules for AI
 agents, read by Claude Code and other agents), even with `--no-skills`. When skills
 are opted in, they are installed to both `.agents/skills/burger-api/` and
-`.claude/skills/burger-api/`.
+`.claude/skills/burger-api/`. TypeScript projects also get `src/types.ts`, a
+commented module-augmentation example for app-wide type extensions.
 
 Flags (feature flags imply `--yes`; without a TTY `create` never prompts and uses the defaults plus any flags):
 
@@ -122,6 +123,11 @@ burger-api build src/index.ts --minify --outfile dist/app.js
 ```
 
 Default output: `.build/bundle/app.js`
+
+Building for a portable target (`cloudflare`, `deno`, `vercel`, `node`)
+prints one warning listing any user source files that import `bun`/`bun:*`
+or use the `Bun.` global — those runtimes have no Bun globals. The build
+continues; remove the Bun-only code before deploying.
 
 ### `start`
 

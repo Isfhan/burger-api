@@ -437,7 +437,7 @@ export class Burger {
         if (Array.isArray(this.options.apiRoutes)) {
             // AOT routes may carry uppercase method keys (GET/POST) in
             // `schema` / `openapi`; normalize once for the compiler and
-            // OpenAPI generator.
+            // OpenAPI generator. `config` keeps its uppercase method keys.
             apiRoutes = this.options.apiRoutes
                 .map((def) => ({
                     ...def,

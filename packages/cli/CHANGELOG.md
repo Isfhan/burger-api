@@ -41,6 +41,13 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 - `create` writes `AGENTS.md`: every new project (also with `--no-skills`)
   gets short, project-specific rules for AI agents. Claude Code and other
   agents read it directly, so no `CLAUDE.md` is written.
+- `create` writes `src/types.ts` for TypeScript projects: a commented
+  module-augmentation example for `RouteConfig` and `BurgerServices`, so the
+  single home for app-wide type extensions exists from the first run.
+- `AGENTS.md` documents per-method `config.ts`, `ws.url` / `ws.query`, and
+  `ctx.publish`, and lists `src/types.ts` in the project layout.
+- `generate plugin` stubs note that plugins add hooks, while services
+  (database, clients) belong in `src/providers.ts` via `burger.provide()`.
 - `--lang ts|js` and `--yes` / `--defaults` flags on `create`; JS scaffolds use
   `jsconfig.json` (`checkJs: true`) and `.js` convention files with JSDoc
   types.
@@ -68,6 +75,10 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 ### 🔧 Changed
 
+- `build` for a portable target (`cloudflare`, `deno`, `vercel`, `node`)
+  warns once, listing user source files that import `bun`/`bun:*` or use the
+  `Bun.` global; the build still succeeds so the code can be removed before
+  the platform's own bundler runs.
 - `generate ws` uses `config.wsDir` (was hardcoded `src/websocket`).
 - API and WS scanners accept `.ts` / `.js` / `.mjs` conventions and fail loud
   when conflicting files coexist (for example `route.ts` + `route.js`).

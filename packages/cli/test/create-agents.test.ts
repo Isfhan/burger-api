@@ -66,6 +66,7 @@ describe('generateAgentsMd', () => {
             '`src/plugins.ts`',
             '`src/providers.ts`',
             '`src/openapi.config.ts`',
+            '`src/types.ts`',
             '`burger.build.ts`',
             '`route.ts`',
             '`schema.ts`',
@@ -74,6 +75,15 @@ describe('generateAgentsMd', () => {
         ]) {
             expect(content).toContain(file);
         }
+    });
+
+    it('documents per-method config, ws.url/query, ctx.publish, and types.ts', () => {
+        const content = generateAgentsMd(baseOptions());
+
+        expect(content).toContain('export const POST = { auth: { required: true } }');
+        expect(content).toContain('`ws.url` / `ws.query`');
+        expect(content).toContain('`ctx.publish(topic, message)`');
+        expect(content).toContain("declare module 'burger-api'");
     });
 
     it('leaves no unreplaced template placeholders', () => {
@@ -100,6 +110,8 @@ describe('generateAgentsMd', () => {
         expect(content).toContain('`schema.js`');
         expect(content).toContain('`burger.build.js`');
         expect(content).not.toContain('route.ts');
+        // types.ts is TS-only; JS projects have no ambient type layer.
+        expect(content).not.toContain('src/types.ts');
         expect(content).toContain(
             '| `route.js` | Handlers: `export async function GET(ctx)` |'
         );
@@ -166,6 +178,7 @@ describe('create writes AGENTS.md', () => {
         const agents = await readFile(join(noSkills, 'AGENTS.md'), 'utf8');
 
         expect(agents).toContain('`src/index.ts`');
+        expect(agents).toContain('`src/types.ts`');
         expect(agents).toContain('- Skill: run `burger-api skills install`');
         expect(existsSync(join(noSkills, 'CLAUDE.md'))).toBe(false);
     });

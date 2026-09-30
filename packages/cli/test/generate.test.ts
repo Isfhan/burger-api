@@ -149,6 +149,16 @@ describe('generatePluginTemplate', () => {
         expect(content).toContain('Import and register in src/plugins.ts');
     });
 
+    it('points services at providers.ts (plugins are for hooks)', () => {
+        const ts = generatePluginTemplate('jwt');
+        expect(ts).toContain('Plugins add hooks');
+        expect(ts).toContain('src/providers.ts via burger.provide()');
+
+        const js = generatePluginTemplate('jwt', 'js');
+        expect(js).toContain('Plugins add hooks');
+        expect(js).toContain('src/providers.js via burger.provide()');
+    });
+
     it('capitalizes the class name', () => {
         const content = generatePluginTemplate('jwt');
         expect(content).toContain('export const Jwt');

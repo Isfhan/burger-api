@@ -900,6 +900,29 @@ export default (burger: ProviderRegistrar) => {
 `;
 }
 
+/**
+ * `src/types.ts` (TypeScript projects only): app-wide type extensions.
+ * Everything is commented out so a fresh scaffold typechecks until the user
+ * opts in.
+ */
+export function generateTypesFile(): string {
+    return `// App-wide type extensions. Uncomment to extend burger-api interfaces
+// project-wide (ctx.config, ctx.services, ...).
+//
+// declare module 'burger-api' {
+//     interface RouteConfig {
+//         auth?: boolean | { required?: boolean; roles?: string[] };
+//         cache?: number;
+//     }
+//
+//     interface BurgerServices {
+//         db: Database;
+//     }
+// }
+
+export {};
+`;
+}
 
 /**
  * openapi.config.ts|js: OpenAPI metadata, docs UI, docs auth.
@@ -1008,6 +1031,11 @@ export function generateAgentsMd(
         `- \`src/providers.${ext}\` - services, registered with \`burger.provide()\``
     );
     lines.push(`- \`src/openapi.config.${ext}\` - OpenAPI metadata and docs UI`);
+    if (ext === 'ts') {
+        lines.push(
+            '- `src/types.ts` - app-wide type extensions (module augmentation)'
+        );
+    }
     if (options.useApi) {
         lines.push(
             `- \`src/${apiDir}/\` - API routes, served under \`${apiPrefix}\``
@@ -1051,6 +1079,9 @@ export function generateAgentsMd(
     lines.push(
         'Use per-method named exports (`GET`, `POST`, ...) in route, schema, and openapi files.'
     );
+    lines.push(
+        `\`config.${ext}\` uses \`export default\` for the whole route and named method exports (e.g. \`export const POST = { auth: { required: true } }\`) to override for one method.`
+    );
     lines.push('');
 
     lines.push('## Rules');
@@ -1085,6 +1116,14 @@ export function generateAgentsMd(
     lines.push(
         '- `ctx.services` is read-only; put per-request data in a `transform` hook.'
     );
+    lines.push(
+        '- WebSocket handlers read `ws.url` / `ws.query`; HTTP handlers send to WS topic subscribers with `ctx.publish(topic, message)` (Bun).'
+    );
+    if (ext === 'ts') {
+        lines.push(
+            '- App-wide type extensions (e.g. `ctx.services`) go in `src/types.ts` via `declare module \'burger-api\'`.'
+        );
+    }
     lines.push('');
 
     lines.push('## After changes');
@@ -1182,6 +1221,15 @@ export async function createProject(
             join(targetDir, 'src', `providers.${ext}`),
             generateProvidersFile(lang)
         );
+
+        // TS-only: a home for app-wide module augmentation. JS projects have
+        // no ambient type layer, so no file is written.
+        if (lang === 'ts') {
+            await write(
+                join(targetDir, 'src', 'types.ts'),
+                generateTypesFile()
+            );
+        }
 
         if (options.useApi) {
             const apiDir = join(targetDir, 'src', options.apiDir || 'api');
@@ -1575,6 +1623,8 @@ export function generatePluginTemplate(
         return [
             `/**`,
             ` * ${className} plugin.`,
+            ` * Plugins add hooks; services (database, clients) go in`,
+            ` * src/providers.js via burger.provide().`,
             ` * Import and register in src/plugins.js via burger.usePlugin().`,
             ` */`,
             `/** @type {import('burger-api').Plugin} */`,
@@ -1590,6 +1640,8 @@ export function generatePluginTemplate(
     return [
         `/**`,
         ` * ${className} plugin.`,
+        ` * Plugins add hooks; services (database, clients) go in`,
+        ` * src/providers.ts via burger.provide().`,
         ` * Import and register in src/plugins.ts via burger.usePlugin().`,
         ` */`,
         `import type { Plugin } from 'burger-api';`,

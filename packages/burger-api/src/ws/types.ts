@@ -207,6 +207,28 @@ export interface BurgerWS {
     readonly params: Record<string, string>;
 
     /**
+     * The URL of the upgrade request. Parsed lazily on first access and
+     * cached for the life of the socket.
+     *
+     * @example
+     * ```typescript
+     * const room = ws.url.pathname;
+     * ```
+     */
+    readonly url: URL;
+
+    /**
+     * Query string parameters of the upgrade request. Parsed lazily on first
+     * access and cached for the life of the socket.
+     *
+     * @example
+     * ```typescript
+     * const token = ws.query.get('token');
+     * ```
+     */
+    readonly query: URLSearchParams;
+
+    /**
      * Injected application services, populated by `burger.provide()` (the
      * `ctx.services` equivalent). Extend `BurgerServices` via module augmentation.
      *
@@ -391,15 +413,28 @@ export class BurgerWSContext implements BurgerWS {
     private _params: Record<string, string>;
     private _services: BurgerServices = Object.create(null) as BurgerServices;
 
+    /** Upgrade request URL captured by the adapter (not parsed yet). */
+    private _url: string | undefined;
+
+    /** Cached parsed URL — lazily built once per socket. */
+    private _parsedUrl: URL | undefined;
+
+    /** Cached query view — shares the parsed URL's `searchParams`. */
+    private _query: URLSearchParams | undefined;
+
     // The raw socket is the platform's server-side WebSocket; `providers` is
     // the same map passed to `BurgerContext.create`.
     constructor(
         rawWebSocket: any,
         providers?: Map<string, unknown>,
-        params: Record<string, string> = {}
+        params: Record<string, string> = {},
+        url?: string
     ) {
         this._raw = rawWebSocket;
         this._params = params;
+        this._url = url;
+        this._parsedUrl = undefined;
+        this._query = undefined;
         // Copy data from the raw socket (typed via the `WebSocketData`
         // augmentation).
         if (rawWebSocket.data) {
@@ -424,6 +459,24 @@ export class BurgerWSContext implements BurgerWS {
 
     get params(): Record<string, string> {
         return this._params;
+    }
+
+    get url(): URL {
+        if (this._parsedUrl !== undefined) return this._parsedUrl;
+        // Wired sockets carry the URL from the upgrade; a raw socket that
+        // exposes its own `url` (some framing libraries) is the fallback.
+        const raw = this._url ?? this._raw?.url;
+        if (typeof raw !== 'string') {
+            throw new Error(
+                '[burger-api] ws.url is unavailable: this socket was not ' +
+                    'created by the BurgerAPI WebSocket upgrade path.'
+            );
+        }
+        return (this._parsedUrl = new URL(raw));
+    }
+
+    get query(): URLSearchParams {
+        return (this._query ??= this.url.searchParams);
     }
 
     get services(): BurgerServices {

@@ -112,7 +112,7 @@ export function open(ws: BurgerWS) {
 }
 
 export function message(ws: BurgerWS, message: string | Buffer) {
-    ws.publish('chat', message); // broadcast to every subscriber
+    ws.publish('chat', message); // broadcast to subscribers (not the sender)
 }
 ```
 
@@ -125,6 +125,26 @@ export function open(ws: BurgerWS) {
     const { roomId } = ws.params;
 }
 ```
+
+The upgrade request is available too: `ws.url` (a `URL`, parsed lazily once
+per socket) and `ws.query` (its `URLSearchParams`).
+
+```typescript
+export function open(ws: BurgerWS) {
+    const token = ws.query.get('token');
+    console.log(ws.url.pathname);
+}
+```
+
+HTTP handlers can broadcast to WS subscribers with
+`ctx.publish(topic, message)` (Bun only; throws on other runtimes and before
+`app.serve()`). `ws.publish` does **not** echo to the publishing socket;
+`ctx.publish` reaches every subscriber, including the sender if it is
+subscribed.
+
+With an auth plugin registered, WS upgrades are gated by that plugin. A
+public WS route needs a `config.ts` with `auth: false` under the ws route
+directory — otherwise the plugin default-denies the upgrade.
 
 Scaffold with `burger-api generate ws <path>` (see `cli.md`), or opt into a
 sample route at project creation time via `create`'s "Do you need WebSocket

@@ -193,6 +193,37 @@ describe('BurgerWSContext', () => {
         expect((ctx.data as Record<string, unknown>).userId).toBe('123');
     });
 
+    it('lazily parses url and query once per socket', () => {
+        const mockWs = createMockWs();
+        const ctx = new BurgerWSContext(
+            mockWs,
+            undefined,
+            {},
+            'http://localhost/chat/lobby?room=general'
+        );
+
+        expect(ctx.url.pathname).toBe('/chat/lobby');
+        expect(ctx.query.get('room')).toBe('general');
+        // Both accessors cache their parse per socket.
+        expect(ctx.url).toBe(ctx.url);
+        expect(ctx.query).toBe(ctx.query);
+    });
+
+    it('falls back to a raw socket url when present', () => {
+        const mockWs = createMockWs({ url: 'http://localhost/raw?x=1' });
+        const ctx = new BurgerWSContext(mockWs);
+
+        expect(ctx.url.pathname).toBe('/raw');
+        expect(ctx.query.get('x')).toBe('1');
+    });
+
+    it('fails loud when the socket carries no upgrade URL', () => {
+        const ctx = new BurgerWSContext(createMockWs());
+
+        expect(() => ctx.url).toThrow(/upgrade path/);
+        expect(() => ctx.query).toThrow(/upgrade path/);
+    });
+
     it('should have correct readyState', () => {
         const mockWs = createMockWs({
             readyState: WebSocketReadyState.OPEN,

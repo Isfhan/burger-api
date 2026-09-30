@@ -134,16 +134,26 @@ export function collectRoutes(
 }
 
 /**
- * Copies a per-method map (`schema.ts` / `openapi.ts` exports) with uppercase
- * method keys (`GET`) lowercased (`get`) for the validation compiler and
- * OpenAPI generator. Non-method keys (e.g. `coerce`) pass through; never
- * mutates the input (module namespaces are frozen).
+ * Copies a per-method map (`schema.ts` / `openapi.ts` / `config.ts` exports)
+ * with uppercase method keys (`GET`) lowercased (`get`) for the validation
+ * compiler, OpenAPI generator and route compiler. Non-method keys (e.g.
+ * `coerce`) pass through; never mutates the input (module namespaces are
+ * frozen). Returns the input unchanged when it has no uppercase method key,
+ * so default-only configs keep their object identity.
  */
 export function lowercaseMethodKeys(
     raw: Record<string, unknown> | object
 ): Record<string, unknown> {
+    const entries = Object.entries(raw);
+    if (
+        !entries.some(([key]) =>
+            (HTTP_METHODS as readonly string[]).includes(key)
+        )
+    ) {
+        return raw as Record<string, unknown>;
+    }
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(raw)) {
+    for (const [key, value] of entries) {
         const isMethod = (HTTP_METHODS as readonly string[]).includes(key);
         out[isMethod ? key.toLowerCase() : key] = value;
     }

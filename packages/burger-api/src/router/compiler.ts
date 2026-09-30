@@ -1,5 +1,6 @@
 import type { RouteDefinition, RequestHandler } from '../types/index.js';
 import type { HTTPMethod, LowercaseHTTPMethod } from '../utils/routing.js';
+import { HTTP_METHODS } from '../utils/routing.js';
 import type { RouteModule } from '../compiler/route-module.js';
 import type {
     ContextInit,
@@ -205,15 +206,20 @@ export class RouterCompiler {
             // Thread debug flag for error rendering.
             plan.debug = this.debug;
 
+            // Split `config.ts` into route-wide options + per-method overrides
+            // once; each method resolves its own merged config below. A
+            // default-only config passes through with its identity intact.
+            const { base: baseConfig, methods: methodConfigs } = splitConfig(
+                def.config
+            );
+
             // Thread global validation config for response validation. A
-            // route's `config.ts` may override `responseValidation`.
-            const routeMode = def.config?.responseValidation;
-            plan.validatorConfig =
-                routeMode === 'off' ||
-                routeMode === 'dev' ||
-                routeMode === 'enforce'
-                    ? { ...this.config, responseValidation: routeMode }
-                    : this.config;
+            // route's `config.ts` may override `responseValidation`; a
+            // per-method override replaces it for that method only.
+            plan.validatorConfig = resolveValidatorConfig(
+                this.config,
+                baseConfig
+            );
 
             // Compile-time-only field analysis. A `known` result (every reader
             // provably accesses fields only through direct member reads) lets
@@ -236,7 +242,9 @@ export class RouterCompiler {
                 path,
                 isWildcard,
                 isStatic,
-                def.config,
+                baseConfig,
+                methodConfigs,
+                this.config,
                 this.jit,
                 services,
                 ipHolder
@@ -404,6 +412,10 @@ function describeReturn(result: unknown): string {
  * the request context, runs the hook plan (or calls the handler directly for
  * an empty plan), and merges `ctx.set` into the response. Auto-HEAD and the
  * framework's auto OPTIONS are baked in here.
+ *
+ * `config` is the route-wide config; `methodConfigs` holds the per-method
+ * overrides. Both are resolved to one merged object per method at compile
+ * time — no per-request merging or allocation.
  */
 function buildRouteCores(
     rawHandlers: Partial<Record<HTTPMethod, RequestHandler>>,
@@ -414,6 +426,8 @@ function buildRouteCores(
     isWildcard: boolean,
     isStatic: boolean,
     config: Record<string, unknown> | undefined,
+    methodConfigs: Record<string, Record<string, unknown>> | undefined,
+    validatorBase: ValidatorConfig,
     jit: boolean,
     services: BurgerServices,
     ipHolder: RequestIPHolder | undefined
@@ -430,17 +444,26 @@ function buildRouteCores(
     const skipValidatedBag = meta.unknown === false && !meta.has('validated');
 
     for (const m of Object.keys(planHandlers) as HTTPMethod[]) {
+        const methodConfig = mergeMethodConfig(
+            config,
+            methodConfigs?.[m.toLowerCase()]
+        );
         cores[m] = buildMethodCore(
             m,
             m,
             rawHandlers[m]!,
             planHandlers[m]!,
-            specializePlan(plan, m, skipValidatedBag),
+            specializePlan(
+                plan,
+                m,
+                skipValidatedBag,
+                methodValidatorConfig(plan, validatorBase, methodConfig)
+            ),
             meta,
             pattern,
             isWildcard,
             staticRouteMeta,
-            config,
+            methodConfig,
             jit,
             services,
             ipHolder
@@ -449,19 +472,29 @@ function buildRouteCores(
 
     // Auto-HEAD: derive from GET when no explicit HEAD handler exists. The
     // GET handler runs through the normal plan; only the exit differs (body
-    // stripped, Content-Length preserved) — see `finishHead`.
+    // stripped, Content-Length preserved) — see `finishHead`. Config follows
+    // GET, mirroring the handler derivation.
     if (!cores.HEAD && rawHandlers.GET) {
+        const headConfig = mergeMethodConfig(
+            config,
+            methodConfigs?.head ?? methodConfigs?.get
+        );
         cores.HEAD = buildMethodCore(
             'HEAD',
             'GET',
             rawHandlers.GET,
             planHandlers.GET!,
-            specializePlan(plan, 'HEAD', skipValidatedBag),
+            specializePlan(
+                plan,
+                'HEAD',
+                skipValidatedBag,
+                methodValidatorConfig(plan, validatorBase, headConfig)
+            ),
             meta,
             pattern,
             isWildcard,
             staticRouteMeta,
-            config,
+            headConfig,
             jit,
             services,
             ipHolder
@@ -472,18 +505,110 @@ function buildRouteCores(
 }
 
 /**
+ * Shallow-merges a method's config over the route-wide config (method keys
+ * win). Returns the route-wide object unchanged when the method has no
+ * override — preserving its identity for `ctx.config`.
+ */
+function mergeMethodConfig(
+    base: Record<string, unknown> | undefined,
+    override: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+    if (!override) return base;
+    return { ...base, ...override };
+}
+
+/**
+ * Resolves a method's effective `responseValidation` mode. Returns the base
+ * plan's config object unchanged when the method does not change the mode, so
+ * every core without an override shares the same ValidatorConfig.
+ */
+function methodValidatorConfig(
+    plan: HookPlan,
+    validatorBase: ValidatorConfig,
+    methodConfig: Record<string, unknown> | undefined
+): ValidatorConfig {
+    const baseResolved =
+        plan.validatorConfig ??
+        resolveValidatorConfig(validatorBase, undefined);
+    if (methodConfig === undefined) return baseResolved;
+    const mode = methodConfig.responseValidation;
+    if (mode !== 'off' && mode !== 'dev' && mode !== 'enforce') {
+        return baseResolved;
+    }
+    return mode === baseResolved.responseValidation
+        ? baseResolved
+        : { ...validatorBase, responseValidation: mode };
+}
+
+/**
+ * Applies a route config's `responseValidation` mode to the app validation
+ * config; unknown/absent modes leave the base object untouched.
+ */
+function resolveValidatorConfig(
+    base: ValidatorConfig,
+    config: Record<string, unknown> | undefined
+): ValidatorConfig {
+    const mode = config?.responseValidation;
+    return mode === 'off' || mode === 'dev' || mode === 'enforce'
+        ? { ...base, responseValidation: mode }
+        : base;
+}
+
+/** Route-wide config + per-method overrides split from `config.ts`. */
+interface RouteConfigParts {
+    base: Record<string, unknown> | undefined;
+    methods: Record<string, Record<string, unknown>> | undefined;
+}
+
+/**
+ * Splits a route's `config.ts` object into route-wide options and per-method
+ * overrides (uppercase method keys only, lowercased here), so plain options
+ * such as `options` or `delete` stay route-wide. A config without method
+ * keys passes through untouched, preserving object identity.
+ */
+function splitConfig(
+    config: Record<string, unknown> | undefined
+): RouteConfigParts {
+    if (!config) return { base: undefined, methods: undefined };
+    let methods: Record<string, Record<string, unknown>> | undefined;
+    for (const [key, value] of Object.entries(config)) {
+        if (!isMethodKey(key)) continue;
+        if (value === null || typeof value !== 'object') continue;
+        (methods ??= {})[key.toLowerCase()] = value as Record<string, unknown>;
+    }
+    if (!methods) return { base: config, methods: undefined };
+
+    const base: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+        if (isMethodKey(key)) continue;
+        base[key] = value;
+    }
+    return { base, methods };
+}
+
+/** True when `key` is an uppercase HTTP method (`GET`, `POST`, …). */
+function isMethodKey(key: string): boolean {
+    return (HTTP_METHODS as readonly string[]).includes(key);
+}
+
+/**
  * Clones a route plan with the validation hook specialized for one method:
  * the method lookup and `toLowerCase()` are resolved at compile time, so the
  * request path runs only the declared slots. Plans without validators are
- * returned as-is (no allocation).
+ * returned as-is (no allocation) unless the method's `responseValidation`
+ * override changed the validator config.
  */
 function specializePlan(
     plan: HookPlan,
     method: HTTPMethod,
-    skipValidatedBag: boolean
+    skipValidatedBag: boolean,
+    validatorConfig: ValidatorConfig
 ): HookPlan {
     const validators = plan.validators;
-    if (!validators || !plan.validation) return plan;
+    const configChanged = validatorConfig !== plan.validatorConfig;
+    if (!validators || !plan.validation) {
+        return configChanged ? { ...plan, validatorConfig } : plan;
+    }
     return {
         ...plan,
         validation: createValidationHook(
@@ -493,6 +618,7 @@ function specializePlan(
             method.toLowerCase() as import('../utils/routing.js').LowercaseHTTPMethod,
             skipValidatedBag
         ),
+        validatorConfig,
     };
 }
 

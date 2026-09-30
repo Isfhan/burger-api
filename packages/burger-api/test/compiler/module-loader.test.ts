@@ -80,6 +80,63 @@ describe('ModuleLoader — assembly (self-contained routes)', () => {
         expect(users.config).toEqual({ auth: true });
     });
 
+    it('merges per-method config exports over the default (lowercase method keys)', async () => {
+        const root2 = mkdtempSync(path.join(tmpdir(), 'burger-config-methods-'));
+        try {
+            const write = (rel: string, contents: string) => {
+                const full = path.join(root2, rel);
+                mkdirSync(path.dirname(full), { recursive: true });
+                writeFileSync(full, contents);
+            };
+            write(
+                'mixed/route.ts',
+                `export const GET = () => new Response('get');
+export const POST = () => new Response('post');`
+            );
+            write(
+                'mixed/config.ts',
+                `export default { auth: false };
+export const POST = { auth: { required: true } };`
+            );
+            const scanned = await new DirectoryScanner(root2, 'api').scan();
+            const loaded = await new ModuleLoader().load(scanned);
+            const mixed = loaded.find((m) => m.path === '/api/mixed')!;
+            expect(mixed.config).toEqual({
+                auth: false,
+                POST: { auth: { required: true } },
+            });
+        } finally {
+            rmSync(root2, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps a default-only config object unchanged (identity preserved)', async () => {
+        const root2 = mkdtempSync(path.join(tmpdir(), 'burger-config-id-'));
+        try {
+            const full = path.join(root2, 'plain');
+            mkdirSync(full, { recursive: true });
+            writeFileSync(
+                path.join(full, 'route.ts'),
+                `export const GET = () => new Response('plain');`
+            );
+            writeFileSync(
+                path.join(full, 'config.ts'),
+                `const config = { auth: false };
+export default config;`
+            );
+            const scanned = await new DirectoryScanner(root2, 'api').scan();
+            const loaded = await new ModuleLoader().load(scanned);
+            const plain = loaded.find((m) => m.path === '/api/plain')!;
+            expect(plain.config).toEqual({ auth: false });
+            // Same module instance: the loader must not clone default-only
+            // configs, so `ctx.config` identity is unchanged.
+            const reimport = await import(path.join(full, 'config.ts'));
+            expect(plain.config).toBe(reimport.default);
+        } finally {
+            rmSync(root2, { recursive: true, force: true });
+        }
+    });
+
     it('route without config still works (config is optional)', () => {
         const dashboard = modules.find((m) => m.path === '/api/dashboard')!;
         expect(dashboard.config).toBeUndefined();

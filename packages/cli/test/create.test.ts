@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { applyFlags, validateProjectName } from '../src/commands/create';
+import { createProject } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
+import { baseCreateOptions, makeTempDir, removeDir } from './test-utils';
 
 describe('validateProjectName', () => {
     it('accepts normal names', () => {
@@ -77,5 +81,40 @@ describe('applyFlags', () => {
         const out = applyFlags(base, { api: false, skills: false });
         expect(out.useApi).toBe(false);
         expect(out.addSkills).toBe(false);
+    });
+});
+
+describe('create scaffolds src/types.ts for TS projects only', () => {
+    it('writes a commented module-augmentation example', async () => {
+        const dir = makeTempDir('burger-types-');
+        try {
+            await createProject(dir, baseCreateOptions({ name: 'typed-app' }));
+
+            const types = readFileSync(join(dir, 'src', 'types.ts'), 'utf8');
+            expect(types).toContain("declare module 'burger-api'");
+            expect(types).toContain('interface RouteConfig');
+            expect(types).toContain('interface BurgerServices');
+            // Kept a module so uncommenting the augmentation works.
+            expect(types).toContain('export {};');
+            // Everything in the example is commented out, so the fresh
+            // scaffold typechecks as-is.
+            expect(types).not.toMatch(/^\s*(declare|interface)/m);
+        } finally {
+            removeDir(dir);
+        }
+    });
+
+    it('does not write src/types.ts for JS projects', async () => {
+        const dir = makeTempDir('burger-types-js-');
+        try {
+            await createProject(
+                dir,
+                baseCreateOptions({ name: 'js-app', lang: 'js' })
+            );
+
+            expect(existsSync(join(dir, 'src', 'types.ts'))).toBe(false);
+        } finally {
+            removeDir(dir);
+        }
     });
 });

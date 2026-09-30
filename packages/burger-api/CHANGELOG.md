@@ -100,6 +100,10 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 - New `ctx.ip`: the socket peer address on Bun, `undefined` on WinterCG `fetch`
   entries; adapters can supply it via `setRequestIP(request, ip)`. Forwarded
   headers are never trusted.
+- New `ctx.publish(topic, message)`: sends to every WebSocket socket
+  subscribed to the topic through the Bun server, returning Bun's send status
+  (bytes sent, `0` dropped, `-1` backpressure). Bun only: it throws on other
+  runtimes and before `app.serve()` has started.
 - `ctx.validated` is always an object after validation.
 - `ServerOptions.maxRequestBodySize` (forwarded to `Bun.serve`).
 
@@ -141,6 +145,11 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 - Page routes under `src/pages/` and static assets, served next to the API.
 - `config.ts` per route: `auth`, `cache`, `timeout`, and other keys are data for
   plugins and hooks; core honors a per-route `responseValidation` override.
+- `config.ts` per method: uppercase method exports (`export const POST = { auth:
+  { required: true } }`) are shallow-merged over the default for that method
+  only, so `ctx.config` and `responseValidation` can differ per method. A
+  default-only `config.ts` behaves exactly as before, with the same object
+  identity on `ctx.config`.
 - Compiled core: the file tree compiles into an immutable app (`RouteModule` ->
   `CompiledRoute`); the scanner is a pure filesystem walk that reports routes
   plus the global hooks path, the loader merges convention files (inline
@@ -152,6 +161,11 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 - File-based WebSocket routes under `src/websocket/` (or `config.wsDir`), plus
   programmatic `burger.websocket()`.
+- `ws.url` / `ws.query`: the upgrade URL and its query params, parsed lazily
+  once per socket, on every runtime (Bun, Cloudflare Workers, Deno, and the
+  Node bridge).
+- `ctx.publish()` reaches every subscriber; `ws.publish()` keeps Bun's
+  behavior of not echoing to the publishing socket.
 - App-level WS hooks (`onOpen` / `onMessage` / `onClose`) apply to prebuilt and
   programmatic routes.
 - `createNodeWsBridge()` runs WebSocket routes on Node through the `ws`

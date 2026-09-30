@@ -51,6 +51,52 @@ function rewriteImportsRelativeTo(
     );
 }
 
+/** Deploy targets whose bundle runs outside Bun (no Bun-only APIs). */
+const PORTABLE_TARGETS: ReadonlySet<RuntimeTarget> = new Set([
+    'cloudflare',
+    'deno',
+    'vercel',
+    'node',
+]);
+
+/** Files the Bun-only scan reads (source extensions only). */
+const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]s|tsx)$/;
+
+/**
+ * Finds user source files that reach Bun-only APIs: `bun` / `bun:*` imports
+ * or the `Bun.` global. Portable targets (Cloudflare, Deno, Vercel, Node)
+ * cannot run them, so the build warns once and continues instead of letting
+ * the deploy-time bundler fail with a bare resolution error.
+ */
+function findBunOnlyFiles(files: Array<string | undefined>): string[] {
+    const scanner = new Bun.Transpiler({ loader: 'ts' });
+    const flagged = new Set<string>();
+    for (const file of files) {
+        if (!file || !SOURCE_FILE_PATTERN.test(file)) continue;
+        let source: string;
+        try {
+            source = readFileSync(file, 'utf-8');
+        } catch {
+            // Missing optional file: the build itself will fail loud if needed.
+            continue;
+        }
+        try {
+            const imports = scanner.scanImports(source);
+            if (
+                /\bBun\s*\./.test(source) ||
+                imports.some(
+                    (i) => i.path === 'bun' || i.path.startsWith('bun:')
+                )
+            ) {
+                flagged.add(file);
+            }
+        } catch {
+            // Unparseable file: the target bundler reports it with more context.
+        }
+    }
+    return [...flagged];
+}
+
 /**
  * Find app-level convention files next to the entry file: `hooks`,
  * `plugins`, `providers`, `openapi.config` with `.ts`, `.js` or `.mjs`.
@@ -186,6 +232,39 @@ export async function runVirtualEntryBuild(options: {
     } catch (err) {
         cleanupEntryOptionsModule(entryOptions.tempFilePath);
         throw err;
+    }
+
+    // Portable targets run no Bun.build here; Bun-only user code would only
+    // fail later in the target's own bundler. Warn once, then continue.
+    if (PORTABLE_TARGETS.has(platformTarget)) {
+        const bunOnly = findBunOnlyFiles([
+            resolve(options.cwd, options.entryFile),
+            ...apiEntries.flatMap((e) => [
+                e.importPath,
+                e.hooksPath,
+                e.schemaPath,
+                e.openapiPath,
+                e.configPath,
+            ]),
+            ...wsEntries.flatMap((e) => [e.importPath, e.hooksPath, e.configPath]),
+            ...pageEntries.map((e) => e.importPath),
+            appConventions?.hooksPath,
+            appConventions?.pluginsPath,
+            appConventions?.providersPath,
+            appConventions?.openapiConfigPath,
+        ]);
+        if (bunOnly.length > 0) {
+            warning(
+                `Bun-only APIs found for the "${platformTarget}" target, ` +
+                    'which has no Bun runtime globals. Remove `bun`/`bun:*` ' +
+                    'imports and `Bun.` usage from: ' +
+                    bunOnly
+                        .map((f) =>
+                            relative(options.cwd, f).split('\\').join('/')
+                        )
+                        .join(', ')
+            );
+        }
     }
 
     const source = generateVirtualEntrySource(

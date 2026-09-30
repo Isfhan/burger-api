@@ -194,8 +194,10 @@ describe('push platforms deliver events to the matched route (Deno / Workers)', 
         router.addRoute({
             path: '/ws',
             handlers: {
-                open: () => {
-                    events.push('open');
+                open: (ws) => {
+                    events.push(
+                        `open:${ws.url.pathname}?${ws.query.get('room')}`
+                    );
                 },
                 message: (_ws, message) => {
                     events.push(`message:${String(message)}`);
@@ -204,14 +206,16 @@ describe('push platforms deliver events to the matched route (Deno / Workers)', 
             config: {},
         });
         const adapter = new WebSocketAdapter({ router, runtimeTarget: 'deno' });
-        const outcome = await adapter.handleUpgrade(upgradeRequest('/ws'));
+        const outcome = await adapter.handleUpgrade(
+            upgradeRequest('/ws?room=lobby')
+        );
         expect(outcome.handled).toBe(true);
         // Route internals are not exposed on the socket's public data.
         expect((socket.data as { route?: unknown })?.route).toBeUndefined();
         await (listeners.get('open') as Function)({});
         await (listeners.get('message') as Function)({ data: 'hi' });
         await new Promise((r) => setTimeout(r, 0));
-        expect(events).toEqual(['open', 'message:hi']);
+        expect(events).toEqual(['open:/ws?lobby', 'message:hi']);
     });
 });
 

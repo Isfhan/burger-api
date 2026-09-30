@@ -282,6 +282,10 @@ export interface RouteDefinition {
      * for this route). Every other key (auth, cache, timeout, …) is plain
      * data that core never acts on — hooks and plugins (e.g. an auth plugin
      * reading `ctx.config.auth`) give it meaning.
+     *
+     * Uppercase method keys (`{ POST: { auth: { required: true } } }`) are
+     * per-method overrides, shallow-merged over the route-wide options for
+     * that method only.
      */
     config?: Record<string, unknown>;
 }

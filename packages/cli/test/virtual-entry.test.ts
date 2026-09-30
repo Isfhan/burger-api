@@ -16,6 +16,7 @@ type VirtualEntryHelpers = {
     __pick: (...args: any[]) => any;
     __handlers: (...args: any[]) => any;
     __normOpenapi: (...args: any[]) => any;
+    __config: (...args: any[]) => any;
     __page: (...args: any[]) => any;
 };
 
@@ -30,7 +31,7 @@ function loadHelpers(): VirtualEntryHelpers {
     const end = source.indexOf('\nconst apiRoutes');
     const helpers = source.slice(start, end).replace(/^import .*$/gm, '');
     return new Function(
-        `${helpers}\nreturn { __mod, __get, __pick, __handlers, __normOpenapi, __page };`
+        `${helpers}\nreturn { __mod, __get, __pick, __handlers, __normOpenapi, __config, __page };`
     )();
 }
 
@@ -167,8 +168,31 @@ describe('generateVirtualEntrySource', () => {
         // Bare `_c0` binds the raw namespace ({ default: {...} }), so
         // ctx.config.auth would be undefined in production even with
         // `auth: false`.
-        expect(source).toContain('config: __mod(_c0),');
+        expect(source).toContain('config: __config(_c0),');
         expect(source).not.toContain('config: _c0,');
+    });
+
+    it('__config merges per-method config exports over the default (production parity with dev)', () => {
+        const { __config } = loadHelpers();
+        const base = { auth: false };
+
+        // Default-only keeps the exact object (route-wide identity).
+        expect(__config({ default: base })).toBe(base);
+
+        // Method exports ride along as uppercase keys; index.ts lowercases
+        // them for the route compiler.
+        const merged = __config({
+            default: base,
+            POST: { auth: { required: true } },
+        });
+        expect(merged).toEqual({
+            auth: false,
+            POST: { auth: { required: true } },
+        });
+
+        // No default: the namespace itself is the route-wide config.
+        const noDefault = { auth: false, POST: { auth: true } };
+        expect(__config(noDefault)).toBe(noDefault);
     });
 
     it('optional route exports are read through __get (no bundler import-is-undefined warnings)', () => {

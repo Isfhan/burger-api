@@ -28,6 +28,7 @@ src/
   plugins.ts                 # register plugins
   providers.ts               # declare shared services → ctx.services
   hooks.ts                   # global hooks
+  types.ts                   # app-wide type extensions (TS projects)
   api/<path>/
     route.ts
     schema.ts
@@ -54,6 +55,10 @@ Groups `(name)` only strip from the URL.
 | `config.ts` | Route options (auth, cache, timeout, …) |
 
 Per-method named exports (`GET`, `POST`, …) on route/schema/openapi.
+
+`config.ts` can also override per method: `export default { auth: false }`
+plus `export const POST = { auth: { required: true } }` — each method gets a
+shallow merge of default + its own export (method keys win).
 
 ## Quick start
 
@@ -99,6 +104,8 @@ Handlers and hooks receive `ctx`:
 - `ctx.route` — matched route metadata; `ctx.config` — from `config.ts`
 - `ctx.ip` — client socket address, resolved lazily; `undefined` where the
   runtime exposes no client address (the Node adapter reads the socket)
+- `ctx.publish(topic, message)` — send to every WS socket subscribed to
+  `topic` (Bun only; throws on other runtimes / before `app.serve()`)
 - `ctx.set` — response mutations
 - `ctx.env` — platform bindings on WinterCG targets
 - `ctx.services` — app services; app-scoped, shared and frozen (read only)
@@ -119,6 +126,10 @@ export const POST = {
 
 `onRequest` → routing → `transform` → validation → `beforeRoute` → handler → `afterRoute` → `mapResponse`  
 Errors → `onError`
+
+Scope order: request hooks run **Framework → Plugin → Global → Route**;
+response hooks (`afterRoute` / `mapResponse`) run nearest-first
+**Route → Global → Plugin → Framework**; `onError` is nearest-first too.
 
 | Scope | Where |
 |-------|--------|
@@ -202,6 +213,21 @@ declare module "burger-api" {
   }
 }
 ```
+
+Put app-wide augmentations in `src/types.ts` (scaffolded for TS projects).
+
+Per method: the default applies to every method, and an uppercase method
+export overrides it for that method only (shallow merge, method wins):
+
+```ts
+// config.ts
+export default { auth: false };                   // GET stays public
+export const POST = { auth: { required: true } }; // POST requires a user
+```
+
+With an auth plugin registered, **WebSocket routes are gated too**: a public
+WS route needs `config.ts` with `auth: false` under the ws dir — otherwise
+the plugin default-denies the upgrade.
 
 ## Plugin Development
 
@@ -304,7 +330,7 @@ ecosystem/skills/
 
 ## Supported
 
-- **WebSocket:** file-based router under `src/websocket/` (default `wsDir`; `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`, or opt in at `create` time via the WebSocket-routes prompt
+- **WebSocket:** file-based router under `src/websocket/` (default `wsDir`; `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`, or opt in at `create` time via the WebSocket-routes prompt. Handlers get `ws.url` / `ws.query` for the upgrade URL, and HTTP handlers can fan out with `ctx.publish(topic, message)` (Bun; `ws.publish` does not echo to the publishing socket, `ctx.publish` reaches every subscriber)
 
 ## Legacy names (avoid in new code)
 

@@ -35,6 +35,8 @@ const WS_ROUTE = Symbol('burger-api.ws.route');
 interface WsMatch {
     route: CompiledWebSocketRoute;
     params: Record<string, string>;
+    /** The upgrade request URL, captured once at match time (for `ws.url`). */
+    url?: string;
 }
 
 /**
@@ -402,10 +404,15 @@ export class WebSocketAdapter {
 
         // The matched route rides in a non-enumerable symbol slot (invisible in
         // `ws.data` copies/JSON) but travels with every platform that attaches
-        // `data` to the socket.
+        // `data` to the socket. The URL is stored once here so `ws.url` and
+        // `ws.query` parse lazily per socket, never per request.
         const data: Record<string, unknown> = {};
         Object.defineProperty(data, WS_ROUTE, {
-            value: { route: match.route, params: match.params },
+            value: {
+                route: match.route,
+                params: match.params,
+                url: request.url,
+            },
             enumerable: false,
         });
         if (authResult.user !== undefined) {
@@ -603,10 +610,12 @@ export class WebSocketAdapter {
     private createBurgerWS(ws: any): BurgerWS {
         let burgerWs = this.wsContexts.get(ws);
         if (!burgerWs) {
+            const match = this.getMatch(ws);
             burgerWs = new BurgerWSContext(
                 ws,
                 this.providers,
-                this.getMatch(ws)?.params ?? {}
+                match?.params ?? {},
+                match?.url
             );
             this.wsContexts.set(ws, burgerWs);
         }

@@ -110,3 +110,17 @@ Also available via `burger-api add <name>`, but these are **plugins** (`burger.u
 | session | Cookie-based session auth |
 | oidc | OpenID Connect authentication |
 | env | Validates required environment variables on startup |
+
+Auth plugins read `ctx.config.auth` and default-deny unless it is disabled.
+`config.ts` can scope that per method — the default applies route-wide and an
+uppercase method export overrides it (shallow merge, method wins):
+
+```typescript
+// config.ts
+export default { auth: false };                   // GET stays public
+export const POST = { auth: { required: true } }; // POST requires a user
+```
+
+The same plugins gate WebSocket upgrades: a public WS route needs
+`config.ts` with `auth: false` under the ws route directory, or the upgrade
+is rejected.
