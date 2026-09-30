@@ -12,6 +12,7 @@ import {
     generatePluginTemplate,
 } from '../src/utils/templates';
 import { baseCreateOptions } from './test-utils';
+import { resolve } from 'path';
 
 describe('generateBurgerConfig', () => {
     it('generates config with default-like values', () => {
@@ -172,11 +173,28 @@ describe('generatePackageJson BURGER_API_SOURCE', () => {
     });
 
     it('emits a file: specifier with an absolute path when set to a path', () => {
-        process.env.BURGER_API_SOURCE = 'C:\\repos\\burger-api';
+        process.env.BURGER_API_SOURCE = 'repos/burger-api';
         const pkg = JSON.parse(generatePackageJson('x'));
         expect(pkg.dependencies['burger-api']).toBe(
-            'file:C:\\repos\\burger-api'
+            `file:${resolve('repos/burger-api')}`
         );
+    });
+
+    // Regression: the local CLI's own `burger-api@^1.0.0-beta` dependency
+    // failed to resolve while that version was unpublished.
+    it('overrides nested burger-api to the same local path', () => {
+        process.env.BURGER_API_SOURCE = 'repos/burger-api';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.overrides).toEqual({
+            'burger-api': `file:${resolve('repos/burger-api')}`,
+        });
+    });
+
+    it('adds no overrides for the npm range or link mode', () => {
+        delete process.env.BURGER_API_SOURCE;
+        expect(JSON.parse(generatePackageJson('x')).overrides).toBeUndefined();
+        process.env.BURGER_API_SOURCE = 'link';
+        expect(JSON.parse(generatePackageJson('x')).overrides).toBeUndefined();
     });
 });
 

@@ -216,6 +216,11 @@ export const addCommand = new Command('add')
             );
             const call = (name: string) =>
                 USAGE_HINTS[name]?.call ?? `${exportNames.get(name) ?? name}()`;
+            // Import the name the call uses, so hint and import always match.
+            const importName = (name: string) =>
+                USAGE_HINTS[name]?.call.match(/^[A-Za-z_$][\w$]*/)?.[0] ??
+                exportNames.get(name) ??
+                name;
             // Import paths are relative to src/, where these lines go.
             const isJs = existsSync('jsconfig.json');
             if (plugins.length > 0) {
@@ -225,7 +230,7 @@ export const addCommand = new Command('add')
                 }
                 for (const name of plugins) {
                     code(
-                        `import { ${exportNames.get(name) ?? name} } from '../ecosystem/plugins/${name}/${name}';`
+                        `import { ${importName(name)} } from '../ecosystem/plugins/${name}/${name}';`
                     );
                 }
                 code('');
@@ -251,7 +256,7 @@ export const addCommand = new Command('add')
                 code(`// src/hooks.${isJs ? 'js' : 'ts'}`);
                 for (const name of hooks) {
                     code(
-                        `import { ${exportNames.get(name) ?? name} } from '../ecosystem/hooks/${name}/${name}';`
+                        `import { ${importName(name)} } from '../ecosystem/hooks/${name}/${name}';`
                     );
                 }
                 for (const stage of ['onRequest', 'beforeRoute'] as const) {

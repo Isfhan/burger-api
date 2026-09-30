@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'bun:test';
 import { join } from 'path';
-import { hyphenToCamelCase, resolveExportName } from '../src/commands/add';
+import { existsSync, readFileSync } from 'fs';
+import {
+    hyphenToCamelCase,
+    resolveExportName,
+    USAGE_HINTS,
+} from '../src/commands/add';
 
 const ECOSYSTEM = join(__dirname, '../../../ecosystem');
 
@@ -52,5 +57,26 @@ describe('resolveExportName', () => {
         expect(
             resolveExportName('/nonexistent/path/rate-limiter.ts', 'rate-limiter')
         ).toBe('rateLimiter');
+    });
+});
+
+describe('USAGE_HINTS', () => {
+    // Regression: the logger hint called `logger()` but imported
+    // `createLogger`, so the pasted code did not compile.
+    it('every hint calls a function its package really exports', () => {
+        for (const [name, hint] of Object.entries(USAGE_HINTS)) {
+            const kind = existsSync(join(ECOSYSTEM, 'hooks', name))
+                ? 'hooks'
+                : 'plugins';
+            const source = readFileSync(
+                join(ECOSYSTEM, kind, name, `${name}.ts`),
+                'utf-8'
+            );
+            const fn = hint.call.match(/^[A-Za-z_$][\w$]*/)?.[0];
+            expect(fn, name).toBeDefined();
+            expect(source, `${name} exports ${fn}`).toMatch(
+                new RegExp('export (async )?function ' + fn + '\\s*\\(')
+            );
+        }
     });
 });

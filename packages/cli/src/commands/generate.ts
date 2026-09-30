@@ -312,7 +312,7 @@ const pluginCommand = new Command('plugin')
         await writeFile(join(targetDir, `${name}.${ext}`), content);
 
         newline();
-        success(`Plugin "${className}" created at ${rel(targetDir)}/`);
+        success(`Plugin "${name}" created at ${rel(targetDir)}/`);
         newline();
         header('How to use');
         code(`// src/plugins.${ext}`);

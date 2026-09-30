@@ -141,6 +141,16 @@ export function generatePackageJson(
         },
     };
 
+    // A local CLI checkout still asks for `burger-api@^1.0.0-beta` from npm;
+    // point that at the same local copy so an unpublished version resolves.
+    if (burgerApiSpecifier.startsWith('file:')) {
+        return JSON.stringify(
+            { ...packageJson, overrides: { 'burger-api': burgerApiSpecifier } },
+            null,
+            2
+        );
+    }
+
     return JSON.stringify(packageJson, null, 2);
 }
 

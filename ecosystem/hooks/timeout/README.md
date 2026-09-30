@@ -1,6 +1,8 @@
 # Timeout
 
-Request timeouts for burger-api. Two exports:
+Request timeouts for burger-api: a handler wrapper and a hook.
+
+Two exports:
 
 | Export | Where | Responds at the deadline? | Default status |
 |--------|-------|---------------------------|----------------|

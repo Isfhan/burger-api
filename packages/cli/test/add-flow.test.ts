@@ -263,4 +263,30 @@ describe('add command flow', () => {
         expect(result.output).toContain('// src/hooks.js');
         expect(result.output).not.toContain('// src/hooks.ts');
     });
+
+    // Regression: the hint imported the first export (`createLogger`) but
+    // called `logger()`, so the pasted code did not compile.
+    it('imports the same function the usage hint calls', async () => {
+        const repo: FakeRepo = {
+            hooks: {
+                logger: {
+                    files: {
+                        'logger.ts':
+                            'export function createLogger() {}\nexport function logger() {}\n',
+                    },
+                },
+            },
+            plugins: {},
+        };
+
+        const result = await withMockedFetch(githubMock(repo), () =>
+            runCommandInProcess(addCommand, ['logger'], dir)
+        );
+
+        expect(result.exitCode).toBeNull();
+        expect(result.output).toContain(
+            "import { logger } from '../ecosystem/hooks/logger/logger';"
+        );
+        expect(result.output).toContain('    logger(),');
+    });
 });
