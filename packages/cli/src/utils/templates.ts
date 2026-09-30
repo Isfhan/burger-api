@@ -1108,14 +1108,6 @@ export function generateAgentsMd(
     return lines.join('\n');
 }
 
-/** CLAUDE.md for a new project: imports the shared rules in AGENTS.md. */
-export function generateClaudeMd(): string {
-    return [
-        '<!-- Claude Code reads this file; the project rules live in AGENTS.md. -->',
-        '@AGENTS.md',
-        '',
-    ].join('\n');
-}
 
 /** Injectable steps for tests; production uses the real implementations. */
 export interface CreateProjectDeps {
@@ -1272,13 +1264,12 @@ export async function createProject(
         }
     }
 
-    // Always written, also with --no-skills: AGENTS.md holds the project
-    // rules; CLAUDE.md imports it for Claude Code.
+    // Always written, also with --no-skills. Claude Code and other agents
+    // read AGENTS.md directly.
     await Bun.write(
         join(targetDir, 'AGENTS.md'),
         generateAgentsMd(options, result.skillsInstalled === true)
     );
-    await Bun.write(join(targetDir, 'CLAUDE.md'), generateClaudeMd());
 
     return result;
 }

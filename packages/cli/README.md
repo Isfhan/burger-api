@@ -103,7 +103,7 @@ burger-api create my-api --lang js
 - ✅ `burger.build.ts` generated from your answers (build-time only)
 - ✅ Example routes with schema + openapi files
 - ✅ Ready to run!
-- ✅ `AGENTS.md` (project rules for AI agents) and `CLAUDE.md` (`@AGENTS.md` import), always written
+- ✅ `AGENTS.md` (project rules for AI agents, read by Claude Code and other agents), always written
 - ✅ AI agent skills installed at `.agents/skills/burger-api/` and `.claude/skills/burger-api/` (when opted in)
 - ✅ When page routes are enabled, the sample `index.html` matches your choices
   (API prefix for “Try API”, and edit hints for your API/page directories)
@@ -472,7 +472,6 @@ my-api/
 ├── burger.build.ts # Build-time config (dirs, prefixes, debug)
 ├── tsconfig.json # TypeScript config (jsconfig.json for --lang js)
 ├── AGENTS.md # Project rules for AI agents
-├── CLAUDE.md # Imports AGENTS.md for Claude Code
 ├── ecosystem/
 │ └── hooks/
 │     └── index.ts # Installed hooks/plugins land here

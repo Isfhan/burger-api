@@ -262,7 +262,7 @@ export const createCommand = new Command('create')
             newline();
             console.log(` 6. AI agent setup:`);
             console.log(
-                `    ${highlight('AGENTS.md')}  project rules (CLAUDE.md imports it)`
+                `    ${highlight('AGENTS.md')}  project rules for AI agents`
             );
             if (created.skillsInstalled) {
                 console.log(

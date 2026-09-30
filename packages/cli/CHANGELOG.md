@@ -38,9 +38,9 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 ### 🆕 New
 
-- `create` writes `AGENTS.md` + `CLAUDE.md`: every new project (also with
-  `--no-skills`) gets short, project-specific rules for AI agents, with
-  `CLAUDE.md` importing `AGENTS.md`.
+- `create` writes `AGENTS.md`: every new project (also with `--no-skills`)
+  gets short, project-specific rules for AI agents. Claude Code and other
+  agents read it directly, so no `CLAUDE.md` is written.
 - `--lang ts|js` and `--yes` / `--defaults` flags on `create`; JS scaffolds use
   `jsconfig.json` (`checkJs: true`) and `.js` convention files with JSDoc
   types.

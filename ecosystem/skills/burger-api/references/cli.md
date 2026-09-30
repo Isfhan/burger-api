@@ -26,7 +26,7 @@ burger-api create my-api
 Prompts for: API routes (y/n, default yes), API directory name, API prefix, debug mode, Page routes (y/n, default no), Page directory name, Page prefix, WebSocket routes (y/n, default no), WebSocket directory name, AI agent skills (y/n, default yes).
 
 Every project gets `AGENTS.md` (commands, layout, and framework rules for AI
-agents) and `CLAUDE.md` (`@AGENTS.md`), even with `--no-skills`. When skills
+agents, read by Claude Code and other agents), even with `--no-skills`. When skills
 are opted in, they are installed to both `.agents/skills/burger-api/` and
 `.claude/skills/burger-api/`.
 

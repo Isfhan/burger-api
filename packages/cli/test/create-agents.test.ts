@@ -6,7 +6,6 @@ import { join } from 'path';
 import {
     createProject,
     generateAgentsMd,
-    generateClaudeMd,
 } from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
 import { baseCreateOptions as baseOptions } from './test-utils';
@@ -159,34 +158,25 @@ describe('generateAgentsMd', () => {
     });
 });
 
-describe('generateClaudeMd', () => {
-    it('is a comment plus the AGENTS.md import', () => {
-        expect(generateClaudeMd()).toBe(
-            '<!-- Claude Code reads this file; the project rules live in AGENTS.md. -->\n@AGENTS.md\n'
-        );
-    });
-});
-
-describe('create writes AGENTS.md and CLAUDE.md', () => {
-    it('writes both files for a TS project, with and without skills', async () => {
+describe('create writes AGENTS.md', () => {
+    // Claude Code reads AGENTS.md when no CLAUDE.md exists, so no
+    // CLAUDE.md is written.
+    it('writes AGENTS.md and no CLAUDE.md for a TS project', async () => {
         const noSkills = await scaffold('ts-no-skills', { lang: 'ts' });
         const agents = await readFile(join(noSkills, 'AGENTS.md'), 'utf8');
-        const claude = await readFile(join(noSkills, 'CLAUDE.md'), 'utf8');
 
-        expect(existsSync(join(noSkills, 'AGENTS.md'))).toBe(true);
-        expect(existsSync(join(noSkills, 'CLAUDE.md'))).toBe(true);
         expect(agents).toContain('`src/index.ts`');
         expect(agents).toContain('- Skill: run `burger-api skills install`');
-        expect(claude).toContain('@AGENTS.md');
+        expect(existsSync(join(noSkills, 'CLAUDE.md'))).toBe(false);
     });
 
-    it('writes both files for a JS project', async () => {
+    it('writes AGENTS.md and no CLAUDE.md for a JS project', async () => {
         const dir = await scaffold('js-no-skills', { lang: 'js' });
         const agents = await readFile(join(dir, 'AGENTS.md'), 'utf8');
 
         expect(agents).toContain('`src/index.js`');
         expect(agents).toContain('`route.js`');
-        expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(true);
+        expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(false);
     });
 
     it('reflects pages and ws in the written file', async () => {

@@ -70,7 +70,7 @@ bun test ./test/e2e
   run and a cancelled prompt exits 0 before scaffolding (scripted
   `@clack/prompts` mock; a full answer flow would run `bun install`).
 - `create-config.test.ts` — scaffolded config file generation.
-- `create-agents.test.ts` — generated AGENTS.md/CLAUDE.md content.
+- `create-agents.test.ts` — generated AGENTS.md content (no CLAUDE.md).
 - `create-index-page.test.ts` — generated landing page.
 - `skills-command.test.ts` — `skills` subcommands and skill helpers
   (`parseSkillDescription`, `flattenSkillFiles` with a mocked fetch).
