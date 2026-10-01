@@ -100,6 +100,40 @@ describe('portable-target Bun-only warning', () => {
         expect(warning).not.toContain('src/index.ts');
     });
 
+    // Regression: `src/db.ts` (bun:sqlite) was missed because only route and
+    // convention files were scanned, not the local files they import.
+    it('follows local imports to find Bun-only helpers', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/providers.ts': [
+                "import { openDb } from './db';",
+                'export default (burger: { provide(n: string, v: unknown): void }) => {',
+                "    burger.provide('db', openDb());",
+                '};',
+            ].join('\n'),
+            'src/db.ts': [
+                "import { Database } from 'bun:sqlite';",
+                "export const openDb = () => new Database(':memory:');",
+            ].join('\n'),
+            'src/api/plain/route.ts':
+                'export function GET() { return Response.json({ ok: true }); }',
+            // Feature-checked Bun use (like the ecosystem logger) is portable.
+            'src/hooks.ts': [
+                'const now = () =>',
+                "    typeof Bun !== 'undefined' ? Bun.nanoseconds() : performance.now();",
+                'export const onRequest = [];',
+                'void now;',
+            ].join('\n'),
+        });
+
+        const { logs } = await buildPortable(dir);
+        const warning = logs.find((line) => line.includes('Bun-only APIs'));
+        expect(warning).toBeDefined();
+        expect(warning).toContain('src/db.ts');
+        expect(warning).not.toContain('src/providers.ts');
+        expect(warning).not.toContain('src/hooks.ts');
+    });
+
     it('does not warn when no user source touches Bun-only APIs', async () => {
         const dir = project({
             'src/index.ts': ENTRY,

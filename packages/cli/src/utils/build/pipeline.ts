@@ -22,7 +22,7 @@ import {
     prepareEntryOptionsModule,
 } from '../entry-options';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { basename, dirname, relative, resolve } from 'path';
+import { basename, dirname, join, relative, resolve } from 'path';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
 
 /**
@@ -67,12 +67,19 @@ const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]s|tsx)$/;
  * or the `Bun.` global. Portable targets (Cloudflare, Deno, Vercel, Node)
  * cannot run them, so the build warns once and continues instead of letting
  * the deploy-time bundler fail with a bare resolution error.
+ *
+ * Local relative imports are followed, so a helper such as `src/db.ts`
+ * imported by `src/providers.ts` is checked too.
  */
 function findBunOnlyFiles(files: Array<string | undefined>): string[] {
     const scanner = new Bun.Transpiler({ loader: 'ts' });
     const flagged = new Set<string>();
-    for (const file of files) {
-        if (!file || !SOURCE_FILE_PATTERN.test(file)) continue;
+    const seen = new Set<string>();
+    const queue = files.filter((f): f is string => Boolean(f));
+    while (queue.length > 0) {
+        const file = queue.pop()!;
+        if (seen.has(file) || !SOURCE_FILE_PATTERN.test(file)) continue;
+        seen.add(file);
         let source: string;
         try {
             source = readFileSync(file, 'utf-8');
@@ -83,18 +90,42 @@ function findBunOnlyFiles(files: Array<string | undefined>): string[] {
         try {
             const imports = scanner.scanImports(source);
             if (
-                /\bBun\s*\./.test(source) ||
+                // `typeof Bun` means the file feature-checks Bun and falls
+                // back, so its `Bun.` uses are portable.
+                (/\bBun\s*\./.test(source) &&
+                    !/typeof\s+Bun\b/.test(source)) ||
                 imports.some(
                     (i) => i.path === 'bun' || i.path.startsWith('bun:')
                 )
             ) {
                 flagged.add(file);
             }
+            for (const i of imports) {
+                if (!i.path.startsWith('.')) continue;
+                const local = resolveLocalImport(dirname(file), i.path);
+                if (local) queue.push(local);
+            }
         } catch {
             // Unparseable file: the target bundler reports it with more context.
         }
     }
     return [...flagged];
+}
+
+/** Resolves `./db` / `./db.ts` / `./lib` (index file) to a source file path. */
+function resolveLocalImport(fromDir: string, spec: string): string | undefined {
+    const base = resolve(fromDir, spec);
+    if (SOURCE_FILE_PATTERN.test(base) && existsSync(base)) return base;
+    // `./db.js` written for ESM may point at `db.ts`.
+    const stem = base.replace(/\.[cm]?js$/, '');
+    for (const ext of ['.ts', '.tsx', '.js', '.mjs']) {
+        if (existsSync(stem + ext)) return stem + ext;
+    }
+    for (const ext of ['.ts', '.js']) {
+        const index = join(base, `index${ext}`);
+        if (existsSync(index)) return index;
+    }
+    return undefined;
 }
 
 /**
