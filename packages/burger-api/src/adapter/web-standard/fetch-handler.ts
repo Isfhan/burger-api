@@ -25,6 +25,7 @@ import type {
     BurgerEnv,
     BurgerExecutionContext,
 } from '../../context/context.js';
+import { renderUncaught } from '../../errors/http-error.js';
 
 /**
  * The portable entry shape: a Web-Standard `Request` in, a `Response` out.
@@ -50,16 +51,32 @@ export type FetchHandlerEntry = (
  */
 export function toFetchHandler(burger: Burger): FetchHandlerEntry {
     let prepared: Promise<EnvFetchHandler> | null = null;
-    return (
+
+    /** Lazily prepares the handler; a failed attempt is not cached. */
+    const prepare = (): Promise<EnvFetchHandler> => {
+        if (!prepared) {
+            prepared = burger.fetchHandler().catch((error) => {
+                // Reset so the next request retries the scan/compile instead
+                // of replaying the rejection forever.
+                prepared = null;
+                throw error;
+            });
+        }
+        return prepared;
+    };
+
+    return async (
         request: Request,
         env?: BurgerEnv,
         executionCtx?: BurgerExecutionContext
     ): Promise<Response> => {
-        if (!prepared) {
-            prepared = burger.fetchHandler();
+        try {
+            const handler = await prepare();
+            return await handler(request, env, executionCtx);
+        } catch (error) {
+            // One top-level safety net, shared with the Bun adapter: every
+            // runtime answers RFC 9457, never an unhandled rejection.
+            return renderUncaught(error, request);
         }
-        return prepared.then((handler) =>
-            handler(request, env, executionCtx)
-        );
     };
 }

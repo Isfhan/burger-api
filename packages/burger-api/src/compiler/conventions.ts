@@ -131,6 +131,29 @@ export function warnUnknownRouteExports(
 }
 
 /**
+ * Resolves the default export of an app-level convention module
+ * (`plugins.ts` / `providers.ts`). A file that exists but has no default
+ * function export is a startup error, never a silent skip.
+ *
+ * @throws when the module has no default function export.
+ */
+export function requireDefaultFunctionExport(
+    mod: unknown,
+    label: string,
+    filePath?: string
+): (...args: unknown[]) => unknown {
+    const fn = (mod as { default?: unknown } | undefined)?.default;
+    if (typeof fn !== 'function') {
+        throw new Error(
+            `[burger-api] ${label}${filePath ? ` (${filePath})` : ''} must ` +
+                'default-export a function — add: ' +
+                'export default function (burger) { ... }'
+        );
+    }
+    return fn as (...args: unknown[]) => unknown;
+}
+
+/**
  * Validates a discovered file stem against the convention.
  * @throws if the file is forbidden.
  */

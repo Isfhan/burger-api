@@ -325,52 +325,79 @@ function validateMethodSlots(
     if (bodyValidator && !isHead) {
         const rawContentType = ctx.headers.get('content-type') ?? '';
         const mediaType = mediaTypeOf(rawContentType);
+
+        /** Validates one body value; failures land in `errorsBySlot.body`. */
+        const validateBodyValue = (bodyData: unknown): void => {
+            try {
+                const result = bodyValidator.validate(bodyData);
+                if (result.success) {
+                    validated.body = result.data;
+                } else {
+                    if (!errorsBySlot) errorsBySlot = {};
+                    errorsBySlot.body = result.issues;
+                }
+            } catch (error: unknown) {
+                const msg =
+                    error instanceof Error ? error.message : String(error);
+                if (!errorsBySlot) errorsBySlot = {};
+                errorsBySlot.body = [{ path: [], message: msg }];
+            }
+        };
+
         if (isJsonMediaType(mediaType)) {
-            // Reading the body is the only asynchronous work here;
-            // parse failures and throwing validators both land in
-            // `errorsBySlot.body` (surfaced as a 422 ValidationError).
-            return ctx.json().then(
-                (bodyData) => {
-                    try {
-                        const result = bodyValidator.validate(bodyData);
-                        if (result.success) {
-                            validated.body = result.data;
-                        } else {
-                            if (!errorsBySlot) errorsBySlot = {};
-                            errorsBySlot.body = result.issues;
+            // Read once through `ctx.text()` (bytes are cached), so
+            // `ctx.text()` / `ctx.arrayBuffer()` still work in the handler.
+            // An empty body validates as `undefined`; malformed JSON is a
+            // client error (400) and passes through onError, never 422.
+            return ctx.text().then(
+                (raw) => {
+                    if (isBlank(raw)) {
+                        validateBodyValue(undefined);
+                    } else {
+                        let bodyData: unknown;
+                        try {
+                            bodyData = JSON.parse(raw);
+                        } catch (error) {
+                            throw new HTTPError(
+                                400,
+                                `Malformed JSON body: ${
+                                    (error as Error).message
+                                }`,
+                                { cause: error }
+                            );
                         }
-                    } catch (error: unknown) {
-                        const msg =
-                            error instanceof Error
-                                ? error.message
-                                : String(error);
-                        if (!errorsBySlot) errorsBySlot = {};
-                        errorsBySlot.body = [{ path: [], message: msg }];
+                        validateBodyValue(bodyData);
                     }
                     finish();
                 },
                 (error: unknown) => {
+                    // Body read failure — surface as a body validation issue.
                     const msg =
-                        error instanceof Error
-                            ? error.message
-                            : String(error);
+                        error instanceof Error ? error.message : String(error);
                     if (!errorsBySlot) errorsBySlot = {};
                     errorsBySlot.body = [{ path: [], message: msg }];
                     finish();
                 }
             );
         } else if (isBlank(rawContentType)) {
-            // A body schema is declared but the client sent no
-            // Content-Type — reject rather than silently skipping
-            // validation.
-            if (!errorsBySlot) errorsBySlot = {};
-            errorsBySlot.body = [
-                {
-                    path: [],
-                    message:
-                        'Content-Type header required for body validation',
-                },
-            ];
+            // No media type: an empty body validates as `undefined` (optional
+            // schemas work); a non-empty body is rejected rather than
+            // silently skipping validation.
+            return ctx.text().then((raw) => {
+                if (isBlank(raw)) {
+                    validateBodyValue(undefined);
+                } else {
+                    if (!errorsBySlot) errorsBySlot = {};
+                    errorsBySlot.body = [
+                        {
+                            path: [],
+                            message:
+                                'Content-Type header required for body validation',
+                        },
+                    ];
+                }
+                finish();
+            });
         } else {
             // A body schema is declared but the body is not JSON (form,
             // text, …). Never let unvalidated data reach the handler:

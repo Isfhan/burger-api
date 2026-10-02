@@ -46,6 +46,25 @@ interface DevCommandOptions {
     file?: string;
 }
 
+/**
+ * Environment for the dev child process. Defaults `NODE_ENV` to
+ * `development` when the caller did not set it, so the framework's default
+ * debug output (stacks, response-validation detail) keeps working under
+ * `burger-api dev`.
+ */
+export function devChildEnv(
+    port: string,
+    watchRoot: string,
+    base: Record<string, string | undefined> = process.env
+): Record<string, string | undefined> {
+    return {
+        ...base,
+        PORT: port,
+        BURGER_API_APP_DIR: watchRoot,
+        NODE_ENV: base.NODE_ENV ?? 'development',
+    };
+}
+
 /** `burger-api dev` — development server with hot reload. */
 export const devCommand = new Command('dev')
     .description('Start development server with hot reload')
@@ -97,11 +116,7 @@ export const devCommand = new Command('dev')
                 stdout: 'inherit',
                 stderr: 'inherit',
                 stdin: 'inherit',
-                env: {
-                    ...process.env,
-                    PORT: port,
-                    BURGER_API_APP_DIR: watchRoot,
-                },
+                env: devChildEnv(port, watchRoot),
             });
         };
 

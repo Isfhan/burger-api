@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { DirectoryScanner } from '../../src/compiler/scanner';
 import { ModuleLoader } from '../../src/compiler/module-loader';
 import { generateOpenAPIDocument } from '../../src/core/openapi';
+import { Burger } from '../../src/index';
 import {
     scalarDocs,
     swaggerDocs,
@@ -375,6 +376,41 @@ describe('ModuleLoader — normalizeOpenapi', () => {
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
+    });
+});
+
+// ─── Unrepresentable schemas ───
+
+describe('OpenAPI — unrepresentable schemas do not crash startup', () => {
+    it('starts and serves /openapi.json when a body schema cannot be represented', async () => {
+        const burger = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/date',
+                    handlers: { POST: () => Response.json({ ok: true }) },
+                    schema: { post: { body: z.date() } } as never,
+                    openapi: {},
+                },
+                {
+                    path: '/api/transform',
+                    handlers: { POST: () => Response.json({ ok: true }) },
+                    schema: {
+                        post: {
+                            body: z.object({
+                                name: z.string().transform((s) => s.length),
+                            }),
+                        },
+                    } as never,
+                    openapi: {},
+                },
+            ],
+        });
+        const handler = await burger.fetchHandler();
+        const res = await handler(new Request('http://localhost/openapi.json'));
+        expect(res.status).toBe(200);
+        const doc = (await res.json()) as any;
+        expect(doc.paths['/api/date'].post).toBeDefined();
+        expect(doc.paths['/api/transform'].post).toBeDefined();
     });
 });
 

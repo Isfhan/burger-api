@@ -49,4 +49,16 @@ describe('compileRouteSchema', () => {
         expect(cv.validate({ search: 'hi' }).success).toBe(true);
         expect(cv.validate({}).success).toBe(false);
     });
+
+    it('never shares a compiled validator between unrepresentable schemas', () => {
+        const upper = z.string().transform((s) => s.toUpperCase());
+        const length = z.string().transform((s) => s.length);
+        const a = compileRouteSchema({ post: { body: upper } });
+        const b = compileRouteSchema({ post: { body: length } });
+        const va = a.methods.post!.body!;
+        const vb = b.methods.post!.body!;
+        expect(va).not.toBe(vb);
+        expect(va.validate('abc')).toEqual({ success: true, data: 'ABC' });
+        expect(vb.validate('abc')).toEqual({ success: true, data: 3 });
+    });
 });

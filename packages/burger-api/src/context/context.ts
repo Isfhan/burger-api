@@ -13,6 +13,9 @@ import type { RouteMethodSchema } from '../types/inference.js';
 import type { RouteConfig } from '../types/index.js';
 import { HTTPError } from '../errors/http-error.js';
 
+/** Shared UTF-8 decoder; strips a leading BOM like `Request.json()` does. */
+const utf8 = new TextDecoder();
+
 /**
  * Module augmentation target for `ctx.services`:
  *
@@ -235,6 +238,16 @@ export class BurgerContext<TRoute = unknown> {
     declare private _json: Promise<unknown> | undefined;
 
     /**
+     * The raw body bytes, read at most once and cached. Body validation reads
+     * through this, so `ctx.text()` / `ctx.arrayBuffer()` still work after it
+     * (webhook signatures) and no cost is paid when nobody asks.
+     */
+    declare private _bodyBuffer: Promise<ArrayBuffer> | undefined;
+
+    /** The body as text, cached alongside `_bodyBuffer` (see `text()`). */
+    declare private _bodyText: Promise<string> | undefined;
+
+    /**
      * Validated data attached by the validation hook. Starts `undefined` so
      * the hook runs (it short-circuits when already truthy).
      *
@@ -329,6 +342,8 @@ export class BurgerContext<TRoute = unknown> {
         ctx._query = undefined;
         ctx._cookies = undefined;
         ctx._json = undefined;
+        ctx._bodyBuffer = undefined;
+        ctx._bodyText = undefined;
         ctx.validated = undefined;
         ctx._set = undefined;
         // A Map (direct callers, e.g. the WS adapter) is copied per context;
@@ -557,26 +572,57 @@ export class BurgerContext<TRoute = unknown> {
     json<T = any>(): Promise<T> {
         // Parsed once and cached (body validation reads it first). Malformed
         // JSON is a client error: 400 Problem Details, not a 500.
-        this._json ??= this._raw.json().catch((error: unknown) => {
-            // A parse failure stays cached (a re-read reports the same 400);
-            // any other failure (stream already used, …) is not cached.
-            if (error instanceof SyntaxError) {
-                throw new HTTPError(400, `Malformed JSON body: ${error.message}`, {
-                    cause: error,
-                });
-            }
-            this._json = undefined;
-            throw error;
-        });
+        if (this._json === undefined) {
+            this._json = this.text().then(
+                (raw) => {
+                    try {
+                        return JSON.parse(raw);
+                    } catch (error) {
+                        if (error instanceof SyntaxError) {
+                            throw new HTTPError(
+                                400,
+                                `Malformed JSON body: ${error.message}`,
+                                { cause: error }
+                            );
+                        }
+                        throw error;
+                    }
+                },
+                (error: unknown) => {
+                    // A stream failure is not cached: a later read may retry.
+                    this._json = undefined;
+                    throw error;
+                }
+            );
+        }
         return this._json as Promise<T>;
     }
 
+    /**
+     * The body is read once, in the form first asked for. Text is the fast
+     * path (JSON parsing and validation use it); bytes asked for first stay
+     * byte-exact (webhook signatures over raw bytes).
+     */
     text(): Promise<string> {
-        return this._raw.text();
+        if (this._bodyText !== undefined) return this._bodyText;
+        if (this._bodyBuffer !== undefined) {
+            return (this._bodyText = this._bodyBuffer.then((buffer) =>
+                utf8.decode(buffer)
+            ));
+        }
+        return (this._bodyText = this._raw.text());
     }
 
     arrayBuffer(): Promise<ArrayBuffer> {
-        return this._raw.arrayBuffer();
+        if (this._bodyBuffer !== undefined) return this._bodyBuffer;
+        if (this._bodyText !== undefined) {
+            // Read as text already: its UTF-8 bytes (identical for any
+            // valid UTF-8 body, which every JSON body is).
+            return (this._bodyBuffer = this._bodyText.then(
+                (text) => new TextEncoder().encode(text).buffer as ArrayBuffer
+            ));
+        }
+        return (this._bodyBuffer = this._raw.arrayBuffer());
     }
 
     blob(): Promise<Blob> {

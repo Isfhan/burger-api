@@ -1,6 +1,7 @@
 import { HTTP_METHODS } from '../utils/routing.js';
 import type { HTTPMethod } from '../utils/routing.js';
 import {
+    requireDefaultFunctionExport,
     warnUnknownHookExports,
     warnUnknownRouteExports,
 } from './conventions.js';
@@ -258,25 +259,36 @@ export class ModuleLoader {
     }
 
     /**
-     * Loads the `plugins.ts` convention file from the scanned result.
-     * Returns the module, or undefined if no plugins file was discovered.
+     * Loads the `plugins.ts` convention file. Returns the module namespace,
+     * or undefined when the file was not discovered. A present file without a
+     * default function export throws — never a silent skip.
      */
     async loadPlugins(
         scanned: ScanResult
     ): Promise<Record<string, unknown> | undefined> {
-        return this.loadOptional<Record<string, unknown>>(scanned.pluginsPath);
+        return this.loadAppModule(scanned.pluginsPath, 'plugins.ts');
     }
 
     /**
-     * Loads the `providers.ts` convention file from the scanned result.
-     * Returns the module, or undefined if no providers file was discovered.
+     * Loads the `providers.ts` convention file. Returns the module namespace,
+     * or undefined when the file was not discovered. A present file without a
+     * default function export throws — never a silent skip.
      */
     async loadProviders(
         scanned: ScanResult
     ): Promise<Record<string, unknown> | undefined> {
-        return this.loadOptional<Record<string, unknown>>(
-            scanned.providersPath
-        );
+        return this.loadAppModule(scanned.providersPath, 'providers.ts');
+    }
+
+    /** Imports an app-level module and validates its default export shape. */
+    private async loadAppModule(
+        filePath: string | undefined,
+        label: string
+    ): Promise<Record<string, unknown> | undefined> {
+        if (!filePath) return undefined;
+        const mod = (await import(filePath)) as Record<string, unknown>;
+        requireDefaultFunctionExport(mod, label, filePath);
+        return mod;
     }
 
     /**

@@ -3,14 +3,16 @@
  * entry hints, the stale-bundle warning, and child exit-code propagation.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { utimesSync } from 'fs';
-import { join } from 'path';
+import { mkdirSync, symlinkSync, utimesSync } from 'fs';
+import { join, resolve } from 'path';
 import {
     getAvailablePort,
     makeTempDir,
     removeDir,
     runCli,
 } from './test-utils';
+
+const BURGER_API_PKG = resolve(import.meta.dir, '..', '..', 'burger-api');
 
 let dir = '';
 
@@ -90,5 +92,31 @@ describe('start command', () => {
 
         expect(result.exitCode).toBe(3);
         expect(result.stdout).toContain('Server stopped unexpectedly');
+    });
+
+    it('exits non-zero with a clean message when serve() has no routes', async () => {
+        mkdirSync(join(dir, 'node_modules'), { recursive: true });
+        symlinkSync(
+            BURGER_API_PKG,
+            join(dir, 'node_modules', 'burger-api'),
+            process.platform === 'win32' ? 'junction' : 'dir'
+        );
+        await Bun.write(
+            join(dir, 'src', 'index.ts'),
+            [
+                "import { Burger } from 'burger-api';",
+                'new Burger({}).serve(Number(process.env.PORT) || 4000);',
+            ].join('\n')
+        );
+
+        const port = await getAvailablePort();
+        const result = await runCli(['start', '--port', String(port)], {
+            cwd: dir,
+        });
+
+        expect(result.exitCode).not.toBe(0);
+        expect(result.stdout + result.stderr).toContain(
+            'No routes configured'
+        );
     });
 });

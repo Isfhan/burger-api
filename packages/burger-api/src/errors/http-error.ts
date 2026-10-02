@@ -1,3 +1,5 @@
+import { resolveDebug } from '../utils/env.js';
+
 /**
  * Base HTTP error class for BurgerAPI.
  *
@@ -74,6 +76,24 @@ export function logUnhandledError(
         // Not an absolute URL — log it verbatim.
     }
     console.error(`[burger-api] Unhandled error in ${method} ${path}:`, error);
+}
+
+/**
+ * Renders an error that escaped the request pipeline as RFC 9457 and logs it
+ * when it is a server-side failure. Shared by the Bun adapter, the router's
+ * pre-routing path and the WinterCG fetch entry, so uncaught errors render
+ * identically on every runtime.
+ */
+export function renderUncaught(
+    error: unknown,
+    request: { method: string; url: string },
+    debug?: boolean
+): Response {
+    const response = renderHTTPError(error, resolveDebug(debug));
+    if (response.status >= 500) {
+        logUnhandledError(request.method, request.url, error);
+    }
+    return response;
 }
 
 /**

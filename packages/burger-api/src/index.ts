@@ -16,7 +16,10 @@ import { collectRoutes, compareRoutes, setDir } from './utils/index.js';
 import { notFound, openApiError } from './utils/response.js';
 import { extractPathnameFromUrl } from './utils/wildcard.js';
 import { lowercaseMethodKeys } from './utils/routing.js';
-import { warnUnknownHookExports } from './compiler/conventions.js';
+import {
+    requireDefaultFunctionExport,
+    warnUnknownHookExports,
+} from './compiler/conventions.js';
 
 // Import plugin system
 import { PluginRegistry } from './plugin/registry.js';
@@ -104,6 +107,19 @@ export class Burger {
 
     /** Plugin registry, populated via `.usePlugin()` before `serve()`. */
     private pluginRegistry = new PluginRegistry();
+
+    /**
+     * Pre-routing onRequest hooks (Framework → Plugin → Global) resolved at
+     * compile time; shared with the WebSocket upgrade chain so both paths run
+     * the same hooks.
+     */
+    private onRequestHooks: import('./lifecycle/types.js').Hook[] = [];
+
+    /**
+     * App-level (`src/hooks.ts`) route hooks, retained so WebSocket upgrades
+     * run the same transform/beforeRoute chain as HTTP.
+     */
+    private globalRouteHooks?: RouteHooks;
 
     /** Services from `burger.provide()`, injected into `ctx.services`. */
     private providers = new Map<string, unknown>();
@@ -479,49 +495,35 @@ export class Burger {
                     'route'
                 );
             }
-
-            // Production: execute plugins module if provided
-            const pluginsMod = this.options.pluginsModule;
-            if (pluginsMod) {
-                const defaultFn = (pluginsMod as any).default;
-                if (typeof defaultFn === 'function') {
-                    await (
-                        defaultFn as (
-                            burger: PluginRegistrar
-                        ) => void | Promise<void>
-                    )(this);
-                }
-            }
-
-            // Production: execute providers module if provided
-            const providersMod = this.options.providersModule;
-            if (providersMod) {
-                const defaultFn = (providersMod as any).default;
-                if (typeof defaultFn === 'function') {
-                    await (
-                        defaultFn as (
-                            burger: ProviderRegistrar
-                        ) => void | Promise<void>
-                    )(this);
-                }
-            }
         } else {
             // Dev path: Scanner → Module Loader → RouteModule → Compiler,
-            // loaded lazily (AOT builds ship prebuilt apiRoutes).
+            // loaded lazily (AOT builds ship prebuilt apiRoutes). App-level
+            // convention files load even for pages-only apps (no apiDir).
             await this.applyConventionDefaults();
-            if (!this.apiDir) {
-                apiRoutes = [];
-            } else {
+            let scanned:
+                | import('./compiler/route-module.js').ScanResult
+                | undefined;
+            if (this.apiDir) {
                 const { DirectoryScanner } = await import(
                     './compiler/scanner.js'
                 );
-                const { ModuleLoader } = await import(
-                    './compiler/module-loader.js'
-                );
-                const scanned = await new DirectoryScanner(
+                scanned = await new DirectoryScanner(
                     this.apiDir,
                     this.apiPrefix
                 ).scan();
+            } else {
+                const { scanAppRootConventions } = await import(
+                    './compiler/scanner.js'
+                );
+                const { resolveAppRootDir } = await import('./utils/fs.js');
+                const appRoot = resolveAppRootDir();
+                if (appRoot) scanned = await scanAppRootConventions(appRoot);
+            }
+
+            if (scanned) {
+                const { ModuleLoader } = await import(
+                    './compiler/module-loader.js'
+                );
                 const loader = new ModuleLoader();
                 const modules = await loader.load(scanned);
                 globalOnRequest = scanned.globalOnRequest;
@@ -531,26 +533,27 @@ export class Burger {
                         | Record<string, unknown>
                         | undefined
                 );
-                if (modules.length === 0) this.emptyApiDir = this.apiDir;
+                if (this.apiDir && modules.length === 0) {
+                    this.emptyApiDir = this.apiDir;
+                }
 
                 // Load openapi.config.ts if discovered
                 this.openAPIConfig = await loader.loadOpenAPIConfig(scanned);
 
-                // Load and execute plugins.ts (auto-discovered at app root)
-                const pluginsFn = await loader.loadPlugins(scanned);
-                if (typeof pluginsFn === 'function') {
+                // Load and execute plugins.ts / providers.ts (app root). A
+                // present file with no default function export fails loud.
+                const pluginsMod = await loader.loadPlugins(scanned);
+                if (pluginsMod) {
                     await (
-                        pluginsFn as (
+                        pluginsMod.default as (
                             burger: PluginRegistrar
                         ) => void | Promise<void>
                     )(this);
                 }
-
-                // Load and execute providers.ts (auto-discovered at app root)
-                const providersFn = await loader.loadProviders(scanned);
-                if (typeof providersFn === 'function') {
+                const providersMod = await loader.loadProviders(scanned);
+                if (providersMod) {
                     await (
-                        providersFn as (
+                        providersMod.default as (
                             burger: ProviderRegistrar
                         ) => void | Promise<void>
                     )(this);
@@ -568,7 +571,31 @@ export class Burger {
                     config: m.config,
                     isWildcard: m.isWildcard,
                 }));
+            } else {
+                apiRoutes = [];
             }
+        }
+
+        // Production: execute the pre-resolved plugins/providers modules.
+        // Runs for pages-only AOT apps too (no apiRoutes array). A module
+        // present without a default function export fails loud.
+        if (this.options.pluginsModule) {
+            const fn = requireDefaultFunctionExport(
+                this.options.pluginsModule,
+                'plugins.ts'
+            );
+            await (fn as (burger: PluginRegistrar) => void | Promise<void>)(
+                this
+            );
+        }
+        if (this.options.providersModule) {
+            const fn = requireDefaultFunctionExport(
+                this.options.providersModule,
+                'providers.ts'
+            );
+            await (fn as (burger: ProviderRegistrar) => void | Promise<void>)(
+                this
+            );
         }
 
         // API routes are optional: the router is still built so hooks, the `ip`
@@ -609,6 +636,8 @@ export class Burger {
             }
         }
         onRequestHooks.push(...(globalOnRequest ?? []));
+        this.onRequestHooks = onRequestHooks;
+        this.globalRouteHooks = globalRouteHooks;
 
         router.compile(
             apiRoutes,
@@ -696,11 +725,17 @@ export class Burger {
     private async processWebSocketRoutes(): Promise<boolean> {
         this.wsRouter = new WebSocketRouter();
 
-        // Extract auth hooks from resolved plugins for WebSocket upgrade
+        // Extract auth hooks from resolved plugins for WebSocket upgrade.
+        // beforeRoute follows the HTTP order: Framework → Plugin → Global.
         const resolvedPlugins = await this.pluginRegistry.resolveAll();
         let pluginTransform:
             import('./lifecycle/types.js').TransformMap | undefined;
         const pluginBeforeRoute: import('./lifecycle/types.js').Hook[] = [];
+        const frameworkBeforeRoute: import('./lifecycle/types.js').Hook[] = [];
+        const toHookArray = (
+            value: import('./lifecycle/types.js').Hook | import('./lifecycle/types.js').Hook[]
+        ): import('./lifecycle/types.js').Hook[] =>
+            Array.isArray(value) ? value : [value];
 
         for (const plugin of resolvedPlugins) {
             // Collect transform hooks
@@ -708,14 +743,20 @@ export class Burger {
                 if (!pluginTransform) pluginTransform = {};
                 Object.assign(pluginTransform, plugin.hooks.transform);
             }
-            // Collect beforeRoute hooks
+            // Collect beforeRoute hooks, bucketed by scope.
             if (plugin.hooks.beforeRoute) {
-                const hooks = Array.isArray(plugin.hooks.beforeRoute)
-                    ? plugin.hooks.beforeRoute
-                    : [plugin.hooks.beforeRoute];
-                pluginBeforeRoute.push(...hooks);
+                const hooks = toHookArray(plugin.hooks.beforeRoute);
+                if (plugin.scope === 'framework') {
+                    frameworkBeforeRoute.push(...hooks);
+                } else {
+                    pluginBeforeRoute.push(...hooks);
+                }
             }
         }
+
+        const globalBeforeRoute = this.globalRouteHooks?.beforeRoute
+            ? toHookArray(this.globalRouteHooks.beforeRoute)
+            : undefined;
 
         this.wsAdapter = new WebSocketAdapter({
             router: this.wsRouter,
@@ -725,6 +766,14 @@ export class Burger {
             pluginTransform,
             pluginBeforeRoute:
                 pluginBeforeRoute.length > 0 ? pluginBeforeRoute : undefined,
+            frameworkBeforeRoute:
+                frameworkBeforeRoute.length > 0
+                    ? frameworkBeforeRoute
+                    : undefined,
+            onRequestHooks: this.onRequestHooks,
+            globalTransform: this.globalRouteHooks?.transform,
+            globalBeforeRoute,
+            ipHolder: this.dynamicRouter?.getRequestIPHolder(),
             runtimeTarget: this.options.runtimeTarget,
         });
 
@@ -1054,12 +1103,13 @@ export class Burger {
                     this.dynamicRouter?.setRequestIPSource(server),
             });
         } else {
-            console.error(
+            // Nothing to serve is a startup error, never a silent no-op.
+            throw new Error(
                 this.emptyApiDir
-                    ? `Error: No routes configured — the API directory "${this.emptyApiDir}" has no route files. ` +
+                    ? `[burger-api] No routes configured — the API directory "${this.emptyApiDir}" has no route files. ` +
                           'Each endpoint is a folder with a route.ts, e.g. src/api/hello/route.ts: ' +
                           'export async function GET(ctx) { return Response.json({ hello: "world" }); }'
-                    : 'Error: No routes configured! Please provide apiDir/pageDir (for dev) or apiRoutes/pageRoutes (for production builds) when initializing the Burger class.'
+                    : '[burger-api] No routes configured! Please provide apiDir/pageDir (for dev) or apiRoutes/pageRoutes (for production builds) when initializing the Burger class.'
             );
         }
     }

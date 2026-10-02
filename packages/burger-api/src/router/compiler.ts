@@ -609,6 +609,19 @@ function specializePlan(
     if (!validators || !plan.validation) {
         return configChanged ? { ...plan, validatorConfig } : plan;
     }
+
+    // Response validation is resolved at compile time. 'off', and 'dev'
+    // without debug output, do no observable work — dropping the validator
+    // removes the per-request clone/parse entirely.
+    const responseMode = validatorConfig.responseValidation ?? 'dev';
+    const dropResponse =
+        validators.response !== undefined &&
+        (responseMode === 'off' ||
+            (responseMode === 'dev' && plan.debug !== true));
+    const planValidators = dropResponse
+        ? omitResponseValidators(validators)
+        : validators;
+
     return {
         ...plan,
         validation: createValidationHook(
@@ -618,8 +631,17 @@ function specializePlan(
             method.toLowerCase() as import('../utils/routing.js').LowercaseHTTPMethod,
             skipValidatedBag
         ),
+        validators: planValidators,
         validatorConfig,
     };
+}
+
+/** Shallow copy of the validators without the `response` map. */
+function omitResponseValidators(
+    validators: CompiledRouteValidators
+): CompiledRouteValidators {
+    const { response: _response, ...rest } = validators;
+    return rest;
 }
 
 /**
@@ -775,17 +797,28 @@ function buildMethodCore(
               );
     };
 
-    const fail = (ctx: BurgerContext, error: unknown): Promise<Response> =>
+    const finish = (ctx: BurgerContext, response: Response): Response =>
+        ctx.hasSet() ? applySet(response, ctx.set) : response;
+
+    /**
+     * Error exit: dispatch through `onError`, then apply `ctx.set` to the
+     * rendered response like every other path. `applySet` keeps the error
+     * status; only headers/other mutations are merged.
+     */
+    const fail = (
+        ctx: BurgerContext,
+        error: unknown
+    ): Promise<Response> =>
         dispatchOnError(
             error,
             plan.onError,
             ctx,
             plan.debug,
             plan.validatorConfig
-        );
-
-    const finish = (ctx: BurgerContext, response: Response): Response =>
-        ctx.hasSet() ? applySet(response, ctx.set) : response;
+        ).then((response) => {
+            const mutated = finish(ctx, response);
+            return isHead ? finishHead(mutated) : mutated;
+        });
 
     /** Auto-HEAD exit: apply `ctx.set`, then strip the body, keeping size. */
     const finishHead = (mutated: Response): Response | Promise<Response> => {

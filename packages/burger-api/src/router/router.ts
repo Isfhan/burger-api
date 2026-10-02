@@ -1,9 +1,11 @@
-import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
+import { renderUncaught } from '../errors/http-error.js';
+import { dispatchOnError } from '../lifecycle/executor.js';
 import type { ContextInit } from '../context/types.js';
 import { notFound, methodNotAllowed } from '../utils/response.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
 import { isThenable } from '../utils/thenable.js';
 import { RouterCompiler } from './compiler.js';
+import { resolveDebug } from '../utils/env.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
 import { Trie } from './trie.js';
@@ -22,7 +24,8 @@ import type {
 } from './types.js';
 import type { ValidatorConfig } from '../validation/types.js';
 import type { ResolvedPlugin } from '../plugin/types.js';
-import type { Hook } from '../lifecycle/types.js';
+import type { ErrorHook, Hook, RouteHooks } from '../lifecycle/types.js';
+import type { Scope } from '../chain/node.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
@@ -84,6 +87,12 @@ export class Router {
     private onRequestHooks: Hook[] = [];
     /** True when pre-routing `onRequest` hooks exist (hot-path flag). */
     private hasOnRequest = false;
+    /**
+     * Error hooks available before a route is matched (Global → Plugin →
+     * Framework, nearest-first). Let pre-routing `onRequest` throws go
+     * through the same `onError` pipeline as request errors.
+     */
+    private onErrorHooks: ErrorHook[] = [];
     /** App services resolved ONCE; shared (frozen) by every request context. */
     private appServices: BurgerServices = EMPTY_SERVICES;
     /** Per-app server reference for lazy `ctx.ip` (written once at startup). */
@@ -96,10 +105,13 @@ export class Router {
     private regexMatcher: ((path: string) => RegexMatch | null) | null = null;
 
     constructor(config: RouterConfig = {}) {
-        this.debug = config.debug ?? false;
+        // Resolve once: `debug: true` or NODE_ENV=development. The compiler
+        // (hook plans) and renderUnhandled share this exact value, so
+        // onRequest errors and handler errors render the same.
+        this.debug = resolveDebug(config.debug);
         this.engine = config.engine;
         this.compiler = new RouterCompiler(
-            config.debug,
+            this.debug,
             config.validation ?? {},
             config.jit !== false
         );
@@ -138,6 +150,7 @@ export class Router {
         this.cachedNativeRoutes = undefined;
         this.onRequestHooks = onRequestHooks ?? [];
         this.hasOnRequest = this.onRequestHooks.length > 0;
+        this.onErrorHooks = buildPreRoutingErrorChain(plugins, globalHooks);
         this.regexMatcher = this.buildMatcher(result);
     }
 
@@ -312,11 +325,7 @@ export class Router {
 
     /** Renders an error that escaped the pipeline; logs it when 5xx. */
     private renderUnhandled(request: Request, error: unknown): Response {
-        const response = renderHTTPError(error, this.debug);
-        if (response.status >= 500) {
-            logUnhandledError(request.method, request.url, error);
-        }
-        return response;
+        return renderUncaught(error, request, this.debug);
     }
 
     /**
@@ -379,8 +388,15 @@ export class Router {
                     );
                 }
             } catch (error) {
+                // Same onError chain as request errors (nearest-first:
+                // Global → Plugin → Framework) — never a bare render.
                 outcome.shortCircuit = await this.applyMappers(
-                    this.renderUnhandled(request, error),
+                    await dispatchOnError(
+                        error,
+                        this.onErrorHooks,
+                        ctx,
+                        this.debug
+                    ),
                     outcome.mappers
                 );
                 return outcome;
@@ -631,6 +647,37 @@ function applyToResponse(
     apply: (res: Response) => Response | Promise<Response>
 ): Response | Promise<Response> {
     return isThenable(response) ? response.then(apply) : apply(response);
+}
+
+/**
+ * Builds the pre-routing `onError` chain: the hooks available before a route
+ * is matched, in the same nearest-first order a route plan uses (Global →
+ * Plugin → Framework).
+ */
+function buildPreRoutingErrorChain(
+    plugins?: ResolvedPlugin[],
+    globalHooks?: RouteHooks
+): ErrorHook[] {
+    const buckets: Record<Scope, ErrorHook[]> = {
+        local: [],
+        global: [],
+        plugin: [],
+        framework: [],
+    };
+    const push = (value: ErrorHook | ErrorHook[] | undefined, to: ErrorHook[]) => {
+        if (value === undefined) return;
+        if (Array.isArray(value)) for (const h of value) to.push(h);
+        else to.push(value);
+    };
+    push(globalHooks?.onError, buckets.global);
+    for (const plugin of plugins ?? []) {
+        push(plugin.hooks.onError, buckets[plugin.scope]);
+    }
+    return [
+        ...buckets.global,
+        ...buckets.plugin,
+        ...buckets.framework,
+    ];
 }
 
 /** True when any matched `:param` captured an empty segment. */

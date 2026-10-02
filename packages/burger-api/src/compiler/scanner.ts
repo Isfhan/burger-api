@@ -46,59 +46,13 @@ export class DirectoryScanner {
     async scan(): Promise<ScanResult> {
         const routes: ScannedRoute[] = [];
         await this.walk(this.routesDir, routes);
-
-        // Detect global hooks, openapi.config.ts, plugins.ts, and providers.ts at the app root
-        // (sibling of entry point).
-        // When apiDir is `./src/api`, these live in `./src/`.
-        // When apiDir is `./api`, these live in `./`.
-        let globalHooks: string | undefined;
-        let openAPIConfigPath: string | undefined;
-        let pluginsPath: string | undefined;
-        let providersPath: string | undefined;
-        const parentDir = path.dirname(this.routesDir);
-        let rootEntries: { name: string; isFile: () => boolean }[] = [];
-        try {
-            rootEntries = await readdir(parentDir, {
-                withFileTypes: true,
-            });
-        } catch {
-            // Parent directory may not exist — ignore.
-        }
-        const rootFiles: Record<string, string> = {};
-        for (const entry of rootEntries) {
-            if (!entry.isFile()) continue;
-            const split = splitConventionName(entry.name);
-            if (!split) continue;
-            const stem = split.stem;
-            if (
-                stem !== 'hooks' &&
-                stem !== 'openapi.config' &&
-                stem !== 'plugins' &&
-                stem !== 'providers'
-            ) {
-                continue;
-            }
-            const existing = rootFiles[stem];
-            if (existing) {
-                throw new Error(
-                    `Conflicting app-level convention files "${existing}" and "${path.join(parentDir, entry.name)}" — ` +
-                        `use only one of .ts/.js/.mjs per convention file.`
-                );
-            }
-            rootFiles[stem] = path.resolve(path.join(parentDir, entry.name));
-        }
-        globalHooks = rootFiles['hooks'];
-        openAPIConfigPath = rootFiles['openapi.config'];
-        pluginsPath = rootFiles['plugins'];
-        providersPath = rootFiles['providers'];
-
-        return {
-            routes,
-            globalHooks,
-            openAPIConfigPath,
-            pluginsPath,
-            providersPath,
-        };
+        // App-level convention files (hooks.ts, openapi.config.ts, plugins.ts,
+        // providers.ts) are siblings of the entry point — the parent of the
+        // routes directory.
+        const appFiles = await collectAppConventionFiles(
+            path.dirname(this.routesDir)
+        );
+        return { routes, ...appFiles };
     }
 
     /**
@@ -227,6 +181,68 @@ export class DirectoryScanner {
             await this.walk(childPath, out);
         }
     }
+}
+
+/**
+ * Discovers the app-level convention files (`hooks`, `openapi.config`,
+ * `plugins`, `providers`) in `appRoot`. Conflicting extensions for one stem
+ * fail loud.
+ */
+async function collectAppConventionFiles(
+    appRoot: string
+): Promise<
+    Pick<
+        ScanResult,
+        'globalHooks' | 'openAPIConfigPath' | 'pluginsPath' | 'providersPath'
+    >
+> {
+    let rootEntries: { name: string; isFile: () => boolean }[] = [];
+    try {
+        rootEntries = await readdir(appRoot, { withFileTypes: true });
+    } catch {
+        // Directory may not exist — ignore.
+    }
+    const rootFiles: Record<string, string> = {};
+    for (const entry of rootEntries) {
+        if (!entry.isFile()) continue;
+        const split = splitConventionName(entry.name);
+        if (!split) continue;
+        const stem = split.stem;
+        if (
+            stem !== 'hooks' &&
+            stem !== 'openapi.config' &&
+            stem !== 'plugins' &&
+            stem !== 'providers'
+        ) {
+            continue;
+        }
+        const existing = rootFiles[stem];
+        if (existing) {
+            throw new Error(
+                `Conflicting app-level convention files "${existing}" and "${path.join(appRoot, entry.name)}" — ` +
+                    `use only one of .ts/.js/.mjs per convention file.`
+            );
+        }
+        rootFiles[stem] = path.resolve(path.join(appRoot, entry.name));
+    }
+    return {
+        globalHooks: rootFiles['hooks'],
+        openAPIConfigPath: rootFiles['openapi.config'],
+        pluginsPath: rootFiles['plugins'],
+        providersPath: rootFiles['providers'],
+    };
+}
+
+/**
+ * App-root convention files for apps with no API directory (pages-only).
+ * Returns a route-less {@link ScanResult} so the Module Loader can load
+ * hooks/plugins/providers exactly like it does for API apps.
+ */
+export async function scanAppRootConventions(
+    appRoot: string
+): Promise<ScanResult> {
+    const appFiles = await collectAppConventionFiles(appRoot);
+    return { routes: [], ...appFiles };
 }
 
 /** Re-exported for convenience / symmetry with the module loader. */

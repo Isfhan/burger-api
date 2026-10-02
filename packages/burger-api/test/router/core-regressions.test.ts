@@ -680,6 +680,13 @@ describe('small fixes', () => {
         });
         await expect(burger.serve(70000)).rejects.toThrow('Invalid port 70000');
     });
+
+    it('serve() with no routes rejects with a clear error', async () => {
+        const burger = new Burger({});
+        await expect(burger.serve(0)).rejects.toThrow(
+            /No routes configured/
+        );
+    });
 });
 
 describe('Convention directory defaults (filesystem mode)', () => {

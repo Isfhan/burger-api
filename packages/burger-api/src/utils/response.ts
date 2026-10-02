@@ -144,12 +144,15 @@ export function hasSetMutations(set?: ContextSet): boolean {
  * Merges a `ContextSet` (`ctx.set`) into the outgoing `Response`:
  * - `set.headers` is merged over the response's headers; explicitly set values
  *   win and other handler headers are kept.
- * - `set.status` overrides the response status only when defined.
+ * - `set.status` overrides the response status only when defined, and NEVER
+ *   overrides an error status (>= 400) — errors stay errors.
  * - Runs once at the pipeline exit, for every response path; returns the
  *   original `Response` unchanged when there is nothing to apply.
  */
 export function applySet(response: Response, set?: ContextSet): Response {
     if (!set) return response;
+    // Errors are authoritative: `ctx.set.status` may only restyle successes.
+    const setStatus = response.status >= 400 ? undefined : set.status;
 
     if (set instanceof TrackedContextSet) {
         const flags = set.flags;
@@ -159,7 +162,7 @@ export function applySet(response: Response, set?: ContextSet): Response {
             // header list itself, so no explicit `new Headers(...)` copy is
             // needed.
             return new Response(response.body, {
-                status: set.status ?? response.status,
+                status: setStatus ?? response.status,
                 statusText: response.statusText,
                 headers: response.headers,
             });
@@ -185,10 +188,8 @@ export function applySet(response: Response, set?: ContextSet): Response {
         }
     }
 
-    const status = set.status ?? response.status;
-
     return new Response(response.body, {
-        status,
+        status: setStatus ?? response.status,
         statusText: response.statusText,
         headers,
     });

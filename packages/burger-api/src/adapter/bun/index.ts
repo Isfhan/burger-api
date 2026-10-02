@@ -1,8 +1,5 @@
 import { serve } from 'bun';
-import {
-    renderHTTPError,
-    logUnhandledError,
-} from '../../errors/http-error.js';
+import { renderUncaught } from '../../errors/http-error.js';
 import type {
     RuntimeAdapter,
     ServerHandle,
@@ -29,14 +26,8 @@ export class BunAdapter implements RuntimeAdapter {
                 } catch (error) {
                     // Safety net for errors that escape the pipeline.
                     // HTTPError subclasses are caught by dispatchOnError.
-                    // This catches the rest.
-                    const isDev =
-                        opts.debug ?? process.env.NODE_ENV !== 'production';
-                    const response = renderHTTPError(error, isDev);
-                    if (response.status >= 500) {
-                        logUnhandledError(request.method, request.url, error);
-                    }
-                    return response;
+                    // This catches the rest — same renderer as the fetch path.
+                    return renderUncaught(error, request, opts.debug);
                 }
             },
             error(error: Error) {
@@ -64,13 +55,14 @@ export class BunAdapter implements RuntimeAdapter {
         try {
             server = serve(serverOptions as Parameters<typeof serve>[0]);
         } catch (error) {
-            // A busy port is an operator problem, not a framework crash:
-            // one clean line instead of a stack trace.
+            // A busy port is an operator problem: throw one clear error the
+            // caller (app entry, CLI child) can surface; never kill the
+            // process from inside the adapter.
             if ((error as { code?: string })?.code === 'EADDRINUSE') {
-                console.error(
-                    `Port ${opts.port} is already in use. Stop the other process or set PORT / --port.`
+                throw new Error(
+                    `Port ${opts.port} is already in use. Stop the other process or set PORT / --port.`,
+                    { cause: error }
                 );
-                process.exit(1);
             }
             throw error;
         }

@@ -46,6 +46,26 @@ function normalizeIssues(error: z.ZodError): ValidationIssue[] {
     }));
 }
 
+/** Monotonic ids for schemas with no computable JSON Schema fingerprint. */
+const uniqueSchemaIds = new WeakMap<object, number>();
+let nextUniqueSchemaId = 0;
+
+/**
+ * Root-level wrappers whose validation semantics the JSON Schema fingerprint
+ * cannot capture. `z.string().optional()` and `z.string()` serialize
+ * identically, so sharing a cached validator would validate the wrong
+ * schema (e.g. `undefined` rejected for an optional body).
+ */
+const LOSSY_ROOT_TYPES = new Set([
+    'optional',
+    'prefault',
+    'nonoptional',
+    'default',
+    'catch',
+    'pipe',
+    'lazy',
+]);
+
 export const ZodAdapter: ValidatorAdapter = {
     identity(schema: SchemaInput): string {
         // Zod v4's `toString()` is not stable for object schemas, so use a
@@ -56,8 +76,14 @@ export const ZodAdapter: ValidatorAdapter = {
         try {
             fingerprint = JSON.stringify(z.toJSONSchema(zodSchema));
         } catch {
-            // Fallback for schemas without JSON Schema support.
-            fingerprint = String(zodSchema);
+            // No computable fingerprint (transforms, dates, custom, bigint):
+            // key by object identity so distinct schemas can never share.
+            let id = uniqueSchemaIds.get(zodSchema);
+            if (id === undefined) {
+                id = ++nextUniqueSchemaId;
+                uniqueSchemaIds.set(zodSchema, id);
+            }
+            return 'zod:object:' + id;
         }
         return 'zod:' + fingerprint;
     },
@@ -66,7 +92,13 @@ export const ZodAdapter: ValidatorAdapter = {
         const zodSchema = schema as z.ZodTypeAny;
         const def = (
             zodSchema as unknown as {
-                _zod?: { def?: { coerce?: boolean; checks?: unknown[] } };
+                _zod?: {
+                    def?: {
+                        type?: string;
+                        coerce?: boolean;
+                        checks?: unknown[];
+                    };
+                };
             }
         )._zod?.def;
 
@@ -74,6 +106,12 @@ export const ZodAdapter: ValidatorAdapter = {
         // plain counterparts even though their JSON Schema fingerprints are
         // identical — never let one route's coercion leak into another's.
         if (def?.coerce === true) {
+            return false;
+        }
+
+        // Root wrappers invisible to the fingerprint (optional/default/pipe/
+        // …) change what counts as valid input — compile fresh.
+        if (def?.type !== undefined && LOSSY_ROOT_TYPES.has(def.type)) {
             return false;
         }
 

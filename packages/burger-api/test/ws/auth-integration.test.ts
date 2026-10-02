@@ -6,6 +6,8 @@ import type {
     WebSocketConfig,
 } from '../../src/ws/types';
 import type { BurgerContext } from '../../src/context/context';
+import { HTTPError } from '../../src/errors/http-error';
+import { Burger } from '../../src/index';
 
 describe('WebSocket Auth Integration', () => {
     let router: WebSocketRouter;
@@ -147,23 +149,15 @@ describe('WebSocket Auth Integration', () => {
             expect((response as Response).status).toBe(401);
         });
 
-        it('should return 403 when auth hook throws ForbiddenError', async () => {
+        it('should return 403 when auth hook throws HTTPError(403)', async () => {
             const route = createRoute('/chat');
             router.addRoute(route);
-
-            class ForbiddenError extends Error {
-                status = 403;
-                constructor(message: string) {
-                    super(message);
-                    this.name = 'ForbiddenError';
-                }
-            }
 
             const adapter = new WebSocketAdapter({
                 router,
                 pluginBeforeRoute: [
                     async (ctx: BurgerContext) => {
-                        throw new ForbiddenError('Insufficient permissions');
+                        throw new HTTPError(403, 'Insufficient permissions');
                     },
                 ],
                 debug: false,
@@ -264,6 +258,137 @@ describe('WebSocket Auth Integration', () => {
         });
     });
 
+    describe('auth never fails open', () => {
+        it('returns 401 for auth.required with no plugin hooks at all', async () => {
+            const route = createRoute('/chat', {
+                config: { auth: { required: true } },
+            });
+            router.addRoute(route);
+
+            const adapter = new WebSocketAdapter({ router, debug: false });
+            const outcome = await adapter.handleUpgrade(
+                createUpgradeRequest(),
+                createMockServer() as any
+            );
+            expect(outcome.handled).toBe(true);
+            expect(((outcome as { response?: Response }).response as Response).status).toBe(401);
+        });
+
+        it('returns 403 for auth.roles with no plugin hooks at all', async () => {
+            const route = createRoute('/chat', {
+                config: { auth: { roles: ['admin'] } },
+            });
+            router.addRoute(route);
+
+            const adapter = new WebSocketAdapter({ router, debug: false });
+            const outcome = await adapter.handleUpgrade(
+                createUpgradeRequest(),
+                createMockServer() as any
+            );
+            expect(outcome.handled).toBe(true);
+            expect(((outcome as { response?: Response }).response as Response).status).toBe(403);
+        });
+
+        it('rejects the upgrade when a global onRequest hook responds', async () => {
+            const route = createRoute('/chat');
+            router.addRoute(route);
+
+            const adapter = new WebSocketAdapter({
+                router,
+                onRequestHooks: [
+                    () => new Response('blocked', { status: 401 }),
+                ],
+            });
+            const outcome = await adapter.handleUpgrade(
+                createUpgradeRequest(),
+                createMockServer() as any
+            );
+            expect(outcome.handled).toBe(true);
+            expect(((outcome as { response?: Response }).response as Response).status).toBe(401);
+        });
+
+        it('runs onRequest before transform and beforeRoute, with ctx.ip available', async () => {
+            const order: string[] = [];
+            const route = createRoute('/chat');
+            router.addRoute(route);
+
+            const adapter = new WebSocketAdapter({
+                router,
+                onRequestHooks: [
+                    (ctx: BurgerContext) => {
+                        order.push('onRequest');
+                        expect(ctx.ip).toBe('10.0.0.1');
+                    },
+                ],
+                pluginTransform: {
+                    user: () => {
+                        order.push('plugin-transform');
+                        return { sub: 'u1' };
+                    },
+                },
+                globalTransform: {
+                    tenant: () => {
+                        order.push('global-transform');
+                        return 'acme';
+                    },
+                },
+                pluginBeforeRoute: [
+                    (ctx: BurgerContext) => {
+                        order.push('plugin-beforeRoute');
+                        expect(
+                            (ctx as unknown as { tenant: string }).tenant
+                        ).toBe('acme');
+                    },
+                ],
+                globalBeforeRoute: [
+                    () => {
+                        order.push('global-beforeRoute');
+                    },
+                ],
+                ipHolder: {
+                    server: { requestIP: () => ({ address: '10.0.0.1' }) },
+                },
+            });
+            const outcome = await adapter.handleUpgrade(
+                createUpgradeRequest(),
+                createMockServer() as any
+            );
+            expect(outcome.handled).toBe(true);
+            expect(order).toEqual([
+                'onRequest',
+                'plugin-transform',
+                'global-transform',
+                'plugin-beforeRoute',
+                'global-beforeRoute',
+            ]);
+        });
+
+        it('a non-HTTPError thrown by an auth hook renders a generic 500', async () => {
+            const route = createRoute('/chat');
+            router.addRoute(route);
+
+            const adapter = new WebSocketAdapter({
+                router,
+                pluginBeforeRoute: [
+                    () => {
+                        throw new Error('secret-db-detail');
+                    },
+                ],
+                debug: false,
+            });
+            const outcome = await adapter.handleUpgrade(
+                createUpgradeRequest(),
+                createMockServer() as any
+            );
+            expect(outcome.handled).toBe(true);
+            const response = (outcome as { response?: Response }).response as Response;
+            expect(response.status).toBe(500);
+            const text = await response.text();
+            expect(text).not.toContain('secret-db-detail');
+            expect(JSON.parse(text).detail).toBe('Internal Server Error');
+        });
+    });
+
     describe('provider injection', () => {
         it('should inject providers into WebSocketAdapter', async () => {
             const route = createRoute('/chat');
@@ -325,5 +450,47 @@ describe('WebSocket Auth Integration', () => {
                     ?.logger
             ).toBeDefined();
         });
+    });
+});
+
+describe('WebSocket auth through the app wiring (fetchHandler)', () => {
+    const upgrade = (path = '/chat') =>
+        new Request(`http://localhost${path}`, {
+            headers: { upgrade: 'websocket' },
+        });
+
+    it('enforces auth.required with no plugins registered', async () => {
+        const burger = new Burger({
+            apiRoutes: [],
+            wsRoutes: [
+                {
+                    path: '/chat',
+                    handlers: {},
+                    config: { auth: { required: true } },
+                },
+            ],
+        });
+        const handler = await burger.fetchHandler();
+        const res = await handler(upgrade());
+        expect(res.status).toBe(401);
+    });
+
+    it('runs a global onRequest hook on the upgrade and honors its rejection', async () => {
+        let ran = false;
+        const burger = new Burger({
+            apiRoutes: [],
+            wsRoutes: [{ path: '/chat', handlers: {} }],
+            globalHooks: {
+                onRequest: () => {
+                    ran = true;
+                    return new Response('blocked', { status: 401 });
+                },
+            },
+        });
+        const handler = await burger.fetchHandler();
+        const res = await handler(upgrade());
+        expect(ran).toBe(true);
+        expect(res.status).toBe(401);
+        expect(await res.text()).toBe('blocked');
     });
 });

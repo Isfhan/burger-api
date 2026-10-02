@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll, spyOn } from 'bun:test';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -212,6 +212,41 @@ describe('toFetchHandler — runtime independence', () => {
             { waitUntil: () => {} }
         );
         expect(res.status).toBe(200);
+    });
+});
+
+describe('toFetchHandler — error handling', () => {
+    it('resets a failed prepare and renders an RFC 9457 500', async () => {
+        let calls = 0;
+        const burger = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/products',
+                    handlers: { GET: () => Response.json({ ok: true }) },
+                },
+            ],
+            pluginsModule: {
+                default: () => {
+                    if (++calls === 1) throw new Error('transient-setup');
+                },
+            },
+        });
+        const errors = spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const h = toFetchHandler(burger);
+            const first = await h(req('/api/products'));
+            expect(first.status).toBe(500);
+            expect(first.headers.get('content-type')).toBe(
+                'application/problem+json'
+            );
+            // The cached prepare promise must have been reset: the next call
+            // retries and succeeds.
+            const second = await h(req('/api/products'));
+            expect(second.status).toBe(200);
+            expect(await second.json()).toEqual({ ok: true });
+        } finally {
+            errors.mockRestore();
+        }
     });
 });
 

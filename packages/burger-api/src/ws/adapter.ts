@@ -14,8 +14,9 @@ import { BurgerContext } from '../context/context.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
+    RequestIPHolder,
 } from '../context/context.js';
-import type { TransformMap } from '../lifecycle/types.js';
+import type { Hook, TransformMap } from '../lifecycle/types.js';
 import { applyTransform } from '../lifecycle/transform.js';
 import {
     acceptWsUpgrade,
@@ -28,6 +29,7 @@ import {
     type WsUpgradeOutcome,
 } from './platform.js';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../runtime/capabilities.js';
+import { resolveDebug } from '../utils/env.js';
 
 /** Internal socket-data slot holding the route matched at upgrade. */
 const WS_ROUTE = Symbol('burger-api.ws.route');
@@ -74,6 +76,33 @@ export interface WebSocketAdapterOptions {
     pluginBeforeRoute?: ((ctx: BurgerContext) => unknown | Promise<unknown>)[];
 
     /**
+     * Resolved framework-scope beforeRoute hooks (run before plugin hooks).
+     */
+    frameworkBeforeRoute?: Hook[];
+
+    /**
+     * Pre-routing onRequest hooks, in the same Framework → Plugin → Global
+     * order the HTTP path uses. Always run on upgrade — auth must not fail open.
+     */
+    onRequestHooks?: Hook[];
+
+    /**
+     * App-level (`src/hooks.ts`) transform factories, applied after plugin ones.
+     */
+    globalTransform?: TransformMap;
+
+    /**
+     * App-level (`src/hooks.ts`) beforeRoute hooks — run after plugin hooks.
+     */
+    globalBeforeRoute?: Hook[];
+
+    /**
+     * Per-app `ctx.ip` holder, so upgrade hooks resolve the socket peer like
+     * HTTP hooks do.
+     */
+    ipHolder?: RequestIPHolder;
+
+    /**
      * The deployment target declared by `burger-api build --target`, if any.
      * When present, resolves the handoff via `RUNTIME_CAPABILITIES` instead of
      * live probing (Node and Vercel look identical to `globalThis` detection).
@@ -111,6 +140,11 @@ export class WebSocketAdapter {
     private pluginBeforeRoute?: ((
         ctx: BurgerContext
     ) => unknown | Promise<unknown>)[];
+    private frameworkBeforeRoute: Hook[];
+    private onRequestHooks: Hook[];
+    private globalTransform?: TransformMap;
+    private globalBeforeRoute: Hook[];
+    private ipHolder?: RequestIPHolder;
     private runtimeTarget?: RuntimeTarget;
 
     /** One context per connection, so `ws.data` mutations persist. */
@@ -122,10 +156,15 @@ export class WebSocketAdapter {
     constructor(options: WebSocketAdapterOptions) {
         this.router = options.router;
         this.config = options.config ?? {};
-        this.debug = options.debug ?? false;
+        this.debug = resolveDebug(options.debug);
         this.providers = options.providers;
         this.pluginTransform = options.pluginTransform;
         this.pluginBeforeRoute = options.pluginBeforeRoute;
+        this.frameworkBeforeRoute = options.frameworkBeforeRoute ?? [];
+        this.onRequestHooks = options.onRequestHooks ?? [];
+        this.globalTransform = options.globalTransform;
+        this.globalBeforeRoute = options.globalBeforeRoute ?? [];
+        this.ipHolder = options.ipHolder;
         this.runtimeTarget = options.runtimeTarget;
     }
 
@@ -631,9 +670,11 @@ export class WebSocketAdapter {
     }
 
     /**
-     * Runs plugin auth hooks during the upgrade; returns a Response when auth
-     * fails. `env` / `executionCtx` are bound onto the temporary context so
-     * transform hooks can read bindings (e.g. JWT secrets).
+     * Runs the upgrade request through the same pre-handler chain HTTP uses —
+     * onRequest → transform → beforeRoute (Framework → Plugin → Global) —
+     * then enforces `config.auth.required` / `roles`. Always runs: auth
+     * check must never depend on a plugin being registered. `env` /
+     * `executionCtx` are bound onto the context so hooks can read bindings.
      */
     private async runAuthHooks(
         request: Request,
@@ -641,15 +682,8 @@ export class WebSocketAdapter {
         env?: BurgerEnv,
         executionCtx?: BurgerExecutionContext
     ): Promise<{ response?: Response; user?: unknown }> {
-        // No auth plugins registered — skip
-        if (
-            !this.pluginTransform &&
-            (!this.pluginBeforeRoute || this.pluginBeforeRoute.length === 0)
-        ) {
-            return {};
-        }
-
-        // Create a temporary BurgerContext for the upgrade request
+        // One temporary BurgerContext for the upgrade request. Needed even
+        // with no hooks, because `auth.required` / `roles` are enforced here.
         const ctx = BurgerContext.create(
             request,
             {},
@@ -657,25 +691,46 @@ export class WebSocketAdapter {
             this.providers,
             routeConfig as Record<string, unknown> | undefined,
             env,
-            executionCtx
+            executionCtx,
+            this.ipHolder
         );
+        // Mappers registered by onRequest / beforeRoute still wrap rejections
+        // (e.g. a cors hook adds headers to the 401).
+        const mappers: ((res: Response) => Response | Promise<Response>)[] = [];
+        const reject = async (response: Response) => ({
+            response: await this.applyMappers(response, mappers),
+        });
 
         try {
-            // Transform hooks set `ctx.user`, needed even when auth is disabled.
+            // 1. onRequest — same ordered array the HTTP path runs.
+            for (const hook of this.onRequestHooks) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
+            }
+
+            // 2. transform — plugin factories first, app-level hooks override.
             if (this.pluginTransform) {
                 await applyTransform(ctx, this.pluginTransform);
             }
+            if (this.globalTransform) {
+                await applyTransform(ctx, this.globalTransform);
+            }
 
-            // beforeRoute hooks always run; plugins decide whether to act
-            // (e.g. rate limiting). Only the required-user check below is gated.
-            if (this.pluginBeforeRoute) {
-                for (const hook of this.pluginBeforeRoute) {
-                    const result = await hook(ctx);
-                    // If hook returns a Response, auth failed
-                    if (result instanceof Response) {
-                        return { response: result };
-                    }
-                }
+            // 3. beforeRoute — Framework → Plugin → Global.
+            for (const hook of this.frameworkBeforeRoute) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
+            }
+            for (const hook of this.pluginBeforeRoute ?? []) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+            }
+            for (const hook of this.globalBeforeRoute) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
             }
 
             // Extract user from context (set by transform hooks)
@@ -687,48 +742,68 @@ export class WebSocketAdapter {
                     ? routeConfig.auth
                     : undefined;
 
-            // If auth is required but no user was attached, reject
+            // Auth is enforced regardless of whether any hook ran.
             if (authConfig?.required && !user) {
-                return {
-                    response: renderHTTPError(
+                return reject(
+                    renderHTTPError(
                         new HTTPError(401, 'Authentication required'),
-                        false
-                    ),
-                };
+                        this.debug
+                    )
+                );
             }
 
             // Role-scoped routes reject with 403 unless the user holds a role.
-            if (authConfig?.roles && authConfig.roles.length > 0) {
-                if (!hasAnyRole(user, authConfig.roles)) {
-                    return {
-                        response: renderHTTPError(
-                            new HTTPError(403, 'Insufficient permissions'),
-                            false
-                        ),
-                    };
-                }
+            if (
+                authConfig?.roles &&
+                authConfig.roles.length > 0 &&
+                !hasAnyRole(user, authConfig.roles)
+            ) {
+                return reject(
+                    renderHTTPError(
+                        new HTTPError(403, 'Insufficient permissions'),
+                        this.debug
+                    )
+                );
             }
 
             return { user };
         } catch (error) {
-            // Auth hook threw an error — determine correct status
-            if (this.debug) {
-                console.error('[WebSocket] Auth hook error:', error);
-            }
-            // Same RFC 9457 shape as HTTP errors (status-phrase title).
-            const status = (error as any)?.status ?? 401;
-            return {
-                response: renderHTTPError(
-                    new HTTPError(
-                        status,
-                        error instanceof Error
-                            ? error.message
-                            : 'Authentication failed'
-                    ),
-                    false
-                ),
-            };
+            return reject(this.renderAuthError(error));
         }
+    }
+
+    /**
+     * Renders a throw from the upgrade auth chain. Only framework
+     * `HTTPError`s keep their status; anything else is a server bug and
+     * renders a generic 500 (never a fake 401 echoing the thrown message).
+     */
+    private renderAuthError(error: unknown): Response {
+        if (this.debug) {
+            console.error('[WebSocket] Auth hook error:', error);
+        }
+        if (error instanceof HTTPError) {
+            return renderHTTPError(error, this.debug);
+        }
+        return renderHTTPError(
+            new HTTPError(
+                500,
+                'Internal Server Error',
+                error instanceof Error ? { cause: error } : undefined
+            ),
+            this.debug
+        );
+    }
+
+    /** Applies collected mappers onion-style (last registered runs first). */
+    private async applyMappers(
+        response: Response,
+        mappers: ((res: Response) => Response | Promise<Response>)[]
+    ): Promise<Response> {
+        let res = response;
+        for (let i = mappers.length - 1; i >= 0; i--) {
+            res = await mappers[i]!(res);
+        }
+        return res;
     }
 }
 

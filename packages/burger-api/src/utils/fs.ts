@@ -47,6 +47,19 @@ export function resolveScanDir(dir: string, label: string, option: string): stri
 }
 
 /**
+ * Resolves the app root (where `hooks.ts` / `plugins.ts` / `providers.ts` /
+ * `openapi.config.ts` live) when no API directory points at it. Uses
+ * `BURGER_API_APP_DIR` (set by `burger-api dev` to the entry file's
+ * directory), then `./src`.
+ */
+export function resolveAppRootDir(): string | undefined {
+    const appDir = process.env.BURGER_API_APP_DIR;
+    if (appDir && existsSync(appDir)) return appDir;
+    if (existsSync('./src')) return './src';
+    return undefined;
+}
+
+/**
  * Convention default for a scan root the app did not configure
  * (`src/api`, `src/pages`, `src/websocket`) — matches the CLI build's
  * defaults so dev and production mount the same directories. Returns the

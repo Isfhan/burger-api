@@ -38,6 +38,26 @@ describe('RuntimeAdapter — BunAdapter contract', () => {
     });
 });
 
+describe('RuntimeAdapter — port conflicts', () => {
+    it('throws a clear EADDRINUSE error instead of exiting the process', () => {
+        const adapter = new BunAdapter();
+        const port = 45000 + Math.floor(Math.random() * 2000);
+        const opts = {
+            staticRoutes: {} as Record<string, any>,
+            fetch: (() => new Response('x')) as any,
+            port,
+        };
+        const handle = adapter.start(opts);
+        try {
+            expect(() => adapter.start(opts)).toThrow(
+                new RegExp(`Port ${port} is already in use`)
+            );
+        } finally {
+            handle.stop();
+        }
+    });
+});
+
 describe('RuntimeAdapter — options shape', () => {
     it('accepts staticRoutes, fetch, port, hostname, debug, onListen', () => {
         const opts = {

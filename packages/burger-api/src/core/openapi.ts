@@ -67,10 +67,10 @@ function schemaToJsonSchema(
     io: 'input' | 'output' = 'output'
 ): Record<string, unknown> | undefined {
     if (schema instanceof ZodType) {
-        const jsonSchema = toJSONSchema(schema, { io }) as Record<
-            string,
-            unknown
-        >;
+        const jsonSchema = toJSONSchema(schema, {
+            io,
+            unrepresentable: 'any',
+        }) as Record<string, unknown>;
         // Zod emits `$schema`, which is illegal inside an OpenAPI `schema`
         // object (OAS defines its own dialect) — drop it.
         delete jsonSchema.$schema;
@@ -256,82 +256,99 @@ export function generateOpenAPIDocument(
             }
             const lowerMethod = method.toLowerCase();
 
-            const methodMeta = openapiMeta[lowerMethod] || {};
+            try {
+                const methodMeta = openapiMeta[lowerMethod] || {};
 
-            // Sanitize the operationId to OpenAPI-legal characters and dedupe
-            // collisions.
-            let operationId =
-                methodMeta.operationId ||
-                `${lowerMethod}_${route.path.replace(/[^a-zA-Z0-9_.-]+/g, '_')}`;
-            if (usedOperationIds.has(operationId)) {
-                let suffix = 2;
-                let candidate = `${operationId}_${suffix}`;
-                while (usedOperationIds.has(candidate)) {
-                    suffix += 1;
-                    candidate = `${operationId}_${suffix}`;
+                // Sanitize the operationId to OpenAPI-legal characters and
+                // dedupe collisions.
+                let operationId =
+                    methodMeta.operationId ||
+                    `${lowerMethod}_${route.path.replace(/[^a-zA-Z0-9_.-]+/g, '_')}`;
+                if (usedOperationIds.has(operationId)) {
+                    let suffix = 2;
+                    let candidate = `${operationId}_${suffix}`;
+                    while (usedOperationIds.has(candidate)) {
+                        suffix += 1;
+                        candidate = `${operationId}_${suffix}`;
+                    }
+                    operationId = candidate;
                 }
-                operationId = candidate;
-            }
-            usedOperationIds.add(operationId);
+                usedOperationIds.add(operationId);
 
-            let parameters: any[] = [];
-            if (schema[lowerMethod]) {
-                const schemaDef = schema[lowerMethod];
-                parameters = [
-                    ...buildParameters(schemaDef.params, 'path'),
-                    ...buildParameters(schemaDef.query, 'query'),
-                    ...buildParameters(schemaDef.headers, 'header'),
-                    ...buildParameters(schemaDef.cookies, 'cookie'),
-                ];
-            }
-
-            // Every operation on a templated path must define its path
-            // parameters (OAS `path-parameters-defined`), even with no schema.
-            for (const match of openApiPath.matchAll(/\{([^}]+)\}/g)) {
-                const name = match[1]!;
-                if (!parameters.some((p) => p.in === 'path' && p.name === name)) {
-                    parameters.unshift({
-                        name,
-                        in: 'path',
-                        required: true,
-                        schema: { type: 'string' },
-                        description: `Path parameter ${name}`,
-                    });
+                let parameters: any[] = [];
+                if (schema[lowerMethod]) {
+                    const schemaDef = schema[lowerMethod];
+                    parameters = [
+                        ...buildParameters(schemaDef.params, 'path'),
+                        ...buildParameters(schemaDef.query, 'query'),
+                        ...buildParameters(schemaDef.headers, 'header'),
+                        ...buildParameters(schemaDef.cookies, 'cookie'),
+                    ];
                 }
-            }
 
-            let requestBody = undefined;
-            if (schema[lowerMethod]?.body) {
-                requestBody = buildRequestBody(
-                    schema[lowerMethod].body,
+                // Every operation on a templated path must define its path
+                // parameters (OAS `path-parameters-defined`), even with no
+                // schema.
+                for (const match of openApiPath.matchAll(/\{([^}]+)\}/g)) {
+                    const name = match[1]!;
+                    if (
+                        !parameters.some(
+                            (p) => p.in === 'path' && p.name === name
+                        )
+                    ) {
+                        parameters.unshift({
+                            name,
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'string' },
+                            description: `Path parameter ${name}`,
+                        });
+                    }
+                }
+
+                let requestBody = undefined;
+                if (schema[lowerMethod]?.body) {
+                    requestBody = buildRequestBody(
+                        schema[lowerMethod].body,
+                        config?.mapJsonSchema
+                    );
+                }
+
+                const responses = buildResponses(
+                    schema[lowerMethod]?.response,
+                    methodMeta.responses,
                     config?.mapJsonSchema
                 );
+
+                // Collect tags
+                const tags = methodMeta.tags || [];
+                for (const tag of tags) {
+                    tagSet.add(tag);
+                }
+
+                (doc.paths[openApiPath] as any)[lowerMethod] = {
+                    operationId,
+                    summary:
+                        methodMeta.summary ||
+                        `Summary for ${method} ${route.path}`,
+                    description: methodMeta.description || '',
+                    tags,
+                    deprecated: methodMeta.deprecated || false,
+                    parameters,
+                    requestBody,
+                    responses,
+                    externalDocs: methodMeta.externalDocs || undefined,
+                };
+            } catch (error) {
+                // A schema the converter still cannot express must not take
+                // the whole document (or startup) down — document the
+                // operation with an empty object and warn once.
+                console.warn(
+                    `[burger-api] OpenAPI: could not build ${method.toUpperCase()} ${route.path} — documenting it without schema details:`,
+                    error
+                );
+                (doc.paths[openApiPath] as any)[lowerMethod] = {};
             }
-
-            const responses = buildResponses(
-                schema[lowerMethod]?.response,
-                methodMeta.responses,
-                config?.mapJsonSchema
-            );
-
-            // Collect tags
-            const tags = methodMeta.tags || [];
-            for (const tag of tags) {
-                tagSet.add(tag);
-            }
-
-            (doc.paths[openApiPath] as any)[lowerMethod] = {
-                operationId,
-                summary:
-                    methodMeta.summary || `Summary for ${method} ${route.path}`,
-                description: methodMeta.description || '',
-                tags,
-                deprecated: methodMeta.deprecated || false,
-                parameters,
-                requestBody,
-                responses,
-                externalDocs: methodMeta.externalDocs || undefined,
-            };
         }
     }
 

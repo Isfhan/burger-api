@@ -11,7 +11,7 @@ import { applyTransform } from './transform.js';
 import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import { ValidationError } from '../validation/error.js';
 import { validateResponse } from '../validation/response.js';
-import { isNotProductionEnv } from '../utils/env.js';
+import { resolveDebug } from '../utils/env.js';
 import { isThenable } from '../utils/thenable.js';
 
 /**
@@ -107,7 +107,7 @@ export async function executeHookPlanForHandler(
                         response.status,
                         body,
                         plan.validatorConfig ?? {},
-                        plan.debug ?? isNotProductionEnv()
+                        resolveDebug(plan.debug)
                     );
                     // A failure replaces the response; afterRoute /
                     // mapResponse still run on it (e.g. CORS headers).
@@ -161,14 +161,19 @@ export async function dispatchOnError(
             if (result instanceof Response) {
                 return result;
             }
-        } catch {
-            // onError threw — skip to next; never re-enter onError
+        } catch (hookError) {
+            // onError threw — log it, skip to the next hook, never re-enter
+            // onError. The original error still renders if none handles it.
+            console.error(
+                '[burger-api] onError hook threw; rendering the original error:',
+                hookError
+            );
         }
     }
 
-    // Fallback for unhandled errors: RFC 9457. Dev mode includes stack and
-    // cause; production exposes no internals.
-    const isDev = debug ?? isNotProductionEnv();
+    // Fallback for unhandled errors: RFC 9457. Debug mode includes stack and
+    // cause; otherwise no internals.
+    const isDev = resolveDebug(debug);
 
     // ValidationError retains its structured format (errorsBySlot grouping).
     if (error instanceof ValidationError) {
