@@ -57,9 +57,15 @@ export function compileRouteSchema(
     cache: ValidatorCache = validatorCache
 ): CompiledRouteValidators {
     const methods: CompiledRouteValidators['methods'] = {};
+    // `export const coerce = true` in schema.ts enables coercion for every
+    // method in the file (a per-method `coerce` still works the same).
+    const topLevelCoerce =
+        (schema as { coerce?: unknown }).coerce === true;
 
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
+        // The top-level `coerce` flag is not a method.
+        if (method === 'coerce') continue;
         // Schema keys are typed as the method union; a module export is still
         // a runtime string, so index via the widened record.
         const m =
@@ -69,10 +75,10 @@ export function compileRouteSchema(
         const compiledMethod: CompiledRouteValidators['methods'][LowercaseHTTPMethod] =
             {};
 
-        // Coercion is opt-in: app-level config.coerce OR per-route
-        // schema[method].coerce override.
+        // Coercion is opt-in: app-level config.coerce, top-level schema
+        // `coerce`, OR per-route schema[method].coerce override.
         const coerceEnabled =
-            config.coerce === true || m.coerce === true;
+            config.coerce === true || topLevelCoerce || m.coerce === true;
 
         for (const slot of REQUEST_SLOTS) {
             const raw = m[slot];
@@ -133,6 +139,7 @@ function compileResponseSchemas(
     let any = false;
     for (const rawMethod of Object.keys(schema)) {
         const method = rawMethod.toLowerCase();
+        if (method === 'coerce') continue;
         const m =
             (schema as Record<string, MethodSchema | undefined>)[
                 rawMethod

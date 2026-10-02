@@ -175,15 +175,35 @@ export function applySet(response: Response, set?: ContextSet): Response {
     const setHeaders = set.headers;
     if (setHeaders) {
         if (setHeaders instanceof Headers) {
+            // Preserve every Set-Cookie value (iteration may combine them).
+            const getSetCookie = (
+                setHeaders as { getSetCookie?: () => string[] }
+            ).getSetCookie;
+            if (typeof getSetCookie === 'function') {
+                for (const cookie of getSetCookie.call(setHeaders)) {
+                    headers.append('set-cookie', cookie);
+                }
+            }
             for (const entry of setHeaders as unknown as Iterable<
                 [string, string]
             >) {
+                if (entry[0].toLowerCase() === 'set-cookie') continue;
                 headers.set(entry[0], entry[1]);
             }
         } else {
             for (const key in setHeaders) {
                 const value = setHeaders[key];
-                if (value !== undefined) headers.set(key, value);
+                if (value === undefined) continue;
+                // Arrays append (multiple cookies); a scalar Set-Cookie is
+                // appended too, so a handler-set cookie survives. Other
+                // headers keep "ctx.set wins".
+                if (Array.isArray(value)) {
+                    for (const item of value) headers.append(key, item);
+                } else if (key.toLowerCase() === 'set-cookie') {
+                    headers.append(key, value);
+                } else {
+                    headers.set(key, value);
+                }
             }
         }
     }

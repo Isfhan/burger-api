@@ -462,13 +462,13 @@ describe('auto OPTIONS and HEAD', () => {
         expect(doc.paths['/api/g']!.options).toBeUndefined();
     });
 
-    it('auto-HEAD reports GET content-length', async () => {
+    it('auto-HEAD returns the GET response without reading its body', async () => {
         const burger = new Burger({
             apiRoutes: [{ path: '/api/h', handlers: { GET: () => new Response('hello world') } }],
         });
         const res = await fetchVia(burger, '/api/h', { method: 'HEAD' });
-        expect(res.headers.get('content-length')).toBe('11');
-        expect(await res.text()).toBe('');
+        expect(res.status).toBe(200);
+        expect(res.bodyUsed).toBe(false);
     });
 });
 

@@ -153,7 +153,7 @@ describe('env / executionCtx injection', () => {
         expect(await res.json()).toEqual({ hasEnv: false });
     });
 
-    it('transform hooks cannot clobber reserved keys (env, executionCtx)', async () => {
+    it('transform hooks cannot claim reserved keys (env, executionCtx) — startup error', async () => {
         const routes: RouteDefinition[] = [
             {
                 path: '/api/guarded',
@@ -172,8 +172,8 @@ describe('env / executionCtx injection', () => {
             },
         ];
         const burger = new Burger({ apiRoutes: routes });
-        const handler = toFetchHandler(burger);
-        const res = await handler(req('/api/guarded'), env);
-        expect(await res.json()).toEqual({ stillEnv: 'secret' });
+        // Reserved keys fail loud at startup instead of being dropped
+        // silently at request time.
+        await expect(burger.fetchHandler()).rejects.toThrow(/env/);
     });
 });

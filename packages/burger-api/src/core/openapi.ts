@@ -1,5 +1,5 @@
 // Import stuff from Zod 4.x
-import { toJSONSchema, ZodObject, ZodType } from 'zod';
+import { toJSONSchema, ZodType } from 'zod';
 
 // Import types
 import type {
@@ -15,43 +15,104 @@ import type {
 import type { SchemaInput } from '../validation/types.js';
 
 /**
- * Builds OpenAPI parameters from a Zod object schema, using the input side so
+ * Builds OpenAPI parameters from an object schema, using the input side so
  * `.default()` / `.optional()` fields are not required and each parameter
  * keeps its enum / format / default / min / max.
+ *
+ * Zod objects and configured Standard Schema converters yield real JSON
+ * Schema. A Standard Schema with no JSON Schema falls back to its field map
+ * (`shape` / `entries`) and emits each name with `schema: {}` — never a
+ * silent omission.
  */
 function buildParameters(
-    zodSchema: unknown,
-    location: 'path' | 'query' | 'header' | 'cookie'
+    schema: unknown,
+    location: 'path' | 'query' | 'header' | 'cookie',
+    mapJsonSchema?: Record<string, JsonSchemaConverter>
 ): any[] {
-    if (!isZodObjectSchema(zodSchema)) return [];
-
-    const json = toJSONSchema(zodSchema, {
-        io: 'input',
-        unrepresentable: 'any',
-    }) as {
-        properties?: Record<string, Record<string, unknown>>;
+    const json = schemaToJsonSchema(
+        schema as SchemaInput,
+        mapJsonSchema,
+        'input'
+    ) as {
+        properties?: Record<string, unknown>;
         required?: string[];
-    };
-    const required = new Set(json.required ?? []);
+    } | undefined;
+    const properties = json?.properties;
+    if (properties && typeof properties === 'object') {
+        const required = new Set(json?.required ?? []);
+        return Object.entries(properties).map(([name, propertySchema]) => {
+            const source =
+                typeof propertySchema === 'object' && propertySchema !== null
+                    ? (propertySchema as Record<string, unknown>)
+                    : {};
+            const { description, ...rest } = source;
+            return {
+                name,
+                in: location,
+                // OpenAPI requires path parameters to be marked required.
+                required: location === 'path' || required.has(name),
+                schema: rest,
+                description:
+                    typeof description === 'string'
+                        ? description
+                        : `${location} parameter ${name}`,
+            };
+        });
+    }
 
-    return Object.entries(json.properties ?? {}).map(([name, schema]) => {
-        const { description, ...rest } = schema;
-        return {
-            name,
-            in: location,
-            // OpenAPI requires path parameters to be marked required.
-            required: location === 'path' || required.has(name),
-            schema: rest,
-            description:
-                typeof description === 'string'
-                    ? description
-                    : `${location} parameter ${name}`,
-        };
-    });
+    // No JSON Schema available: use the schema's structural field map.
+    const fields = structuralFieldNames(schema);
+    if (!fields) return [];
+    return fields.map((name) => ({
+        name,
+        in: location,
+        required: location === 'path',
+        schema: {},
+        description: `${location} parameter ${name}`,
+    }));
 }
 
-function isZodObjectSchema(value: unknown): value is ZodObject<any, any> {
-    return value instanceof ZodObject;
+/**
+ * Field names from common structural maps: zod's `shape`, valibot's
+ * `entries`. Returns undefined when the schema exposes no field map.
+ */
+function structuralFieldNames(schema: unknown): string[] | undefined {
+    if (typeof schema !== 'object' || schema === null) return undefined;
+    const candidate = schema as { shape?: unknown; entries?: unknown };
+    const map = candidate.shape ?? candidate.entries;
+    if (map && typeof map === 'object' && !Array.isArray(map)) {
+        return Object.keys(map as Record<string, unknown>);
+    }
+    return undefined;
+}
+
+/**
+ * Whether the body schema accepts `undefined` (so the request body is not
+ * required). Runs once at document generation, never per request.
+ */
+function acceptsUndefined(schema: unknown): boolean {
+    const zod = schema as { safeParse?: (value: unknown) => unknown };
+    if (typeof zod.safeParse === 'function') {
+        try {
+            const result = zod.safeParse(undefined) as { success?: boolean };
+            return result?.success === true;
+        } catch {
+            return false;
+        }
+    }
+    const standard = schema as {
+        '~standard'?: { validate?: (value: unknown) => unknown };
+    };
+    try {
+        const result = standard['~standard']?.validate?.(undefined) as
+            | { issues?: unknown }
+            | Promise<unknown>
+            | undefined;
+        if (result === undefined || result instanceof Promise) return false;
+        return !('issues' in result && result.issues);
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -111,7 +172,8 @@ function buildRequestBody(
             },
         },
         description: 'Request body',
-        required: true,
+        // Required unless the schema itself accepts `undefined`.
+        required: !acceptsUndefined(zodSchema),
     };
 }
 
@@ -167,14 +229,15 @@ function buildResponses(
 
 /**
  * Converts `:param` and `*` route segments to OpenAPI's curly brace syntax.
+ * Param names may carry `-` and `_`; wildcards document as `{wildcard}`.
  */
 function convertPathForOpenAPI(routePath: string): string {
     if (routePath.indexOf(':') === -1 && routePath.indexOf('*') === -1) {
         return routePath;
     }
     return routePath
-        .replace(/:([a-zA-Z0-9_]+)/g, '{$1}')
-        .replace(/\*+/g, '{path}');
+        .replace(/:([a-zA-Z0-9_-]+)/g, '{$1}')
+        .replace(/\*+/g, '{wildcard}');
 }
 
 /**
@@ -203,7 +266,8 @@ export function generateOpenAPIDocument(
     if (config?.termsOfService) info.termsOfService = config.termsOfService;
 
     const doc: OpenAPIObject = {
-        openapi: '3.0.0',
+        // Zod emits JSON Schema draft 2020-12, which OpenAPI 3.1 matches.
+        openapi: '3.1.0',
         info,
         paths: {} as Record<string, any>,
     };
@@ -278,11 +342,28 @@ export function generateOpenAPIDocument(
                 let parameters: any[] = [];
                 if (schema[lowerMethod]) {
                     const schemaDef = schema[lowerMethod];
+                    const mapJsonSchema = config?.mapJsonSchema;
                     parameters = [
-                        ...buildParameters(schemaDef.params, 'path'),
-                        ...buildParameters(schemaDef.query, 'query'),
-                        ...buildParameters(schemaDef.headers, 'header'),
-                        ...buildParameters(schemaDef.cookies, 'cookie'),
+                        ...buildParameters(
+                            schemaDef.params,
+                            'path',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.query,
+                            'query',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.headers,
+                            'header',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.cookies,
+                            'cookie',
+                            mapJsonSchema
+                        ),
                     ];
                 }
 
@@ -301,7 +382,10 @@ export function generateOpenAPIDocument(
                             in: 'path',
                             required: true,
                             schema: { type: 'string' },
-                            description: `Path parameter ${name}`,
+                            description:
+                                name === 'wildcard'
+                                    ? 'Wildcard path segments (may contain slashes)'
+                                    : `Path parameter ${name}`,
                         });
                     }
                 }

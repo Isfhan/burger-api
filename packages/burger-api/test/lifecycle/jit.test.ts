@@ -361,8 +361,7 @@ describe('jit hook plan — equivalence with interpreter', () => {
         const rj = await routerJ.fetch(req());
         expect(rj.status).toBe(ri.status);
         expect(rj.headers.get('x-marker')).toBe(ri.headers.get('x-marker'));
-        expect(await rj.text()).toBe('');
-        expect(await ri.text()).toBe('');
+        expect(await rj.text()).toBe(await ri.text());
     });
 
     it('405 + Allow parity identically through both engines', async () => {

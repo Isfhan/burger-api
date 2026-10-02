@@ -18,17 +18,24 @@ import { HTTPError } from '../errors/http-error.js';
 import {
     dispatchOnError,
     executeHookPlanForHandler,
+    globalErrorFinisher,
+    hasGlobalResponseHooks,
+    runGlobalResponseHooks,
 } from '../lifecycle/executor.js';
+import type { GlobalResponsePlan } from '../lifecycle/executor.js';
 import { compileJitHookPlan } from '../lifecycle/jit.js';
-import type { HookPlan, RouteHooks, TransformMap } from '../lifecycle/types.js';
+import type {
+    HookPlan,
+    ResponseHook,
+    RouteHooks,
+    TransformMap,
+} from '../lifecycle/types.js';
 import { HookChain } from '../chain/chain.js';
+import type { Scope } from '../chain/node.js';
 import { flatten } from '../chain/flattener.js';
 import { composePluginHooks } from '../plugin/composer.js';
 import type { ResolvedPlugin } from '../plugin/types.js';
-import {
-    BurgerContext,
-    createServices,
-} from '../context/context.js';
+import { BurgerContext, createServices } from '../context/context.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
@@ -36,6 +43,7 @@ import type {
     RequestIPHolder,
 } from '../context/context.js';
 import { analyzeRouteAccess } from '../analysis/route-access-analyzer.js';
+import { assertTransformKeys } from '../lifecycle/transform.js';
 import { isThenable } from '../utils/thenable.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
@@ -58,6 +66,50 @@ import type {
 } from '../validation/types.js';
 
 /**
+ * Builds the global + plugin (+ framework) response plan, in the same
+ * nearest-first order route plans use (global → plugin → framework; route
+ * scope is excluded because it only runs for matched routes).
+ */
+export function buildGlobalResponsePlan(
+    plugins?: ResolvedPlugin[],
+    globalHooks?: RouteHooks
+): GlobalResponsePlan {
+    const after: Record<Scope, ResponseHook[]> = {
+        local: [],
+        global: [],
+        plugin: [],
+        framework: [],
+    };
+    const map: Record<Scope, ResponseHook[]> = {
+        local: [],
+        global: [],
+        plugin: [],
+        framework: [],
+    };
+    const push = (
+        value: ResponseHook | ResponseHook[] | undefined,
+        bucket: ResponseHook[]
+    ): void => {
+        if (value === undefined) return;
+        if (Array.isArray(value)) {
+            for (const hook of value) bucket.push(hook);
+        } else {
+            bucket.push(value);
+        }
+    };
+    push(globalHooks?.afterRoute, after.global);
+    push(globalHooks?.mapResponse, map.global);
+    for (const plugin of plugins ?? []) {
+        push(plugin.hooks.afterRoute, after[plugin.scope]);
+        push(plugin.hooks.mapResponse, map[plugin.scope]);
+    }
+    return {
+        afterRoute: [...after.global, ...after.plugin, ...after.framework],
+        mapResponse: [...map.global, ...map.plugin, ...map.framework],
+    };
+}
+
+/**
  * Compiles a `RouteDefinition[]` into the dispatch structures used by `Router`:
  * builds one `CompiledHandler` per route (method dispatch + 405/Allow +
  * auto-HEAD + hook pipeline), classifies routes as static (`StaticMap`) or
@@ -71,11 +123,7 @@ export class RouterCompiler {
     /** JIT HookPlan compilation (capability-gated, default off). */
     private jit: boolean;
 
-    constructor(
-        debug?: boolean,
-        config: ValidatorConfig = {},
-        jit = false
-    ) {
+    constructor(debug?: boolean, config: ValidatorConfig = {}, jit = false) {
         this.debug = debug;
         this.config = config;
         this.jit = jit;
@@ -112,15 +160,39 @@ export class RouterCompiler {
         // compile pass).
         const accessSources = collectAccessSources(plugins, globalHooks);
 
+        // Reserved transform keys fail startup, even for apps without routes.
+        assertTransformKeys(globalHooks?.transform, 'global hooks');
+        if (plugins) {
+            for (const plugin of plugins) {
+                assertTransformKeys(
+                    plugin.hooks.transform,
+                    `plugin "${plugin.name}"`
+                );
+            }
+        }
+
+        // Global/plugin response hooks for non-route responses (404/405/
+        // auto-OPTIONS/errors); matched routes already carry them in `plan`.
+        const globalResponse = buildGlobalResponsePlan(plugins, globalHooks);
+
         for (const def of defs) {
             const path = def.path;
 
-            // Allow header: the route's explicitly defined methods (HEAD is not
-            // listed unless the user defined it — auto-HEAD is derived, not advertised).
-            const allowMethods = Object.keys(def.handlers).filter(
-                (m) => m !== 'HEAD'
-            );
-            const allow = allowCache.compute(allowMethods);
+            // Allow header: every method the route answers. HEAD is advertised
+            // when GET exists (auto-HEAD) or was defined explicitly; OPTIONS is
+            // always answered (auto OPTIONS), so it is always listed.
+            const userMethods = Object.keys(def.handlers);
+            const allowMethods = userMethods.filter((m) => m !== 'HEAD');
+            const allowList: string[] = [];
+            for (const m of allowMethods) {
+                allowList.push(m);
+                if (m === 'GET' && !userMethods.includes('HEAD')) {
+                    allowList.push('HEAD');
+                }
+            }
+            if (userMethods.includes('HEAD')) allowList.push('HEAD');
+            if (!allowList.includes('OPTIONS')) allowList.push('OPTIONS');
+            const allow = allowCache.compute(allowList);
             allowCache.set(path, allow);
 
             // Every handler is checked to return a `Response`. Every route
@@ -197,6 +269,12 @@ export class RouterCompiler {
                 plugins,
                 globalHooks?.transform
             );
+            assertTransformKeys(plan.transform, `${path} transform`);
+            // The error path needs the global hooks too; the plan already
+            // carries them in afterRoute/mapResponse for the success path.
+            if (hasGlobalResponseHooks(globalResponse)) {
+                plan.globalResponse = globalResponse;
+            }
 
             // Attach compiled validators for response validation post-handler.
             if (routeValidators) {
@@ -247,7 +325,8 @@ export class RouterCompiler {
                 this.config,
                 this.jit,
                 services,
-                ipHolder
+                ipHolder,
+                globalResponse
             );
             methodCores.set(path, cores);
             // The `fetch` fallback (trie / loose-slash / undefined method)
@@ -430,7 +509,8 @@ function buildRouteCores(
     validatorBase: ValidatorConfig,
     jit: boolean,
     services: BurgerServices,
-    ipHolder: RequestIPHolder | undefined
+    ipHolder: RequestIPHolder | undefined,
+    globalResponse: GlobalResponsePlan
 ): NativeMethodCores {
     const cores: NativeMethodCores = {};
     // Static routes share one frozen route identity object; dynamic routes
@@ -466,20 +546,21 @@ function buildRouteCores(
             methodConfig,
             jit,
             services,
-            ipHolder
+            ipHolder,
+            globalResponse
         );
     }
 
     // Auto-HEAD: derive from GET when no explicit HEAD handler exists. The
-    // GET handler runs through the normal plan; only the exit differs (body
-    // stripped, Content-Length preserved) — see `finishHead`. Config follows
-    // GET, mirroring the handler derivation.
+    // GET handler runs through the normal plan and its response is returned as-is:
+    // the server drops the body (and cancels a stream) for HEAD, so a body is
+    // never read here. Config follows GET, mirroring the handler derivation.
     if (!cores.HEAD && rawHandlers.GET) {
         const headConfig = mergeMethodConfig(
             config,
             methodConfigs?.head ?? methodConfigs?.get
         );
-        cores.HEAD = buildMethodCore(
+        const headCore = buildMethodCore(
             'HEAD',
             'GET',
             rawHandlers.GET,
@@ -497,11 +578,41 @@ function buildRouteCores(
             headConfig,
             jit,
             services,
-            ipHolder
+            ipHolder,
+            globalResponse
         );
+        cores.HEAD = (request, ctxInit, prebuilt, env, executionCtx) => {
+            const result = headCore(
+                request,
+                ctxInit,
+                prebuilt,
+                env,
+                executionCtx
+            );
+            return isThenable(result)
+                ? (result as Promise<Response>).then(finishHead)
+                : finishHead(result as Response);
+        };
     }
 
     return cores;
+}
+
+/**
+ * Auto-HEAD exit. The body is never read: the server drops it for HEAD (and
+ * reports a buffered body's size). A handler-set Content-Length is kept by
+ * sending headers only, since some servers drop it when the body is a stream.
+ */
+function finishHead(response: Response): Response {
+    if (!response.body || !response.headers.has('content-length')) {
+        return response;
+    }
+    void response.body.cancel().catch(() => {});
+    return new Response(null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+    });
 }
 
 /**
@@ -663,15 +774,13 @@ function collectAccessSources(
             out.push(value);
         }
     };
-    const pushHooks = (
-        hooks: {
-            beforeRoute?: unknown;
-            afterRoute?: unknown;
-            mapResponse?: unknown;
-            onError?: unknown;
-            transform?: unknown;
-        }
-    ): void => {
+    const pushHooks = (hooks: {
+        beforeRoute?: unknown;
+        afterRoute?: unknown;
+        mapResponse?: unknown;
+        onError?: unknown;
+        transform?: unknown;
+    }): void => {
         pushStage(hooks.beforeRoute);
         pushStage(hooks.afterRoute);
         pushStage(hooks.mapResponse);
@@ -704,16 +813,37 @@ function buildMethodCore(
     config: Record<string, unknown> | undefined,
     jit: boolean,
     services: BurgerServices,
-    ipHolder: RequestIPHolder | undefined
+    ipHolder: RequestIPHolder | undefined,
+    globalResponse: GlobalResponsePlan
 ): RouteCore {
     // The framework's auto OPTIONS answers directly: no beforeRoute (auth
-    // hooks must not reject CORS preflights) and no context. onRequest hooks
-    // (when configured) run in the router wrapper; their mappers still apply.
+    // hooks must not reject CORS preflights) and no route hooks. Global and
+    // plugin response hooks still run (headers on preflight), as does
+    // `ctx.set` seeded by onRequest.
     if ((rawHandler as { isAutoOptions?: boolean }).isAutoOptions) {
-        return () => (rawHandler as unknown as () => Response)();
+        if (!hasGlobalResponseHooks(globalResponse)) {
+            return () => (rawHandler as unknown as () => Response)();
+        }
+        return (request, _ctxInit, prebuilt, env, executionCtx) => {
+            const ctx =
+                prebuilt ??
+                BurgerContext.create(
+                    request,
+                    undefined,
+                    undefined,
+                    services,
+                    undefined,
+                    env,
+                    executionCtx,
+                    ipHolder
+                );
+            const response = (rawHandler as unknown as () => Response)();
+            return runGlobalResponseHooks(globalResponse, ctx, response).then(
+                (res) => (ctx.hasSet() ? applySet(res, ctx.set) : res)
+            );
+        };
     }
 
-    const isHead = method === 'HEAD';
     // `isWildcard` may be unset on hand-built AOT definitions; the pattern is
     // authoritative (extractCtxInit always keyed off it too).
     const hasWildcard = isWildcard || pattern.includes('*');
@@ -801,46 +931,26 @@ function buildMethodCore(
         ctx.hasSet() ? applySet(response, ctx.set) : response;
 
     /**
-     * Error exit: dispatch through `onError`, then apply `ctx.set` to the
-     * rendered response like every other path. `applySet` keeps the error
+     * Error exit: dispatch through `onError`, run the global/plugin response
+     * hooks (route-level response hooks stay off the error path, as before),
+     * then apply `ctx.set` like every other path. `applySet` keeps the error
      * status; only headers/other mutations are merged.
      */
-    const fail = (
-        ctx: BurgerContext,
-        error: unknown
-    ): Promise<Response> =>
-        dispatchOnError(
-            error,
-            plan.onError,
-            ctx,
-            plan.debug,
-            plan.validatorConfig
+    const finishError = globalErrorFinisher(globalResponse);
+    const fail = (ctx: BurgerContext, error: unknown): Promise<Response> =>
+        finishError(
+            dispatchOnError(
+                error,
+                plan.onError,
+                ctx,
+                plan.debug,
+                plan.validatorConfig
+            ),
+            ctx
         ).then((response) => {
             const mutated = finish(ctx, response);
-            return isHead ? finishHead(mutated) : mutated;
+            return mutated;
         });
-
-    /** Auto-HEAD exit: apply `ctx.set`, then strip the body, keeping size. */
-    const finishHead = (mutated: Response): Response | Promise<Response> => {
-        const headers = new Headers(mutated.headers);
-        if (!headers.has('content-length') && mutated.body) {
-            // Report GET's Content-Length: runtimes answer a null body with
-            // `content-length: 0` unless the header is explicit.
-            return mutated.arrayBuffer().then((buffer) => {
-                headers.set('content-length', String(buffer.byteLength));
-                return new Response(null, {
-                    status: mutated.status,
-                    statusText: mutated.statusText,
-                    headers,
-                });
-            });
-        }
-        return new Response(null, {
-            status: mutated.status,
-            statusText: mutated.statusText,
-            headers,
-        });
-    };
 
     const settle = (
         ctx: BurgerContext,
@@ -858,7 +968,7 @@ function buildMethodCore(
             );
         }
         const mutated = finish(ctx, result);
-        return isHead ? finishHead(mutated) : mutated;
+        return mutated;
     };
 
     const runDirect = (ctx: BurgerContext): Response | Promise<Response> => {
@@ -958,11 +1068,11 @@ function buildMethodCore(
         if (isThenable(result)) {
             return result.then((response) => {
                 const mutated = finish(ctx, response);
-                return isHead ? finishHead(mutated) : mutated;
+                return mutated;
             });
         }
         const mutated = finish(ctx, result);
-        return isHead ? finishHead(mutated) : mutated;
+        return mutated;
     };
 }
 
@@ -1072,12 +1182,11 @@ function registerNativeOptions(
         path: string,
         response: Response
     ) => void;
-    const nativeStaticResponse = (
+    const nativeStaticResponse =
         typeof Bun === 'undefined'
             ? undefined
             : (Bun as { nativeStaticResponse?: NativeStaticResponse })
-                  .nativeStaticResponse
-    );
+                  .nativeStaticResponse;
     if (typeof nativeStaticResponse !== 'function') {
         return;
     }
@@ -1085,8 +1194,7 @@ function registerNativeOptions(
         return;
     }
     const opt = def.handlers['OPTIONS'] as
-        | (typeof def.handlers)['OPTIONS']
-        | undefined;
+        (typeof def.handlers)['OPTIONS'] | undefined;
     if (opt && (opt as { isAutoOptions?: boolean }).isAutoOptions === true) {
         try {
             nativeStaticResponse(
@@ -1096,8 +1204,7 @@ function registerNativeOptions(
                     status: 204,
                     headers: {
                         Allow:
-                            (opt as { allowHeader?: string }).allowHeader ??
-                            '',
+                            (opt as { allowHeader?: string }).allowHeader ?? '',
                     },
                 })
             );

@@ -92,6 +92,20 @@ type-check if you choose to use them; a page handler that returns a plain
 Static assets go under `<pageDir>/assets/` (e.g. `src/pages/assets/style.css`
 → served at `/assets/style.css`).
 
+Every `.tsx` page handler (static or dynamic) receives a real `BurgerContext`,
+so `ctx.services`, `ctx.query`, `ctx.set` and the `Request` surface work.
+
+Pages, assets, `/docs` and `/openapi.json` answer `GET` and `HEAD` only.
+Other methods get `405` with `Allow: GET, HEAD`.
+
+API routes, pages, assets, `/docs` and `/openapi.json` share one URL space:
+two sources resolving to the same path fail at startup with an error naming
+both. Two dynamic page files at the same level (`[a].tsx` + `[b].tsx`) also
+fail at startup.
+
+A route `405` lists `HEAD` (when `GET` exists) and `OPTIONS`, so `Allow` is
+never empty.
+
 ## WebSocket Route Scaffolding
 
 WebSocket routes live under `wsDir` (default `src/websocket`) and use their

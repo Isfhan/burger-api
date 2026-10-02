@@ -2,7 +2,7 @@
  * WebSocket types for BurgerAPI
  */
 
-import type { BurgerServices } from '../context/context.js';
+import type { BurgerContext, BurgerServices } from '../context/context.js';
 
 /**
  * Per-connection data, extended via module augmentation:
@@ -207,6 +207,14 @@ export interface BurgerWS {
     readonly params: Record<string, string>;
 
     /**
+     * Wildcard segments of the matched route, decoded per segment (e.g.
+     * `['a', 'b c']` for `/files/a/b%20c` with `/files/*`). Mirrors HTTP
+     * `ctx.wildcardParams`; `params['*']` still carries the raw remainder.
+     * Empty array for non-wildcard routes.
+     */
+    readonly wildcardParams: string[];
+
+    /**
      * The URL of the upgrade request. Parsed lazily on first access and
      * cached for the life of the socket.
      *
@@ -241,18 +249,19 @@ export interface BurgerWS {
     services: BurgerServices;
 
     /**
-     * Authenticated user from auth plugins, available when auth succeeds during
-     * the upgrade.
+     * Authenticated user from auth plugins, available when auth succeeds
+     * during the upgrade. Same type as `ctx.user` (the shared
+     * `BurgerAuthUser` augmentation point):
      *
-     * @example
      * ```typescript
-     * export function open(ws: BurgerWS) {
-     * const user = ws.user as JwtPayload;
-     * console.log(`User connected: ${user.sub}`);
+     * declare module "burger-api" {
+     * interface BurgerAuthUser {
+     * tenantId: string;
+     * }
      * }
      * ```
      */
-    user?: unknown;
+    user?: BurgerContext['user'];
 
     /**
      * Send a message to the client
@@ -411,6 +420,7 @@ export class BurgerWSContext implements BurgerWS {
     private _raw: any;
     private _data: WebSocketData = {};
     private _params: Record<string, string>;
+    private _wildcardParams: string[];
     private _services: BurgerServices = Object.create(null) as BurgerServices;
 
     /** Upgrade request URL captured by the adapter (not parsed yet). */
@@ -428,10 +438,12 @@ export class BurgerWSContext implements BurgerWS {
         rawWebSocket: any,
         providers?: Map<string, unknown>,
         params: Record<string, string> = {},
-        url?: string
+        url?: string,
+        wildcardParams: string[] = []
     ) {
         this._raw = rawWebSocket;
         this._params = params;
+        this._wildcardParams = wildcardParams;
         this._url = url;
         this._parsedUrl = undefined;
         this._query = undefined;
@@ -461,6 +473,10 @@ export class BurgerWSContext implements BurgerWS {
         return this._params;
     }
 
+    get wildcardParams(): string[] {
+        return this._wildcardParams;
+    }
+
     get url(): URL {
         if (this._parsedUrl !== undefined) return this._parsedUrl;
         // Wired sockets carry the URL from the upgrade; a raw socket that
@@ -483,9 +499,9 @@ export class BurgerWSContext implements BurgerWS {
         return this._services;
     }
 
-    get user(): unknown {
+    get user(): BurgerWS['user'] {
         // `user` is not declared on `WebSocketData`; auth plugins seed it.
-        return (this._data as Record<string, unknown>).user;
+        return (this._data as Record<string, unknown>).user as BurgerWS['user'];
     }
 
     send(message: string | Buffer): void {

@@ -37,6 +37,8 @@ const WS_ROUTE = Symbol('burger-api.ws.route');
 interface WsMatch {
     route: CompiledWebSocketRoute;
     params: Record<string, string>;
+    /** Decoded wildcard segments (mirrors HTTP `ctx.wildcardParams`). */
+    wildcardParams?: string[];
     /** The upgrade request URL, captured once at match time (for `ws.url`). */
     url?: string;
 }
@@ -153,6 +155,13 @@ export class WebSocketAdapter {
     /** Matched route per connection (see `getMatch`). */
     private wsMatches = new WeakMap<object, WsMatch>();
 
+    /**
+     * Per-socket event chain: messages (and close/drain/ping/pong) are
+     * delivered in order and only after `open` finished. The first event runs
+     * synchronously; only queued events wait on the chain.
+     */
+    private wsChains = new WeakMap<object, Promise<unknown>>();
+
     constructor(options: WebSocketAdapterOptions) {
         this.router = options.router;
         this.config = options.config ?? {};
@@ -214,7 +223,28 @@ export class WebSocketAdapter {
         return option;
     }
 
-    private async handleOpen(ws: any): Promise<void> {
+    /**
+     * Serializes events per socket. The first event starts synchronously (a
+     * sync handler keeps its immediate behavior); queued events run in order
+     * after it. Handlers catch their own errors, so the chain never rejects.
+     */
+    private enqueue<T>(ws: any, work: () => Promise<T>): Promise<T> {
+        const previous = this.wsChains.get(ws);
+        if (previous === undefined) {
+            const result = work();
+            this.wsChains.set(ws, Promise.resolve(result).catch(() => {}));
+            return result;
+        }
+        const next = previous.then(() => work());
+        this.wsChains.set(ws, next.catch(() => {}));
+        return next;
+    }
+
+    private handleOpen(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runOpen(ws));
+    }
+
+    private async runOpen(ws: any): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) {
             console.warn(
@@ -244,7 +274,14 @@ export class WebSocketAdapter {
         }
     }
 
-    private async handleMessage(
+    private handleMessage(
+        ws: any,
+        message: string | Buffer
+    ): Promise<void> {
+        return this.enqueue(ws, () => this.runMessage(ws, message));
+    }
+
+    private async runMessage(
         ws: any,
         message: string | Buffer
     ): Promise<void> {
@@ -272,7 +309,15 @@ export class WebSocketAdapter {
         }
     }
 
-    private async handleClose(
+    private handleClose(
+        ws: any,
+        code: number,
+        reason: string
+    ): Promise<void> {
+        return this.enqueue(ws, () => this.runClose(ws, code, reason));
+    }
+
+    private async runClose(
         ws: any,
         code: number,
         reason: string
@@ -300,11 +345,16 @@ export class WebSocketAdapter {
             }
         }
 
-        // Connection is gone — drop the cached context.
+        // Connection is gone — drop the cached context and its chain.
         this.wsContexts.delete(ws);
+        this.wsChains.delete(ws);
     }
 
-    private async handleDrain(ws: any): Promise<void> {
+    private handleDrain(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runDrain(ws));
+    }
+
+    private async runDrain(ws: any): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -319,7 +369,11 @@ export class WebSocketAdapter {
         }
     }
 
-    private async handlePing(ws: any): Promise<void> {
+    private handlePing(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runPing(ws));
+    }
+
+    private async runPing(ws: any): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -334,7 +388,11 @@ export class WebSocketAdapter {
         }
     }
 
-    private async handlePong(ws: any): Promise<void> {
+    private handlePong(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runPong(ws));
+    }
+
+    private async runPong(ws: any): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -450,6 +508,7 @@ export class WebSocketAdapter {
             value: {
                 route: match.route,
                 params: match.params,
+                wildcardParams: match.wildcardParams,
                 url: request.url,
             },
             enumerable: false,
@@ -643,7 +702,11 @@ export class WebSocketAdapter {
                 | (CompiledWebSocketRoute & { params?: Record<string, string> })
                 | undefined;
             if (!match && legacy?.handlers) {
-                match = { route: legacy, params: legacy.params ?? {} };
+                match = {
+                    route: legacy,
+                    params: legacy.params ?? {},
+                    wildcardParams: [],
+                };
             }
             if (match) this.wsMatches.set(ws, match);
         }
@@ -662,7 +725,8 @@ export class WebSocketAdapter {
                 ws,
                 this.providers,
                 match?.params ?? {},
-                match?.url
+                match?.url,
+                match?.wildcardParams ?? []
             );
             this.wsContexts.set(ws, burgerWs);
         }

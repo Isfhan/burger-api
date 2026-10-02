@@ -15,6 +15,66 @@ import { resolveDebug } from '../utils/env.js';
 import { isThenable } from '../utils/thenable.js';
 
 /**
+ * The global/plugin response hooks that run for every response the app
+ * produces — matched routes carry them in their plans; non-route responses
+ * (404/405/auto-OPTIONS, pages/assets/docs, onError renders) run them
+ * directly. Compiled once at startup.
+ */
+export interface GlobalResponsePlan {
+    afterRoute: ResponseHook[];
+    mapResponse: ResponseHook[];
+}
+
+/** True when the plan carries at least one hook. */
+export function hasGlobalResponseHooks(plan: GlobalResponsePlan): boolean {
+    return plan.afterRoute.length > 0 || plan.mapResponse.length > 0;
+}
+
+/**
+ * Runs the global response plan (afterRoute then mapResponse) for one
+ * response.
+ */
+export async function runGlobalResponseHooks(
+    plan: GlobalResponsePlan,
+    ctx: BurgerContext,
+    response: Response
+): Promise<Response> {
+    let res = response;
+    if (plan.afterRoute.length > 0) {
+        res = await runResponseHookList(plan.afterRoute, ctx, res);
+    }
+    if (plan.mapResponse.length > 0) {
+        res = await runResponseHookList(plan.mapResponse, ctx, res);
+    }
+    return res;
+}
+
+/**
+ * Wraps an onError-rendered response so the global response hooks still run.
+ * A throwing hook must not mask the original error response, so it is logged
+ * and skipped.
+ */
+export function globalErrorFinisher(
+    plan: GlobalResponsePlan | undefined
+): (response: Promise<Response>, ctx: BurgerContext) => Promise<Response> {
+    if (!plan || !hasGlobalResponseHooks(plan)) {
+        return (response) => response;
+    }
+    return async (response, ctx) => {
+        let res = await response;
+        try {
+            res = await runGlobalResponseHooks(plan, ctx, res);
+        } catch (hookError) {
+            console.error(
+                '[burger-api] global response hook threw while rendering an error:',
+                hookError
+            );
+        }
+        return res;
+    };
+}
+
+/**
  * Runs the frozen {@link HookPlan} inside the single request pipeline.
  *
  * Forward order: transform → validation → beforeRoute → handler → afterRoute
@@ -65,12 +125,15 @@ export async function executeHookPlanForHandler(
         try {
             return await handler(ctx);
         } catch (error) {
-            return dispatchOnError(
-                error,
-                plan.onError,
-                ctx,
-                plan.debug,
-                plan.validatorConfig
+            return globalErrorFinisher(plan.globalResponse)(
+                dispatchOnError(
+                    error,
+                    plan.onError,
+                    ctx,
+                    plan.debug,
+                    plan.validatorConfig
+                ),
+                ctx
             );
         }
     }
@@ -120,17 +183,22 @@ export async function executeHookPlanForHandler(
             }
         }
 
-        response = await runResponseHooks(plan.afterRoute, ctx, response);
-        response = await runResponseHooks(plan.mapResponse, ctx, response);
+        response = await runResponseHookList(plan.afterRoute, ctx, response);
+        response = await runResponseHookList(plan.mapResponse, ctx, response);
 
         return response;
     } catch (error) {
-        return dispatchOnError(
-            error,
-            plan.onError,
-            ctx,
-            plan.debug,
-            plan.validatorConfig
+        // The error render also gets the global/plugin response hooks
+        // (route-level response hooks stay off the error path).
+        return globalErrorFinisher(plan.globalResponse)(
+            dispatchOnError(
+                error,
+                plan.onError,
+                ctx,
+                plan.debug,
+                plan.validatorConfig
+            ),
+            ctx
         );
     }
 }
@@ -194,8 +262,11 @@ export async function dispatchOnError(
  * Runs one response hook point (`afterRoute` / `mapResponse`). Each hook may
  * return a `Response` (replace), a transform function `(res) => Response`
  * (transform), or `undefined` / `void` (continue).
+ *
+ * Exported so the global/plugin response plan (used for 404/405/OPTIONS and
+ * non-route responses) runs hooks with the exact same semantics.
  */
-async function runResponseHooks(
+export async function runResponseHookList(
     hooks: ResponseHook[],
     ctx: BurgerContext,
     response: Response

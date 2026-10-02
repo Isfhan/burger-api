@@ -13,7 +13,7 @@ export const SET_HEADERS = 2;
 export class TrackedContextSet implements ContextSet {
     #flags = 0;
     #status: number | undefined;
-    #headers: Record<string, string> | Headers | undefined;
+    #headers: Record<string, string | string[]> | Headers | undefined;
 
     /** Bitmask of the fields that were assigned (`SET_STATUS` / `SET_HEADERS`). */
     get flags(): number {
@@ -29,11 +29,20 @@ export class TrackedContextSet implements ContextSet {
         this.#flags |= SET_STATUS;
     }
 
-    get headers(): Record<string, string> | Headers | undefined {
+    /**
+     * Always defined: lazily creates the record on first access, so
+     * `ctx.set.headers['x-id'] = v` never throws. Reading it marks headers as
+     * mutated; `applySet` reads this only after the flag is set.
+     */
+    get headers(): Record<string, string | string[]> | Headers {
+        if (this.#headers === undefined) {
+            this.#headers = {};
+            this.#flags |= SET_HEADERS;
+        }
         return this.#headers;
     }
 
-    set headers(value: Record<string, string> | Headers | undefined) {
+    set headers(value: Record<string, string | string[]> | Headers | undefined) {
         this.#headers = value;
         this.#flags |= SET_HEADERS;
     }

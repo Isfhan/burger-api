@@ -29,7 +29,7 @@ When `openapi.config.ts` does not exist, defaults apply: minimal metadata, `/ope
 
 | Endpoint | Purpose | Default |
 |----------|---------|---------|
-| `GET /openapi.json` | OpenAPI 3.0 specification (JSON) | Always served (configurable path) |
+| `GET /openapi.json` | OpenAPI 3.1 specification (JSON) | Always served (configurable path) |
 | `GET /docs` | Documentation UI | Enabled, configurable path |
 
 Paths are configurable via `openapi.config.ts`. Both endpoints are disabled with `enabled: false`.
@@ -85,7 +85,7 @@ When `schema.response` is defined, responses are auto-generated. User-provided r
 
 ## Schema Conversion
 
-Zod v4 schemas defined in `schema` exports are automatically converted to OpenAPI 3.0 schema objects. This includes:
+Zod v4 schemas defined in `schema` exports are automatically converted to OpenAPI 3.1 schema objects. This includes:
 
 - String types (minLength, maxLength, pattern)
 - Number types (minimum, maximum)
@@ -94,6 +94,13 @@ Zod v4 schemas defined in `schema` exports are automatically converted to OpenAP
 - Enums
 - Optional fields
 - Default values
+
+Generated details:
+
+- `requestBody.required` is `true` unless the body schema accepts `undefined` (for example `z.object({...}).optional()`).
+- Wildcard routes document the wildcard as a `{wildcard}` path parameter that may contain slashes; `:param` names may contain `-` and `_`.
+- Non-Zod (Standard Schema) params/query/headers are emitted by name. With a converter the parameter gets the real schema; without one it gets `schema: {}` instead of being dropped.
+- `docsAuth` accepts UTF-8 usernames/passwords.
 
 For non-Zod validators (Valibot, ArkType, Effect Schema), provide a converter via `mapJsonSchema`:
 
@@ -109,7 +116,7 @@ export default {
 
 ## Full Metadata
 
-All OpenAPI 3.0 document-level fields are supported:
+All OpenAPI 3.1 document-level fields are supported:
 
 ```ts
 export default {

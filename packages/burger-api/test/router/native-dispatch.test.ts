@@ -72,7 +72,7 @@ describe('native method dispatch', () => {
     it('405 + Allow for an undefined method on a static route', async () => {
         const res = await fetch(`${BASE}/static`, { method: 'POST' });
         expect(res.status).toBe(405);
-        expect(res.headers.get('allow')).toBe('GET');
+        expect(res.headers.get('allow')).toBe('GET, HEAD, OPTIONS');
         expect(res.headers.get('content-type')).toBe(
             'application/problem+json'
         );
@@ -80,14 +80,14 @@ describe('native method dispatch', () => {
             type: 'about:blank',
             title: 'Method Not Allowed',
             status: 405,
-            detail: 'Supported methods: GET',
+            detail: 'Supported methods: GET, HEAD, OPTIONS',
         });
     });
 
     it('405 + Allow for an undefined method on a dynamic route', async () => {
         const res = await fetch(`${BASE}/param/7`, { method: 'DELETE' });
         expect(res.status).toBe(405);
-        expect(res.headers.get('allow')).toBe('GET');
+        expect(res.headers.get('allow')).toBe('GET, HEAD, OPTIONS');
     });
 
     it('auto-HEAD reports the GET Content-Length with an empty body', async () => {

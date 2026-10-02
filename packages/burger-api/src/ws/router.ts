@@ -19,11 +19,16 @@ export class WebSocketRouter {
     addRoute(route: CompiledWebSocketRoute): void {
         this.routes.push(route);
 
-        // Categorize routes
+        // Categorize routes. Param and wildcard routes are kept sorted by
+        // specificity (static segment > param > wildcard at the first
+        // differing segment; longer wildcard prefix first), matching HTTP
+        // dispatch. The sort is stable, so equal patterns keep insertion order.
         if (route.path.includes('*')) {
             this.wildcardRoutes.push(route);
+            this.wildcardRoutes.sort(compareWildcardSpecificity);
         } else if (route.path.includes(':')) {
             this.paramRoutes.push(route);
+            this.paramRoutes.sort(compareRouteSpecificity);
         } else {
             this.staticRoutes.set(route.path, route);
         }
@@ -39,13 +44,15 @@ export class WebSocketRouter {
     }
 
     /**
-     * Match a WebSocket path to a route
+     * Match a WebSocket path to a route. Static beats param beats wildcard;
+     * among param routes the most specific (leftmost static segment) wins.
      */
     match(
         path: string
     ): {
         route: CompiledWebSocketRoute;
         params: Record<string, string>;
+        wildcardParams: string[];
     } | null {
         // A trailing slash is ignored, like HTTP routing (`/chat/` ≡ `/chat`).
         if (path.length > 1 && path.endsWith('/')) {
@@ -55,22 +62,22 @@ export class WebSocketRouter {
         // Try static routes first (fastest)
         const staticRoute = this.staticRoutes.get(path);
         if (staticRoute) {
-            return { route: staticRoute, params: {} };
+            return { route: staticRoute, params: {}, wildcardParams: [] };
         }
 
         // Try parameterized routes
         for (const route of this.paramRoutes) {
             const params = this.matchParams(route.path, path);
             if (params !== null) {
-                return { route, params };
+                return { route, params, wildcardParams: [] };
             }
         }
 
         // Try wildcard routes
         for (const route of this.wildcardRoutes) {
-            const params = this.matchWildcard(route.path, path);
-            if (params !== null) {
-                return { route, params };
+            const result = this.matchWildcard(route.path, path);
+            if (result !== null) {
+                return { route, params: result.params, wildcardParams: result.wildcardParams };
             }
         }
 
@@ -130,12 +137,17 @@ export class WebSocketRouter {
     }
 
     /**
-     * Match wildcard path (e.g., /files/*)
+     * Match wildcard path (e.g., /files/*). Keeps `params['*']` as the raw
+     * remainder and adds the decoded per-segment `wildcardParams` array that
+     * mirrors HTTP `ctx.wildcardParams`.
      */
     private matchWildcard(
         pattern: string,
         path: string
-    ): Record<string, string> | null {
+    ): {
+        params: Record<string, string>;
+        wildcardParams: string[];
+    } | null {
         // Remove trailing * for comparison
         const basePattern = pattern.replace(/\*$/, '');
         const basePath = path.slice(0, basePattern.length);
@@ -146,7 +158,54 @@ export class WebSocketRouter {
 
         // Extract wildcard value
         const wildcardValue = path.slice(basePattern.length);
+        const wildcardParams: string[] = [];
+        if (wildcardValue !== '') {
+            for (const segment of wildcardValue.split('/')) {
+                wildcardParams.push(decodeSegment(segment));
+            }
+        }
 
-        return { '*': wildcardValue };
+        return { params: { '*': wildcardValue }, wildcardParams };
     }
+}
+
+/** Decodes a path segment, falling back to the raw value on bad escapes. */
+function decodeSegment(segment: string): string {
+    if (segment === '' || segment.indexOf('%') === -1) return segment;
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return segment;
+    }
+}
+
+/** Specificity rank: static 0, param 1, wildcard 2, missing 3. */
+function segmentRank(segment: string | undefined): number {
+    if (segment === undefined) return 3;
+    if (segment === '*') return 2;
+    if (segment.startsWith(':')) return 1;
+    return 0;
+}
+
+/** Compares two param patterns; lower rank at the first difference wins. */
+function compareRouteSpecificity(
+    a: CompiledWebSocketRoute,
+    b: CompiledWebSocketRoute
+): number {
+    const aParts = a.path.split('/');
+    const bParts = b.path.split('/');
+    const length = Math.max(aParts.length, bParts.length);
+    for (let i = 0; i < length; i++) {
+        const diff = segmentRank(aParts[i]) - segmentRank(bParts[i]);
+        if (diff !== 0) return diff;
+    }
+    return 0;
+}
+
+/** Longer wildcard prefix is more specific. */
+function compareWildcardSpecificity(
+    a: CompiledWebSocketRoute,
+    b: CompiledWebSocketRoute
+): number {
+    return b.path.replace(/\*$/, '').length - a.path.replace(/\*$/, '').length;
 }

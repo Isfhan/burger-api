@@ -112,6 +112,14 @@ export const GET = {
 // ?n=42&b=true  =>  { n: 42, b: true }
 ```
 
+Or for every method in one `schema.ts`, with a top-level export:
+
+```typescript
+// api/items/schema.ts
+export const coerce = true;
+export const GET = { query: z.object({ n: z.number() }) };
+```
+
 ## Response Validation
 
 Declare what a handler returns and BurgerAPI checks it. Modes:

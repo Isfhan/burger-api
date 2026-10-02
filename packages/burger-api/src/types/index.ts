@@ -41,7 +41,7 @@ export interface ServerOptions {
 
     /**
      * The directory path to load API routes from.
-     * If not specified, no API routes are loaded.
+     * If not specified, `src/api` is auto-resolved when it exists.
      */
     apiDir?: string;
 
@@ -52,15 +52,14 @@ export interface ServerOptions {
     apiPrefix?: string;
 
     /**
-     * The directory path to load Page routes from.
-     * If not specified, no Page routes are loaded.
-     * Page routes are not yet supported, but will be supported in the future.
+     * The directory path to load page routes from.
+     * If not specified, `src/pages` is auto-resolved when it exists.
      */
     pageDir?: string;
 
     /**
-     * The prefix for the Page routes.
-     * If not specified, the default prefix is 'pages'.
+     * The prefix for the page routes.
+     * If not specified, pages mount at the root (no prefix).
      */
     pagePrefix?: string;
 
@@ -320,7 +319,14 @@ export interface MethodSchema {
  */
 export type RouteSchema = Partial<
     Record<LowercaseHTTPMethod | HTTPMethod, MethodSchema>
->;
+> & {
+    /**
+     * `export const coerce = true` in `schema.ts`: default coercion for
+     * every method in the file. A per-method `coerce` overrides nothing —
+     * either flag enables coercion for that method.
+     */
+    coerce?: boolean;
+};
 
 /**
  * Per-method OpenAPI metadata. Each key is an HTTP method name in lowercase
@@ -389,17 +395,33 @@ export interface BuildConfig {
  * }
  * ```
  *
- * Without augmentation, `ctx.config` is typed as the empty `RouteConfig`,
- * so unknown keys fail at compile time. Augment to unlock them.
+ * Without augmentation, unknown keys read as `unknown`; augment to type
+ * them.
  *
  * Core itself only reads `responseValidation`; keys such as `auth`,
  * `cache` or `timeout` do nothing unless a plugin or hook reads them.
  */
-export interface RouteConfig {}
+export interface RouteConfig {
+    /**
+     * Response-validation mode for this route, overriding
+     * `ServerOptions.validation.responseValidation`:
+     * `'off'` (skip), `'dev'` (warn only), `'enforce'` (replace with an
+     * error response).
+     */
+    responseValidation?: 'off' | 'dev' | 'enforce';
+    /**
+     * Any other option (`auth`, `cache`, `timeout`, …) is plain data core
+     * never acts on. The index signature keeps `satisfies RouteConfig`
+     * compiling for them; augment `RouteConfig` to type them.
+     */
+    [key: string]: unknown;
+}
 
 export interface PageDefinition {
     path: string;
     handler: RequestHandler;
+    /** Origin of the page (file path) — used in collision errors. */
+    source?: string;
 }
 
 export interface TrieNode {

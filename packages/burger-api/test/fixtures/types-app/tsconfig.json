@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "types": [],
+        "baseUrl": ".",
+        "paths": {
+            "burger-api": ["../../../src/index.ts"]
+        }
+    },
+    "include": ["src"]
+}

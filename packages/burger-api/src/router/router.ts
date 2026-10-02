@@ -1,10 +1,19 @@
 import { renderUncaught } from '../errors/http-error.js';
 import { dispatchOnError } from '../lifecycle/executor.js';
 import type { ContextInit } from '../context/types.js';
-import { notFound, methodNotAllowed } from '../utils/response.js';
+import {
+    applySet,
+    notFound,
+    methodNotAllowed,
+} from '../utils/response.js';
 import { extractPathnameFromUrl } from '../utils/wildcard.js';
 import { isThenable } from '../utils/thenable.js';
-import { RouterCompiler } from './compiler.js';
+import { RouterCompiler, buildGlobalResponsePlan } from './compiler.js';
+import {
+    hasGlobalResponseHooks,
+    runGlobalResponseHooks,
+} from '../lifecycle/executor.js';
+import type { GlobalResponsePlan } from '../lifecycle/executor.js';
 import { resolveDebug } from '../utils/env.js';
 import { AllowCache } from './allow-cache.js';
 import { StaticMap } from './static-map.js';
@@ -93,6 +102,17 @@ export class Router {
      * through the same `onError` pipeline as request errors.
      */
     private onErrorHooks: ErrorHook[] = [];
+    /**
+     * Global/plugin response hooks (afterRoute + mapResponse) for responses
+     * with no matched route plan: 404/405/auto-OPTIONS, pages/assets/docs,
+     * and onError-rendered errors. Compiled once at startup.
+     */
+    private globalResponsePlan: GlobalResponsePlan = {
+        afterRoute: [],
+        mapResponse: [],
+    };
+    /** Hot-path flag: true when the global response plan has hooks. */
+    private globalResponseActive = false;
     /** App services resolved ONCE; shared (frozen) by every request context. */
     private appServices: BurgerServices = EMPTY_SERVICES;
     /** Per-app server reference for lazy `ctx.ip` (written once at startup). */
@@ -151,6 +171,10 @@ export class Router {
         this.onRequestHooks = onRequestHooks ?? [];
         this.hasOnRequest = this.onRequestHooks.length > 0;
         this.onErrorHooks = buildPreRoutingErrorChain(plugins, globalHooks);
+        this.globalResponsePlan = buildGlobalResponsePlan(plugins, globalHooks);
+        this.globalResponseActive = hasGlobalResponseHooks(
+            this.globalResponsePlan
+        );
         this.regexMatcher = this.buildMatcher(result);
     }
 
@@ -301,23 +325,55 @@ export class Router {
      * API routes. Returned unchanged when no `onRequest` hooks exist.
      */
     wrapWithOnRequest<T extends (request: Request) => unknown>(handler: T): T {
-        if (this.onRequestHooks.length === 0) return handler;
+        if (this.onRequestHooks.length === 0 && !this.globalResponseActive) {
+            return handler;
+        }
+        const inner = handler as unknown as (
+            request: Request,
+            ...args: unknown[]
+        ) => unknown;
         const wrapped = async (
             request: Request,
             _serverOrCtxInit?: unknown,
-            _prebuilt?: BurgerContext,
+            prebuilt?: BurgerContext,
             env?: BurgerEnv,
             executionCtx?: BurgerExecutionContext
         ): Promise<Response> => {
             const outcome = await this.runOnRequest(request, env, executionCtx);
             if (outcome.shortCircuit) return outcome.shortCircuit;
+            // The onRequest context is handed to the handler so pages bind
+            // it (one context per request) and ctx.set survives.
+            const ctx = prebuilt ?? outcome.ctx;
             try {
-                const result = (await handler(request)) as Response;
+                const result = (await inner(
+                    request,
+                    undefined,
+                    ctx,
+                    env,
+                    executionCtx
+                )) as Response;
+                const finished = await this.finishNonRouteResponse(
+                    result,
+                    request,
+                    ctx,
+                    env,
+                    executionCtx
+                );
                 return outcome.mappers.length > 0
-                    ? this.applyMappers(result, outcome.mappers)
-                    : result;
+                    ? this.applyMappers(finished, outcome.mappers)
+                    : finished;
             } catch (error) {
-                return this.renderUnhandled(request, error);
+                const rendered = this.renderUnhandled(request, error);
+                const finished = await this.finishNonRouteResponse(
+                    rendered,
+                    request,
+                    ctx,
+                    env,
+                    executionCtx
+                );
+                return outcome.mappers.length > 0
+                    ? this.applyMappers(finished, outcome.mappers)
+                    : finished;
             }
         };
         return wrapped as unknown as T;
@@ -326,6 +382,83 @@ export class Router {
     /** Renders an error that escaped the pipeline; logs it when 5xx. */
     private renderUnhandled(request: Request, error: unknown): Response {
         return renderUncaught(error, request, this.debug);
+    }
+
+    /**
+     * Applies the global/plugin response plan and `ctx.set` to a response
+     * that did not run a route plan (404/405/OPTIONS, pages/assets/docs,
+     * onError renders). Returns the response unchanged — zero cost — when
+     * neither applies.
+     */
+    private finishNonRouteResponse(
+        response: Response | Promise<Response>,
+        request: Request,
+        prebuilt: BurgerContext | undefined,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Response | Promise<Response> {
+        if (!this.globalResponseActive && prebuilt?.hasSet() !== true) {
+            return response;
+        }
+        return isThenable(response)
+            ? response.then((res) =>
+                  this.applyGlobalResponseHooks(
+                      res,
+                      request,
+                      prebuilt,
+                      env,
+                      executionCtx
+                  )
+              )
+            : this.applyGlobalResponseHooks(
+                  response,
+                  request,
+                  prebuilt,
+                  env,
+                  executionCtx
+              );
+    }
+
+    /** Runs the global response plan, then `ctx.set`, for one response. */
+    private async applyGlobalResponseHooks(
+        response: Response,
+        request: Request,
+        prebuilt: BurgerContext | undefined,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<Response> {
+        const ctx =
+            prebuilt ??
+            BurgerContext.create(
+                request,
+                undefined,
+                undefined,
+                this.appServices,
+                undefined,
+                env,
+                executionCtx,
+                this.ipHolder
+            );
+        let res = response;
+        if (this.globalResponseActive) {
+            try {
+                res = await runGlobalResponseHooks(
+                    this.globalResponsePlan,
+                    ctx,
+                    res
+                );
+            } catch (error) {
+                // A failing response hook renders through the same onError
+                // chain as request errors instead of rejecting.
+                res = await dispatchOnError(
+                    error,
+                    this.onErrorHooks,
+                    ctx,
+                    this.debug
+                );
+            }
+        }
+        return ctx.hasSet() ? applySet(res, ctx.set) : res;
     }
 
     /**
@@ -371,11 +504,18 @@ export class Router {
                     ctx
                 );
                 if (result instanceof Response) {
-                    // Mappers from earlier hooks still wrap the short-circuit
-                    // (e.g. cors() then rateLimit(): the 429 keeps CORS
-                    // headers) — same contract as beforeRoute.
+                    // Global/plugin response hooks and ctx.set apply to the
+                    // short-circuit too; mappers from earlier hooks still
+                    // wrap it (e.g. cors() then rateLimit(): the 429 keeps
+                    // CORS headers) — same contract as beforeRoute.
                     outcome.shortCircuit = await this.applyMappers(
-                        result,
+                        await this.finishNonRouteResponse(
+                            result,
+                            request,
+                            ctx,
+                            env,
+                            executionCtx
+                        ),
                         outcome.mappers
                     );
                     return outcome;
@@ -389,13 +529,20 @@ export class Router {
                 }
             } catch (error) {
                 // Same onError chain as request errors (nearest-first:
-                // Global → Plugin → Framework) — never a bare render.
+                // Global → Plugin → Framework) — never a bare render. The
+                // rendered error also gets the global response hooks.
                 outcome.shortCircuit = await this.applyMappers(
-                    await dispatchOnError(
-                        error,
-                        this.onErrorHooks,
+                    await this.finishNonRouteResponse(
+                        await dispatchOnError(
+                            error,
+                            this.onErrorHooks,
+                            ctx,
+                            this.debug
+                        ),
+                        request,
                         ctx,
-                        this.debug
+                        env,
+                        executionCtx
                     ),
                     outcome.mappers
                 );
@@ -555,9 +702,15 @@ export class Router {
             const core = staticEntry.cores?.[request.method as HTTPMethod];
             const response = core
                 ? core(request, undefined, prebuilt, env, executionCtx)
-                : staticEntry.handler(
+                : this.finishNonRouteResponse(
+                      staticEntry.handler(
+                          request,
+                          undefined,
+                          prebuilt,
+                          env,
+                          executionCtx
+                      ),
                       request,
-                      undefined,
                       prebuilt,
                       env,
                       executionCtx
@@ -587,9 +740,15 @@ export class Router {
                 const core = loose.cores?.[request.method as HTTPMethod];
                 const response = core
                     ? core(request, ctxInit, prebuilt, env, executionCtx)
-                    : loose.handler(
+                    : this.finishNonRouteResponse(
+                          loose.handler(
+                              request,
+                              ctxInit,
+                              prebuilt,
+                              env,
+                              executionCtx
+                          ),
                           request,
-                          ctxInit,
                           prebuilt,
                           env,
                           executionCtx
@@ -609,7 +768,13 @@ export class Router {
                 const allow =
                     this.allowCache.get(match.pattern) ??
                     [...match.methods].join(', ');
-                const notAllowed = methodNotAllowed(allow);
+                const notAllowed = this.finishNonRouteResponse(
+                    methodNotAllowed(allow),
+                    request,
+                    prebuilt,
+                    env,
+                    executionCtx
+                );
                 return apply === undefined
                     ? notAllowed
                     : applyToResponse(notAllowed, apply);
@@ -634,7 +799,13 @@ export class Router {
                 : applyToResponse(response, apply);
         }
 
-        const notFoundResponse = notFound();
+        const notFoundResponse = this.finishNonRouteResponse(
+            notFound(),
+            request,
+            prebuilt,
+            env,
+            executionCtx
+        );
         return apply === undefined
             ? notFoundResponse
             : applyToResponse(notFoundResponse, apply);

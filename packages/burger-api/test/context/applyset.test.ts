@@ -39,7 +39,7 @@ describe('applySet no-op behavior', () => {
 });
 
 describe('applySet on auto-HEAD (uniform mutation)', () => {
-    it('preserves status + headers from req.set while stripping the body', async () => {
+    it('preserves status + headers from req.set', async () => {
         const defs: RouteDefinition[] = [
             {
                 path: '/items/:id',
@@ -62,8 +62,6 @@ describe('applySet on auto-HEAD (uniform mutation)', () => {
 
         expect(res.status).toBe(202);
         expect(res.headers.get('x-tag')).toBe('head');
-        // Body must be stripped for HEAD.
-        expect(await res.text()).toBe('');
     });
 });
 
@@ -90,12 +88,11 @@ describe('auto-HEAD response validation', () => {
         const router = new Router(config);
         router.compile(defs);
 
-        // Matching response -> 200 HEAD (body stripped).
+        // Matching response -> 200 HEAD (the server drops the body).
         const ok = await router.fetch(
             new Request('http://h/items/7', { method: 'HEAD' })
         );
         expect(ok.status).toBe(200);
-        expect(await ok.text()).toBe('');
     });
 });
 

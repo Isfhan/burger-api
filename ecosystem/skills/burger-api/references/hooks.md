@@ -73,6 +73,16 @@ This pattern is useful for:
 - Logging response status codes
 - Transforming response bodies
 
+Global (`src/hooks.ts`) and plugin `afterRoute` / `mapResponse` hooks run for
+**every** response the app produces: matched routes, 404s, 405s, auto-OPTIONS,
+`onError`-rendered errors, pages, assets, `/docs` and `/openapi.json`.
+Route-level response hooks run only for their matched route.
+
+`ctx.set.headers` is always defined (created on first access), so
+`ctx.set.headers['x-id'] = value` never throws. Array values append; a scalar
+`set-cookie` appends too, so cookies from the handler and from `ctx.set` both
+survive.
+
 ## Performance
 
 - Each route+method hook plan is JIT-compiled into one specialized function

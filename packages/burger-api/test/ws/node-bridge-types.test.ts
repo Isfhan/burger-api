@@ -150,6 +150,10 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
         );
         wsInstance!.emit('close', 1000, 'bye');
 
+        // Messages are queued behind `open` and delivered in order — let the
+        // per-socket chain drain before asserting.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         // A text frame (isBinary: false) must decode to a string, matching
         // Bun's native ServerWebSocket, not pass through as a raw Buffer.
         expect(receivedMessages).toEqual(['hello from a real socket']);

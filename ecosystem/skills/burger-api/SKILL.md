@@ -151,6 +151,12 @@ response; `ResponseHook` (`afterRoute` / `mapResponse`) returns `Response`
 (replace), a mapper, or `undefined`; `ErrorHook` (`onError`) returns
 `Response` or `undefined`. Anything else fails to typecheck.
 
+Global and plugin `afterRoute` / `mapResponse` run for **every** response:
+matched routes, 404s, 405s, auto-OPTIONS, `onError`-rendered errors, pages,
+assets, `/docs`, `/openapi.json`. Route-level response hooks run only for
+their matched route. `ctx.set.headers` is always defined; array values (and
+`set-cookie`) append.
+
 ## Plugins vs hooks
 
 - Hooks: when code runs on a request  
@@ -202,9 +208,9 @@ export default {
 } satisfies RouteConfig;
 ```
 
-`RouteConfig` is an empty interface by default (`satisfies` accepts any
-shape against it), so this compiles as-is — but reading it back via
-`ctx.config.auth` elsewhere requires augmenting `RouteConfig` first:
+`RouteConfig` declares `responseValidation?: "off" | "dev" | "enforce"`
+built in. Other keys (`satisfies` accepts any shape) compile as-is, but
+reading them back via `ctx.config.auth` requires augmenting `RouteConfig`:
 
 ```ts
 declare module "burger-api" {
@@ -215,6 +221,8 @@ declare module "burger-api" {
 ```
 
 Put app-wide augmentations in `src/types.ts` (scaffolded for TS projects).
+For the authenticated user, augment `BurgerAuthUser` (shared by `ctx.user`
+and `ws.user`); use `BurgerContext` for your own request-scoped properties.
 
 Per method: the default applies to every method, and an uppercase method
 export overrides it for that method only (shallow merge, method wins):
@@ -330,7 +338,7 @@ ecosystem/skills/
 
 ## Supported
 
-- **WebSocket:** file-based router under `src/websocket/` (default `wsDir`; `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`, or opt in at `create` time via the WebSocket-routes prompt. Handlers get `ws.url` / `ws.query` for the upgrade URL, and HTTP handlers can fan out with `ctx.publish(topic, message)` (Bun; `ws.publish` does not echo to the publishing socket, `ctx.publish` reaches every subscriber)
+- **WebSocket:** file-based router under `src/websocket/` (default `wsDir`; `ws.ts`/`hooks.ts`/`config.ts` convention files) plus programmatic `burger.websocket()`; CLI `generate ws <name>`, or opt in at `create` time via the WebSocket-routes prompt. Handlers get `ws.url` / `ws.query` for the upgrade URL, `ws.wildcardParams` mirrors `ctx.wildcardParams`, and HTTP handlers can fan out with `ctx.publish(topic, message)` (Bun; `ws.publish` does not echo to the publishing socket, `ctx.publish` reaches every subscriber). Messages for one socket are delivered in order and only after `open` finished; route matching uses HTTP specificity (static > param > wildcard). `ws.user` shares the `ctx.user` type via `BurgerAuthUser`.
 
 ## Legacy names (avoid in new code)
 

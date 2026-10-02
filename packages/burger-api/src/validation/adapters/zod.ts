@@ -14,6 +14,7 @@ import type {
     ValidationResult,
     ValidationIssue,
 } from '../types.js';
+import { isZodSchema } from '../adapter.js';
 import type { ValidatorAdapter } from '../adapter.js';
 
 /** Maps a Zod issue path to the normalized `(string | number)[]`. */
@@ -127,7 +128,7 @@ export const ZodAdapter: ValidatorAdapter = {
     },
 
     supports(schema: SchemaInput): boolean {
-        return schema instanceof z.ZodType;
+        return isZodSchema(schema);
     },
 
     compile(schema: SchemaInput, slot: ValidationSlot): CompiledValidator {

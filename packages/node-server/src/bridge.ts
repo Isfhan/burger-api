@@ -43,7 +43,19 @@ export async function sendWebResponse(
 ): Promise<void> {
     res.statusCode = response.status;
     res.statusMessage = response.statusText;
-    response.headers.forEach((value, key) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => {
+        // Set-Cookie is the one header that must stay a list.
+        if (key !== 'set-cookie') res.setHeader(key, value);
+    });
+    const cookies = response.headers.getSetCookie();
+    if (cookies.length > 0) res.setHeader('set-cookie', cookies);
+
+    // HEAD never sends a body: cancel it so a stream stops producing.
+    if (res.req?.method === 'HEAD') {
+        if (response.body) void response.body.cancel().catch(() => {});
+        res.end();
+        return;
+    }
 
     if (!response.body) {
         res.end();

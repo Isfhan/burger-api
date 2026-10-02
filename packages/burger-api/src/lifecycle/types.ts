@@ -3,6 +3,7 @@ import type {
     CompiledRouteValidators,
     ValidatorConfig,
 } from '../validation/types.js';
+import type { GlobalResponsePlan } from './executor.js';
 
 /**
  * The forward hook points that run inside the single request pipeline.
@@ -117,6 +118,12 @@ export interface HookPlan {
     debug?: boolean;
     /** Global validation config (coerce, responseValidation, errorFormat, etc.). */
     validatorConfig?: ValidatorConfig;
+    /**
+     * Global/plugin response hooks (same shared plan on every route), so the
+     * error path can run them on onError-rendered responses too. Set only
+     * when the plan has hooks.
+     */
+    globalResponse?: GlobalResponsePlan;
 }
 
 /**

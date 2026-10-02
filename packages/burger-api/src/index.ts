@@ -13,7 +13,12 @@ import type { NativeMethodHandlers } from './router/types.js';
 
 // Import utils
 import { collectRoutes, compareRoutes, setDir } from './utils/index.js';
-import { notFound, openApiError } from './utils/response.js';
+import {
+    applySet,
+    methodNotAllowed,
+    notFound,
+    openApiError,
+} from './utils/response.js';
 import { extractPathnameFromUrl } from './utils/wildcard.js';
 import { lowercaseMethodKeys } from './utils/routing.js';
 import {
@@ -25,6 +30,7 @@ import {
 import { PluginRegistry } from './plugin/registry.js';
 import type { Plugin, PluginFactory } from './plugin/types.js';
 import type { Scope } from './chain/node.js';
+import { assertTransformKeys } from './lifecycle/transform.js';
 
 // Import WebSocket router/adapter (scanner/compiler load lazily on the dev
 // filesystem path only).
@@ -141,6 +147,9 @@ export class Burger {
     private routes: {
         [key: string]: RequestHandler | NativeMethodHandlers;
     } = {};
+
+    /** Origin of every registered route path, for collision errors. */
+    private routeSources = new Map<string, string>();
 
     /**
      * Every compiled API path (static + dynamic). Used by `fetchHandler()`
@@ -318,6 +327,27 @@ export class Burger {
         return wrapped as unknown as RequestHandler;
     }
 
+    /**
+     * Registers one route path, failing loud when two sources (API route,
+     * page, asset, docs UI, spec) resolve to the same path. Silent overwrites
+     * would make one of them unreachable.
+     */
+    private registerRoute(
+        key: string,
+        handler: RequestHandler | NativeMethodHandlers,
+        source: string
+    ): void {
+        const existing = this.routeSources.get(key);
+        if (existing !== undefined) {
+            throw new Error(
+                `[burger-api] Route collision: "${key}" is registered by both ` +
+                    `${existing} and ${source}. Rename one of them.`
+            );
+        }
+        this.routeSources.set(key, source);
+        this.routes[key] = handler;
+    }
+
     /** Registers page + asset routes once (shared by serve and fetchHandler). */
     private processPageRoutesOnce(): Promise<boolean> {
         return (this.pagesProcessed ??= this.processPageRoutes());
@@ -335,8 +365,14 @@ export class Burger {
 
             for (let i = 0; i < sorted.length; i++) {
                 const page = sorted[i]!;
-                this.routes[page.path] = this.withOnRequest(
-                    this.wrapPageHandler(page.handler, page.path) as never
+                this.registerRoute(
+                    page.path,
+                    this.withOnRequest(
+                        this.restrictToGetHead(
+                            this.wrapPageHandler(page.handler, page.path)
+                        ) as never
+                    ),
+                    page.source ? `page "${page.source}"` : `page route`
                 );
             }
             hasPages = sorted.length > 0;
@@ -352,8 +388,14 @@ export class Burger {
 
             for (let i = 0; i < pages.length; i++) {
                 const page = pages[i]!;
-                this.routes[page.path] = this.withOnRequest(
-                    this.wrapPageHandler(page.handler, page.path) as never
+                this.registerRoute(
+                    page.path,
+                    this.withOnRequest(
+                        this.restrictToGetHead(
+                            this.wrapPageHandler(page.handler, page.path)
+                        ) as never
+                    ),
+                    page.source ? `page "${page.source}"` : `page route`
                 );
             }
             hasPages = pages.length > 0;
@@ -367,37 +409,78 @@ export class Burger {
     }
 
     /**
-     * Wraps a dynamic page handler with a per-request `BurgerContext` (Bun
-     * matches `:param` patterns but does not expose the params); static pages
-     * pass through unchanged.
+     * Wraps every page handler with a real per-request `BurgerContext` — the
+     * same object API routes get — so `ctx.services`, `ctx.query`, `ctx.set`
+     * and the delegated `Request` surface work on static pages too. Dynamic
+     * pages (`:param`) also get `ctx.params`; static pages seed only the
+     * route pattern (`ctx.route.path` derives lazily).
+     *
+     * Cost per page request: one `BurgerContext` allocation (no parsing).
+     * When an onRequest/global-hook wrapper already created the context, the
+     * existing instance is re-bound instead of allocated.
      */
     private wrapPageHandler(
         handler: RequestHandler,
         path: string
     ): RequestHandler {
-        if (!path.includes(':')) return handler;
         // Compile the pattern's segments once per route, not per request.
-        const compiledPattern = compilePatternSegments(path);
+        const compiledPattern = path.includes(':')
+            ? compilePatternSegments(path)
+            : undefined;
         // Invoked with the raw `Request`, like `fetchHandler`'s static dispatch.
-        const wrapped = async (request: Request): Promise<Response> => {
-            const ctxInit = extractCtxInitWithSegments(
-                request,
-                path,
-                compiledPattern
-            );
-            const ctx = BurgerContext.create(
-                request,
-                ctxInit,
-                undefined,
-                this.dynamicRouter?.getAppServices(),
-                undefined,
-                undefined,
-                undefined,
-                this.dynamicRouter?.getRequestIPHolder()
-            );
-            return handler(ctx);
+        const wrapped = async (
+            request: Request,
+            _ctxInit?: unknown,
+            prebuilt?: BurgerContext,
+            env?: import('./context/context.js').BurgerEnv,
+            executionCtx?: import('./context/context.js').BurgerExecutionContext
+        ): Promise<Response> => {
+            const ctxInit = compiledPattern
+                ? extractCtxInitWithSegments(request, path, compiledPattern)
+                : { pattern: path };
+            const ctx = prebuilt
+                ? prebuilt.bind(request, ctxInit)
+                : BurgerContext.create(
+                      request,
+                      ctxInit,
+                      undefined,
+                      this.dynamicRouter?.getAppServices(),
+                      undefined,
+                      env,
+                      executionCtx,
+                      this.dynamicRouter?.getRequestIPHolder()
+                  );
+            const response = await handler(ctx);
+            // With no outer onRequest/global-hook wrapper there is nobody
+            // else to apply `ctx.set`; do it here.
+            return prebuilt
+                ? response
+                : ctx.hasSet()
+                  ? applySet(response, ctx.set)
+                  : response;
         };
         return wrapped as unknown as RequestHandler;
+    }
+
+    /**
+     * Pages, assets, the docs UI and the OpenAPI spec answer GET and HEAD
+     * only. Every other method gets a 405 with `Allow: GET, HEAD` and the
+     * same RFC 9457 body route 405s use. Global/plugin response hooks and
+     * onRequest mappers still apply (this runs inside `withOnRequest`).
+     */
+    private restrictToGetHead<
+        T extends (arg: any, ...rest: any[]) => any,
+    >(handler: T): T {
+        const restricted = (
+            arg: { method: string },
+            ...rest: unknown[]
+        ): unknown => {
+            if (arg.method !== 'GET' && arg.method !== 'HEAD') {
+                return methodNotAllowed('GET, HEAD');
+            }
+            return (handler as (...args: unknown[]) => unknown)(arg, ...rest);
+        };
+        return restricted as unknown as T;
     }
 
     /**
@@ -413,8 +496,14 @@ export class Burger {
                 './core/embedded-assets.js'
             );
             for (const asset of prebuiltAssets) {
-                this.routes[asset.path] = this.withOnRequest(
-                    embeddedAssetHandler(asset) as never
+                this.registerRoute(
+                    asset.path,
+                    this.withOnRequest(
+                        this.restrictToGetHead(
+                            embeddedAssetHandler(asset)
+                        ) as never
+                    ),
+                    `asset "${asset.path}"`
                 );
             }
             return;
@@ -429,8 +518,12 @@ export class Burger {
             this.pagePrefix
         );
         for (const route of routes) {
-            this.routes[route.routePath] = this.withOnRequest(
-                diskAssetHandler(route) as never
+            this.registerRoute(
+                route.routePath,
+                this.withOnRequest(
+                    this.restrictToGetHead(diskAssetHandler(route)) as never
+                ),
+                `asset "${route.file}"`
             );
         }
     }
@@ -657,9 +750,13 @@ export class Burger {
 
         // Merge static and dynamic routes onto Bun's native routes map (Bun
         // matches `:param` / `*` directly); unmatched requests fall through to
-        // `Router.fetch` (the trie).
-        Object.assign(this.routes, router.staticRoutes());
-        Object.assign(this.routes, router.nativeRoutes());
+        // `Router.fetch` (the trie). Collisions with pages/assets/docs throw.
+        for (const [key, handlers] of Object.entries(router.staticRoutes())) {
+            this.registerRoute(key, handlers, `API route "${key}"`);
+        }
+        for (const [key, handlers] of Object.entries(router.nativeRoutes())) {
+            this.registerRoute(key, handlers, `API route "${key}"`);
+        }
         this.apiRoutePaths = new Set([
             ...Object.keys(router.staticRoutes()),
             ...Object.keys(router.nativeRoutes()),
@@ -672,7 +769,7 @@ export class Burger {
 
             const expectedAuth = config?.docsAuth
                 ? 'Basic ' +
-                  btoa(
+                  base64Utf8(
                       `${config.docsAuth.username}:${config.docsAuth.password}`
                   )
                 : null;
@@ -694,27 +791,42 @@ export class Burger {
 
             // Invoked with the raw `Request` (native routes map); wrapped so
             // global/plugin onRequest hooks (CORS, auth, …) apply here too.
-            this.routes[specPath] = this.withOnRequest((request: Request) =>
-                unauthorized(request) ??
-                (this.openApiDoc
-                    ? Response.json(this.openApiDoc)
-                    : this.openApiError())
+            this.registerRoute(
+                specPath,
+                this.withOnRequest(
+                    this.restrictToGetHead(
+                        (request: Request) =>
+                            unauthorized(request) ??
+                            (this.openApiDoc
+                                ? Response.json(this.openApiDoc)
+                                : this.openApiError())
+                    )
+                ),
+                'openapi.json route'
             );
 
             // Docs UI: configured provider, or Swagger UI by default (loaded
             // lazily).
             const { swaggerDocs } = await import('./core/docs-providers.js');
             const provider: DocsProvider = config?.provider ?? swaggerDocs();
-            this.routes[docsPath] = this.withOnRequest((request: Request) => {
-                const denied = unauthorized(request);
-                if (denied) return denied;
+            this.registerRoute(
+                docsPath,
+                this.withOnRequest(
+                    this.restrictToGetHead((request: Request) => {
+                        const denied = unauthorized(request);
+                        if (denied) return denied;
 
-                const result = provider(this.openApiDoc!, { specUrl: specPath });
-                if (result instanceof Response) return result;
-                return new Response(result, {
-                    headers: { 'Content-Type': 'text/html' },
-                });
-            });
+                        const result = provider(this.openApiDoc!, {
+                            specUrl: specPath,
+                        });
+                        if (result instanceof Response) return result;
+                        return new Response(result, {
+                            headers: { 'Content-Type': 'text/html' },
+                        });
+                    })
+                ),
+                'docs UI'
+            );
         }
 
         this.routesProcessed = true;
@@ -753,6 +865,13 @@ export class Burger {
                 }
             }
         }
+
+        // Same startup guard as HTTP: a reserved transform key fails loud.
+        assertTransformKeys(pluginTransform, 'plugin transform (WebSocket)');
+        assertTransformKeys(
+            this.globalRouteHooks?.transform,
+            'global transform (WebSocket)'
+        );
 
         const globalBeforeRoute = this.globalRouteHooks?.beforeRoute
             ? toHookArray(this.globalRouteHooks.beforeRoute)
@@ -1168,6 +1287,19 @@ const WS_TRANSPORT_KEYS = [
     'compression',
 ] as const;
 
+/**
+ * Base64 of the UTF-8 bytes. `btoa` alone throws on non-Latin1 input, so a
+ * password with accents/emoji would break startup.
+ */
+function base64Utf8(value: string): string {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]!);
+    }
+    return btoa(binary);
+}
+
 /** Picks the WebSocket hooks out of an app-level hooks object. */
 function pickWsHooks(
     hooks: Record<string, unknown> | undefined
@@ -1239,6 +1371,7 @@ export type {
     BurgerValidated,
     BurgerEnv,
     BurgerExecutionContext,
+    BurgerAuthUser,
 } from './context/context.js';
 
 // Export utils used by examples and CLI build pipeline

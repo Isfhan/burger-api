@@ -71,8 +71,10 @@ export class PageRouter {
         dir: string,
         basePath: string = ''
     ): Promise<void> {
-        // Tracks whether a dynamic folder was already seen at this level.
+        // Tracks whether a dynamic folder or file was already seen at this
+        // level (two `[param]` entries would be ambiguous).
         let dynamicFolderFound = false;
+        let dynamicFileFound = false;
 
         try {
             const entries = await readdir(dir, { withFileTypes: true });
@@ -119,6 +121,22 @@ export class PageRouter {
                         entry.name.endsWith(ext)
                     )
                 ) {
+                    // Two dynamic files (`[a].tsx` + `[b].tsx`) at the same
+                    // level are ambiguous — fail loud like dynamic folders.
+                    if (
+                        entry.name.startsWith(
+                            ROUTE_CONSTANTS.DYNAMIC_FOLDER_START
+                        ) &&
+                        entry.name.includes(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
+                    ) {
+                        if (dynamicFileFound) {
+                            throw new Error(
+                                `Multiple dynamic page files found in the same directory: '${entry.name}' conflicts with another dynamic file.`
+                            );
+                        }
+                        dynamicFileFound = true;
+                    }
+
                     // Convert file path to route path and load the module
                     const cleanedRoutePath = filePathToPageRoutePath(
                         relativePath,
@@ -154,17 +172,25 @@ export class PageRouter {
                         );
                     }
 
-                    const pageDefWithSlash: PageDefinition = {
-                        path: cleanedRoutePath + '/',
-                        handler,
-                    };
-
                     const pageDef: PageDefinition = {
                         path: cleanedRoutePath,
                         handler,
+                        source: entryPath,
                     };
-
-                    this.pages.push(pageDefWithSlash, pageDef);
+                    this.pages.push(pageDef);
+                    // Non-root pages also answer the trailing-slash variant.
+                    // The root already ends in `/` — adding another would
+                    // create the odd `//` route key.
+                    if (
+                        cleanedRoutePath !== '/' &&
+                        !cleanedRoutePath.endsWith('/')
+                    ) {
+                        this.pages.push({
+                            path: cleanedRoutePath + '/',
+                            handler,
+                            source: entryPath,
+                        });
+                    }
                 }
             }
         } catch (error) {

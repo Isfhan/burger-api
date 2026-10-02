@@ -2,7 +2,7 @@ import type { BurgerContext } from '../context/context.js';
 import type { RequestHandler } from '../types/index.js';
 import type { HookPlan, ResponseHook } from './types.js';
 import { applyTransform } from './transform.js';
-import { dispatchOnError } from './executor.js';
+import { dispatchOnError, globalErrorFinisher } from './executor.js';
 import { validateResponse } from '../validation/response.js';
 import { resolveDebug } from '../utils/env.js';
 import type {
@@ -315,24 +315,34 @@ export function compileJitHookPlan(
     emitChain('m', mLen);
 
     L.push('return res;');
-    L.push('}catch(e){return DE(e,D.e,ctx,D.dbg,D.vc);}');
+    L.push(
+        '}catch(e){return GR(DE(e,D.e,ctx,D.dbg,D.vc),ctx);}'
+    );
 
     const factory = new Function(
         'D',
         'TF',
         'VR',
         'DE',
+        'GR',
         `return ${needsAsync ? 'async ' : ''}function(ctx,H,METHOD){${L.join('\n')}}`
     ) as (
         d: JitDeps,
         tf: typeof applyTransform,
         vr: typeof validateResponse,
-        de: typeof dispatchOnError
+        de: typeof dispatchOnError,
+        gr: (response: Promise<Response>, ctx: BurgerContext) => Promise<Response>
     ) => (
         ctx: BurgerContext,
         handler: RequestHandler,
         method: string
     ) => Response | Promise<Response>;
 
-    return factory(deps, applyTransform, validateResponse, dispatchOnError);
+    return factory(
+        deps,
+        applyTransform,
+        validateResponse,
+        dispatchOnError,
+        globalErrorFinisher(plan.globalResponse)
+    );
 }

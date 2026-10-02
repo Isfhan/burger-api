@@ -41,15 +41,15 @@ describe('Router — Hybrid Router dispatch', () => {
             ]);
             const res = await r.fetch(req('/api/posts', 'DELETE'));
             expect(res.status).toBe(405);
-            expect(res.headers.get('Allow')).toBe('GET, POST');
+            expect(res.headers.get('Allow')).toBe('GET, HEAD, POST, OPTIONS');
         });
 
-        it('does not advertise HEAD in Allow when only GET is defined', async () => {
+        it('advertises HEAD and OPTIONS in Allow when only GET is defined', async () => {
             const r = new Router();
             r.compile([route('/api/only-get', { GET: () => new Response('x') })]);
             const res = await r.fetch(req('/api/only-get', 'POST'));
             expect(res.status).toBe(405);
-            expect(res.headers.get('Allow')).toBe('GET');
+            expect(res.headers.get('Allow')).toBe('GET, HEAD, OPTIONS');
         });
     });
 
@@ -76,7 +76,7 @@ describe('Router — Hybrid Router dispatch', () => {
             ]);
             const res = await r.fetch(req('/api/users/123', 'DELETE'));
             expect(res.status).toBe(405);
-            expect(res.headers.get('Allow')).toBe('GET, PUT');
+            expect(res.headers.get('Allow')).toBe('GET, HEAD, PUT, OPTIONS');
         });
 
         it('decodes URL-encoded param segments', async () => {
@@ -194,7 +194,7 @@ describe('Router — Hybrid Router dispatch', () => {
     });
 
     describe('auto-HEAD', () => {
-        it('derives HEAD from GET (empty body, GET headers)', async () => {
+        it('derives HEAD from GET (GET headers; the server drops the body)', async () => {
             const r = new Router();
             r.compile([
                 route('/api/head', {
@@ -205,7 +205,6 @@ describe('Router — Hybrid Router dispatch', () => {
             const res = await r.fetch(req('/api/head', 'HEAD'));
             expect(res.status).toBe(200);
             expect(res.headers.get('X-Marker')).toBe('1');
-            expect(await res.text()).toBe('');
         });
 
         it('returns 405 for HEAD when the route has no GET', async () => {
@@ -213,7 +212,7 @@ describe('Router — Hybrid Router dispatch', () => {
             r.compile([route('/api/post-only', { POST: () => new Response('x') })]);
             const res = await r.fetch(req('/api/post-only', 'HEAD'));
             expect(res.status).toBe(405);
-            expect(res.headers.get('Allow')).toBe('POST');
+            expect(res.headers.get('Allow')).toBe('POST, OPTIONS');
         });
     });
 

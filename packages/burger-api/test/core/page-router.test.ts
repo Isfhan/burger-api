@@ -41,8 +41,9 @@ describe('PageRouter — missing directory', () => {
             process.chdir(root);
             const router = new PageRouter('pages', '/');
             await router.loadPages();
-            // One page file → two entries (with and without trailing slash).
-            expect(router.pages).toHaveLength(2);
+            // The root page is a single entry — never the odd `//` key.
+            expect(router.pages).toHaveLength(1);
+            expect(router.pages[0]!.path).toBe('/');
         } finally {
             process.chdir(originalCwd);
             if (originalAppDir === undefined) {

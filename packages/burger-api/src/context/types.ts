@@ -41,7 +41,11 @@ export interface ContextInit {
  */
 export interface ContextSet {
     status?: number;
-    headers?: Record<string, string> | Headers;
+    /**
+     * Response headers. A value may be an array: array values (and
+     * `Set-Cookie` values) are appended, so multiple cookies survive.
+     */
+    headers?: Record<string, string | string[]> | Headers;
 }
 
 /**

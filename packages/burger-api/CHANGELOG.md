@@ -16,6 +16,54 @@ This is a breaking rewrite: the `0.9.x` line stays on npm
 Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
 if anything breaks or feels wrong.
 
+#### 🔍 Audit round 2 (behaviour, parity, types)
+
+- `ctx.set.headers` is always defined (created on first access), so
+  `ctx.set.headers["x-id"] = value` never throws. Array values append, and a
+  scalar `set-cookie` is appended, so cookies from the handler and from
+  `ctx.set` both survive.
+- Global and plugin `afterRoute` / `mapResponse` hooks now run for every
+  response the app produces: 404s, 405s, auto-`OPTIONS`, errors rendered by
+  `onError`, pages, assets, `/docs` and `/openapi.json`. A `ctx.set` mutation
+  from `onRequest` applies to those responses too. Route-level response hooks
+  still run only for their matched route.
+- Transform keys are validated at startup against `BurgerContext` (methods,
+  getters and reserved names such as `cache`); a reserved key throws with its
+  name instead of being dropped at request time.
+- `.tsx` page handlers now receive a real `BurgerContext`, so
+  `ctx.services`, `ctx.query` and `ctx.set` work on static pages too. Pages,
+  assets, `/docs` and `/openapi.json` answer only `GET` and `HEAD`; other
+  methods get `405` with `Allow: GET, HEAD`.
+- Zod detection is structural (`_zod` marker), so coercion and validation
+  work with schemas from a second zod copy.
+- OpenAPI now declares `3.1.0`; `requestBody.required` follows whether the
+  body schema accepts `undefined`; wildcard routes document `{wildcard}`;
+  `:param` names may contain `-` and `_`; Standard Schema params/query/headers
+  are emitted by name (`schema: {}` when no JSON Schema is available); and a
+  `docsAuth` password with non-Latin1 characters no longer throws at startup.
+- `405` responses list `HEAD` (when `GET` exists) and `OPTIONS` in `Allow`,
+  never an empty list.
+- API routes, pages, assets, `/docs` and `/openapi.json` share one URL space:
+  a collision throws at startup naming both sources. Two dynamic page files at
+  the same level also fail at startup, and the root page key is `/`, never
+  `//`.
+- Auto-`HEAD` never reads the `GET` body (a stream may never end). The server
+  drops the body: Bun sends the size of a buffered body and cancels a stream,
+  and `@burger-api/node-server` now cancels it too. A `Content-Length` set by
+  the handler is kept.
+- `@burger-api/node-server` keeps every `Set-Cookie` header (it kept only the
+  last one).
+- WebSocket parity: messages for one socket are delivered in order and only
+  after `open` finished; param routes match with HTTP specificity (static >
+  param > wildcard); `ws.wildcardParams` mirrors `ctx.wildcardParams`
+  (`params["*"]` still holds the raw remainder); and `ws.user` is typed
+  through the shared `BurgerAuthUser` augmentation point.
+- `RouteConfig` declares `responseValidation?: "off" | "dev" | "enforce"`.
+  Augment `BurgerAuthUser` for user fields instead of `BurgerContext.user`, so
+  app types and auth plugins always agree.
+- A top-level `export const coerce = true` in `schema.ts` enables coercion for
+  every method in that file.
+
 #### ✨ Highlights
 
 - **Hooks replace middleware:** `onRequest`, `transform`, `beforeRoute`,
@@ -27,7 +75,7 @@ if anything breaks or feels wrong.
   `burger.provide()` in `src/providers.ts` (`ctx.services`).
 - **Standard Schema validation:** Zod default, plus Valibot and ArkType, for
   query, params, headers, cookies, and body, with optional response validation.
-- **OpenAPI 3.0 + docs UI:** generated from routes and schemas, with Swagger UI,
+- **OpenAPI 3.1 + docs UI:** generated from routes and schemas, with Swagger UI,
   Scalar, and Redoc built in (`/openapi.json`, `/docs`).
 - **WebSocket routes:** file-based under `src/websocket/`, plus
   `burger.websocket()`.

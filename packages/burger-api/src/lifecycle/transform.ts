@@ -1,8 +1,10 @@
-import type { BurgerContext } from '../context/context.js';
+import { BurgerContext } from '../context/context.js';
 import type { TransformMap } from './types.js';
 import { isThenable } from '../utils/thenable.js';
 
 const RESERVED = new Set([
+    // Reserved for a future release (like `ctx.set.cookies`).
+    'cache',
     'params',
     'wildcardParams',
     'query',
@@ -37,6 +39,36 @@ const RESERVED = new Set([
  * hazards. Exported so the JIT compiler shares the exact same guard.
  */
 export const TRANSFORM_RESERVED = RESERVED;
+
+/**
+ * Every name a transform may never claim: the full `BurgerContext` prototype
+ * (getters, methods, delegated `Request` members) plus the reserved names
+ * above. Built once at module load.
+ */
+const RESERVED_TRANSFORM_KEYS: ReadonlySet<string> = new Set([
+    ...Object.getOwnPropertyNames(BurgerContext.prototype),
+    ...RESERVED,
+]);
+
+/**
+ * Validates transform keys at compile time. A reserved key would shadow a
+ * context member, so it fails startup loud with the offending key instead of
+ * corrupting `ctx` at request time.
+ */
+export function assertTransformKeys(
+    transformMap: TransformMap | undefined,
+    source: string
+): void {
+    if (!transformMap) return;
+    for (const key of Object.keys(transformMap)) {
+        if (RESERVED_TRANSFORM_KEYS.has(key)) {
+            throw new Error(
+                `[burger-api] transform key "${key}" (${source}) is reserved ` +
+                    'by BurgerContext and would shadow a context member — rename it.'
+            );
+        }
+    }
+}
 
 /**
  * Applies `transform` factories onto a context instance: each factory is

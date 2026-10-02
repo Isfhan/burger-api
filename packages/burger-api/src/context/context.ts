@@ -163,22 +163,46 @@ export function isRequestIPSource(value: unknown): value is RequestIPSource {
 }
 
 /**
+ * Module augmentation target for the authenticated user's fields, shared by
+ * the auth plugins (basic-auth, jwt-auth, oidc) and typed on both `ctx.user`
+ * and `ws.user`:
+ *
+ * ```ts
+ * declare module "burger-api" {
+ * interface BurgerAuthUser {
+ * tenantId: string;
+ * }
+ * }
+ * ```
+ *
+ * Augment this (not `BurgerContext.user`) so user fields coexist with every
+ * auth plugin; the plugins merge their own fields here too.
+ */
+export interface BurgerAuthUser {}
+
+/**
  * Module augmentation target for custom properties on BurgerContext, e.g.
  * request-scoped values set in `transform` hooks:
  *
  * ```ts
  * declare module "burger-api" {
  * interface BurgerContext {
- * user: User;
- * session: Session;
  * tenant: Tenant;
  * }
  * }
  * ```
  *
- * The class is defined below; this interface exists for declaration merging.
+ * `user` is declared here (typed via `BurgerAuthUser`) so auth plugins and
+ * apps always agree on one shape. The class is defined below; this interface
+ * exists for declaration merging.
  */
-export interface BurgerContext {}
+export interface BurgerContext {
+    /**
+     * The authenticated user, set by an auth plugin during the request
+     * lifecycle. `undefined` when no auth plugin ran (or it rejected).
+     */
+    user?: BurgerAuthUser & Record<string, unknown>;
+}
 
 /**
  * `BurgerContext` — the public request context type.

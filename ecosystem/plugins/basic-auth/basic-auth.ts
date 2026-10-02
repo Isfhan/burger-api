@@ -23,13 +23,10 @@
 import type { Plugin, BurgerContext } from "burger-api";
 import { UnauthorizedError, renderHTTPError } from "burger-api";
 
-// All auth plugins declare `ctx.user` with the same type and merge their
-// fields into `BurgerAuthUser`, so they can be installed together.
+// All auth plugins merge their fields into `BurgerAuthUser`, the shared
+// augmentation point for `ctx.user` / `ws.user`, so they can be installed
+// together.
 declare module "burger-api" {
-  interface BurgerContext {
-    /** The authenticated user, set by an auth plugin. */
-    user?: BurgerAuthUser & Record<string, unknown>;
-  }
   interface BurgerAuthUser {
     /** User ID (basic-auth) */
     id?: string;

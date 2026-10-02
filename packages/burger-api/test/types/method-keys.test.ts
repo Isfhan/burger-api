@@ -320,9 +320,14 @@ describe('consumer convention-file types', () => {
         const ctx = {} as BurgerContext;
         const auth: boolean | undefined = ctx.config?.auth;
         expect(auth).toBeUndefined();
-        // @ts-expect-error unknown keys still fail under the augmentation
-        const bogus = ctx.config?.nope;
+        // Unaumented keys read as `unknown` (the index signature keeps
+        // `satisfies RouteConfig` compiling for plugin options).
+        const bogus: unknown = ctx.config?.nope;
         expect(bogus).toBeUndefined();
+        // The built-in response-validation mode is typed.
+        const mode: 'off' | 'dev' | 'enforce' | undefined =
+            ctx.config?.responseValidation;
+        expect(mode).toBeUndefined();
     });
 });
 

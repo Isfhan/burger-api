@@ -40,13 +40,15 @@ export interface ValidatorAdapter {
     cacheable?(schema: SchemaInput): boolean;
 }
 
-/** True when the value is a Zod schema (instance of `z.ZodType`). */
-function isZod(value: unknown): value is z.ZodTypeAny {
-    try {
-        return value instanceof z.ZodType;
-    } catch {
-        return false;
-    }
+/**
+ * True when the value is a Zod 4 schema. Detection is structural — the `_zod`
+ * internals marker — so schemas from a second zod copy (a duplicate install)
+ * are recognized too, not only instances of this package's `z.ZodType`.
+ */
+export function isZodSchema(value: unknown): value is z.ZodTypeAny {
+    if (typeof value !== 'object' || value === null) return false;
+    const internals = (value as { _zod?: unknown })._zod;
+    return typeof internals === 'object' && internals !== null;
 }
 
 /** True when the value carries the Standard Schema v1 `~standard` contract. */
@@ -89,7 +91,7 @@ export function registerAdapter(adapter: ValidatorAdapter): void {
  * schemas to fail fast at compile time — never a request-time surprise.
  */
 export function detectAdapter(schema: SchemaInput): ValidatorAdapter {
-    if (isZod(schema) && zodAdapterInstance) {
+    if (isZodSchema(schema) && zodAdapterInstance) {
         return zodAdapterInstance;
     }
     for (const adapter of registered) {

@@ -13,7 +13,7 @@
  * conversion stays a string so the validator reports the real input.
  */
 
-import { z } from 'zod';
+import { isZodSchema } from './adapter.js';
 import type {
     CoercionOp,
     CoercionPlan,
@@ -124,21 +124,22 @@ export function buildPlan(
     slotSchema: SchemaInput,
     slot: 'query' | 'params' | 'headers' | 'cookies'
 ): CoercionPlan | undefined {
-    if (!(slotSchema instanceof z.ZodType)) return undefined;
-    const shape = (slotSchema as z.ZodObject<any, any>).shape;
+    if (!isZodSchema(slotSchema)) return undefined;
+    const shape = (slotSchema as { shape?: unknown }).shape;
     if (!shape || typeof shape !== 'object') return undefined;
+    const fieldMap = shape as Record<string, unknown>;
 
     const fields: Record<string, CoercionOp> = {};
     const arrays: Record<string, CoercionOp> = {};
-    for (const key of Object.keys(shape)) {
+    for (const key of Object.keys(fieldMap)) {
         // `z.array(x)`: repeated keys (`?tag=a&tag=b`) already arrive as an
         // array; a single occurrence is wrapped. Elements use x's op.
-        const inner = unwrap(shape[key]) as any;
+        const inner = unwrap(fieldMap[key]) as any;
         if (inner?.constructor?.name === 'ZodArray') {
             arrays[key] = opForZodField(inner._zod?.def?.element);
             continue;
         }
-        const op = opForZodField(shape[key]);
+        const op = opForZodField(fieldMap[key]);
         if (op !== 'none') fields[key] = op;
     }
 

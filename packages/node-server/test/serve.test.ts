@@ -147,3 +147,77 @@ describe('serve() — WebSocket bridge', () => {
         }
     });
 });
+
+describe('serve() — response headers and HEAD', () => {
+    test('keeps every Set-Cookie header', async () => {
+        const app = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/cookies',
+                    handlers: {
+                        GET: () => {
+                            const headers = new Headers();
+                            headers.append('set-cookie', 'a=1; Path=/');
+                            headers.append('set-cookie', 'b=2; Path=/');
+                            return new Response('ok', { headers });
+                        },
+                    },
+                },
+            ],
+        });
+        const { baseUrl, close } = await listenOnFreePort(app);
+        try {
+            const res = await fetch(`${baseUrl}/api/cookies`);
+            assert.deepEqual(res.headers.getSetCookie(), [
+                'a=1; Path=/',
+                'b=2; Path=/',
+            ]);
+        } finally {
+            await close();
+        }
+    });
+
+    test('HEAD sends no body and cancels a never-ending stream', async () => {
+        let cancelled = false;
+        const app = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/events',
+                    handlers: {
+                        GET: () =>
+                            new Response(
+                                new ReadableStream({
+                                    pull: () =>
+                                        new Promise((r) => setTimeout(r, 5)),
+                                    cancel() {
+                                        cancelled = true;
+                                    },
+                                }),
+                                {
+                                    headers: {
+                                        'content-type': 'text/event-stream',
+                                    },
+                                }
+                            ),
+                    },
+                },
+            ],
+        });
+        const { baseUrl, close } = await listenOnFreePort(app);
+        try {
+            const res = await fetch(`${baseUrl}/api/events`, {
+                method: 'HEAD',
+                signal: AbortSignal.timeout(2000),
+            });
+            assert.equal(res.status, 200);
+            assert.equal(res.headers.get('content-type'), 'text/event-stream');
+            assert.equal(await res.text(), '');
+            for (let i = 0; i < 50 && !cancelled; i++) {
+                await new Promise((r) => setTimeout(r, 10));
+            }
+            assert.equal(cancelled, true);
+        } finally {
+            await close();
+        }
+    });
+});
