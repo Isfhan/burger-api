@@ -589,8 +589,104 @@ code {
 
 /* Hero */
 .hero {
-    padding: 96px 0 72px;
+    padding: 72px 0 80px;
     text-align: center;
+}
+
+/* The mascot is the one bold moment: big, haloed, two quiet rings. */
+.mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 340px;
+    height: 340px;
+    margin: 0 auto 4px;
+}
+
+.mark::before {
+    content: '';
+    position: absolute;
+    inset: 40px;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--primary) 34%, transparent) 0%,
+        color-mix(in srgb, var(--primary) 10%, transparent) 45%,
+        transparent 70%
+    );
+    filter: blur(8px);
+}
+
+.ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+}
+
+.ring-inner {
+    inset: 36px;
+}
+
+.ring-outer {
+    inset: 0;
+    border-color: color-mix(in srgb, var(--primary) 12%, transparent);
+    border-style: dashed;
+}
+
+.mascot {
+    position: relative;
+    width: 240px;
+    height: 240px;
+    filter: drop-shadow(0 22px 34px rgba(255, 166, 43, 0.38));
+    animation: arrive 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both,
+        float 6s 0.7s ease-in-out infinite;
+}
+
+@keyframes arrive {
+    from { opacity: 0; transform: translateY(16px) scale(0.86); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.wordmark {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    animation: rise 0.6s 0.15s ease-out both;
+}
+
+.wordmark span {
+    background: linear-gradient(135deg, var(--accent), var(--primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.hero h1 {
+    margin-top: 20px;
+    font-size: clamp(40px, 6.5vw, 64px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    animation: rise 0.6s 0.2s ease-out both;
+}
+
+.hero .lead {
+    max-width: 560px;
+    margin: 16px auto 0;
+    font-size: 17px;
+    color: var(--muted);
+    animation: rise 0.6s 0.25s ease-out both;
+}
+
+.hero .status {
+    margin-top: 28px;
+    animation: rise 0.6s 0.35s ease-out both;
 }
 
 .status {
@@ -621,38 +717,6 @@ code {
     100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
-.hero-logo {
-    display: block;
-    width: 88px;
-    height: 88px;
-    margin: 32px auto 24px;
-    filter: drop-shadow(0 12px 28px rgba(255, 166, 43, 0.35));
-    animation: rise 0.6s ease-out both;
-}
-
-.hero h1 {
-    font-size: clamp(44px, 7vw, 72px);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -0.03em;
-    animation: rise 0.6s 0.05s ease-out both;
-}
-
-.hero h1 .accent {
-    background: linear-gradient(135deg, var(--accent), var(--primary));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-}
-
-.hero .lead {
-    max-width: 600px;
-    margin: 16px auto 0;
-    font-size: 17px;
-    color: var(--muted);
-    animation: rise 0.6s 0.1s ease-out both;
-}
-
 @keyframes rise {
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -665,7 +729,7 @@ code {
     justify-content: center;
     gap: 12px;
     margin-top: 32px;
-    animation: rise 0.6s 0.15s ease-out both;
+    animation: rise 0.6s 0.3s ease-out both;
 }
 
 .btn {
@@ -935,7 +999,15 @@ code {
         display: none;
     }
     .hero {
-        padding: 64px 0 48px;
+        padding: 48px 0 56px;
+    }
+    .mark {
+        width: 250px;
+        height: 250px;
+    }
+    .mascot {
+        width: 180px;
+        height: 180px;
     }
     .cmd .comment {
         display: none;
@@ -1118,13 +1190,18 @@ export function generateIndexPage(options: CreateOptions): string {
  <main>
  <section class="hero">
  <div class="container">
- <span class="status"><span class="dot"></span>Server running</span>
- <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI logo" class="hero-logo">
- <h1>${projectName} is <span class="accent">ready</span></h1>
+ <div class="mark" aria-hidden="true">
+ <span class="ring ring-outer"></span>
+ <span class="ring ring-inner"></span>
+ <img src="https://burger-api.com/img/logo.png" alt="" class="mascot" width="240" height="240">
+ </div>
+ <p class="wordmark">Burger<span>API</span></p>
+ <h1>${projectName} is ready</h1>
  <p class="lead">Your BurgerAPI app is up and running. Edit a file and save: the server reloads on its own.</p>
  <div class="actions">
  ${actions}
  </div>
+ <span class="status"><span class="dot"></span>Server running</span>
  </div>
  </section>
 

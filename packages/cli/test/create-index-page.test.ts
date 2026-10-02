@@ -25,7 +25,8 @@ describe('generateIndexPage', () => {
         expect(html).toContain('>Try API</a>');
         expect(html).toContain('<code>src/pages/index.html</code>');
         expect(html).toContain('<code>src/backend/route.ts</code>');
-        expect(html).toContain('t-app-1 is <span class="accent">ready</span>');
+        expect(html).toContain('<h1>t-app-1 is ready</h1>');
+        expect(html).toContain('<p class="wordmark">Burger<span>API</span></p>');
     });
 
     it('uses defaults for dirs and prefix when omitted', () => {
