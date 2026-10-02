@@ -9,7 +9,12 @@ const NOT_FOUND_BODY = JSON.stringify({
     detail: 'Not Found',
 });
 
-const PROBLEM_JSON_HEADERS = { 'Content-Type': 'application/problem+json' };
+/**
+ * 404 init with a prebuilt `Headers`: the constructor copies it, which is
+ * much cheaper than parsing a plain headers object per call. Built on first
+ * use, never at module scope (Workers restrict work during module load).
+ */
+let notFoundInit: ResponseInit | undefined;
 
 /**
  * Builds the framework's 404 response (RFC 9457 Problem Details). A fresh
@@ -18,10 +23,15 @@ const PROBLEM_JSON_HEADERS = { 'Content-Type': 'application/problem+json' };
  * the next `clone()` throws and the request 500s.
  */
 export const notFound = (): Response =>
-    new Response(NOT_FOUND_BODY, {
-        status: 404,
-        headers: PROBLEM_JSON_HEADERS,
-    });
+    new Response(
+        NOT_FOUND_BODY,
+        (notFoundInit ??= {
+            status: 404,
+            headers: new Headers({
+                'Content-Type': 'application/problem+json',
+            }),
+        })
+    );
 
 /**
  * The OpenAPI error response. A factory — see {@link notFound}: never share a
