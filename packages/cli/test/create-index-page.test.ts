@@ -108,14 +108,24 @@ describe('generateIndexPage', () => {
 });
 
 describe('generateSampleCss / generateSampleJs', () => {
-    it('ships light and dark themes with the brand orange', () => {
+    it('is dark by default with a light theme behind the toggle', () => {
         const css = generateSampleCss();
-        expect(css).toContain('--primary: #ffa62b');
-        expect(css).toContain('@media (prefers-color-scheme: dark)');
+        expect(css).toContain(":root:not([data-theme='light'])");
+        expect(css).toContain('--bg: #09090b');
+        expect(css).toContain('--bg: #f7f7f5');
         expect(css).toContain('prefers-reduced-motion');
     });
 
-    it('wires copy buttons', () => {
-        expect(generateSampleJs()).toContain("querySelectorAll('[data-copy]')");
+    it('wires copy buttons and the remembered theme toggle', () => {
+        const js = generateSampleJs();
+        expect(js).toContain("querySelectorAll('[data-copy]')");
+        expect(js).toContain("localStorage.setItem('theme', next)");
+    });
+
+    it('applies a saved light theme before first paint', () => {
+        const html = generateIndexPage({ name: 'x', useApi: true, usePages: true });
+        expect(html).toContain('data-theme-toggle');
+        const head = html.slice(0, html.indexOf('</head>'));
+        expect(head).toContain('localStorage.getItem("theme")');
     });
 });

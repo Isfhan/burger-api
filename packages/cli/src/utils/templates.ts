@@ -187,7 +187,8 @@ export function generateTsConfig(): string {
 export function generateJsConfig(): string {
     const jsconfig = {
         compilerOptions: {
-            lib: ['ESNext'],
+            // Pages ship browser assets (DOM + iterable DOM collections).
+            lib: ['ESNext', 'DOM', 'DOM.Iterable'],
             target: 'ESNext',
             module: 'ESNext',
             moduleDetection: 'force',
@@ -410,26 +411,25 @@ export function generateSampleCss(): string {
     --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --primary: #ffb84d;
-        --bg: #09090b;
-        --bg-2: #0f1012;
-        --card: #17181c;
-        --card-soft: #141519;
-        --border: rgba(255, 255, 255, 0.08);
-        --text: #fafafa;
-        --text-2: #d4d4d8;
-        --muted: #a1a1aa;
-        --btn-2: rgba(255, 255, 255, 0.05);
-        --btn-2-hover: rgba(255, 255, 255, 0.08);
-        --code-bg: #0d0e10;
-        --grid: rgba(255, 255, 255, 0.035);
-        --orb: rgba(255, 166, 43, 0.16);
-        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-        --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.5);
-        --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
-    }
+/* Dark is the default; the navbar toggle switches to light. */
+:root:not([data-theme='light']) {
+    --primary: #ffb84d;
+    --bg: #09090b;
+    --bg-2: #0f1012;
+    --card: #17181c;
+    --card-soft: #141519;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #fafafa;
+    --text-2: #d4d4d8;
+    --muted: #a1a1aa;
+    --btn-2: rgba(255, 255, 255, 0.05);
+    --btn-2-hover: rgba(255, 255, 255, 0.08);
+    --code-bg: #0d0e10;
+    --grid: rgba(255, 255, 255, 0.035);
+    --orb: rgba(255, 166, 43, 0.16);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
 *,
@@ -438,6 +438,14 @@ export function generateSampleCss(): string {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+}
+
+html {
+    color-scheme: dark;
+}
+
+html[data-theme='light'] {
+    color-scheme: light;
 }
 
 body {
@@ -547,6 +555,36 @@ code {
 
 .nav-links a:hover {
     color: var(--text);
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--btn-2);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 180ms ease-out;
+}
+
+.theme-toggle:hover {
+    background: var(--btn-2-hover);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
 /* Hero */
@@ -915,13 +953,40 @@ code {
 `;
 }
 
-/** The sample page script (app.js): copy buttons for the commands. */
+/** The sample page script (app.js): theme toggle and copy buttons. */
 export function generateSampleJs(): string {
-    return `// Copy a command to the clipboard.
-for (const button of document.querySelectorAll('[data-copy]')) {
+    return `// Theme toggle: dark by default, the choice is remembered.
+const root = document.documentElement;
+const toggle = document.querySelector('[data-theme-toggle]');
+
+function showTheme() {
+    if (!toggle) return;
+    const light = root.dataset.theme === 'light';
+    toggle.textContent = light ? '☾' : '☀';
+    toggle.setAttribute('aria-label', light ? 'Switch to dark theme' : 'Switch to light theme');
+}
+
+if (toggle) {
+    showTheme();
+    toggle.addEventListener('click', () => {
+        const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+        root.dataset.theme = next;
+        try {
+            localStorage.setItem('theme', next);
+        } catch {
+            // Storage blocked: the toggle still works for this visit.
+        }
+        showTheme();
+    });
+}
+
+// Copy a command to the clipboard.
+for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (
+    document.querySelectorAll('[data-copy]')
+)) {
     button.addEventListener('click', async () => {
         try {
-            await navigator.clipboard.writeText(button.dataset.copy);
+            await navigator.clipboard.writeText(button.dataset.copy ?? '');
             button.textContent = 'Copied';
         } catch {
             button.textContent = 'Press Ctrl+C';
@@ -1018,7 +1083,9 @@ export function generateIndexPage(options: CreateOptions): string {
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <meta name="color-scheme" content="light dark">
+ <meta name="color-scheme" content="dark light">
+ <!-- Apply the saved theme before first paint (dark by default). -->
+ <script>try{if(localStorage.getItem("theme")==="light")document.documentElement.dataset.theme="light"}catch{}</script>
  <title>${projectName} · BurgerAPI</title>
  <link rel="icon" type="image/png" href="https://burger-api.com/img/logo.png">
  <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1038,10 +1105,13 @@ export function generateIndexPage(options: CreateOptions): string {
  <img src="https://burger-api.com/img/logo.png" alt="">
  BurgerAPI
  </a>
+ <div class="nav-right">
  <nav class="nav-links">
  <a href="https://burger-api.com/docs" target="_blank" rel="noopener">Docs</a>
  <a href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">GitHub</a>
  </nav>
+ <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light theme">☀</button>
+ </div>
  </div>
  </header>
 
