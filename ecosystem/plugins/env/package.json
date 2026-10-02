@@ -5,7 +5,7 @@
   "main": "env.ts",
   "type": "module",
   "peerDependencies": {
-    "burger-api": ">=1.0.0"
+    "burger-api": ">=1.0.0-beta"
   },
   "keywords": [
     "burger-api",

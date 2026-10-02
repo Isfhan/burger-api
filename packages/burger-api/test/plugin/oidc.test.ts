@@ -82,9 +82,10 @@ async function startProvider(): Promise<{
     let hits = 0;
     const server: Bun.Server<any> = Bun.serve({
         port: 0,
+        hostname: '127.0.0.1',
         fetch(req): Response | Promise<Response> {
             const url = new URL(req.url);
-            const base = `http://localhost:${server.port}`;
+            const base = `http://127.0.0.1:${server.port}`;
             if (url.pathname === '/.well-known/openid-configuration') {
                 return Response.json({
                     issuer: base,
@@ -103,7 +104,7 @@ async function startProvider(): Promise<{
     });
     providers.push(server);
     return {
-        issuer: `http://localhost:${server.port}`,
+        issuer: `http://127.0.0.1:${server.port}`,
         setKeys: (k) => {
             keys = k;
         },
@@ -155,17 +156,6 @@ async function run(
 const bearer = (token: string): RequestInit => ({
     headers: { Authorization: `Bearer ${token}` },
 });
-
-async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        if (cond()) {
-            return;
-        }
-        await Bun.sleep(50);
-    }
-    throw new Error('condition not met in time');
-}
 
 describe('oidc', () => {
     afterAll(() => {
@@ -263,18 +253,27 @@ describe('oidc', () => {
         const staleOk = await request('/api/guarded', bearer(token1));
         expect(staleOk.status).toBe(200);
 
-        // Wait for the background refresh to land, then the new key works.
-        await waitFor(() => provider.jwksHits() >= 2);
+        // The refresh runs in the background, and a failed refresh is retried
+        // by the next request. Keep sending the new token, as real traffic
+        // would, until it verifies; the provider counts a hit before the
+        // plugin stores the keys, so the hit count alone is not the signal.
         const token2 = await signToken(key2, {
             sub: 'u',
             iss: provider.issuer,
             exp: nowSec() + 600,
         });
-        const rotated = await request('/api/guarded', bearer(token2));
-        expect(rotated.status).toBe(200);
+        let rotated = 0;
+        const deadline = Date.now() + 8000;
+        while (Date.now() < deadline) {
+            rotated = (await request('/api/guarded', bearer(token2))).status;
+            if (rotated === 200) break;
+            await Bun.sleep(50);
+        }
+        expect(rotated).toBe(200);
+        expect(provider.jwksHits()).toBeGreaterThanOrEqual(2);
 
         provider.stop();
-    });
+    }, 15_000);
 
     it('ES256 token against an RSA key is a clean 401', async () => {
         const provider = await startProvider();
