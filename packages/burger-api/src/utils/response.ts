@@ -1,7 +1,6 @@
 /**
  * The 404 body is a constant (RFC 9457 Problem Details), so it is serialized
- * once. A prebuilt `Response` is cloned per request — `clone()` is much
- * cheaper than re-running the `Response` constructor with a headers init.
+ * once; every call builds a fresh `Response` over it.
  */
 const NOT_FOUND_BODY = JSON.stringify({
     type: 'about:blank',
@@ -13,25 +12,16 @@ const NOT_FOUND_BODY = JSON.stringify({
 const PROBLEM_JSON_HEADERS = { 'Content-Type': 'application/problem+json' };
 
 /**
- * Prebuilt 404 template, created on FIRST use — never at module scope
- * (Workers forbid `new Response()` during module evaluation).
+ * Builds the framework's 404 response (RFC 9457 Problem Details). A fresh
+ * `Response` per call: a cached template cannot be cloned reliably — runtimes
+ * (workerd) lock a shared template's body stream once it has been served, so
+ * the next `clone()` throws and the request 500s.
  */
-let notFoundTemplate: Response | undefined;
-
-/**
- * Builds the framework's 404 response (RFC 9457 Problem Details) as a clone of
- * a prebuilt `Response` — a body stream is single-use, but cloning is cheaper
- * than constructing a fresh `Response` per request.
- */
-export const notFound = (): Response => {
-    const template =
-        notFoundTemplate ??
-        (notFoundTemplate = new Response(NOT_FOUND_BODY, {
-            status: 404,
-            headers: PROBLEM_JSON_HEADERS,
-        }));
-    return template.clone();
-};
+export const notFound = (): Response =>
+    new Response(NOT_FOUND_BODY, {
+        status: 404,
+        headers: PROBLEM_JSON_HEADERS,
+    });
 
 /**
  * The OpenAPI error response. A factory — see {@link notFound}: never share a

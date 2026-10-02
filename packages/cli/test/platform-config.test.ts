@@ -74,15 +74,38 @@ describe('scaffoldPlatformConfig — deno', () => {
 
         const config = JSON.parse(readFileSync(join(dir, 'deno.json'), 'utf8'));
         expect(config).toEqual({
+            unstable: ['sloppy-imports'],
             imports: { 'burger-api': 'npm:burger-api@^1.0.0-beta' },
         });
     });
 
-    it('leaves burger-api unpinned for link/file/workspace/git ranges', () => {
+    // Regression: a local copy was mapped to unpinned `npm:burger-api` (the
+    // latest npm release, not the linked code).
+    it('uses node_modules for a local link/file/workspace copy', () => {
         for (const range of [
             'link:burger-api',
             'file:../burger-api',
             'workspace:*',
+        ]) {
+            const dir = tempProject({
+                name: 'acme-api',
+                dependencies: { 'burger-api': range },
+            });
+
+            scaffoldPlatformConfig(dir, 'deno', '.build/deno/index.ts');
+
+            const config = JSON.parse(
+                readFileSync(join(dir, 'deno.json'), 'utf8')
+            );
+            expect(config).toEqual({
+                unstable: ['sloppy-imports'],
+                nodeModulesDir: 'manual',
+            });
+        }
+    });
+
+    it('leaves burger-api unpinned for git and url ranges', () => {
+        for (const range of [
             'git+https://github.com/isfhan/burger-api.git',
             'https://example.com/burger-api.tgz',
         ]) {

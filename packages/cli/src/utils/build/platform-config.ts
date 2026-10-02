@@ -30,32 +30,32 @@ function wranglerToml(projectName: string, mainPath: string): string {
  * registry range (not link:/file:/workspace:). An unpinned `npm:burger-api`
  * would resolve to the latest release, not the tested one.
  */
-function projectBurgerApiRange(cwd: string): string | undefined {
+function projectBurgerApiSpec(cwd: string): string | undefined {
     try {
         const pkg = JSON.parse(
             readFileSync(resolve(cwd, 'package.json'), 'utf-8')
         ) as { dependencies?: Record<string, string> };
-        const range = pkg.dependencies?.['burger-api'];
-        if (!range || /^(link|file|workspace|git|http)/.test(range)) {
-            return undefined;
-        }
-        return range;
+        return pkg.dependencies?.['burger-api'];
     } catch {
         return undefined;
     }
 }
 
 export function denoJson(cwd: string): string {
-    const range = projectBurgerApiRange(cwd);
-    return JSON.stringify(
-        {
-            imports: {
-                'burger-api': range ? `npm:burger-api@${range}` : 'npm:burger-api',
-            },
-        },
-        null,
-        2
-    ) + '\n';
+    const spec = projectBurgerApiSpec(cwd);
+    // Route files import each other without extensions (`./schema`), which
+    // Deno only allows with sloppy imports.
+    const config: Record<string, unknown> = { unstable: ['sloppy-imports'] };
+    if (spec && /^(link|file|workspace)/.test(spec)) {
+        // A local copy is not on npm: use the project's node_modules.
+        config.nodeModulesDir = 'manual';
+    } else {
+        const range = spec && !/^(git|http)/.test(spec) ? spec : undefined;
+        config.imports = {
+            'burger-api': range ? `npm:burger-api@${range}` : 'npm:burger-api',
+        };
+    }
+    return JSON.stringify(config, null, 2) + '\n';
 }
 
 function vercelJson(): string {

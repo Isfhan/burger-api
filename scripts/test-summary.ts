@@ -126,6 +126,16 @@ const suites: Suite[] = [
     },
 ];
 
+// The full CLI end-to-end suite takes minutes, so `test:all` only includes
+// it when explicitly requested (E2E_FULL=1).
+if (process.env.E2E_FULL === '1') {
+    suites.push({
+        label: 'cli-e2e-full',
+        cmd: ['bun', 'run', '--filter', '@burger-api/cli', 'test:e2e:full'],
+        kind: 'tests',
+    });
+}
+
 function parseTestCounts(output: string): { pass: number; fail: number } | null {
     // bun test prints "12 pass"; node --test prints "# pass 12" (spec
     // reporter) or "ℹ pass 12" (Node 24's default reporter).

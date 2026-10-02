@@ -14,9 +14,10 @@ bun run test:cli
 From `packages/cli`, the same plus typecheck:
 
 ```bash
-bun run test        # default suite — test/**, minus test/e2e
-bun run test:e2e    # e2e tests — test/e2e/** (slow, needs network)
-bun run typecheck   # tsc --noEmit
+bun run test          # default suite — test/**, minus test/e2e and test/e2e-full
+bun run test:e2e      # e2e tests — test/e2e/** (slow, needs network)
+bun run test:e2e:full # full CLI e2e — test/e2e-full/** (slow; see below)
+bun run typecheck     # tsc --noEmit
 ```
 
 Run one file or a directory:
@@ -121,6 +122,22 @@ bun test ./test/e2e
   cannot catch prompt write errors on a real console.
 - `e2e/helpers.ts` — shared E2E scaffolding (`scaffoldProject`, `run`,
   `cleanupProjects`); not a test file.
+- `e2e-full/helpers.ts` — full-suite plumbing: isolated `$BUN_INSTALL` link
+  sandbox, temp projects, deadline-bound command runner, server
+  boot/wait/kill (`withServer`), the shared smoke set, and the check table;
+  not a test file.
+- `e2e-full/blog-fixtures.ts` — the `blog-ts` fixture app (JWT login, posts
+  provider, CORS/logger/request-id hooks, WS comments); not a test file.
+- `e2e-full/blog-ts.test.ts` — TS + WS project: doctor, inspect, typecheck,
+  dev + hot edit, build + start, standalone bundle, `build:exec`, and the
+  cloudflare Bun-only warning.
+- `e2e-full/site-js.test.ts` — JS + pages project: doctor, inspect,
+  typecheck, dev + hot edit, build + start, standalone bundle.
+- `e2e-full/api-prefix.test.ts` — `/v1` project: the above plus
+  `--target=node` under Node >= 24, `--target=deno` under `deno serve`, and
+  `--target=cloudflare` under `wrangler dev`.
+- `e2e-full/zz-summary.test.ts` — runs last and prints the
+  check → pass/skip/fail table.
 
 ## E2E tests (slow, need network)
 
@@ -134,6 +151,56 @@ They are not part of the default suite: `bun run test` ignores
 `test/e2e/**` via `--path-ignore-patterns`. Run them with `bun run test:e2e`
 (or `bun test ./test/e2e`). The root `test:all` runs both CLI suites
 (`cli` and `cli-e2e`).
+
+## Full CLI end-to-end suite (`test:e2e:full`)
+
+`test/e2e-full/**` is the permanent, repeatable "use it like a real user"
+suite: it creates three projects with the real CLI in local mode
+(`BURGER_API_LOCAL=1`), linked through an isolated `$BUN_INSTALL` sandbox so
+the developer's global `bun link` store is never touched, then drives each of
+them through the CLI and a running server. It needs no network beyond the
+Bun cache (`$BUN_INSTALL_CACHE_DIR` reuses the host cache), and every project
+lives in an OS temp dir that is removed at the end.
+
+Projects and what they prove:
+
+- `blog-ts` (`--ws`) — JWT login (`signJwt`), an in-memory posts provider,
+  zod validation, per-method `config.ts` auth, CORS/logger/request-id hooks,
+  and a WS comments route that receives a `ctx.publish` broadcast from
+  `POST /api/posts`. Covers doctor, inspect, typecheck, dev with a hot route
+  edit, build + start, a standalone `.build/bundle/app.js` copy, `build:exec`
+  (compiled binary copy), and the cloudflare Bun-only warning (build only).
+- `site-js` (`--lang js --pages`) — pages plus API: doctor, inspect,
+  typecheck (jsconfig), dev + hot edit, build + start, standalone bundle.
+- `api-prefix` (`--api-prefix /v1`) — `/v1` routing (and `/api` 404s), the
+  same dev/build/standalone checks, plus `--target=node` run under Node >= 24,
+  `--target=deno` run under `deno serve`, and `--target=cloudflare` run under
+  `wrangler dev`.
+
+Each check also asserts the shared smoke set over real HTTP: health 200,
+unknown path 404, validation 422, auth (no token 401 → login → protected
+POST 201), CORS header with an `Origin`, `/openapi.json` title, `/docs` 200,
+and (blog-ts) a WebSocket broadcast within 5s.
+
+Prerequisites: Bun; optionally Node >= 24 (node target), deno, and wrangler
+(cloudflare target). A missing/too-old runtime records a **SKIP** with the
+reason instead of failing — on a machine with all three installed the suite
+is 23/23 PASS with no skips.
+
+Run it from `packages/cli`:
+
+```bash
+bun run test:e2e:full
+```
+
+Expected duration: under a minute on a warm Bun cache (server boots are
+bounded, and `build:exec` is the slowest single check). The suite prints a
+`E2E full summary` table (check → PASS/SKIP/FAIL) when it finishes. To include
+it at the end of the repo-wide run, set `E2E_FULL=1`:
+
+```bash
+E2E_FULL=1 bun run test:all   # root; adds the cli-e2e-full suite
+```
 
 ## Optional environment variables
 
