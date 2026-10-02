@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import {
+    CLI_ENTRY,
     getAvailablePort,
     killTree,
     treeKillSpawnOptions,
@@ -11,7 +12,7 @@ import { cleanupProjects, run, scaffoldProject } from './helpers';
 
 const E2E_TIMEOUT = 240_000;
 
-/** Boots `bun run <script>`, waits for a path, kills the tree, returns it. */
+/** Boots `burger-api <script>`, waits for a path, kills the tree, returns it. */
 async function bootAndCheck(
     cwd: string,
     port: number,
@@ -19,7 +20,7 @@ async function bootAndCheck(
     path = '/api'
 ): Promise<{ status: number; body: unknown }> {
     const proc = Bun.spawn(
-        ['bun', 'run', script, '--', '--port', String(port)],
+        ['bun', CLI_ENTRY, script, '--port', String(port)],
         { cwd, stdout: 'pipe', stderr: 'pipe', ...treeKillSpawnOptions() }
     );
     const outReader = new Response(proc.stdout).text();
@@ -39,13 +40,18 @@ async function bootAndCheck(
         }
     }
     await killTree(proc);
-    await outReader;
-    await errReader;
+    const out = await outReader;
+    const err = await errReader;
+    if (status === -1) {
+        // Never answered: show why, instead of a bare "-1".
+        const tail = `${out}\n${err}`.trim().split('\n').slice(-20).join('\n');
+        console.error(`[e2e] ${script} never served ${path}:\n${tail}`);
+    }
     return { status, body };
 }
 
 /**
- * Boots `bun run dev`, creates a brand-new route while it runs, and polls
+ * Boots `burger-api dev`, creates a brand-new route while it runs, and polls
  * it until it serves. Regression: `bun --watch` only tracks modules already
  * imported, so dev needs its own directory watcher to see new routes.
  */
@@ -54,7 +60,7 @@ async function bootAddRouteAndCheck(
     port: number
 ): Promise<number> {
     const proc = Bun.spawn(
-        ['bun', 'run', 'dev', '--', '--port', String(port)],
+        ['bun', CLI_ENTRY, 'dev', '--port', String(port)],
         { cwd, stdout: 'pipe', stderr: 'pipe', ...treeKillSpawnOptions() }
     );
     const outReader = new Response(proc.stdout).text();
@@ -120,7 +126,7 @@ describe('E2E scaffold — TypeScript', () => {
             expect(typecheck.code).toBe(0);
 
             // build produces the AOT bundle
-            const build = await run(['bun', 'run', 'build'], dir);
+            const build = await run(['bun', CLI_ENTRY, 'build'], dir);
             expect(build.code).toBe(0);
             expect(existsSync(join(dir, '.build', 'bundle', 'app.js'))).toBe(
                 true
@@ -184,7 +190,7 @@ describe('E2E scaffold — TypeScript', () => {
             expect(dev.status).toBe(200);
             expect(dev.body).toEqual({ gated: false });
 
-            const build = await run(['bun', 'run', 'build'], dir);
+            const build = await run(['bun', CLI_ENTRY, 'build'], dir);
             expect(build.code).toBe(0);
 
             const prod = await bootAndCheck(
@@ -245,7 +251,7 @@ describe('E2E scaffold — JavaScript (--lang js)', () => {
             expect(dev.status).toBe(200);
 
             // build produces the AOT bundle including the .js route
-            const build = await run(['bun', 'run', 'build'], dir);
+            const build = await run(['bun', CLI_ENTRY, 'build'], dir);
             expect(build.code).toBe(0);
             expect(existsSync(join(dir, '.build', 'bundle', 'app.js'))).toBe(
                 true

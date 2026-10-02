@@ -6,7 +6,8 @@ import { join } from 'path';
 import type { Command } from 'commander';
 import type { CreateOptions } from '../src/types';
 
-const CLI_ENTRY = join(import.meta.dir, '..', 'src', 'index.ts');
+/** The CLI under test, run from source (no global `burger-api` needed). */
+export const CLI_ENTRY = join(import.meta.dir, '..', 'src', 'index.ts');
 
 /** Default `CreateOptions` for tests, overridable per field. */
 export function baseCreateOptions(
