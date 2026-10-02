@@ -6,10 +6,19 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
+import { ecosystemCacheKey } from '../src/utils/ecosystem-cache';
 import { makeTempDir, removeDir, runCli } from './test-utils';
 
 let projectDir = '';
 let cacheDir = '';
+
+// The cache key is scoped to the default repo + branch; pin the branch so
+// the child CLI's key is deterministic instead of version-derived.
+const CACHE_KEY = ecosystemCacheKey('component-list', {
+    owner: 'isfhan',
+    repo: 'burger-api',
+    branch: 'main',
+});
 
 beforeEach(async () => {
     projectDir = makeTempDir('burger-generate-hint-');
@@ -25,7 +34,7 @@ beforeEach(async () => {
 
     // Pre-warm the cache with real catalog entries this repo ships.
     await writeFile(
-        join(cacheDir, 'component-list.json'),
+        join(cacheDir, `${CACHE_KEY}.json`),
         JSON.stringify({
             fetchedAt: Date.now(),
             data: [
@@ -39,12 +48,18 @@ beforeEach(async () => {
 afterEach(() => {
     removeDir(projectDir);
     removeDir(cacheDir);
+    if (localRoot) {
+        removeDir(localRoot);
+        localRoot = '';
+    }
 });
+
+let localRoot = '';
 
 function runCliInProject(args: string[]) {
     return runCli(args, {
         cwd: projectDir,
-        env: { BURGER_API_CACHE_DIR: cacheDir },
+        env: { BURGER_API_CACHE_DIR: cacheDir, BURGER_API_BRANCH: 'main' },
     });
 }
 
@@ -74,6 +89,38 @@ describe('generate hook/plugin — ecosystem catalog hint', () => {
         expect(stdout).toContain('already exists in the ecosystem catalog');
         expect(stdout).toContain('burger-api add jwt-auth');
         expect(stdout).toContain('created');
+    });
+
+    test('--local reads the checkout catalog instead of the cache', async () => {
+        localRoot = makeTempDir('burger-generate-local-repo-');
+        await Bun.write(
+            join(localRoot, 'packages', 'burger-api', 'package.json'),
+            JSON.stringify({ name: 'burger-api' })
+        );
+        await Bun.write(
+            join(localRoot, 'packages', 'cli', 'package.json'),
+            JSON.stringify({ name: '@burger-api/cli' })
+        );
+        await Bun.write(
+            join(localRoot, 'ecosystem', 'hooks', 'cors', 'cors.ts'),
+            'export function cors() {}\n'
+        );
+
+        const { exitCode, stdout } = await runCli(
+            ['generate', 'hook', 'cors', '--local'],
+            {
+                cwd: projectDir,
+                env: {
+                    BURGER_API_CACHE_DIR: cacheDir,
+                    BURGER_API_LOCAL_ROOT: localRoot,
+                },
+            }
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('Local mode');
+        expect(stdout).toContain('already exists in the ecosystem catalog');
+        expect(stdout).toContain('Hook "cors" created');
     });
 
     test('says nothing when the name is not in the ecosystem catalog', async () => {

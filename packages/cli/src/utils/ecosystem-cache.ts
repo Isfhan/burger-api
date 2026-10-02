@@ -19,6 +19,24 @@ function cacheDir(): string {
 
 const DEFAULT_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
+/**
+ * Cache key for a GitHub-sourced list, scoped to the repo and branch it came
+ * from so a beta CLI, a stable CLI, and BURGER_API_BRANCH overrides never
+ * share entries. Branch names may contain `/` (encoded here), which must not
+ * leak into the cache filename.
+ */
+export function ecosystemCacheKey(
+    name: string,
+    source: { owner: string; repo: string; branch: string }
+): string {
+    return [
+        name,
+        encodeURIComponent(source.owner),
+        encodeURIComponent(source.repo),
+        encodeURIComponent(source.branch),
+    ].join('-');
+}
+
 interface CacheEnvelope<T> {
     fetchedAt: number;
     data: T;

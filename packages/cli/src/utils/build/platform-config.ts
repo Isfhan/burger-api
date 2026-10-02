@@ -15,10 +15,27 @@ import { info } from '../logger';
  */
 export const WRANGLER_COMPATIBILITY_DATE = '2025-06-01';
 
+/**
+ * Wrangler worker-name rules: lowercase letters, digits and dashes, at most
+ * 63 characters, no leading/trailing dash. npm scopes are dropped and any
+ * other invalid character becomes a dash, so `@scope/My_App` → `my-app`.
+ */
+export function wranglerWorkerName(projectName: string): string {
+    const name = projectName
+        .replace(/^@[^/]+\//, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 63)
+        .replace(/-+$/, '');
+    return name || 'app';
+}
+
 function wranglerToml(projectName: string, mainPath: string): string {
     const date = WRANGLER_COMPATIBILITY_DATE;
     return (
-        `name = "${projectName}"\n` +
+        `name = "${wranglerWorkerName(projectName)}"\n` +
         `main = "${mainPath}"\n` +
         `compatibility_date = "${date}"\n` +
         `compatibility_flags = ["nodejs_compat"]\n`
@@ -51,8 +68,12 @@ export function denoJson(cwd: string): string {
         config.nodeModulesDir = 'manual';
     } else {
         const range = spec && !/^(git|http)/.test(spec) ? spec : undefined;
+        const pin = range ? `npm:burger-api@${range}` : 'npm:burger-api';
         config.imports = {
-            'burger-api': range ? `npm:burger-api@${range}` : 'npm:burger-api',
+            'burger-api': pin,
+            // Subpath imports (`burger-api/adapter/bun`, ...) need their own
+            // map entry; the bare specifier does not cover them.
+            'burger-api/': `${pin}/`,
         };
     }
     return JSON.stringify(config, null, 2) + '\n';

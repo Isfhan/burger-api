@@ -78,6 +78,33 @@ const bearer = (token: string): RequestInit => ({
     headers: { Authorization: `Bearer ${token}` },
 });
 
+type AsymmetricAlgorithm = 'RS256' | 'ES256' | 'ES384' | 'ES512';
+
+/** Generates the signing key pair for an RS/ES algorithm. */
+async function generatePair(
+    algorithm: AsymmetricAlgorithm
+): Promise<CryptoKeyPair> {
+    if (algorithm === 'RS256') {
+        return (await crypto.subtle.generateKey(
+            {
+                name: 'RSASSA-PKCS1-v1_5',
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: 'SHA-256',
+            },
+            true,
+            ['sign', 'verify']
+        )) as CryptoKeyPair;
+    }
+    const namedCurve =
+        algorithm === 'ES256' ? 'P-256' : algorithm === 'ES384' ? 'P-384' : 'P-521';
+    return (await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve },
+        true,
+        ['sign', 'verify']
+    )) as CryptoKeyPair;
+}
+
 describe('jwt-auth', () => {
     it('rejects a short HMAC secret at startup', () => {
         expect(() => jwtAuth({ secret: 'short' })).toThrow(/at least 32 bytes/);
@@ -85,6 +112,15 @@ describe('jwt-auth', () => {
 
     it('requires a secret or public key', () => {
         expect(() => jwtAuth({})).toThrow(/secret.*publicKey/);
+    });
+
+    it('rejects RS/ES algorithms without a publicKey at startup', () => {
+        expect(() => jwtAuth({ algorithm: 'RS256', secret: SECRET })).toThrow(
+            /publicKey/
+        );
+        expect(() => jwtAuth({ algorithm: 'ES256', secret: SECRET })).toThrow(
+            /publicKey/
+        );
     });
 
     it('401 without a token; 200 on auth-disabled routes', async () => {
@@ -262,6 +298,56 @@ describe('jwt-auth signJwt', () => {
                 exp: expect.any(Number),
             },
         });
+    });
+
+    it('roundtrips with RS256', async () => {
+        const pair = await generatePair('RS256');
+        const token = await signJwt(
+            { sub: 'rs-user' },
+            { privateKey: pair.privateKey, algorithm: 'RS256', expiresIn: 600 }
+        );
+        const res = await run(
+            { publicKey: pair.publicKey, algorithm: 'RS256' },
+            '/api/guarded',
+            bearer(token)
+        );
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({
+            user: {
+                sub: 'rs-user',
+                iat: expect.any(Number),
+                exp: expect.any(Number),
+            },
+        });
+    });
+
+    for (const algorithm of ['ES256', 'ES384', 'ES512'] as const) {
+        it(`roundtrips with ${algorithm}`, async () => {
+            const pair = await generatePair(algorithm);
+            const token = await signJwt(
+                { sub: 'es-user' },
+                { privateKey: pair.privateKey, algorithm, expiresIn: 600 }
+            );
+            const res = await run(
+                { publicKey: pair.publicKey, algorithm },
+                '/api/guarded',
+                bearer(token)
+            );
+            expect(res.status).toBe(200);
+            expect(await res.json()).toEqual({
+                user: {
+                    sub: 'es-user',
+                    iat: expect.any(Number),
+                    exp: expect.any(Number),
+                },
+            });
+        });
+    }
+
+    it('requires a privateKey for asymmetric algorithms', async () => {
+        await expect(
+            signJwt({ sub: 'u' }, { secret: SECRET, algorithm: 'RS256' })
+        ).rejects.toThrow(/privateKey/);
     });
 
     it('roundtrips with a non-default algorithm (HS512)', async () => {

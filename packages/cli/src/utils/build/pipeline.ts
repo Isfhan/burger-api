@@ -25,20 +25,33 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
 
+/** Import specifiers in any form: static, side-effect, export-from, dynamic. */
+const IMPORT_SPECIFIER_PATTERN =
+    /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"\n]+)\2/g;
+
 /**
  * Rewrite absolute imports — and, with `sourceDir`, relative ones written
  * for that directory — to be relative to `outDir`: portable entries are
  * bundled later, possibly on another machine, so they must not embed this
  * machine's paths. Bare package specifiers (`burger-api`) are untouched.
+ *
+ * Specifiers come from `scanImports`, so both quote styles, `export ... from`
+ * and dynamic `import('...')` are handled — not just `from '...'`.
  */
 function rewriteImportsRelativeTo(
     source: string,
     outDir: string,
     sourceDir?: string
 ): string {
+    const specifiers = new Set(
+        new Bun.Transpiler({ loader: 'ts' })
+            .scanImports(source)
+            .map((i) => i.path)
+    );
     return source.replace(
-        /(from\s+|import\s+)'([^']+)'/g,
-        (match, lead: string, spec: string) => {
+        IMPORT_SPECIFIER_PATTERN,
+        (match, lead: string, quote: string, spec: string) => {
+            if (!specifiers.has(spec)) return match;
             let abs: string | undefined;
             if (/^[A-Za-z]:\//.test(spec) || spec.startsWith('/')) abs = spec;
             else if (sourceDir && /^\.\.?\//.test(spec))
@@ -46,7 +59,7 @@ function rewriteImportsRelativeTo(
             if (!abs) return match;
             let rel = relative(outDir, abs).split('\\').join('/');
             if (!rel.startsWith('.')) rel = `./${rel}`;
-            return `${lead}'${rel}'`;
+            return `${lead}${quote}${rel}${quote}`;
         }
     );
 }
@@ -63,13 +76,67 @@ const PORTABLE_TARGETS: ReadonlySet<RuntimeTarget> = new Set([
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]s|tsx)$/;
 
 /**
- * Finds user source files that reach Bun-only APIs: `bun` / `bun:*` imports
- * or the `Bun.` global. Portable targets (Cloudflare, Deno, Vercel, Node)
+ * Blank out comments and string/template literal contents so that text such
+ * as `// uses Bun.file` or `"Bun.serve is Bun-only"` is not mistaken for
+ * real API usage. Template interpolations count as string content.
+ */
+function stripCommentsAndStrings(source: string): string {
+    const out: string[] = [];
+    let i = 0;
+    while (i < source.length) {
+        const ch = source[i]!;
+        const next = i + 1 < source.length ? source[i + 1]! : '';
+        if (ch === '/' && next === '/') {
+            while (i < source.length && source[i] !== '\n') {
+                out.push(' ');
+                i++;
+            }
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            while (
+                i < source.length &&
+                !(source[i] === '*' && source[i + 1] === '/')
+            ) {
+                out.push(' ');
+                i++;
+            }
+            out.push(' ', ' ');
+            i += 2;
+            continue;
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            out.push(' ');
+            i++;
+            while (i < source.length && source[i] !== ch) {
+                if (source[i] === '\\') {
+                    out.push(' ');
+                    i++;
+                }
+                out.push(' ');
+                i++;
+            }
+            out.push(' ');
+            i++;
+            continue;
+        }
+        out.push(ch);
+        i++;
+    }
+    return out.join('');
+}
+
+/**
+ * Finds user source files that reach Bun-only APIs: `bun` / `bun:*` imports,
+ * the `Bun.` global, or Bun's pub/sub (`ctx.publish()`, `ws.publish()`,
+ * `server.publish()`). Portable targets (Cloudflare, Deno, Vercel, Node)
  * cannot run them, so the build warns once and continues instead of letting
  * the deploy-time bundler fail with a bare resolution error.
  *
- * Local relative imports are followed, so a helper such as `src/db.ts`
- * imported by `src/providers.ts` is checked too.
+ * Matches run against comment/string-stripped source. A `typeof Bun` check
+ * only makes that file's `Bun.` uses portable — imports and publish calls
+ * still flag it. Local relative imports are followed, so a helper such as
+ * `src/db.ts` imported by `src/providers.ts` is checked too.
  */
 function findBunOnlyFiles(files: Array<string | undefined>): string[] {
     const scanner = new Bun.Transpiler({ loader: 'ts' });
@@ -89,13 +156,14 @@ function findBunOnlyFiles(files: Array<string | undefined>): string[] {
         }
         try {
             const imports = scanner.scanImports(source);
+            const code = stripCommentsAndStrings(source);
             if (
                 // `typeof Bun` means the file feature-checks Bun and falls
                 // back, so its `Bun.` uses are portable.
-                (/\bBun\s*\./.test(source) &&
-                    !/typeof\s+Bun\b/.test(source)) ||
-                // ctx.publish()/ws.publish() are Bun's built-in pub/sub.
-                /\.publish\s*\(/.test(source) ||
+                (/\bBun\s*\./.test(code) && !/typeof\s+Bun\b/.test(code)) ||
+                // ctx.publish()/ws.publish()/server.publish() are Bun's
+                // built-in pub/sub. Other `.publish(` receivers are not.
+                /\b(?:ctx|ws|server)\s*\.\s*publish\s*\(/.test(code) ||
                 imports.some(
                     (i) => i.path === 'bun' || i.path.startsWith('bun:')
                 )
@@ -192,6 +260,11 @@ export async function runVirtualEntryBuild(options: {
     sourcemap?: string;
     compile?: boolean;
     bytecode?: boolean;
+    /**
+     * Set false via `build --no-bun-check` to skip the portable-target scan
+     * that warns about Bun-only APIs in user source.
+     */
+    bunCheck?: boolean;
 }): Promise<VirtualBuildResult> {
     const config = await resolveBuildConfig(options.cwd);
     // dev/start read options from the entry file; the build reads
@@ -211,113 +284,124 @@ export async function runVirtualEntryBuild(options: {
         entryFile: options.entryFile,
     });
 
-    const [apiEntries, pageEntries, wsEntries, assetEntries] =
-        await Promise.all([
-            scanApiRoutes(options.cwd, config.apiDir, config.apiPrefix),
-            scanPageRoutes(options.cwd, config.pageDir, config.pagePrefix),
-            scanWebSocketRoutes(options.cwd, config.wsDir ?? ''),
-            scanAssetRoutes(options.cwd, config.pageDir, config.pagePrefix),
-        ]);
+    // Everything that follows reads or writes build outputs — the temp
+    // entry-options module must be removed on every exit path, including a
+    // route scan that throws (route.ts + route.js) or an asset read failure.
+    try {
+        const [apiEntries, pageEntries, wsEntries, assetEntries] =
+            await Promise.all([
+                scanApiRoutes(options.cwd, config.apiDir, config.apiPrefix),
+                scanPageRoutes(options.cwd, config.pageDir, config.pagePrefix),
+                scanWebSocketRoutes(options.cwd, config.wsDir ?? ''),
+                scanAssetRoutes(
+                    options.cwd,
+                    config.pageDir,
+                    config.pagePrefix
+                ),
+            ]);
 
-    if (
-        apiEntries.length === 0 &&
-        pageEntries.length === 0 &&
-        wsEntries.length === 0
-    ) {
-        cleanupEntryOptionsModule(entryOptions.tempFilePath);
-        throw new Error(
-            `No routes found. Ensure ${config.apiDir}, ${config.pageDir} ` +
-                `or ${config.wsDir} exist and contain route.ts files, ` +
-                `page files, or ws.ts files.`
-        );
-    }
-
-    if (wsEntries.length > 0 && !RUNTIME_CAPABILITIES[platformTarget].websocket) {
-        cleanupEntryOptionsModule(entryOptions.tempFilePath);
-        throw new Error(
-            `--target=${platformTarget} does not support WebSocket routes, ` +
-                `but ${wsEntries.length} were found under ${config.wsDir}. ` +
-                'This platform has no persistent-connection model for ' +
-                'WebSocket upgrades — see the compatibility docs for what ' +
-                'each runtime supports.'
-        );
-    }
-
-    if (platformTarget === 'node') {
-        try {
-            Bun.resolveSync('@burger-api/node-server', options.cwd);
-        } catch {
-            cleanupEntryOptionsModule(entryOptions.tempFilePath);
+        if (
+            apiEntries.length === 0 &&
+            pageEntries.length === 0 &&
+            wsEntries.length === 0
+        ) {
             throw new Error(
-                '--target=node requires the "@burger-api/node-server" ' +
-                    'package, which is not installed in this project. ' +
-                    'Run `bun add @burger-api/node-server` (or the npm/pnpm/yarn ' +
-                    'equivalent) and try again.'
+                `No routes found. Ensure ${config.apiDir}, ${config.pageDir} ` +
+                    `or ${config.wsDir} exist and contain route.ts files, ` +
+                    `page files, or ws.ts files.`
             );
         }
-    }
 
-    let appConventions: AppConventionPaths | undefined;
-    try {
-        appConventions = scanAppConventions(
-            dirname(resolve(options.cwd, options.entryFile))
+        if (
+            wsEntries.length > 0 &&
+            !RUNTIME_CAPABILITIES[platformTarget].websocket
+        ) {
+            throw new Error(
+                `--target=${platformTarget} does not support WebSocket routes, ` +
+                    `but ${wsEntries.length} were found under ${config.wsDir}. ` +
+                    'This platform has no persistent-connection model for ' +
+                    'WebSocket upgrades — see the compatibility docs for what ' +
+                    'each runtime supports.'
+            );
+        }
+
+        if (platformTarget === 'node') {
+            try {
+                Bun.resolveSync('@burger-api/node-server', options.cwd);
+            } catch {
+                throw new Error(
+                    '--target=node requires the "@burger-api/node-server" ' +
+                        'package, which is not installed in this project. ' +
+                        'Run `bun add @burger-api/node-server` (or the npm/pnpm/yarn ' +
+                        'equivalent) and try again.'
+                );
+            }
+        }
+
+        const appConventions: AppConventionPaths | undefined =
+            scanAppConventions(
+                dirname(resolve(options.cwd, options.entryFile))
+            );
+
+        // Portable targets run no Bun.build here; Bun-only user code would
+        // only fail later in the target's own bundler. Warn once, continue.
+        if (
+            PORTABLE_TARGETS.has(platformTarget) &&
+            options.bunCheck !== false
+        ) {
+            const bunOnly = findBunOnlyFiles([
+                resolve(options.cwd, options.entryFile),
+                ...apiEntries.flatMap((e) => [
+                    e.importPath,
+                    e.hooksPath,
+                    e.schemaPath,
+                    e.openapiPath,
+                    e.configPath,
+                ]),
+                ...wsEntries.flatMap((e) => [
+                    e.importPath,
+                    e.hooksPath,
+                    e.configPath,
+                ]),
+                ...pageEntries.map((e) => e.importPath),
+                appConventions?.hooksPath,
+                appConventions?.pluginsPath,
+                appConventions?.providersPath,
+                appConventions?.openapiConfigPath,
+            ]);
+            if (bunOnly.length > 0) {
+                warning(
+                    `Bun-only APIs found for the "${platformTarget}" target, ` +
+                        'which has no Bun runtime globals. Remove `bun`/`bun:*` ' +
+                        'imports, `Bun.` usage, and `ctx.publish()`/`ws.publish()`/' +
+                        '`server.publish()` calls (Bun pub/sub). A `typeof Bun` ' +
+                        "check makes a file's `Bun.` uses portable, but not its " +
+                        'imports or publish calls. From: ' +
+                        bunOnly
+                            .map((f) =>
+                                relative(options.cwd, f).split('\\').join('/')
+                            )
+                            .join(', ')
+                );
+            }
+        }
+
+        const source = generateVirtualEntrySource(
+            config,
+            apiEntries,
+            pageEntries,
+            entryOptions.importPath,
+            appConventions,
+            wsEntries,
+            assetEntries,
+            // `--target=browser` bundles client code — never inject the Bun
+            // adapter. Everything else follows the deploy target (bun gets it).
+            options.target === 'browser' ? false : undefined,
+            platformTarget
         );
-    } catch (err) {
-        cleanupEntryOptionsModule(entryOptions.tempFilePath);
-        throw err;
-    }
+        const hasPages = pageEntries.length > 0;
+        const hasWs = wsEntries.length > 0;
 
-    // Portable targets run no Bun.build here; Bun-only user code would only
-    // fail later in the target's own bundler. Warn once, then continue.
-    if (PORTABLE_TARGETS.has(platformTarget)) {
-        const bunOnly = findBunOnlyFiles([
-            resolve(options.cwd, options.entryFile),
-            ...apiEntries.flatMap((e) => [
-                e.importPath,
-                e.hooksPath,
-                e.schemaPath,
-                e.openapiPath,
-                e.configPath,
-            ]),
-            ...wsEntries.flatMap((e) => [e.importPath, e.hooksPath, e.configPath]),
-            ...pageEntries.map((e) => e.importPath),
-            appConventions?.hooksPath,
-            appConventions?.pluginsPath,
-            appConventions?.providersPath,
-            appConventions?.openapiConfigPath,
-        ]);
-        if (bunOnly.length > 0) {
-            warning(
-                `Bun-only APIs found for the "${platformTarget}" target, ` +
-                    'which has no Bun runtime globals. Remove `bun`/`bun:*` ' +
-                    'imports, `Bun.` usage, and `ctx.publish()`/`ws.publish()` ' +
-                    'calls (Bun pub/sub) from: ' +
-                    bunOnly
-                        .map((f) =>
-                            relative(options.cwd, f).split('\\').join('/')
-                        )
-                        .join(', ')
-            );
-        }
-    }
-
-    const source = generateVirtualEntrySource(
-        config,
-        apiEntries,
-        pageEntries,
-        entryOptions.importPath,
-        appConventions,
-        wsEntries,
-        assetEntries,
-        // `--target=browser` bundles client code — never inject the Bun
-        // adapter. Everything else follows the deploy target (bun gets it).
-        options.target === 'browser' ? false : undefined,
-        platformTarget
-    );
-    const hasPages = pageEntries.length > 0;
-    const hasWs = wsEntries.length > 0;
-
-    try {
         if (
             platformTarget === 'cloudflare' ||
             platformTarget === 'deno' ||

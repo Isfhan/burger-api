@@ -157,6 +157,35 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
         expect(closeResult.value).toEqual({ code: 1000, reason: 'bye' });
     });
 
+    it('destroys the socket instead of throwing on a malformed Host header', async () => {
+        const app = new Burger({
+            apiRoutes: [],
+            wsRoutes: [{ path: '/chat', handlers: { open: () => {} } }],
+        });
+        await app.fetchHandler();
+        const bridge = app.createNodeWsBridge({
+            WebSocketServer: FakeWebSocketServer,
+        });
+
+        let destroyed = false;
+        const fakeSocket = { destroy: () => (destroyed = true) };
+        // A host with a space makes `new Request(...)` throw. The bridge
+        // runs inside an async handler, so the throw must be contained.
+        await bridge.handleUpgrade(
+            {
+                url: '/chat',
+                headers: {
+                    host: 'bad host',
+                    upgrade: 'websocket',
+                    connection: 'Upgrade',
+                },
+            },
+            fakeSocket,
+            Buffer.alloc(0)
+        );
+        expect(destroyed).toBe(true);
+    });
+
     it('destroys the socket for a non-upgrade or unmatched-route request', async () => {
         const app = new Burger({
             apiRoutes: [],

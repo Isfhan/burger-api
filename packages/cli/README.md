@@ -139,6 +139,7 @@ burger-api add cors --local
 burger-api list --local
 burger-api skills install --local
 burger-api skills available --local
+burger-api generate plugin audit-log --local
 
 # Or turn it on for the whole shell
 export BURGER_API_LOCAL=1   # also accepts true
@@ -344,6 +345,8 @@ burger-api build src/index.ts --sourcemap linked
 - `--minify` - Minify the output for smaller file size
 - `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
 - `--target <target>` - Target environment (e.g., bun, node)
+- `--no-bun-check` - Skip the Bun-only API warning for portable targets
+  (cloudflare, deno, vercel, node)
 
 Build config is loaded from `burger.build.ts` or `burger.build.js` when
 present. If no config exists, the CLI uses defaults:

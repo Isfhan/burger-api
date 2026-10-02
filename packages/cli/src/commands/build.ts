@@ -115,6 +115,8 @@ interface BuildCommandOptions {
     target?: string;
     compile?: boolean;
     bytecode?: boolean;
+    /** false with --no-bun-check */
+    bunCheck?: boolean;
 }
 
 /**
@@ -159,6 +161,10 @@ export const buildCommand = new Command('build')
         'Compile to a standalone executable instead of bundling (bun target only)'
     )
     .option('--no-bytecode', 'Disable bytecode compilation (--compile only)')
+    .option(
+        '--no-bun-check',
+        'Skip the Bun-only API scan for portable targets (cloudflare, deno, vercel, node)'
+    )
     .action(async (fileArg: string | undefined, options: BuildCommandOptions) => {
         const cwd = process.cwd();
         const file = resolveEntryFile(fileArg, cwd);
@@ -211,6 +217,7 @@ export const buildCommand = new Command('build')
                 sourcemap: options.sourcemap,
                 compile: options.compile,
                 bytecode: options.bytecode !== false,
+                bunCheck: options.bunCheck,
             },
             onBeforeBuild: (spin) => {
                 if (options.compile) {

@@ -15,6 +15,7 @@ import {
 } from '../utils/config';
 import { ensureAppDirEnv } from '../utils/scanner';
 import { getCachedComponentList } from '../utils/github';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
 import { reindent, isReindentable } from '../utils/reindent';
 import {
     PROJECT_HINT,
@@ -245,11 +246,17 @@ const hookCommand = new Command('hook')
     .description('Scaffold a local hook factory in ecosystem/hooks/<name>/')
     .argument('<name>', 'Hook name (e.g. rate-limit → export rateLimit)')
     .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
-    .action(async (name: string, options: { lang?: string }) => {
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (name: string, options: { lang?: string; local?: boolean }) => {
         ensureProject();
         const nameError = validateComponentName(name);
         if (nameError) fail(nameError);
 
+        setLocalMode(options.local);
+        announceLocalMode();
         const lang = resolveLang(options.lang);
         const ext = lang === 'js' ? 'js' : 'ts';
         const targetDir = resolveUnder(
@@ -288,11 +295,17 @@ const pluginCommand = new Command('plugin')
     .description('Scaffold a local plugin in ecosystem/plugins/<name>/')
     .argument('<name>', 'Plugin name (e.g. audit-log → export AuditLog)')
     .option('-l, --lang <lang>', 'Project language: ts or js (detected from jsconfig.json)')
-    .action(async (name: string, options: { lang?: string }) => {
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (name: string, options: { lang?: string; local?: boolean }) => {
         ensureProject();
         const nameError = validateComponentName(name);
         if (nameError) fail(nameError);
 
+        setLocalMode(options.local);
+        announceLocalMode();
         const lang = resolveLang(options.lang);
         const ext = lang === 'js' ? 'js' : 'ts';
         const targetDir = resolveUnder(

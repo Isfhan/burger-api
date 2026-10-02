@@ -527,10 +527,18 @@ export class WebSocketAdapter {
                     }
                 }
                 const host = String(raw.headers.host ?? 'localhost');
-                const request = new Request(
-                    `http://${host}${raw.url ?? '/'}`,
-                    { headers }
-                );
+                let request: Request;
+                try {
+                    request = new Request(`http://${host}${raw.url ?? '/'}`, {
+                        headers,
+                    });
+                } catch {
+                    // A malformed Host header throws here, inside an async
+                    // 'upgrade' handler — an unhandled rejection would kill
+                    // the Node process. Reject the socket instead.
+                    destroy();
+                    return;
+                }
 
                 const upgradeHeader = request.headers.get('upgrade');
                 if (upgradeHeader?.toLowerCase() !== 'websocket') {

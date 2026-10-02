@@ -13,6 +13,7 @@ import {
     skillDirs,
 } from '../utils/skills';
 import { announceLocalMode, setLocalMode } from '../utils/local-mode';
+import { validateEcosystemName } from '../utils/names';
 import {
     spinner,
     success,
@@ -48,6 +49,13 @@ function ensureSkillDirs(): void {
 
 /** Shared download logic for installing a skill. */
 async function doInstall(skillName: string, force = false): Promise<void> {
+    // Reject traversal/special names before creating any directories.
+    const nameError = validateEcosystemName(skillName);
+    if (nameError) {
+        logError(nameError);
+        process.exit(1);
+    }
+
     requireProject();
     ensureSkillDirs();
 

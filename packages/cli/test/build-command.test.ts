@@ -101,4 +101,41 @@ describe('build command — cloudflare target (offline)', () => {
             'compatibility_flags = ["nodejs_compat"]'
         );
     });
+
+    it('--no-bun-check skips the Bun-only warning', async () => {
+        await Bun.write(
+            join(dir, 'package.json'),
+            JSON.stringify({ name: 'cf-bun-check' })
+        );
+        await Bun.write(
+            join(dir, 'src', 'index.ts'),
+            [
+                "import { Burger } from 'burger-api';",
+                'const app = new Burger({ apiDir: "./src/api" });',
+                'app.serve(4000);',
+            ].join('\n')
+        );
+        await Bun.write(
+            join(dir, 'src', 'api', 'uses-bun', 'route.ts'),
+            [
+                'export function GET() {',
+                "    return new Response(Bun.file('data.txt').size);",
+                '}',
+            ].join('\n')
+        );
+
+        const warnRun = await runCli(
+            ['build', 'src/index.ts', '--target=cloudflare'],
+            { cwd: dir }
+        );
+        expect(warnRun.exitCode).toBe(0);
+        expect(warnRun.stdout).toContain('Bun-only APIs');
+
+        const silentRun = await runCli(
+            ['build', 'src/index.ts', '--target=cloudflare', '--no-bun-check'],
+            { cwd: dir }
+        );
+        expect(silentRun.exitCode).toBe(0);
+        expect(silentRun.stdout).not.toContain('Bun-only APIs');
+    });
 });

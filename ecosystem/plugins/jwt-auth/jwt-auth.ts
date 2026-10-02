@@ -136,13 +136,15 @@ export interface JwtPayload {
 }
 
 /**
- * Map an algorithm name to its Web Crypto parameters. The type is derived
- * from the platform so this compiles without the DOM lib.
+ * Map an algorithm name to its Web Crypto parameters. The types are derived
+ * from the platform so this compiles without the DOM lib. Key import wants
+ * `namedCurve` for ECDSA; sign/verify want `hash` instead — passing the
+ * import params to sign/verify is what broke the ES algorithms.
  */
 type ImportKeyAlgorithm = NonNullable<Parameters<typeof crypto.subtle.importKey>[2]>;
-function getAlgorithmName(
-    algorithm: string
-): ImportKeyAlgorithm {
+type SignVerifyAlgorithm = Parameters<typeof crypto.subtle.sign>[0];
+
+function getImportAlgorithm(algorithm: string): ImportKeyAlgorithm {
   switch (algorithm) {
     case "HS256":
       return { name: "HMAC", hash: "SHA-256" } as ImportKeyAlgorithm;
@@ -165,6 +167,36 @@ function getAlgorithmName(
     default:
       throw new Error(`Unsupported algorithm: ${algorithm}`);
   }
+}
+
+function getSignVerifyAlgorithm(algorithm: string): SignVerifyAlgorithm {
+  switch (algorithm) {
+    case "HS256":
+      return { name: "HMAC", hash: "SHA-256" } as SignVerifyAlgorithm;
+    case "HS384":
+      return { name: "HMAC", hash: "SHA-384" } as SignVerifyAlgorithm;
+    case "HS512":
+      return { name: "HMAC", hash: "SHA-512" } as SignVerifyAlgorithm;
+    case "RS256":
+      return { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as SignVerifyAlgorithm;
+    case "RS384":
+      return { name: "RSASSA-PKCS1-v1_5", hash: "SHA-384" } as SignVerifyAlgorithm;
+    case "RS512":
+      return { name: "RSASSA-PKCS1-v1_5", hash: "SHA-512" } as SignVerifyAlgorithm;
+    case "ES256":
+      return { name: "ECDSA", hash: "SHA-256" } as SignVerifyAlgorithm;
+    case "ES384":
+      return { name: "ECDSA", hash: "SHA-384" } as SignVerifyAlgorithm;
+    case "ES512":
+      return { name: "ECDSA", hash: "SHA-512" } as SignVerifyAlgorithm;
+    default:
+      throw new Error(`Unsupported algorithm: ${algorithm}`);
+  }
+}
+
+/** True for algorithms that need an asymmetric key pair instead of a secret. */
+function isAsymmetric(algorithm: string): boolean {
+  return algorithm.startsWith("RS") || algorithm.startsWith("ES");
 }
 
 /**
@@ -217,7 +249,7 @@ async function verifySignature(
     cryptoKey = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(key),
-      getAlgorithmName(algorithm),
+      getImportAlgorithm(algorithm),
       false,
       ["verify"]
     );
@@ -226,7 +258,7 @@ async function verifySignature(
   }
 
   return crypto.subtle.verify(
-    getAlgorithmName(algorithm),
+    getSignVerifyAlgorithm(algorithm),
     cryptoKey,
     signatureBytes,
     data
@@ -271,6 +303,15 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
 
   if (!verificationKey) {
     throw new Error("JWT plugin requires either `secret` or `publicKey` option");
+  }
+
+  // RS/ES verify with an asymmetric public key. A `secret` here would import
+  // as HMAC and fail every request with a 401 — reject it at startup instead.
+  if (isAsymmetric(algorithm) && !publicKey) {
+    throw new Error(
+      `JWT plugin: algorithm ${algorithm} requires a \`publicKey\` CryptoKey option. ` +
+        "`secret` only works with the HMAC algorithms (HS256, HS384, HS512)."
+    );
   }
 
   // HMAC secrets under 32 bytes are trivially brute-forced — fail at startup.
@@ -466,6 +507,14 @@ export async function signJwt(
     );
   }
 
+  // Same rule as the plugin: RS/ES sign with an asymmetric private key.
+  if (isAsymmetric(algorithm) && !privateKey) {
+    throw new Error(
+      `signJwt: algorithm ${algorithm} requires a \`privateKey\` CryptoKey option. ` +
+        "`secret` only works with the HMAC algorithms (HS256, HS384, HS512)."
+    );
+  }
+
   // Same minimum as the plugin, so signed tokens are never weaker than the
   // verifier accepts.
   if (
@@ -496,14 +545,14 @@ export async function signJwt(
       ? await crypto.subtle.importKey(
           "raw",
           new TextEncoder().encode(signingKey),
-          getAlgorithmName(algorithm),
+          getImportAlgorithm(algorithm),
           false,
           ["sign"]
         )
       : signingKey;
 
   const signature = await crypto.subtle.sign(
-    getAlgorithmName(algorithm),
+    getSignVerifyAlgorithm(algorithm),
     cryptoKey,
     data
   );

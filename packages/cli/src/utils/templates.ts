@@ -4,10 +4,13 @@ import { join, dirname } from 'path';
 import { readFileSync, existsSync } from 'fs';
 
 import type { CreateOptions } from '../types/index';
-import { spinner } from './logger';
+import { spinner, warning } from './logger';
 import { installSkill } from './skills';
 import { isLocalMode } from './local-mode';
 import { reindent, isReindentable } from './reindent';
+
+/** Injected at build time when compiling to executable (--define CLI_VERSION). */
+declare const CLI_VERSION: string | undefined;
 
 /** Walks up from `startFile` to the nearest `package.json` and returns its dir. */
 function findPackageRoot(startFile: string): string | undefined {
@@ -29,26 +32,51 @@ function findPackageRoot(startFile: string): string | undefined {
  */
 function resolveMatchingZodVersion(): string {
     const FALLBACK = '^4.5.4';
+    let burgerApiRoot: string | undefined;
     try {
         const burgerApiEntry = Bun.resolveSync('burger-api', import.meta.dir);
-        const burgerApiRoot = findPackageRoot(burgerApiEntry);
-        if (!burgerApiRoot) return FALLBACK;
-
-        const zodEntry = Bun.resolveSync('zod', burgerApiRoot);
-        const zodRoot = findPackageRoot(zodEntry);
-        if (!zodRoot) return FALLBACK;
-
-        const zodPkg = JSON.parse(
-            readFileSync(join(zodRoot, 'package.json'), 'utf-8')
-        ) as { version?: string };
-        return zodPkg.version ?? FALLBACK;
+        burgerApiRoot = findPackageRoot(burgerApiEntry);
     } catch {
-        return FALLBACK;
+        // Fall through to the warning below.
     }
+
+    if (burgerApiRoot) {
+        try {
+            const zodEntry = Bun.resolveSync('zod', burgerApiRoot);
+            const zodRoot = findPackageRoot(zodEntry);
+            if (zodRoot) {
+                const zodPkg = JSON.parse(
+                    readFileSync(join(zodRoot, 'package.json'), 'utf-8')
+                ) as { version?: string };
+                if (zodPkg.version) return zodPkg.version;
+            }
+        } catch {
+            // Installed zod not resolvable — use burger-api's own range.
+        }
+
+        try {
+            const burgerApiPkg = JSON.parse(
+                readFileSync(join(burgerApiRoot, 'package.json'), 'utf-8')
+            ) as { dependencies?: Record<string, string> };
+            const range = burgerApiPkg.dependencies?.zod;
+            if (range) return range;
+        } catch {
+            // Fall through to the warning below.
+        }
+    }
+
+    warning(
+        `Could not resolve burger-api's zod version; pinning ${FALLBACK} in the scaffold.`
+    );
+    return FALLBACK;
 }
 
-/** The running CLI's own version (package.json next to src/). */
+/**
+ * The running CLI's own version: the build-time `CLI_VERSION` define first
+ * (a compiled binary has no package.json next to it), then package.json.
+ */
 function cliVersion(): string | undefined {
+    if (typeof CLI_VERSION !== 'undefined') return CLI_VERSION;
     try {
         const pkg = JSON.parse(
             readFileSync(join(import.meta.dir, '..', '..', 'package.json'), 'utf-8')

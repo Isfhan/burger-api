@@ -7,10 +7,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
+import { ecosystemCacheKey } from '../src/utils/ecosystem-cache';
 import { makeTempDir, removeDir, runCli } from './test-utils';
 
 let projectDir = '';
 let cacheDir = '';
+
+const REPO_OWNER = 'isfhan';
+const REPO_NAME = 'burger-api-does-not-exist-xyz';
+// Pinned so the child CLI's cache key is deterministic (instead of the
+// version-derived branch).
+const BRANCH = 'main';
 
 beforeEach(() => {
     projectDir = makeTempDir('burger-stale-cache-');
@@ -22,6 +29,18 @@ afterEach(() => {
     removeDir(cacheDir);
 });
 
+/** Cache file for a list, scoped the same way github.ts scopes it. */
+function cacheFile(name: string): string {
+    return join(
+        cacheDir,
+        `${ecosystemCacheKey(name, {
+            owner: REPO_OWNER,
+            repo: REPO_NAME,
+            branch: BRANCH,
+        })}.json`
+    );
+}
+
 function runCliInProject(args: string[]) {
     return runCli(args, {
         cwd: projectDir,
@@ -31,8 +50,9 @@ function runCliInProject(args: string[]) {
             HTTPS_PROXY: 'http://127.0.0.1:9',
             // A nonexistent repo — live refresh 404s (or 403s when the
             // runner's IP is rate limited) if the proxy were bypassed.
-            BURGER_API_REPO_OWNER: 'isfhan',
-            BURGER_API_REPO_NAME: 'burger-api-does-not-exist-xyz',
+            BURGER_API_REPO_OWNER: REPO_OWNER,
+            BURGER_API_REPO_NAME: REPO_NAME,
+            BURGER_API_BRANCH: BRANCH,
         },
     });
 }
@@ -40,7 +60,7 @@ function runCliInProject(args: string[]) {
 describe('list — stale cache fallback', () => {
     test('serves the cached component list and warns when GitHub is unreachable', async () => {
         await writeFile(
-            join(cacheDir, 'component-catalog.json'),
+            cacheFile('component-catalog'),
             JSON.stringify({
                 fetchedAt: Date.now() - 999_999_999, // long expired
                 data: [
@@ -84,7 +104,7 @@ describe('list — stale cache fallback', () => {
 describe('skills available — stale cache fallback', () => {
     test('serves the cached skill list and warns when GitHub is unreachable', async () => {
         await writeFile(
-            join(cacheDir, 'skill-list.json'),
+            cacheFile('skill-list'),
             JSON.stringify({
                 fetchedAt: Date.now() - 999_999_999,
                 data: ['cached-skill'],

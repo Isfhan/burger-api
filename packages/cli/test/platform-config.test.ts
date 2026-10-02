@@ -5,6 +5,7 @@ import {
     WRANGLER_COMPATIBILITY_DATE,
     denoJson,
     scaffoldPlatformConfig,
+    wranglerWorkerName,
 } from '../src/utils/build/platform-config';
 import { makeTempDir, removeDir } from './test-utils';
 
@@ -61,6 +62,16 @@ describe('scaffoldPlatformConfig — cloudflare', () => {
             'name = "app"'
         );
     });
+
+    it('sanitizes an npm-scoped package name to wrangler rules', () => {
+        const dir = tempProject({ name: '@scope/My_App' });
+
+        scaffoldPlatformConfig(dir, 'cloudflare', 'index.ts');
+
+        expect(readFileSync(join(dir, 'wrangler.toml'), 'utf8')).toContain(
+            'name = "my-app"'
+        );
+    });
 });
 
 describe('scaffoldPlatformConfig — deno', () => {
@@ -75,7 +86,10 @@ describe('scaffoldPlatformConfig — deno', () => {
         const config = JSON.parse(readFileSync(join(dir, 'deno.json'), 'utf8'));
         expect(config).toEqual({
             unstable: ['sloppy-imports'],
-            imports: { 'burger-api': 'npm:burger-api@^1.0.0-beta' },
+            imports: {
+                'burger-api': 'npm:burger-api@^1.0.0-beta',
+                'burger-api/': 'npm:burger-api@^1.0.0-beta/',
+            },
         });
     });
 
@@ -120,6 +134,7 @@ describe('scaffoldPlatformConfig — deno', () => {
                 readFileSync(join(dir, 'deno.json'), 'utf8')
             );
             expect(config.imports['burger-api']).toBe('npm:burger-api');
+            expect(config.imports['burger-api/']).toBe('npm:burger-api/');
         }
     });
 
@@ -130,6 +145,7 @@ describe('scaffoldPlatformConfig — deno', () => {
 
         const config = JSON.parse(readFileSync(join(dir, 'deno.json'), 'utf8'));
         expect(config.imports['burger-api']).toBe('npm:burger-api');
+        expect(config.imports['burger-api/']).toBe('npm:burger-api/');
     });
 
     it('denoJson formats with two-space indent and a trailing newline', () => {
@@ -143,6 +159,41 @@ describe('scaffoldPlatformConfig — deno', () => {
         expect(content.endsWith('\n')).toBe(true);
         expect(content).toContain('\n  "imports": {');
         expect(content).toContain('npm:burger-api@~1.2.3');
+        expect(content).toContain('"burger-api/": "npm:burger-api@~1.2.3/"');
+    });
+
+    // Regression: route files import `burger-api/adapter/bun` and other
+    // subpaths, which the bare `burger-api` map entry does not cover.
+    it('maps the burger-api/ subpath prefix to the same pin', () => {
+        const dir = tempProject({
+            name: 'acme-api',
+            dependencies: { 'burger-api': '^1.0.0-beta' },
+        });
+
+        const config = JSON.parse(denoJson(dir));
+
+        expect(config.imports['burger-api/']).toBe(
+            'npm:burger-api@^1.0.0-beta/'
+        );
+    });
+});
+
+describe('wranglerWorkerName', () => {
+    it('strips the npm scope, lowercases, and replaces invalid characters', () => {
+        expect(wranglerWorkerName('@scope/My_App')).toBe('my-app');
+        expect(wranglerWorkerName('Acme.API')).toBe('acme-api');
+    });
+
+    it('trims dashes and caps the length at 63', () => {
+        expect(wranglerWorkerName('--api--')).toBe('api');
+        const long = wranglerWorkerName('a'.repeat(80));
+        expect(long.length).toBe(63);
+        expect(long).toBe('a'.repeat(63));
+    });
+
+    it('falls back to "app" when nothing valid remains', () => {
+        expect(wranglerWorkerName('@scope/___')).toBe('app');
+        expect(wranglerWorkerName('')).toBe('app');
     });
 });
 

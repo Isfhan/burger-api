@@ -16,6 +16,7 @@ import {
 } from 'fs';
 import { dirname, join } from 'path';
 import { downloadSkill } from './github';
+import { assertValidEcosystemName } from './names';
 
 /** The two project folders a skill can live in. */
 export interface SkillDirs {
@@ -66,6 +67,7 @@ export async function installSkill(
         download?: (name: string, targetDir: string) => Promise<number>;
     } = {}
 ): Promise<number> {
+    assertValidEcosystemName(skillName);
     const baseDir = options.baseDir ?? process.cwd();
     const download = options.download ?? downloadSkill;
     const dirs = skillDirs(baseDir);

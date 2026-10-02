@@ -33,7 +33,10 @@ const ENTRY = [
     'app.serve(4000);',
 ].join('\n');
 
-async function buildPortable(dir: string): Promise<{
+async function buildPortable(
+    dir: string,
+    options: { bunCheck?: boolean } = {}
+): Promise<{
     success: boolean;
     logs: string[];
 }> {
@@ -51,6 +54,7 @@ async function buildPortable(dir: string): Promise<{
             entryFile: 'src/index.ts',
             outfile: '.build/cloudflare/index.ts',
             platformTarget: 'cloudflare',
+            bunCheck: options.bunCheck,
         });
         return { success: result.success, logs };
     } finally {
@@ -134,7 +138,7 @@ describe('portable-target Bun-only warning', () => {
         expect(warning).not.toContain('src/hooks.ts');
     });
 
-    it('flags ctx.publish and ws.publish as Bun-only', async () => {
+    it('flags ctx.publish, ws.publish, and server.publish as Bun-only', async () => {
         const dir = project({
             'src/index.ts': ENTRY,
             'src/api/publish/route.ts': [
@@ -148,6 +152,13 @@ describe('portable-target Bun-only warning', () => {
                 "    ws.publish('chat', 'hi');",
                 '}',
             ].join('\n'),
+            'src/api/server-publish/route.ts': [
+                'declare const server: { publish(t: string, m: string): void };',
+                'export function GET() {',
+                "    server.publish('news', 'hi');",
+                '    return Response.json({ ok: true });',
+                '}',
+            ].join('\n'),
         });
 
         const { success, logs } = await buildPortable(dir);
@@ -156,8 +167,79 @@ describe('portable-target Bun-only warning', () => {
         expect(warning).toBeDefined();
         expect(warning).toContain('src/api/publish/route.ts');
         expect(warning).toContain('src/websocket/chat/ws.ts');
+        expect(warning).toContain('src/api/server-publish/route.ts');
         expect(warning).toContain('ctx.publish()');
         expect(warning).toContain('ws.publish()');
+        expect(warning).toContain('server.publish()');
+    });
+
+    // `publisher.publish()` is some other library's method, not Bun pub/sub.
+    it('does not flag other .publish() receivers', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/api/plain/route.ts': [
+                'export function GET(publisher: { publish(t: string): void }) {',
+                "    publisher.publish('news');",
+                '    return Response.json({ ok: true });',
+                '}',
+            ].join('\n'),
+        });
+
+        const { logs } = await buildPortable(dir);
+        expect(logs.some((line) => line.includes('Bun-only APIs'))).toBe(false);
+    });
+
+    it('ignores Bun. in comments and string literals', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/api/plain/route.ts': [
+                '// Uses Bun.file() on the Bun target.',
+                'export function GET() {',
+                "    const message = 'Bun.serve also lives here';",
+                '    /* Bun.write inside a block comment */',
+                '    return Response.json({ message });',
+                '}',
+            ].join('\n'),
+        });
+
+        const { logs } = await buildPortable(dir);
+        expect(logs.some((line) => line.includes('Bun-only APIs'))).toBe(false);
+    });
+
+    // The `typeof Bun` guard only excuses `Bun.` usage in that file; a
+    // `bun:` import in the same file is still a hard dependency.
+    it('still flags a bun import in a typeof Bun guarded file', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/api/guarded/route.ts': [
+                "import { env } from 'bun';",
+                'const mode =',
+                "    typeof Bun !== 'undefined' ? Bun.version : env.NODE_ENV;",
+                'export function GET() { return Response.json({ mode }); }',
+            ].join('\n'),
+        });
+
+        const { logs } = await buildPortable(dir);
+        const warning = logs.find((line) => line.includes('Bun-only APIs'));
+        expect(warning).toBeDefined();
+        expect(warning).toContain('src/api/guarded/route.ts');
+    });
+
+    it('skips the scan entirely with bunCheck: false', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/api/uses-bun/route.ts': [
+                'export function GET() {',
+                "    return new Response(Bun.file('data.txt').size);",
+                '}',
+            ].join('\n'),
+        });
+
+        const { success, logs } = await buildPortable(dir, {
+            bunCheck: false,
+        });
+        expect(success).toBe(true);
+        expect(logs.some((line) => line.includes('Bun-only APIs'))).toBe(false);
     });
 
     it('does not warn when no user source touches Bun-only APIs', async () => {

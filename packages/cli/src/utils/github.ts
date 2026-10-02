@@ -15,8 +15,9 @@ import {
     rmSync,
 } from 'fs';
 import { dirname, join } from 'path';
-import { withEcosystemCache } from './ecosystem-cache';
+import { ecosystemCacheKey, withEcosystemCache } from './ecosystem-cache';
 import { isLocalMode, requireLocalRepo } from './local-mode';
+import { assertValidEcosystemName } from './names';
 
 /** Repo config; override with BURGER_API_REPO_OWNER, BURGER_API_REPO_NAME, BURGER_API_BRANCH. */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
@@ -54,6 +55,15 @@ const BRANCH =
 
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
+
+/** Ecosystem cache key scoped to this repo + branch (see ecosystem-cache.ts). */
+function ecosystemKey(name: string): string {
+    return ecosystemCacheKey(name, {
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        branch: BRANCH,
+    });
+}
 
 // Contents API needs an explicit ref, or list/add/skills return empty results
 // while the 1.0 branch has not merged to the default branch yet.
@@ -187,7 +197,7 @@ export async function getCachedComponentList(): Promise<{
     if (isLocalMode()) {
         return { data: await getComponentList(), stale: false };
     }
-    return withEcosystemCache('component-list', getComponentList);
+    return withEcosystemCache(ecosystemKey('component-list'), getComponentList);
 }
 
 /** First non-heading, non-empty README line — the package's one-line description. */
@@ -294,7 +304,7 @@ export async function getCachedComponentCatalog(): Promise<{
         };
     }
 
-    return withEcosystemCache('component-catalog', async () => {
+    return withEcosystemCache(ecosystemKey('component-catalog'), async () => {
         const list = await getComponentList();
         return componentCatalog(list, async (name, kind) => {
             const dir = kind === 'plugin' ? 'plugins' : 'hooks';
@@ -318,6 +328,7 @@ export async function getComponentInfo(
     name: string,
     kind: 'hook' | 'plugin'
 ): Promise<EcosystemComponentInfo> {
+    assertValidEcosystemName(name);
     const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
     if (isLocalMode()) {
         const componentDir = join(
@@ -448,6 +459,7 @@ export async function downloadComponent(
     targetDir: string,
     kind: 'hook' | 'plugin'
 ): Promise<number> {
+    assertValidEcosystemName(componentName);
     if (isLocalMode()) {
         const sourceDir = join(
             localComponentDir(requireLocalRepo(), kind),
@@ -535,6 +547,7 @@ async function existsInEcosystem(
     kind: 'hooks' | 'plugins',
     name: string
 ): Promise<boolean> {
+    assertValidEcosystemName(name);
     if (isLocalMode()) {
         return existsSync(join(requireLocalRepo(), 'ecosystem', kind, name));
     }
@@ -619,7 +632,7 @@ export async function getCachedSkillList(): Promise<{
     if (isLocalMode()) {
         return { data: await getSkillList(), stale: false };
     }
-    return withEcosystemCache('skill-list', getSkillList);
+    return withEcosystemCache(ecosystemKey('skill-list'), getSkillList);
 }
 
 /**
@@ -690,6 +703,7 @@ export function parseSkillDescription(raw: string): {
  * @returns Promise with true if it exists, false otherwise
  */
 export async function skillExists(name: string): Promise<boolean> {
+    assertValidEcosystemName(name);
     if (isLocalMode()) {
         return existsSync(
             join(requireLocalRepo(), 'ecosystem', 'skills', name)
@@ -722,6 +736,7 @@ export async function skillExists(name: string): Promise<boolean> {
  * @returns Promise with skill info structure
  */
 export async function getSkillInfo(name: string): Promise<SkillInfo> {
+    assertValidEcosystemName(name);
     if (isLocalMode()) {
         const skillDir = join(
             requireLocalRepo(),
@@ -815,6 +830,7 @@ export async function downloadSkill(
     skillName: string,
     targetDir: string
 ): Promise<number> {
+    assertValidEcosystemName(skillName);
     if (isLocalMode()) {
         try {
             const sourceDir = join(

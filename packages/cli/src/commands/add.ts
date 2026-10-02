@@ -6,6 +6,7 @@ import { join } from 'path';
 import * as clack from '@clack/prompts';
 import { detectEcosystemType, downloadComponent } from '../utils/github';
 import { announceLocalMode, setLocalMode } from '../utils/local-mode';
+import { validateEcosystemName } from '../utils/names';
 import {
     spinner,
     success,
@@ -118,6 +119,13 @@ export const addCommand = new Command('add')
         const exportNames = new Map<string, string>();
 
         for (const name of packageNames) {
+            // Reject traversal/special names before touching the network or fs.
+            const nameError = validateEcosystemName(name);
+            if (nameError) {
+                logError(nameError);
+                results.failed.push(name);
+                continue;
+            }
             try {
                 // Exists on GitHub as hook or plugin?
                 let spin = spinner(`Checking ${name}...`);
