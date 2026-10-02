@@ -4,7 +4,10 @@
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
-import { jwtAuth } from '../../../../ecosystem/plugins/jwt-auth/jwt-auth';
+import {
+    jwtAuth,
+    signJwt,
+} from '../../../../ecosystem/plugins/jwt-auth/jwt-auth';
 
 const SECRET = 'test-secret-0123456789abcdef0123456789abcdef';
 const OTHER_SECRET = 'other-secret-0123456789abcdef0123456789abcdef';
@@ -224,5 +227,83 @@ describe('jwt-auth', () => {
                 )
             ).status
         ).toBe(200);
+    });
+});
+
+describe('jwt-auth signJwt', () => {
+    /** Decodes a token payload (unverified) for claim assertions. */
+    function decodePayload(token: string): Record<string, unknown> {
+        const body = token.split('.')[1] ?? '';
+        const padded = body.replace(/-/g, '+').replace(/_/g, '/');
+        const normalized =
+            padded.length % 4 ? padded + '='.repeat(4 - (padded.length % 4)) : padded;
+        return JSON.parse(atob(normalized)) as Record<string, unknown>;
+    }
+
+    it('signs a token the plugin accepts, with iat and exp set', async () => {
+        const before = nowSec();
+        const token = await signJwt(
+            { sub: 'user-123', roles: ['admin'] },
+            { secret: SECRET, expiresIn: 600 }
+        );
+
+        const claims = decodePayload(token);
+        expect(claims.sub).toBe('user-123');
+        expect(claims.iat).toBeGreaterThanOrEqual(before);
+        expect(claims.exp).toBe((claims.iat as number) + 600);
+
+        const res = await run({ secret: SECRET }, '/api/guarded', bearer(token));
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({
+            user: {
+                sub: 'user-123',
+                roles: ['admin'],
+                iat: expect.any(Number),
+                exp: expect.any(Number),
+            },
+        });
+    });
+
+    it('roundtrips with a non-default algorithm (HS512)', async () => {
+        const token = await signJwt(
+            { sub: 'user-512' },
+            { secret: SECRET, algorithm: 'HS512', expiresIn: 600 }
+        );
+        const res = await run(
+            { secret: SECRET, algorithm: 'HS512' },
+            '/api/guarded',
+            bearer(token)
+        );
+        expect(res.status).toBe(200);
+    });
+
+    it('expired tokens are rejected by the plugin', async () => {
+        const token = await signJwt(
+            { sub: 'user-123' },
+            { secret: SECRET, expiresIn: -10 }
+        );
+        const res = await run({ secret: SECRET }, '/api/guarded', bearer(token));
+        expect(res.status).toBe(401);
+    });
+
+    it('tokens signed with a different secret are rejected', async () => {
+        const token = await signJwt(
+            { sub: 'user-123' },
+            { secret: OTHER_SECRET, expiresIn: 600 }
+        );
+        const res = await run({ secret: SECRET }, '/api/guarded', bearer(token));
+        expect(res.status).toBe(401);
+    });
+
+    it('requires a secret or private key', async () => {
+        await expect(signJwt({ sub: 'u' }, {})).rejects.toThrow(
+            /secret.*privateKey/
+        );
+    });
+
+    it('rejects a short HMAC secret, like the plugin', async () => {
+        await expect(
+            signJwt({ sub: 'u' }, { secret: 'short', expiresIn: 60 })
+        ).rejects.toThrow(/at least 32 bytes/);
     });
 });

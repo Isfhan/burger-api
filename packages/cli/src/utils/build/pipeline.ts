@@ -94,6 +94,8 @@ function findBunOnlyFiles(files: Array<string | undefined>): string[] {
                 // back, so its `Bun.` uses are portable.
                 (/\bBun\s*\./.test(source) &&
                     !/typeof\s+Bun\b/.test(source)) ||
+                // ctx.publish()/ws.publish() are Bun's built-in pub/sub.
+                /\.publish\s*\(/.test(source) ||
                 imports.some(
                     (i) => i.path === 'bun' || i.path.startsWith('bun:')
                 )
@@ -288,7 +290,8 @@ export async function runVirtualEntryBuild(options: {
             warning(
                 `Bun-only APIs found for the "${platformTarget}" target, ` +
                     'which has no Bun runtime globals. Remove `bun`/`bun:*` ' +
-                    'imports and `Bun.` usage from: ' +
+                    'imports, `Bun.` usage, and `ctx.publish()`/`ws.publish()` ' +
+                    'calls (Bun pub/sub) from: ' +
                     bunOnly
                         .map((f) =>
                             relative(options.cwd, f).split('\\').join('/')

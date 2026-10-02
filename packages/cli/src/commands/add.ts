@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
 import { detectEcosystemType, downloadComponent } from '../utils/github';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
 import {
     spinner,
     success,
@@ -84,8 +85,15 @@ export const USAGE_HINTS: Record<
 export const addCommand = new Command('add')
     .description('Add a hook or plugin from the ecosystem')
     .argument('<names...>', 'Names of ecosystem packages to add')
-    .action(async (packageNames: string[]) => {
+    .option('--force', 'Overwrite existing installs without prompting')
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (packageNames: string[], options: AddCommandOptions) => {
         clack.intro('Add ecosystem packages to your project');
+        setLocalMode(options.local);
+        announceLocalMode();
 
         if (!existsSync('package.json')) {
             clack.outro('Not in a BurgerAPI project');
@@ -140,12 +148,12 @@ export const addCommand = new Command('add')
                         : join(hooksDir, name);
 
                 spin.update(`Downloading ${name} (${ecosystemType})...`);
-                if (existsSync(targetDir)) {
+                if (existsSync(targetDir) && !options.force) {
                     spin.stop();
                     if (!process.stdin.isTTY) {
                         // No terminal to answer the prompt — never hang.
                         warning(
-                            `${name} already exists — skipped (run in a terminal to confirm overwriting).`
+                            `${name} already exists — skipped (pass --force to overwrite without a prompt).`
                         );
                         results.skipped.push(name);
                         continue;
@@ -307,3 +315,10 @@ export const addCommand = new Command('add')
             clack.outro('No packages were added');
         }
     });
+
+interface AddCommandOptions {
+    /** true with --force */
+    force?: boolean;
+    /** true with --local */
+    local?: boolean;
+}

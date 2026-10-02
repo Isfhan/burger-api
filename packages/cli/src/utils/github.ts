@@ -5,9 +5,18 @@ import type {
     EcosystemComponentInfo,
     SkillInfo,
 } from '../types/index';
-import { mkdirSync, readFileSync, renameSync, rmSync } from 'fs';
+import {
+    copyFileSync,
+    existsSync,
+    mkdirSync,
+    readdirSync,
+    readFileSync,
+    renameSync,
+    rmSync,
+} from 'fs';
 import { dirname, join } from 'path';
 import { withEcosystemCache } from './ecosystem-cache';
+import { isLocalMode, requireLocalRepo } from './local-mode';
 
 /** Repo config; override with BURGER_API_REPO_OWNER, BURGER_API_REPO_NAME, BURGER_API_BRANCH. */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
@@ -123,6 +132,20 @@ export function wrapFetchError(err: unknown, fallbackMessage: string): Error {
 export async function getComponentList(): Promise<
     Array<{ name: string; kind: 'hook' | 'plugin' }>
 > {
+    if (isLocalMode()) {
+        const root = requireLocalRepo();
+        const list = (
+            ['hook', 'plugin'] as const
+        ).flatMap((kind) => {
+            const dir = localComponentDir(root, kind);
+            if (!existsSync(dir)) return [];
+            return readdirSync(dir, { withFileTypes: true })
+                .filter((entry) => entry.isDirectory())
+                .map((entry) => ({ name: entry.name, kind }));
+        });
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     try {
         const [hooksRes, pluginsRes] = await Promise.all([
             fetchWithTimeout(contentsUrl('ecosystem/hooks'), {
@@ -160,6 +183,10 @@ export async function getCachedComponentList(): Promise<{
     data: Array<{ name: string; kind: 'hook' | 'plugin' }>;
     stale: boolean;
 }> {
+    // Local mode never reads or writes the ecosystem cache.
+    if (isLocalMode()) {
+        return { data: await getComponentList(), stale: false };
+    }
     return withEcosystemCache('component-list', getComponentList);
 }
 
@@ -170,6 +197,74 @@ function readmeDescription(readme: string): string {
         if (trimmed && !trimmed.startsWith('#')) return trimmed;
     }
     return 'No description available';
+}
+
+/** `<repo>/ecosystem/hooks` or `<repo>/ecosystem/plugins`. */
+function localComponentDir(root: string, kind: 'hook' | 'plugin'): string {
+    return join(root, 'ecosystem', kind === 'plugin' ? 'plugins' : 'hooks');
+}
+
+/** Every file under `dir`, relative and `/`-separated; `.gitkeep` is skipped. */
+function listRelativeFiles(dir: string, prefix = ''): string[] {
+    const files: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            files.push(...listRelativeFiles(join(dir, entry.name), rel));
+        } else if (entry.name !== '.gitkeep') {
+            files.push(rel);
+        }
+    }
+    return files;
+}
+
+/**
+ * Copy `files` from `sourceDir` into `targetDir` through a staging dir, then
+ * swap — the same partial-install guarantee downloads get.
+ */
+function copyFilesStaged(
+    sourceDir: string,
+    targetDir: string,
+    files: string[]
+): number {
+    const stagingDir = `${targetDir}.download`;
+    rmSync(stagingDir, { recursive: true, force: true });
+    mkdirSync(stagingDir, { recursive: true });
+    try {
+        for (const file of files) {
+            const dest = join(stagingDir, file);
+            mkdirSync(dirname(dest), { recursive: true });
+            copyFileSync(join(sourceDir, file), dest);
+        }
+
+        rmSync(targetDir, { recursive: true, force: true });
+        mkdirSync(dirname(targetDir), { recursive: true });
+        renameSync(stagingDir, targetDir);
+    } finally {
+        rmSync(stagingDir, { recursive: true, force: true });
+    }
+    return files.length;
+}
+
+/** Attach README descriptions to a component list (local or GitHub). */
+async function componentCatalog(
+    list: Array<{ name: string; kind: 'hook' | 'plugin' }>,
+    readReadme: (
+        name: string,
+        kind: 'hook' | 'plugin'
+    ) => Promise<string>
+): Promise<ComponentCatalogEntry[]> {
+    return Promise.all(
+        list.map(async ({ name, kind }) => {
+            let description = 'No description available';
+            try {
+                description = readmeDescription(await readReadme(name, kind));
+            } catch {
+                // Description is cosmetic — keep the entry.
+            }
+            return { name, kind, description };
+        })
+    );
 }
 
 /** A catalog entry for `burger-api list`. */
@@ -184,23 +279,31 @@ export async function getCachedComponentCatalog(): Promise<{
     data: ComponentCatalogEntry[];
     stale: boolean;
 }> {
+    // Local mode never reads or writes the ecosystem cache.
+    if (isLocalMode()) {
+        const root = requireLocalRepo();
+        const list = await getComponentList();
+        return {
+            data: await componentCatalog(list, async (name, kind) =>
+                readFileSync(
+                    join(localComponentDir(root, kind), name, 'README.md'),
+                    'utf-8'
+                )
+            ),
+            stale: false,
+        };
+    }
+
     return withEcosystemCache('component-catalog', async () => {
         const list = await getComponentList();
-        return Promise.all(
-            list.map(async ({ name, kind }) => {
-                const dir = kind === 'plugin' ? 'plugins' : 'hooks';
-                let description = 'No description available';
-                try {
-                    const res = await fetchWithTimeout(
-                        `${RAW_URL}/ecosystem/${dir}/${name}/README.md`
-                    );
-                    if (res.ok) description = readmeDescription(await res.text());
-                } catch {
-                    // Description is cosmetic — keep the entry.
-                }
-                return { name, kind, description };
-            })
-        );
+        return componentCatalog(list, async (name, kind) => {
+            const dir = kind === 'plugin' ? 'plugins' : 'hooks';
+            const res = await fetchWithTimeout(
+                `${RAW_URL}/ecosystem/${dir}/${name}/README.md`
+            );
+            if (!res.ok) throw new Error(`README for ${name} unavailable`);
+            return res.text();
+        });
     });
 }
 
@@ -216,6 +319,31 @@ export async function getComponentInfo(
     kind: 'hook' | 'plugin'
 ): Promise<EcosystemComponentInfo> {
     const dir = kind === 'plugin' ? 'ecosystem/plugins' : 'ecosystem/hooks';
+    if (isLocalMode()) {
+        const componentDir = join(
+            localComponentDir(requireLocalRepo(), kind),
+            name
+        );
+        if (!existsSync(componentDir)) {
+            throw new Error(`Component "${name}" not found`);
+        }
+        let description = 'No description available';
+        try {
+            description = readmeDescription(
+                readFileSync(join(componentDir, 'README.md'), 'utf-8')
+            );
+        } catch {
+            // README unreadable — keep the default description.
+        }
+        return {
+            name,
+            description,
+            path: `${dir}/${name}`,
+            files: readdirSync(componentDir, { withFileTypes: true })
+                .filter((entry) => entry.isFile())
+                .map((entry) => entry.name),
+        };
+    }
     try {
         const response = await fetchWithTimeout(
             contentsUrl(`${dir}/${name}`),
@@ -320,6 +448,25 @@ export async function downloadComponent(
     targetDir: string,
     kind: 'hook' | 'plugin'
 ): Promise<number> {
+    if (isLocalMode()) {
+        const sourceDir = join(
+            localComponentDir(requireLocalRepo(), kind),
+            componentName
+        );
+        if (!existsSync(sourceDir)) {
+            throw new Error(
+                `Failed to download component "${componentName}": ` +
+                    `Component "${componentName}" not found`
+            );
+        }
+        const files = readdirSync(sourceDir, { withFileTypes: true })
+            .filter(
+                (entry) => entry.isFile() && entry.name !== '.gitkeep'
+            )
+            .map((entry) => entry.name);
+        return copyFilesStaged(sourceDir, targetDir, files);
+    }
+
     try {
         const info = await getComponentInfo(componentName, kind);
 
@@ -388,6 +535,10 @@ async function existsInEcosystem(
     kind: 'hooks' | 'plugins',
     name: string
 ): Promise<boolean> {
+    if (isLocalMode()) {
+        return existsSync(join(requireLocalRepo(), 'ecosystem', kind, name));
+    }
+
     let response: Response;
     try {
         response = await fetchWithTimeout(
@@ -426,6 +577,15 @@ export async function detectEcosystemType(
  * @throws Error if GitHub is unreachable or request fails
  */
 export async function getSkillList(): Promise<string[]> {
+    if (isLocalMode()) {
+        const dir = join(requireLocalRepo(), 'ecosystem', 'skills');
+        if (!existsSync(dir)) return [];
+        return readdirSync(dir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name)
+            .sort();
+    }
+
     let response: Response;
     try {
         response = await fetchWithTimeout(contentsUrl('ecosystem/skills'), {
@@ -455,6 +615,10 @@ export async function getCachedSkillList(): Promise<{
     data: string[];
     stale: boolean;
 }> {
+    // Local mode never reads or writes the ecosystem cache.
+    if (isLocalMode()) {
+        return { data: await getSkillList(), stale: false };
+    }
     return withEcosystemCache('skill-list', getSkillList);
 }
 
@@ -465,6 +629,11 @@ export async function flattenSkillFiles(
     basePath: string,
     prefix: string = ''
 ): Promise<string[]> {
+    if (isLocalMode()) {
+        const dir = join(requireLocalRepo(), basePath);
+        return existsSync(dir) ? listRelativeFiles(dir, prefix) : [];
+    }
+
     const response = await fetchWithTimeout(contentsUrl(basePath), {
         headers: {
             ...githubHeaders(),
@@ -521,6 +690,12 @@ export function parseSkillDescription(raw: string): {
  * @returns Promise with true if it exists, false otherwise
  */
 export async function skillExists(name: string): Promise<boolean> {
+    if (isLocalMode()) {
+        return existsSync(
+            join(requireLocalRepo(), 'ecosystem', 'skills', name)
+        );
+    }
+
     try {
         const response = await fetchWithTimeout(
             contentsUrl(`ecosystem/skills/${name}`),
@@ -547,6 +722,38 @@ export async function skillExists(name: string): Promise<boolean> {
  * @returns Promise with skill info structure
  */
 export async function getSkillInfo(name: string): Promise<SkillInfo> {
+    if (isLocalMode()) {
+        const skillDir = join(
+            requireLocalRepo(),
+            'ecosystem',
+            'skills',
+            name
+        );
+        if (!existsSync(skillDir)) {
+            throw new Error(`Skill "${name}" not found`);
+        }
+        let description = `AI agent skill for ${name}`;
+        let version: string | undefined;
+        try {
+            const parsed = parseSkillDescription(
+                readFileSync(join(skillDir, 'SKILL.md'), 'utf-8')
+            );
+            if (parsed.description !== '(no description)') {
+                description = parsed.description;
+            }
+            version = parsed.version;
+        } catch {
+            // Keep the defaults.
+        }
+        return {
+            name,
+            description,
+            version,
+            path: `ecosystem/skills/${name}`,
+            files: listRelativeFiles(skillDir),
+        };
+    }
+
     try {
         const response = await fetchWithTimeout(
             contentsUrl(`ecosystem/skills/${name}`),
@@ -608,6 +815,31 @@ export async function downloadSkill(
     skillName: string,
     targetDir: string
 ): Promise<number> {
+    if (isLocalMode()) {
+        try {
+            const sourceDir = join(
+                requireLocalRepo(),
+                'ecosystem',
+                'skills',
+                skillName
+            );
+            if (!existsSync(sourceDir)) {
+                throw new Error(`Skill "${skillName}" not found`);
+            }
+            return copyFilesStaged(
+                sourceDir,
+                targetDir,
+                listRelativeFiles(sourceDir)
+            );
+        } catch (err) {
+            throw new Error(
+                `Failed to download skill "${skillName}": ${
+                    err instanceof Error ? err.message : 'Unknown error'
+                }`
+            );
+        }
+    }
+
     try {
         const info = await getSkillInfo(skillName);
 

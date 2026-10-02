@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { getCachedComponentCatalog } from '../utils/github';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
 import {
     header,
     withSpinner,
@@ -18,7 +19,13 @@ import {
 export const listCommand = new Command('list')
     .description('Show available hooks and plugins from the ecosystem')
     .alias('ls')
-    .action(async () => {
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (options: { local?: boolean }) => {
+        setLocalMode(options.local);
+        announceLocalMode();
         try {
             await withSpinner(
                 'Fetching hooks and plugins list from GitHub...',

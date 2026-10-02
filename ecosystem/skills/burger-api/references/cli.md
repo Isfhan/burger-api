@@ -43,6 +43,7 @@ Flags (feature flags imply `--yes`; without a TTY `create` never prompts and use
 | `--api-dir <dir>` | API directory under `src/` (default `api`) |
 | `--api-prefix <prefix>` | URL prefix for API routes (default `/api`) |
 | `--no-skills` | Skip AI agent skills |
+| `--local` | Use the local checkout (bun link) instead of npm/GitHub |
 
 ### `add <names...>`
 
@@ -58,6 +59,10 @@ exported factory name (resolved from the downloaded file, e.g. `jwtAuth()`,
 `rateLimit()`), not a guess from the package name, so it's always
 pasteable as-is.
 
+Flags: `--force` replaces an existing install without a prompt (also with no
+TTY); without it the non-TTY skip message points at `--force`. `--local` reads
+the local checkout instead of GitHub.
+
 ### `skills install [name]`
 
 Download AI agent skills into the project:
@@ -71,6 +76,9 @@ Downloads once to `.agents/skills/<name>/`, then copies the folder to
 `.claude/skills/<name>/`. Claude Code reads `.claude/skills/`; agents that
 support the Agent Skills standard (OpenCode, Codex, and others) read
 `.agents/skills/`.
+
+Flags: `--force` replaces an existing install without a prompt (also with no
+TTY). `--local` copies the skill from the local checkout instead of GitHub.
 
 ### `skills list`
 
@@ -94,6 +102,7 @@ burger-api skills available
 
 Fetches from the ecosystem repository and shows descriptions parsed from each
 skill's `SKILL.md`. Install one with `burger-api skills install <name>`.
+`--local` lists the skills in the local checkout instead.
 
 ### `list`
 
@@ -101,6 +110,7 @@ List available hooks and plugins from the ecosystem:
 
 ```bash
 burger-api list
+burger-api list --local
 ```
 
 ### `dev`
@@ -125,9 +135,10 @@ burger-api build src/index.ts --minify --outfile dist/app.js
 Default output: `.build/bundle/app.js`
 
 Building for a portable target (`cloudflare`, `deno`, `vercel`, `node`)
-prints one warning listing any user source files that import `bun`/`bun:*`
-or use the `Bun.` global — those runtimes have no Bun globals. The build
-continues; remove the Bun-only code before deploying.
+prints one warning listing any user source files that import `bun`/`bun:*`,
+use the `Bun.` global, or call `ctx.publish()` / `ws.publish()` (Bun pub/sub):
+those runtimes have no Bun globals. The build continues; remove the Bun-only
+code before deploying.
 
 ### `start`
 

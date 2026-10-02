@@ -48,6 +48,18 @@ declare module "burger-api" {
   }
 }
 
+/** Algorithms the plugin verifies and `signJwt` signs. */
+export type JwtAlgorithm =
+  | "HS256"
+  | "HS384"
+  | "HS512"
+  | "RS256"
+  | "RS384"
+  | "RS512"
+  | "ES256"
+  | "ES384"
+  | "ES512";
+
 /**
  * JWT plugin configuration options
  */
@@ -67,7 +79,7 @@ export interface JwtAuthOptions {
   /**
    * JWT signing algorithm (default: HS256)
    */
-  algorithm?: "HS256" | "HS384" | "HS512" | "RS256" | "RS384" | "RS512" | "ES256" | "ES384" | "ES512";
+  algorithm?: JwtAlgorithm;
 
   /**
    * Header name to extract token from (default: "Authorization")
@@ -164,6 +176,18 @@ function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   const padding = padded.length % 4;
   const normalized = padding ? padded + "=".repeat(4 - padding) : padded;
   return Uint8Array.from(atob(normalized), (c) => c.charCodeAt(0));
+}
+
+/**
+ * Base64 URL encode (no padding)
+ */
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 /**
@@ -375,4 +399,114 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
       },
     },
   };
+}
+
+/**
+ * Options for {@link signJwt}
+ */
+export interface SignJwtOptions {
+  /**
+   * Secret key for HMAC algorithms (HS256, HS384, HS512).
+   * Must be at least 32 bytes, the same minimum the plugin enforces.
+   */
+  secret?: string | CryptoKey;
+
+  /**
+   * Private key for asymmetric algorithms (RS256, ES256, ...).
+   * The plugin verifies with the matching public key.
+   */
+  privateKey?: CryptoKey;
+
+  /**
+   * Signing algorithm (default: HS256). Use the same algorithm the plugin
+   * is configured with.
+   */
+  algorithm?: JwtAlgorithm;
+
+  /**
+   * Token lifetime in seconds. Sets `exp` to now + expiresIn.
+   */
+  expiresIn?: number;
+}
+
+/**
+ * Create a signed JWT the jwt-auth plugin accepts.
+ *
+ * Sets `iat` to the current time. Pass `expiresIn` (seconds) to also set
+ * `exp`; without it the payload's own `exp` (if any) is kept.
+ *
+ * @param payload - Claims to sign
+ * @param options - Key, algorithm, and lifetime
+ * @returns The signed token, ready for an `Authorization: Bearer` header
+ *
+ * @example
+ * ```typescript
+ * // Login route: sign a token
+ * import { signJwt } from "./ecosystem/plugins/jwt-auth/jwt-auth";
+ *
+ * export async function POST(ctx: BurgerContext) {
+ *   const token = await signJwt(
+ *     { sub: "user-123", roles: ["admin"] },
+ *     { secret: process.env.JWT_SECRET!, expiresIn: 3600 }
+ *   );
+ *   return Response.json({ token });
+ * }
+ * ```
+ */
+export async function signJwt(
+  payload: JwtPayload,
+  options: SignJwtOptions = {}
+): Promise<string> {
+  const { secret, privateKey, algorithm = "HS256", expiresIn } = options;
+  const signingKey = privateKey ?? secret;
+
+  if (!signingKey) {
+    throw new Error(
+      "signJwt requires either `secret` or `privateKey` option"
+    );
+  }
+
+  // Same minimum as the plugin, so signed tokens are never weaker than the
+  // verifier accepts.
+  if (
+    algorithm.startsWith("HS") &&
+    typeof secret === "string" &&
+    secret.length < 32
+  ) {
+    throw new Error(
+      `signJwt: HMAC secret must be at least 32 bytes long (got ${secret.length} bytes). ` +
+        "Generate one with `openssl rand -base64 32` and load it from an environment variable."
+    );
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const claims: JwtPayload = { ...payload, iat: now };
+  if (expiresIn !== undefined) claims.exp = now + expiresIn;
+
+  const header = base64UrlEncode(
+    new TextEncoder().encode(JSON.stringify({ alg: algorithm, typ: "JWT" }))
+  );
+  const body = base64UrlEncode(
+    new TextEncoder().encode(JSON.stringify(claims))
+  );
+  const data = new TextEncoder().encode(`${header}.${body}`);
+
+  const cryptoKey =
+    typeof signingKey === "string"
+      ? await crypto.subtle.importKey(
+          "raw",
+          new TextEncoder().encode(signingKey),
+          getAlgorithmName(algorithm),
+          false,
+          ["sign"]
+        )
+      : signingKey;
+
+  const signature = await crypto.subtle.sign(
+    getAlgorithmName(algorithm),
+    cryptoKey,
+    data
+  );
+
+  return `${header}.${body}.${base64UrlEncode(new Uint8Array(signature))}`;
 }

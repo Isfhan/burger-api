@@ -12,6 +12,7 @@ import {
     listInstalledSkills,
     skillDirs,
 } from '../utils/skills';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
 import {
     spinner,
     success,
@@ -46,7 +47,7 @@ function ensureSkillDirs(): void {
 }
 
 /** Shared download logic for installing a skill. */
-async function doInstall(skillName: string): Promise<void> {
+async function doInstall(skillName: string, force = false): Promise<void> {
     requireProject();
     ensureSkillDirs();
 
@@ -73,12 +74,12 @@ async function doInstall(skillName: string): Promise<void> {
     spin.update(`Downloading ${skillName}...`);
 
     // Installed if either folder has it; overwriting replaces both.
-    if (isSkillInstalled(skillName)) {
+    if (isSkillInstalled(skillName) && !force) {
         spin.stop();
         if (!process.stdin.isTTY) {
             // No terminal to answer the prompt (CI, pipes) — never hang.
             logError(
-                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — run in a terminal to confirm overwriting, or remove those folders first.`
+                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — pass --force to overwrite, run in a terminal to confirm, or remove those folders first.`
             );
             process.exit(1);
         }
@@ -135,10 +136,22 @@ async function doInstall(skillName: string): Promise<void> {
 const installCommand = new Command('install')
     .description('Install an AI agent skill from the ecosystem')
     .argument('[name]', 'Name of the skill to install', 'burger-api')
-    .action(async (name: string) => {
-        clack.intro('Install AI agent skills');
-        await doInstall(name);
-    });
+    .option('--force', 'Overwrite an existing install without prompting')
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(
+        async (
+            name: string,
+            options: { force?: boolean; local?: boolean }
+        ) => {
+            clack.intro('Install AI agent skills');
+            setLocalMode(options.local);
+            announceLocalMode();
+            await doInstall(name, options.force === true);
+        }
+    );
 
 /** burger-api skills list — list locally installed skills */
 const listCommand = new Command('list')
@@ -173,8 +186,14 @@ const listCommand = new Command('list')
 /** burger-api skills available — list remote skills from GitHub */
 const availableCommand = new Command('available')
     .description('List available skills from the ecosystem')
-    .action(async () => {
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (options: { local?: boolean }) => {
         clack.intro('Available skills');
+        setLocalMode(options.local);
+        announceLocalMode();
 
         let list: string[];
         let stale = false;

@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from 'bun:test';
+import { afterEach, beforeEach, describe, it, expect } from 'bun:test';
 import {
     generateBurgerConfig,
     generateIndexFile,
@@ -10,9 +10,10 @@ import {
     generateTsConfig,
     generatePackageJson,
     generatePluginTemplate,
+    unpublishedVersionHint,
 } from '../src/utils/templates';
+import { setLocalMode } from '../src/utils/local-mode';
 import { baseCreateOptions } from './test-utils';
-import { resolve } from 'path';
 
 describe('generateBurgerConfig', () => {
     it('generates config with default-like values', () => {
@@ -146,55 +147,73 @@ describe('generatePackageJson', () => {
     });
 });
 
-describe('generatePackageJson BURGER_API_SOURCE', () => {
-    const original = process.env.BURGER_API_SOURCE;
+describe('generatePackageJson local mode', () => {
+    const originalLocal = process.env.BURGER_API_LOCAL;
+
+    beforeEach(() => {
+        // A leaked --local flag from another in-process command must not
+        // decide this suite; the env is what is under test.
+        setLocalMode(undefined);
+    });
 
     afterEach(() => {
-        if (original === undefined) delete process.env.BURGER_API_SOURCE;
-        else process.env.BURGER_API_SOURCE = original;
+        setLocalMode(undefined);
+        if (originalLocal === undefined) delete process.env.BURGER_API_LOCAL;
+        else process.env.BURGER_API_LOCAL = originalLocal;
     });
 
-    it('keeps the npm range when the env var is unset', () => {
-        delete process.env.BURGER_API_SOURCE;
+    it('keeps the npm range when local mode is off', () => {
+        delete process.env.BURGER_API_LOCAL;
         const pkg = JSON.parse(generatePackageJson('x'));
         expect(pkg.dependencies['burger-api']).toBe('^1.0.0-beta');
+        expect(pkg.devDependencies['@burger-api/cli']).toMatch(/^\^/);
     });
 
-    it('emits link:burger-api when set to "link"', () => {
-        process.env.BURGER_API_SOURCE = 'link';
+    it('emits link:burger-api and link:@burger-api/cli with BURGER_API_LOCAL=1', () => {
+        process.env.BURGER_API_LOCAL = '1';
         const pkg = JSON.parse(generatePackageJson('x'));
         expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
-    });
-
-    it('emits link:burger-api when set to "LINK" (case-insensitive)', () => {
-        process.env.BURGER_API_SOURCE = 'LINK';
-        const pkg = JSON.parse(generatePackageJson('x'));
-        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
-    });
-
-    it('emits a file: specifier with an absolute path when set to a path', () => {
-        process.env.BURGER_API_SOURCE = 'repos/burger-api';
-        const pkg = JSON.parse(generatePackageJson('x'));
-        expect(pkg.dependencies['burger-api']).toBe(
-            `file:${resolve('repos/burger-api')}`
+        expect(pkg.devDependencies['@burger-api/cli']).toBe(
+            'link:@burger-api/cli'
         );
+        // No npm ranges, no overrides.
+        expect(pkg.overrides).toBeUndefined();
+        expect(JSON.stringify(pkg)).not.toContain('^1.0.0-beta');
     });
 
-    // Regression: the local CLI's own `burger-api@^1.0.0-beta` dependency
-    // failed to resolve while that version was unpublished.
-    it('overrides nested burger-api to the same local path', () => {
-        process.env.BURGER_API_SOURCE = 'repos/burger-api';
+    it('accepts BURGER_API_LOCAL=true', () => {
+        process.env.BURGER_API_LOCAL = 'true';
         const pkg = JSON.parse(generatePackageJson('x'));
-        expect(pkg.overrides).toEqual({
-            'burger-api': `file:${resolve('repos/burger-api')}`,
-        });
+        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
+    });
+});
+
+describe('unpublishedVersionHint', () => {
+    it('hints local mode when burger-api has no matching version', () => {
+        const hint = unpublishedVersionHint(
+            'error: No version matching "burger-api@^1.0.0-beta" found for specifier "burger-api"'
+        );
+        expect(hint).toContain('--local');
+        expect(hint).toContain('BURGER_API_LOCAL=1');
     });
 
-    it('adds no overrides for the npm range or link mode', () => {
-        delete process.env.BURGER_API_SOURCE;
-        expect(JSON.parse(generatePackageJson('x')).overrides).toBeUndefined();
-        process.env.BURGER_API_SOURCE = 'link';
-        expect(JSON.parse(generatePackageJson('x')).overrides).toBeUndefined();
+    it('hints local mode for @burger-api/cli too', () => {
+        expect(
+            unpublishedVersionHint(
+                'No version matching "@burger-api/cli@^1.0.0-beta" found'
+            )
+        ).toBeDefined();
+    });
+
+    it('returns undefined for other install failures', () => {
+        expect(
+            unpublishedVersionHint('error: connection refused')
+        ).toBeUndefined();
+        expect(
+            unpublishedVersionHint(
+                'No version matching "left-pad@^9" found'
+            )
+        ).toBeUndefined();
     });
 });
 

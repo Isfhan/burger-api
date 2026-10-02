@@ -82,6 +82,7 @@ Create a new Burger API project with interactive prompts.
 - `--api-dir <dir>` - API routes directory under `src/` (default: api)
 - `--api-prefix <prefix>` - URL prefix for API routes (default: /api)
 - `--no-skills` - Skip downloading AI agent skills
+- `--local` - Use the local burger-api checkout (bun link) instead of npm/GitHub
 
 Feature flags imply `--yes` (no prompts). Without a TTY (CI, pipes) `create`
 never prompts: it uses the defaults plus any flags.
@@ -126,6 +127,42 @@ Runtime options belong in `new Burger({...})`, `src/plugins.ts`, and route
 
 ---
 
+### Local Mode (Working From the Checkout)
+
+When you work on BurgerAPI itself, you can scaffold and install from the local
+checkout instead of npm/GitHub.
+
+```bash
+# One-off: every command that reads npm/GitHub takes --local
+burger-api create my-api --local
+burger-api add cors --local
+burger-api list --local
+burger-api skills install --local
+burger-api skills available --local
+
+# Or turn it on for the whole shell
+export BURGER_API_LOCAL=1   # also accepts true
+```
+
+Local mode reads the checkout the CLI runs from, so run the CLI from the repo,
+not a globally installed copy. Register the packages once:
+
+```bash
+cd burger-api/packages/burger-api && bun link
+cd burger-api/packages/cli && bun link
+```
+
+`create --local` writes `link:burger-api` and `link:@burger-api/cli`, so new
+projects use your checkout (no npm ranges, no overrides). Hooks, plugins, and
+skills come from `<repo>/ecosystem/`. Local mode never reads or writes the
+ecosystem cache.
+
+If the CLI is not running from a checkout, or the links are missing, the
+command fails with the exact `bun link` commands to run. It never silently
+falls back to the network.
+
+---
+
 ### `burger-api list`
 
 Show official ecosystem packages you can add — hooks under
@@ -138,6 +175,9 @@ They are separate concepts.
 
 ```bash
 burger-api list
+
+# Read the local checkout instead of GitHub
+burger-api list --local
 ```
 
 **Alias:**
@@ -180,6 +220,12 @@ burger-api add cors logger rate-limiter
 
 # Add plugins (authentication, sessions, ...)
 burger-api add jwt-auth session
+
+# Replace an existing install without a prompt (works without a TTY)
+burger-api add cors --force
+
+# Read the local checkout instead of GitHub
+burger-api add cors --local
 ```
 
 **What it does:**
@@ -188,6 +234,9 @@ burger-api add jwt-auth session
 2. Copies it into your `ecosystem/hooks/` or `ecosystem/plugins/` folder
 3. Shows you example code to wire it in
 4. You can modify the code to fit your needs!
+
+If a package is already installed, `add` asks before overwriting in a
+terminal. Without a TTY it skips the package and tells you to pass `--force`.
 
 **After adding:** the CLI shows you exactly how to use it in your project.
 Hooks go into your lifecycle arrays:
@@ -234,11 +283,15 @@ your BurgerAPI project structure.
 # Install the default burger-api skill
 burger-api skills install
 
+# Replace an existing install without a prompt (works without a TTY)
+burger-api skills install burger-api --force
+
 # List what's installed
 burger-api skills list
 
-# See what skills are available
+# See what skills are available (or read the local checkout)
 burger-api skills available
+burger-api skills available --local
 ```
 
 **What gets installed:** the skill is downloaded once into

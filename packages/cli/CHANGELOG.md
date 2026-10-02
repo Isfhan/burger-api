@@ -72,13 +72,26 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 - Local caching (`~/.burger-api/cache/`, a few hours TTL) for the ecosystem
   catalog that `add` / `list` / `available` / `skills available` all read from,
   with a stale-cache fallback (and a warning) when a live refresh fails.
+- **Local mode:** `--local` (or `BURGER_API_LOCAL=1`) on `create`, `add`,
+  `list`, and `skills install|available` reads hooks, plugins, and skills from
+  the checkout the CLI runs from. `create --local` writes `link:burger-api` and
+  `link:@burger-api/cli` after checking both are registered with `bun link`,
+  and no ecosystem cache is read or written.
+- `--force` on `add` and `skills install`: overwrite an existing install
+  without a prompt, including with no TTY. Without `--force` the non-TTY skip
+  message points at it.
+- `create` hints `--local` / `BURGER_API_LOCAL=1` when `bun install` fails with
+  "No version matching" for `burger-api` or `@burger-api/cli`.
+- The `jwt-auth` plugin exports `signJwt(payload, options)` so a login route
+  can sign tokens the plugin verifies (`expiresIn` sets `exp`; `iat` is set).
 
 ### 🔧 Changed
 
 - `build` for a portable target (`cloudflare`, `deno`, `vercel`, `node`)
   warns once, listing user source files that import `bun`/`bun:*` or use the
-  `Bun.` global; the build still succeeds so the code can be removed before
-  the platform's own bundler runs.
+  `Bun.` global; the warning now also flags `ctx.publish()` and
+  `ws.publish()` calls (Bun pub/sub). The build still succeeds so the code can
+  be removed before the platform's own bundler runs.
 - `generate ws` uses `config.wsDir` (was hardcoded `src/websocket`).
 - API and WS scanners accept `.ts` / `.js` / `.mjs` conventions and fail loud
   when conflicting files coexist (for example `route.ts` + `route.js`).

@@ -8,11 +8,14 @@ import * as clack from '@clack/prompts';
 import { existsSync, rmSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import type { CreateOptions } from '../types/index';
+import { createProject, installDependencies } from '../utils/templates';
 import {
-    createProject,
-    installDependencies,
-    burgerApiSourceOverride,
-} from '../utils/templates';
+    announceLocalMode,
+    isLocalMode,
+    requireLinkedPackages,
+    requireLocalRepo,
+    setLocalMode,
+} from '../utils/local-mode';
 import {
     success,
     error as logError,
@@ -85,6 +88,10 @@ export const createCommand = new Command('create')
     .option('--api-dir <dir>', 'API routes directory under src/ (default: api)')
     .option('--api-prefix <prefix>', 'URL prefix for API routes (default: /api)')
     .option('--no-skills', 'Skip downloading AI agent skills')
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
     .addHelpText(
         'after',
         '\nFeature flags imply --yes (no prompts). Without a TTY (CI, pipes)\n' +
@@ -99,6 +106,7 @@ export const createCommand = new Command('create')
         options: CreateCommandOptions
     ) => {
         clack.intro('Create a new BurgerAPI project');
+        setLocalMode(options.local);
 
         try {
             const nameError = validateProjectName(projectName);
@@ -119,6 +127,13 @@ export const createCommand = new Command('create')
                 clack.outro('Directory already exists!');
                 logError(`A directory named "${projectName}" already exists.`);
                 process.exit(1);
+            }
+
+            // Local mode: verify the checkout and its bun links before
+            // scaffolding, never after.
+            if (isLocalMode()) {
+                announceLocalMode();
+                requireLinkedPackages(requireLocalRepo());
             }
 
             // Prompts only run when interactive; flags, --yes or no TTY use
@@ -209,13 +224,6 @@ export const createCommand = new Command('create')
             }
             newline();
 
-            // Optional local burger-api override (BURGER_API_SOURCE, pre-release testing).
-            const sourceOverride = burgerApiSourceOverride();
-            if (sourceOverride) {
-                info(`Using local burger-api: ${sourceOverride.label}`);
-                newline();
-            }
-
             // Create the project. On failure, remove the partial directory
             // so re-running with the same name works.
             let created;
@@ -300,6 +308,8 @@ interface CreateCommandOptions {
     apiPrefix?: string;
     /** false with --no-skills */
     skills?: boolean;
+    /** true with --local */
+    local?: boolean;
 }
 
 /** Apply the non-interactive feature flags on top of the defaults. */

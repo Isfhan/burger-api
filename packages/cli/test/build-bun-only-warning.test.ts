@@ -134,6 +134,32 @@ describe('portable-target Bun-only warning', () => {
         expect(warning).not.toContain('src/hooks.ts');
     });
 
+    it('flags ctx.publish and ws.publish as Bun-only', async () => {
+        const dir = project({
+            'src/index.ts': ENTRY,
+            'src/api/publish/route.ts': [
+                'export function GET(ctx: { publish(t: string, m: string): void }) {',
+                "    ctx.publish('news', 'hello');",
+                '    return Response.json({ ok: true });',
+                '}',
+            ].join('\n'),
+            'src/websocket/chat/ws.ts': [
+                'export function open(ws: { publish(t: string, m: string): void }) {',
+                "    ws.publish('chat', 'hi');",
+                '}',
+            ].join('\n'),
+        });
+
+        const { success, logs } = await buildPortable(dir);
+        expect(success).toBe(true);
+        const warning = logs.find((line) => line.includes('Bun-only APIs'));
+        expect(warning).toBeDefined();
+        expect(warning).toContain('src/api/publish/route.ts');
+        expect(warning).toContain('src/websocket/chat/ws.ts');
+        expect(warning).toContain('ctx.publish()');
+        expect(warning).toContain('ws.publish()');
+    });
+
     it('does not warn when no user source touches Bun-only APIs', async () => {
         const dir = project({
             'src/index.ts': ENTRY,

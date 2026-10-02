@@ -1,11 +1,12 @@
 /** Scaffolding templates and generated files for `burger-api create` and `generate`. */
 
-import { join, resolve, dirname } from 'path';
+import { join, dirname } from 'path';
 import { readFileSync, existsSync } from 'fs';
 
 import type { CreateOptions } from '../types/index';
 import { spinner } from './logger';
 import { installSkill } from './skills';
+import { isLocalMode } from './local-mode';
 import { reindent, isReindentable } from './reindent';
 
 /** Walks up from `startFile` to the nearest `package.json` and returns its dir. */
@@ -46,30 +47,6 @@ function resolveMatchingZodVersion(): string {
     }
 }
 
-/**
- * Local burger-api override from BURGER_API_SOURCE (pre-release testing):
- * unset → null (npm range), "link" → the global bun link store, a path →
- * "file:<absolute path>" from a local checkout.
- */
-export function burgerApiSourceOverride(): {
-    specifier: string;
-    label: string;
-} | null {
-    const value = process.env.BURGER_API_SOURCE?.trim();
-    if (!value) return null;
-    if (value.toLowerCase() === 'link') {
-        return {
-            specifier: 'link:burger-api',
-            label: 'link:burger-api (BURGER_API_SOURCE=link)',
-        };
-    }
-    const abs = resolve(value);
-    return {
-        specifier: `file:${abs}`,
-        label: `${abs} (BURGER_API_SOURCE)`,
-    };
-}
-
 /** The running CLI's own version (package.json next to src/). */
 function cliVersion(): string | undefined {
     try {
@@ -83,16 +60,11 @@ function cliVersion(): string | undefined {
 }
 
 /**
- * `@burger-api/cli` specifier for scaffolded devDependencies, following
- * BURGER_API_SOURCE like `burger-api` does; otherwise `^<this CLI's version>`.
+ * `@burger-api/cli` specifier for scaffolded devDependencies: the checkout's
+ * link in local mode, otherwise `^<this CLI's version>`.
  */
 function cliSpecifier(): string {
-    const override = burgerApiSourceOverride();
-    if (override?.specifier === 'link:burger-api') return 'link:@burger-api/cli';
-    if (override?.specifier.startsWith('file:')) {
-        const sibling = resolve(override.specifier.slice(5), '..', 'cli');
-        if (existsSync(join(sibling, 'package.json'))) return `file:${sibling}`;
-    }
+    if (isLocalMode()) return 'link:@burger-api/cli';
     return `^${cliVersion() ?? '1.0.0-beta'}`;
 }
 
@@ -107,10 +79,11 @@ export function generatePackageJson(
     lang: 'ts' | 'js' = 'ts'
 ): string {
     const entry = lang === 'js' ? 'src/index.js' : 'src/index.ts';
-    // `^1.0.0-beta` so scaffolds resolve prereleases at all (`^1.0.0` would
-    // exclude them) and pick up later betas and stable 1.x.
-    const burgerApiSpecifier =
-        burgerApiSourceOverride()?.specifier ?? '^1.0.0-beta';
+    // Local mode: both packages come from the checkout via `bun link`.
+    // Otherwise `^1.0.0-beta`, so scaffolds resolve prereleases at all
+    // (`^1.0.0` would exclude them) and pick up later betas and stable 1.x.
+    const local = isLocalMode();
+    const burgerApiSpecifier = local ? 'link:burger-api' : '^1.0.0-beta';
     const packageJson = {
         // npm package names must be lowercase.
         name: projectName.toLowerCase(),
@@ -140,16 +113,6 @@ export function generatePackageJson(
             typescript: '^5',
         },
     };
-
-    // A local CLI checkout still asks for `burger-api@^1.0.0-beta` from npm;
-    // point that at the same local copy so an unpublished version resolves.
-    if (burgerApiSpecifier.startsWith('file:')) {
-        return JSON.stringify(
-            { ...packageJson, overrides: { 'burger-api': burgerApiSpecifier } },
-            null,
-            2
-        );
-    }
 
     return JSON.stringify(packageJson, null, 2);
 }
@@ -1330,6 +1293,23 @@ export interface CreateProjectResult {
 }
 
 /**
+ * Hint for `bun install` failing with "No version matching" for burger-api or
+ * @burger-api/cli: the scaffolded version is not on npm (yet), so a checkout
+ * should use local mode.
+ */
+export function unpublishedVersionHint(
+    stderr: string
+): string | undefined {
+    if (!/No version matching/i.test(stderr)) return undefined;
+    if (!/burger-api|@burger-api\/cli/.test(stderr)) return undefined;
+    return (
+        'burger-api or @burger-api/cli has no published version matching this ' +
+        'scaffold yet. When working from a checkout, pass --local (or set ' +
+        'BURGER_API_LOCAL=1) to use bun link instead of npm.'
+    );
+}
+
+/**
  * Install dependencies (`bun install`) in a project directory.
  *
  * @param projectDir - Directory containing package.json
@@ -1354,10 +1334,12 @@ export async function installDependencies(projectDir: string): Promise<void> {
         }
 
         if (exitCode !== 0) {
-            const message =
+            let message =
                 stderrText.length > 0
                     ? `bun install failed:\n${stderrText}`
                     : 'bun install failed';
+            const hint = unpublishedVersionHint(stderrText);
+            if (hint) message += `\n\nHint: ${hint}`;
             throw new Error(message);
         }
 

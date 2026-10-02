@@ -127,19 +127,20 @@ const suites: Suite[] = [
 ];
 
 function parseTestCounts(output: string): { pass: number; fail: number } | null {
-    // bun test prints "12 pass"; node --test prints "# pass 12".
+    // bun test prints "12 pass"; node --test prints "# pass 12" (spec
+    // reporter) or "ℹ pass 12" (Node 24's default reporter).
     const bunPass = [...output.matchAll(/(\d+)\s+pass\b/gi)];
     const passMatches =
         bunPass.length > 0
             ? bunPass
-            : [...output.matchAll(/#\s*pass\s+(\d+)/gi)];
+            : [...output.matchAll(/(?:#|ℹ)\s*pass\s+(\d+)/gi)];
     if (passMatches.length === 0) {
         return null;
     }
     const failMatches =
         bunPass.length > 0
             ? [...output.matchAll(/(\d+)\s+fail\b/gi)]
-            : [...output.matchAll(/#\s*fail\s+(\d+)/gi)];
+            : [...output.matchAll(/(?:#|ℹ)\s*fail\s+(\d+)/gi)];
     const pass = Number(passMatches[passMatches.length - 1][1]);
     const fail =
         failMatches.length > 0
