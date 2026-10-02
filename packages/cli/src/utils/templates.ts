@@ -381,304 +381,555 @@ export function generateBurgerConfig(options: CreateOptions): string {
 
 /** The sample landing page stylesheet. */
 export function generateSampleCss(): string {
-    return `
- :root {
- --color-primary: hsl(30, 75%, 90%);
- --color-primary-dark: hsl(30, 75%, 80%);
- --color-bg: #09090b;
- --color-surface: hsl(240, 10%, 3.9%);
- --color-border: hsl(240, 3.7%, 15.9%);
- --color-success: hsl(120, 50%, 40%);
- --color-text-muted: hsl(240, 5%, 50%);
- }
+    return `/* BurgerAPI starter page: same look as burger-api.com */
+:root {
+    --primary: #ffa62b;
+    --secondary: #ffb84d;
+    --accent: #ffc861;
+    --success: #10b981;
 
- * {
- margin: 0;
- padding: 0;
- box-sizing: border-box;
- }
+    --bg: #f7f7f5;
+    --bg-2: #f2f2ef;
+    --card: #ffffff;
+    --card-soft: #fcfcfa;
+    --border: rgba(0, 0, 0, 0.06);
+    --text: #0a0a0b;
+    --text-2: #3f3f46;
+    --muted: #52525b;
+    --btn-2: #ecece8;
+    --btn-2-hover: #e3e3df;
+    --code-bg: #111214;
+    --grid: rgba(0, 0, 0, 0.04);
+    --orb: rgba(255, 166, 43, 0.22);
 
- body {
- font-family: 'Poppins', system-ui, sans-serif;
- min-height: 100vh;
- background: var(--color-bg);
- color: #fff;
- display: flex;
- flex-direction: column;
- align-items: center;
- padding: 60px 20px 40px;
- }
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.12);
 
- .hero {
- text-align: center;
- max-width: 600px;
- margin-bottom: 48px;
- }
-
- .logo-wrapper {
- display: flex;
- flex-wrap: wrap;
- margin-bottom: 32px;
- }
-
- .logo {
- width: 80px;
- height: 80px;
- }
-
- .logo-text {
- font-size: 3.5rem;
- font-weight: 600;
- color: var(--color-primary);
- }
-
- h1 {
- font-size: 2.5rem;
- font-weight: 600;
- margin-bottom: 12px;
- color: #fff;
- }
-
- .subtitle {
- color: var(--color-text-muted);
- font-size: 1.1rem;
- margin-bottom: 24px;
- }
-
- .status {
- display: inline-flex;
- align-items: center;
- gap: 8px;
- background: hsla(120, 50%, 40%, 0.1);
- border: 1px solid hsla(120, 50%, 40%, 0.3);
- padding: 8px 16px;
- border-radius: 20px;
- font-size: 0.875rem;
- color: var(--color-success);
- }
-
- .status::before {
- content: '';
- width: 8px;
- height: 8px;
- background: var(--color-success);
- border-radius: 50%;
- animation: pulse 2s infinite;
- }
-
- @keyframes pulse {
- 0%, 100% { opacity: 1; }
- 50% { opacity: 0.5; }
- }
-
- /* Edit hint section */
- .edit-hint {
- background: var(--color-surface);
- border: 1px solid var(--color-border);
- border-radius: 12px;
- padding: 24px 32px;
- margin-bottom: 48px;
- max-width: 500px;
- text-align: center;
- }
-
- .edit-hint p {
- color: var(--color-text-muted);
- font-size: 0.95rem;
- margin-bottom: 8px;
- }
-
- .edit-hint code {
- color: var(--color-primary);
- font-family: 'JetBrains Mono', monospace;
- font-size: 0.9rem;
- }
-
- .edit-hint .hint {
- font-size: 0.8rem;
- color: hsl(240, 5%, 40%);
- margin-top: 12px;
- }
-
- /* Quick start section */
- .quick-start {
- max-width: 500px;
- width: 100%;
- margin-bottom: 48px;
- }
-
- .quick-start h2 {
- font-size: 1rem;
- font-weight: 500;
- color: var(--color-text-muted);
- margin-bottom: 16px;
- text-align: center;
- }
-
- .commands {
- display: flex;
- flex-direction: column;
- gap: 8px;
- }
-
- .command {
- display: flex;
- align-items: center;
- background: var(--color-surface);
- border: 1px solid var(--color-border);
- border-radius: 8px;
- padding: 12px 16px;
- font-family: 'JetBrains Mono', monospace;
- font-size: 0.85rem;
- transition: border-color 0.2s;
- }
-
- .command:hover {
- border-color: var(--color-primary-dark);
- }
-
- .command .prefix {
- color: var(--color-success);
- margin-right: 8px;
- }
-
- .command .cmd {
- color: var(--color-primary);
- }
-
- .command .comment {
- color: var(--color-text-muted);
- margin-left: auto;
- font-size: 0.75rem;
- }
-
- /* Links section */
- .links {
- display: flex;
- gap: 12px;
- justify-content: center;
- flex-wrap: wrap;
- margin-bottom: 48px;
- }
-
- .link {
- color: var(--color-text-muted);
- text-decoration: none;
- font-size: 0.9rem;
- padding: 10px 20px;
- border: 1px solid var(--color-border);
- border-radius: 8px;
- transition: all 0.2s;
- }
-
- .link:hover {
- color: var(--color-primary);
- border-color: var(--color-primary-dark);
- background: var(--color-surface);
- }
-
- .link.primary {
- background: var(--color-primary);
- border-color: var(--color-primary);
- color: #000;
- }
-
- .link.primary:hover {
- background: var(--color-primary-dark);
- border-color: var(--color-primary-dark);
- }
-
- /* Documentation links */
- .docs-links {
- display: flex;
- gap: 32px;
- justify-content: center;
- flex-wrap: wrap;
- margin-bottom: 48px;
- padding-top: 32px;
- border-top: 1px solid var(--color-border);
- max-width: 600px;
- width: 100%;
- }
-
- .docs-section h3 {
- font-size: 0.8rem;
- font-weight: 500;
- color: var(--color-text-muted);
- margin-bottom: 12px;
- text-transform: uppercase;
- letter-spacing: 0.5px;
- }
-
- .docs-section a {
- display: block;
- color: hsl(240, 5%, 60%);
- text-decoration: none;
- font-size: 0.85rem;
- padding: 4px 0;
- transition: color 0.2s;
- }
-
- .docs-section a:hover {
- color: var(--color-primary);
- }
-
- /* Footer */
- .footer {
- margin-top: auto;
- text-align: center;
- padding-top: 32px;
- }
-
- .version {
- font-size: 0.75rem;
- color: hsl(240, 5%, 35%);
- margin-bottom: 16px;
- }
-
- .social-links {
- display: flex;
- gap: 16px;
- justify-content: center;
- margin-bottom: 16px;
- }
-
- .social-links a {
- color: var(--color-text-muted);
- text-decoration: none;
- font-size: 0.85rem;
- transition: color 0.2s;
- }
-
- .social-links a:hover {
- color: var(--color-primary);
- }
-
- .powered-by {
- color: hsl(240, 5%, 35%);
- font-size: 0.8rem;
- }
-
- .powered-by a {
- color: var(--color-primary-dark);
- text-decoration: none;
- }
-
- .powered-by a:hover {
- color: var(--color-primary);
- }
-
- @media (max-width: 600px) {
- h1 { font-size: 2rem; }
- .docs-links { flex-direction: column; gap: 24px; text-align: center; }
- .command .comment { display: none; }
- }
- `;
+    --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
-/** The sample page script (app.js). */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --primary: #ffb84d;
+        --bg: #09090b;
+        --bg-2: #0f1012;
+        --card: #17181c;
+        --card-soft: #141519;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #fafafa;
+        --text-2: #d4d4d8;
+        --muted: #a1a1aa;
+        --btn-2: rgba(255, 255, 255, 0.05);
+        --btn-2-hover: rgba(255, 255, 255, 0.08);
+        --code-bg: #0d0e10;
+        --grid: rgba(255, 255, 255, 0.035);
+        --orb: rgba(255, 166, 43, 0.16);
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+        --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.5);
+        --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--btn-2);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+/* Background: very subtle grid + blurred orange glow */
+.bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+}
+
+.orb {
+    position: fixed;
+    z-index: -1;
+    width: 520px;
+    height: 520px;
+    border-radius: 50%;
+    background: var(--orb);
+    filter: blur(110px);
+    pointer-events: none;
+}
+
+.orb-a {
+    top: -220px;
+    left: 50%;
+    transform: translateX(-70%);
+}
+
+.orb-b {
+    top: 120px;
+    right: -260px;
+    opacity: 0.6;
+}
+
+.container {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+/* Navbar */
+.nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 17px;
+}
+
+.brand img {
+    width: 30px;
+    height: 30px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.nav-links a:hover {
+    color: var(--text);
+}
+
+/* Hero */
+.hero {
+    padding: 96px 0 72px;
+    text-align: center;
+}
+
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-2);
+    background: var(--btn-2);
+    border: 1px solid var(--border);
+}
+
+.status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+    animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.hero-logo {
+    display: block;
+    width: 88px;
+    height: 88px;
+    margin: 32px auto 24px;
+    filter: drop-shadow(0 12px 28px rgba(255, 166, 43, 0.35));
+    animation: rise 0.6s ease-out both;
+}
+
+.hero h1 {
+    font-size: clamp(44px, 7vw, 72px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    animation: rise 0.6s 0.05s ease-out both;
+}
+
+.hero h1 .accent {
+    background: linear-gradient(135deg, var(--accent), var(--primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.hero .lead {
+    max-width: 600px;
+    margin: 16px auto 0;
+    font-size: 17px;
+    color: var(--muted);
+    animation: rise 0.6s 0.1s ease-out both;
+}
+
+@keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Buttons */
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 32px;
+    animation: rise 0.6s 0.15s ease-out both;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 48px;
+    padding: 0 22px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    transition: transform 180ms ease-out, box-shadow 180ms ease-out,
+        background 180ms ease-out, filter 180ms ease-out;
+}
+
+.btn:focus-visible,
+.copy:focus-visible,
+.inline-link:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+}
+
+.btn-primary {
+    min-width: 160px;
+    color: #1a1206;
+    background: linear-gradient(135deg, var(--accent), var(--primary));
+    box-shadow: 0 8px 24px rgba(255, 166, 43, 0.35);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow: 0 12px 32px rgba(255, 166, 43, 0.45);
+}
+
+.btn-secondary {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--btn-2);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    background: var(--btn-2-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn .arrow {
+    transition: transform 180ms ease-out;
+}
+
+.btn:hover .arrow {
+    transform: translateX(3px);
+}
+
+/* Sections and cards */
+.section {
+    padding: 64px 0;
+}
+
+.section-alt {
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.section h2 {
+    font-size: clamp(28px, 4vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.section .desc {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 16px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+    margin-top: 32px;
+}
+
+.card {
+    padding: 28px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, var(--card), var(--card-soft));
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transition: transform 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.card p {
+    font-size: 15px;
+    color: var(--muted);
+}
+
+.card p + p {
+    margin-top: 10px;
+}
+
+.card .icon {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    font-size: 20px;
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+.link-list {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+}
+
+.inline-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--primary);
+    transition: color 180ms ease-out;
+}
+
+.inline-link span {
+    transition: transform 180ms ease-out;
+}
+
+.inline-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.inline-link:hover span {
+    transform: translateX(4px);
+}
+
+/* Terminal */
+.terminal {
+    margin-top: 32px;
+    border-radius: 18px;
+    background: var(--code-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+.terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.terminal-bar i {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.terminal-bar .title {
+    margin-left: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #a1a1aa;
+}
+
+.terminal-body {
+    padding: 12px 8px;
+}
+
+.cmd {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: #fafafa;
+}
+
+.cmd:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.cmd .prompt {
+    color: #ffb84d;
+}
+
+.cmd .text {
+    flex: 1;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.cmd .comment {
+    color: #71717a;
+}
+
+.copy {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #d4d4d8;
+    font: 500 12px var(--font);
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 180ms ease-out;
+}
+
+.copy:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Footer */
+.footer {
+    padding: 40px 0 56px;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.footer .container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.footer nav {
+    display: flex;
+    gap: 20px;
+}
+
+.footer a:hover {
+    color: var(--text);
+}
+
+@media (max-width: 640px) {
+    .nav-links {
+        display: none;
+    }
+    .hero {
+        padding: 64px 0 48px;
+    }
+    .cmd .comment {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+`;
+}
+
+/** The sample page script (app.js): copy buttons for the commands. */
 export function generateSampleJs(): string {
-    return 'console.log("Hello from app.js");';
+    return `// Copy a command to the clipboard.
+for (const button of document.querySelectorAll('[data-copy]')) {
+    button.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            button.textContent = 'Copied';
+        } catch {
+            button.textContent = 'Press Ctrl+C';
+        }
+        setTimeout(() => (button.textContent = 'Copy'), 1500);
+    });
+}
+`;
 }
 
 /** Escape text for safe use inside HTML text nodes and double-quoted attributes. */
@@ -701,13 +952,13 @@ function hrefFromApiPrefix(apiPrefix: string | undefined): string {
 }
 
 /**
- * The scaffolded landing page (index.html), using the BurgerAPI colors.
+ * The scaffolded landing page (index.html), in the burger-api.com style.
  *
  * @param options - Project configuration (name, dirs, apiPrefix, useApi)
  * @returns index.html content as a string
  */
 export function generateIndexPage(options: CreateOptions): string {
-    const projectName = options.name;
+    const projectName = escapeHtml(options.name);
     const pageDir = options.pageDir || 'pages';
     const apiDir = options.apiDir || 'api';
     const apiTryHref = escapeHtml(hrefFromApiPrefix(options.apiPrefix));
@@ -725,105 +976,163 @@ export function generateIndexPage(options: CreateOptions): string {
     const pageHintPath = escapeHtml(`src/${pageDir}/index.html`);
     const apiHintPath = escapeHtml(`src/${apiDir}/route.${ext}`);
 
-    const editHintParagraphs = options.useApi
-        ? `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>
- <p>Edit <code>${apiHintPath}</code> and save to reload the API endpoint.</p>`
-        : `<p>Edit <code>${pageHintPath}</code> and save to reload the page.</p>`;
-
     // API docs exist only when the app has API routes.
-    const actionLinks = options.useApi
-        ? `<a href="/docs" class="link primary">API Docs</a>
- <a href="${apiTryHref}" class="link">Try API</a>
- <a href="/openapi.json" class="link">OpenAPI</a>`
-        : `<a href="https://burger-api.com/docs" class="link primary" target="_blank">Documentation</a>`;
+    const actions = options.useApi
+        ? `<a href="/docs" class="btn btn-primary">API Docs <span class="arrow">→</span></a>
+ <a href="${apiTryHref}" class="btn btn-secondary">Try API</a>
+ <a href="/openapi.json" class="btn btn-secondary">OpenAPI</a>`
+        : `<a href="https://burger-api.com/docs" class="btn btn-primary" target="_blank" rel="noopener">Documentation <span class="arrow">→</span></a>`;
+
+    const apiCard = options.useApi
+        ? `
+ <div class="card">
+ <div class="icon">⚡</div>
+ <h3>Edit your API</h3>
+ <p>Change <code>${apiHintPath}</code> and save. The endpoint reloads on its own.</p>
+ <p>Add routes with <code>burger-api generate route users</code>.</p>
+ </div>`
+        : '';
+
+    const commands: Array<[string, string]> = [
+        ['burger-api add cors logger', 'Add hooks'],
+        ...(options.useApi
+            ? ([['burger-api generate route users', 'New route']] as Array<
+                  [string, string]
+              >)
+            : []),
+        ['burger-api doctor', 'Check the project'],
+        ['bun run build', 'Build for production'],
+    ];
+    const commandRows = commands
+        .map(
+            ([cmd, note]) => ` <div class="cmd">
+ <span class="prompt">$</span>
+ <span class="text">${escapeHtml(cmd)} <span class="comment"># ${escapeHtml(note)}</span></span>
+ <button class="copy" type="button" data-copy="${escapeHtml(cmd)}">Copy</button>
+ </div>`
+        )
+        .join('\n');
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>${escapeHtml(projectName)}</title>
+ <meta name="color-scheme" content="light dark">
+ <title>${projectName} · BurgerAPI</title>
  <link rel="icon" type="image/png" href="https://burger-api.com/img/logo.png">
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
- <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
- <!-- Assets: Styles -->
+ <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
  <link rel="stylesheet" href="${assetBase}/css/style.css" />
- <!-- Assets: Scripts -->
  <script src="${assetBase}/js/app.js" type="module"></script>
 </head>
 <body>
- <!-- Hero Section -->
+ <div class="bg-grid" aria-hidden="true"></div>
+ <div class="orb orb-a" aria-hidden="true"></div>
+ <div class="orb orb-b" aria-hidden="true"></div>
+
+ <header class="nav">
+ <div class="container">
+ <a href="https://burger-api.com" class="brand" target="_blank" rel="noopener">
+ <img src="https://burger-api.com/img/logo.png" alt="">
+ BurgerAPI
+ </a>
+ <nav class="nav-links">
+ <a href="https://burger-api.com/docs" target="_blank" rel="noopener">Docs</a>
+ <a href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">GitHub</a>
+ </nav>
+ </div>
+ </header>
+
+ <main>
  <section class="hero">
- <div class="logo-wrapper">
- <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI Logo" class="logo">
- <span class="logo-text">BurgerAPI</span>
- </div>
- <p class="subtitle">Your Project ${escapeHtml(projectName)} is ready</p>
- <div class="status">Server running</div>
- </section>
-
- <!-- Edit Hint -->
- <div class="edit-hint">
- ${editHintParagraphs}
- <p class="hint">Your changes will automatically refresh the server.</p>
- </div>
-
- <!-- Quick Start Commands -->
- <section class="quick-start">
- <h2>Quick Start</h2>
- <div class="commands">
- <div class="command">
- <span class="prefix">$</span>
- <span class="cmd">burger-api add cors logger</span>
- <span class="comment"># Add hooks</span>
- </div>
- <div class="command">
- <span class="prefix">$</span>
- <span class="cmd">bun run build</span>
- <span class="comment"># Build for production</span>
+ <div class="container">
+ <span class="status"><span class="dot"></span>Server running</span>
+ <img src="https://burger-api.com/img/logo.png" alt="BurgerAPI logo" class="hero-logo">
+ <h1>${projectName} is <span class="accent">ready</span></h1>
+ <p class="lead">Your BurgerAPI app is up and running. Edit a file and save: the server reloads on its own.</p>
+ <div class="actions">
+ ${actions}
  </div>
  </div>
  </section>
 
- <!-- Action Links -->
- <div class="links">
- ${actionLinks}
+ <section class="section section-alt">
+ <div class="container">
+ <h2>Start building</h2>
+ <p class="desc">Everything lives in <code>src/</code>. Folders become routes.</p>
+ <div class="grid">
+ <div class="card">
+ <div class="icon">📄</div>
+ <h3>Edit this page</h3>
+ <p>Change <code>${pageHintPath}</code> and save to see it here.</p>
+ <p>Styles and scripts live in <code>src/${escapeHtml(pageDir)}/assets/</code>.</p>
+ </div>${apiCard}
+ <div class="card">
+ <div class="icon">🤖</div>
+ <h3>Work with AI agents</h3>
+ <p><code>AGENTS.md</code> tells your coding agent how this project works.</p>
  </div>
+ </div>
+ </div>
+ </section>
 
- <!-- Documentation Links -->
- <div class="docs-links">
- <div class="docs-section">
+ <section class="section">
+ <div class="container">
+ <h2>Next steps</h2>
+ <p class="desc">A few commands you will use often.</p>
+ <div class="terminal">
+ <div class="terminal-bar"><i></i><i></i><i></i><span class="title">${projectName}</span></div>
+ <div class="terminal-body">
+${commandRows}
+ </div>
+ </div>
+ </div>
+ </section>
+
+ <section class="section section-alt">
+ <div class="container">
+ <h2>Learn more</h2>
+ <div class="grid">
+ <div class="card">
  <h3>Documentation</h3>
- <a href="https://burger-api.com/docs" target="_blank">Getting Started</a>
- <a href="https://burger-api.com/docs/core/configuration" target="_blank">Configuration</a>
- <a href="https://burger-api.com/docs/core/request-handling" target="_blank">Request Handling</a>
+ <ul class="link-list">
+ <li><a class="inline-link" href="https://burger-api.com/docs" target="_blank" rel="noopener">Getting started <span>→</span></a></li>
+ <li><a class="inline-link" href="https://burger-api.com/docs/core/configuration" target="_blank" rel="noopener">Configuration <span>→</span></a></li>
+ <li><a class="inline-link" href="https://burger-api.com/docs/core/request-handling" target="_blank" rel="noopener">Request handling <span>→</span></a></li>
+ </ul>
  </div>
- <div class="docs-section">
+ <div class="card">
  <h3>Resources</h3>
- <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
- <a href="https://github.com/isfhan/burger-api/issues" target="_blank">Report Issue</a>
- <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM Package</a>
+ <ul class="link-list">
+ <li><a class="inline-link" href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">GitHub <span>→</span></a></li>
+ <li><a class="inline-link" href="https://www.npmjs.com/package/burger-api" target="_blank" rel="noopener">npm package <span>→</span></a></li>
+ <li><a class="inline-link" href="https://github.com/isfhan/burger-api/issues" target="_blank" rel="noopener">Report an issue <span>→</span></a></li>
+ </ul>
  </div>
- <div class="docs-section">
+ <div class="card">
  <h3>Community</h3>
- <a href="https://github.com/isfhan/burger-api" target="_blank">Contribute</a>
- <a href="https://github.com/isfhan/burger-api/discussions" target="_blank">Discussions</a>
- <a href="https://github.com/isfhan/burger-api/stargazers" target="_blank">Star on GitHub</a>
+ <ul class="link-list">
+ <li><a class="inline-link" href="https://github.com/isfhan/burger-api/discussions" target="_blank" rel="noopener">Discussions <span>→</span></a></li>
+ <li><a class="inline-link" href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">Contribute <span>→</span></a></li>
+ <li><a class="inline-link" href="https://github.com/isfhan/burger-api/stargazers" target="_blank" rel="noopener">Star on GitHub <span>→</span></a></li>
+ </ul>
  </div>
  </div>
+ </div>
+ </section>
+ </main>
 
- <!-- Footer -->
  <footer class="footer">
- <div class="version">BurgerAPI v1.0.0-beta • Bun v1.3+</div>
- <div class="social-links">
- <a href="https://github.com/isfhan/burger-api" target="_blank">GitHub</a>
- <a href="https://www.npmjs.com/package/burger-api" target="_blank">NPM</a>
- <a href="https://burger-api.com" target="_blank">Website</a>
+ <div class="container">
+ <span>BurgerAPI v1.0.0-beta · Bun 1.3+</span>
+ <nav>
+ <a href="https://burger-api.com" target="_blank" rel="noopener">Website</a>
+ <a href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">GitHub</a>
+ <a href="https://www.npmjs.com/package/burger-api" target="_blank" rel="noopener">npm</a>
+ </nav>
  </div>
- <p class="powered-by">
- Built with ❤️ using <a href="https://burger-api.com">BurgerAPI</a>
- </p>
  </footer>
 </body>
 </html>

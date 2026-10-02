@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'bun:test';
-import { generateIndexPage } from '../src/utils/templates';
+import {
+    generateIndexPage,
+    generateSampleCss,
+    generateSampleJs,
+} from '../src/utils/templates';
 import type { CreateOptions } from '../src/types';
 
 describe('generateIndexPage', () => {
@@ -21,7 +25,7 @@ describe('generateIndexPage', () => {
         expect(html).toContain('>Try API</a>');
         expect(html).toContain('<code>src/pages/index.html</code>');
         expect(html).toContain('<code>src/backend/route.ts</code>');
-        expect(html).toContain('Your Project t-app-1 is ready');
+        expect(html).toContain('t-app-1 is <span class="accent">ready</span>');
     });
 
     it('uses defaults for dirs and prefix when omitted', () => {
@@ -53,6 +57,42 @@ describe('generateIndexPage', () => {
         expect(html).toContain('<code>src/site/index.html</code>');
     });
 
+    it('pages-only apps get no API card, docs button, or route command', () => {
+        const html = generateIndexPage({
+            name: 'site',
+            useApi: false,
+            usePages: true,
+        });
+
+        expect(html).not.toContain('Edit your API');
+        expect(html).not.toContain('href="/docs"');
+        expect(html).not.toContain('generate route');
+        expect(html).toContain('data-copy="bun run build"');
+    });
+
+    it('every command has a copy button with the exact command', () => {
+        const html = generateIndexPage({
+            name: 'x',
+            useApi: true,
+            usePages: true,
+        });
+
+        expect(html).toContain('data-copy="burger-api add cors logger"');
+        expect(html).toContain('data-copy="burger-api generate route users"');
+        expect(html).toContain('data-copy="burger-api doctor"');
+    });
+
+    it('escapes the project name', () => {
+        const html = generateIndexPage({
+            name: '<script>x</script>',
+            useApi: true,
+            usePages: true,
+        });
+
+        expect(html).not.toContain('<script>x</script>');
+        expect(html).toContain('&lt;script&gt;x&lt;/script&gt;');
+    });
+
     it('normalizes apiPrefix without leading slash for href', () => {
         const options: CreateOptions = {
             name: 'x',
@@ -64,5 +104,18 @@ describe('generateIndexPage', () => {
         const html = generateIndexPage(options);
 
         expect(html).toContain('href="/api/v2"');
+    });
+});
+
+describe('generateSampleCss / generateSampleJs', () => {
+    it('ships light and dark themes with the brand orange', () => {
+        const css = generateSampleCss();
+        expect(css).toContain('--primary: #ffa62b');
+        expect(css).toContain('@media (prefers-color-scheme: dark)');
+        expect(css).toContain('prefers-reduced-motion');
+    });
+
+    it('wires copy buttons', () => {
+        expect(generateSampleJs()).toContain("querySelectorAll('[data-copy]')");
     });
 });
