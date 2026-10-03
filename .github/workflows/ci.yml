@@ -6,7 +6,8 @@ on:
   pull_request:
 
 env:
-  BUN_VERSION: 1.3.4
+  BUN_VERSION: 1.4.2
+  NODE_VERSION: 24
 
 jobs:
   test:
@@ -18,6 +19,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # node-server tests run on plain Node (type stripping needs Node 22.6+).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies
         run: bun install
 
@@ -28,11 +34,6 @@ jobs:
         run: |
           cd packages/burger-api && bun link
           cd ../cli && bun link
-
-      - name: Build example bundle for CLI build-output test
-        run: |
-          cd packages/burger-api/examples/production-app
-          bun run ../../../cli/src/index.ts build src/index.ts --outfile .build/bundle/app.js
 
       - name: Full test suite + typecheck
         run: bun run test:all

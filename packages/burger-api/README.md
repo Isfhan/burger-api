@@ -128,7 +128,7 @@ burger-api --version
 
 - **npm package:**
  [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.3.0
+- **Requires:** Bun >=1.4.0
 
 ### Quick Start
 

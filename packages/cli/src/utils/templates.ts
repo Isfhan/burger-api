@@ -1273,7 +1273,7 @@ ${commandRows}
 
  <footer class="footer">
  <div class="container">
- <span>BurgerAPI v1.0.0-beta · Bun 1.3+</span>
+ <span>BurgerAPI v1.0.0-beta · Bun 1.4+</span>
  <nav>
  <a href="https://burger-api.com" target="_blank" rel="noopener">Website</a>
  <a href="https://github.com/isfhan/burger-api" target="_blank" rel="noopener">GitHub</a>

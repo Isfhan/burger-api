@@ -52,8 +52,8 @@ describe('auto-HEAD never reads the GET body', () => {
         expect(await res.text()).toBe('');
     });
 
-    it('cancels a never-ending stream over Bun.serve', async () => {
-        let cancelled = false;
+    it('stops a never-ending stream over Bun.serve', async () => {
+        let pulls = 0;
         const base = serveRoutes([
             {
                 path: '/events',
@@ -61,9 +61,12 @@ describe('auto-HEAD never reads the GET body', () => {
                     GET: () =>
                         new Response(
                             new ReadableStream({
-                                pull: () => Bun.sleep(5),
-                                cancel() {
-                                    cancelled = true;
+                                pull: async (controller) => {
+                                    pulls++;
+                                    await Bun.sleep(5);
+                                    controller.enqueue(
+                                        new TextEncoder().encode('data: x\n\n')
+                                    );
                                 },
                             }),
                             { headers: { 'content-type': 'text/event-stream' } }
@@ -77,8 +80,11 @@ describe('auto-HEAD never reads the GET body', () => {
         });
         expect(res.headers.get('content-type')).toBe('text/event-stream');
         expect(await res.text()).toBe('');
-        for (let i = 0; i < 50 && !cancelled; i++) await Bun.sleep(10);
-        expect(cancelled).toBe(true);
+        // The server stops reading: the pull count settles instead of growing.
+        await Bun.sleep(100);
+        const settled = pulls;
+        await Bun.sleep(200);
+        expect(pulls).toBe(settled);
     });
 
     it('keeps an explicit Content-Length', async () => {

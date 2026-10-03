@@ -119,7 +119,7 @@ Or download the executable from [GitHub Releases](https://github.com/isfhan/burg
 
 **Package Details:**
 - **NPM Package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.3.0
+- **Requires:** Bun >=1.4.0
 
 For detailed documentation, see
 [`packages/cli/README.md`](./packages/cli/README.md).

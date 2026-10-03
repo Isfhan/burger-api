@@ -11,7 +11,7 @@ BurgerAPI is a **Bun-first**, WinterCG-compatible, **file-based** TypeScript
 **and JavaScript** API framework: file-based routing, end-to-end type safety,
 hook-based request lifecycle, small core + rich ecosystem.
 
-**Tech:** Bun >= 1.3.0 (primary), Node 24+ / edge where practical · TypeScript
+**Tech:** Bun >= 1.4.0 (primary), Node 24+ / edge where practical · TypeScript
 and JavaScript ESM (`.ts` / `.js` / `.mjs` conventions) · Zod ^4 / Standard
 Schema **Packages:** `burger-api`, `@burger-api/cli`,
 `@burger-api/node-server` **Status:** 1.0.0-beta — vision locked; core uses

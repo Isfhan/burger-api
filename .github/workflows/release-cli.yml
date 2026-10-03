@@ -12,7 +12,7 @@ on:
                 type: string
 
 env:
-    BUN_VERSION: 1.3.4
+    BUN_VERSION: 1.4.2
 
 jobs:
     build:
@@ -57,7 +57,7 @@ jobs:
             - name: Setup Node.js (for bun compatibility)
               uses: actions/setup-node@v4
               with:
-                  node-version: '20'
+                  node-version: '24'
 
             - name: Install dependencies
               run: |
