@@ -1,0 +1,7 @@
+{
+    "name": "validation-advanced-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

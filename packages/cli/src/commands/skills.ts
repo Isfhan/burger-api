@@ -1,8 +1,19 @@
 import { Command } from 'commander';
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import * as clack from '@clack/prompts';
-import { skillExists, downloadSkill, getSkillList, getSkillInfo } from '../utils/github';
+import {
+    skillExists,
+    getCachedSkillList,
+    getSkillInfo,
+} from '../utils/github';
+import {
+    installSkill,
+    isSkillInstalled,
+    listInstalledSkills,
+    skillDirs,
+} from '../utils/skills';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
+import { validateEcosystemName } from '../utils/names';
 import {
     spinner,
     success,
@@ -10,16 +21,11 @@ import {
     info,
     newline,
     header,
-    bullet,
     table,
     withSpinner,
     command,
+    warning,
 } from '../utils/logger';
-
-/** Path to .agents/skills/ relative to project root */
-function skillsDir(): string {
-    return join(process.cwd(), '.agents', 'skills');
-}
 
 /** Ensure we're in a BurgerAPI project */
 function requireProject(): void {
@@ -31,27 +37,40 @@ function requireProject(): void {
     }
 }
 
-/** Ensure .agents/skills/ directory exists */
-async function ensureSkillsDir(): Promise<void> {
-    const dir = skillsDir();
-    if (!existsSync(dir)) {
-        await Bun.write(join(dir, '.gitkeep'), '');
+/** Ensure both skill folders (`.agents/skills/` and `.claude/skills/`) exist */
+function ensureSkillDirs(): void {
+    const dirs = skillDirs();
+    for (const dir of [dirs.agents, dirs.claude]) {
+        if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+        }
     }
 }
 
-/** Download logic shared by `install` and (potentially) `update` */
-async function doInstall(skillName: string): Promise<void> {
+/** Shared download logic for installing a skill. */
+async function doInstall(skillName: string, force = false): Promise<void> {
+    // Reject traversal/special names before creating any directories.
+    const nameError = validateEcosystemName(skillName);
+    if (nameError) {
+        logError(nameError);
+        process.exit(1);
+    }
+
     requireProject();
-    await ensureSkillsDir();
+    ensureSkillDirs();
 
     let spin = spinner(`Checking ${skillName}...`);
 
     let exists: boolean;
     try {
         exists = await skillExists(skillName);
-    } catch {
-        spin.stop('Could not connect to GitHub', true);
-        logError('Please check your internet connection and try again.');
+    } catch (err) {
+        spin.stop('Could not check the skill on GitHub', true);
+        logError(
+            err instanceof Error
+                ? err.message
+                : 'Please check your internet connection and try again.'
+        );
         process.exit(1);
     }
 
@@ -62,9 +81,16 @@ async function doInstall(skillName: string): Promise<void> {
 
     spin.update(`Downloading ${skillName}...`);
 
-    const targetDir = join(skillsDir(), skillName);
-    if (existsSync(targetDir)) {
+    // Installed if either folder has it; overwriting replaces both.
+    if (isSkillInstalled(skillName) && !force) {
         spin.stop();
+        if (!process.stdin.isTTY) {
+            // No terminal to answer the prompt (CI, pipes) — never hang.
+            logError(
+                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — pass --force to overwrite, run in a terminal to confirm, or remove those folders first.`
+            );
+            process.exit(1);
+        }
         const shouldOverwrite = await clack.confirm({
             message: `${skillName} already exists. Overwrite?`,
             initialValue: false,
@@ -77,7 +103,7 @@ async function doInstall(skillName: string): Promise<void> {
     }
 
     try {
-        const filesDownloaded = await downloadSkill(skillName, targetDir);
+        const filesDownloaded = await installSkill(skillName);
         spin.stop(`Installed ${skillName} (${filesDownloaded} files)`);
 
         newline();
@@ -87,16 +113,16 @@ async function doInstall(skillName: string): Promise<void> {
         header('What was installed');
         info(`.agents/skills/${skillName}/SKILL.md`);
         info(`.agents/skills/${skillName}/references/`);
+        info(`.claude/skills/${skillName}/SKILL.md`);
+        info(`.claude/skills/${skillName}/references/`);
         newline();
 
         header('Compatible Agents');
         info('This skill is automatically discovered by:');
-        bullet('Cursor — reads from .agents/skills/');
-        bullet('Claude Code — reads from .agents/skills/');
-        bullet('OpenCode — reads from .agents/skills/');
-        bullet('OpenAI Codex — reads from .agents/skills/');
-        bullet('GitHub Copilot — reads from .agents/skills/');
-        bullet('And any agent supporting the agentskills.io standard');
+        info('Claude Code: .claude/skills/');
+        info(
+            'Agents that support the Agent Skills standard (OpenCode, Codex, and others): .agents/skills/'
+        );
         newline();
 
         header('How It Works');
@@ -118,10 +144,22 @@ async function doInstall(skillName: string): Promise<void> {
 const installCommand = new Command('install')
     .description('Install an AI agent skill from the ecosystem')
     .argument('[name]', 'Name of the skill to install', 'burger-api')
-    .action(async (name: string) => {
-        clack.intro('Install AI agent skills');
-        await doInstall(name);
-    });
+    .option('--force', 'Overwrite an existing install without prompting')
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(
+        async (
+            name: string,
+            options: { force?: boolean; local?: boolean }
+        ) => {
+            clack.intro('Install AI agent skills');
+            setLocalMode(options.local);
+            announceLocalMode();
+            await doInstall(name, options.force === true);
+        }
+    );
 
 /** burger-api skills list — list locally installed skills */
 const listCommand = new Command('list')
@@ -129,48 +167,25 @@ const listCommand = new Command('list')
     .action(() => {
         requireProject();
 
-        const dir = skillsDir();
-        if (!existsSync(dir)) {
-            clack.intro('Installed skills');
-            info('No skills installed yet.');
-            newline();
-            info('Install the default skill:');
-            info('  burger-api skills install');
-            clack.outro('Done');
-            process.exit(0);
-        }
-
-        const entries = readdirSync(dir, { withFileTypes: true });
-        const skills = entries
-            .filter((e) => e.isDirectory())
-            .map((e) => {
-                const skillPath = join(dir, e.name, 'SKILL.md');
-                if (!existsSync(skillPath)) return null;
-                const raw = readFileSync(skillPath, 'utf-8');
-                const descLine = raw.split('\n').find((l) =>
-                    l.startsWith('description:')
-                );
-                const description = descLine
-                    ? descLine.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
-                    : '(no description)';
-                return { name: e.name, description };
-            })
-            .filter(Boolean) as { name: string; description: string }[];
+        const skills = listInstalledSkills();
 
         clack.intro('Installed skills');
         if (skills.length === 0) {
-            info('No valid skills found in .agents/skills/.');
+            info('No skills installed yet.');
             newline();
             info('Install the default skill:');
-            info('  burger-api skills install');
+            info(' burger-api skills install');
         } else {
             for (const s of skills) {
-                info(`  ${s.name} — ${s.description}`);
+                info(` ${s.name} — ${s.description}`);
+                info(`   installed in ${s.locations.join(', ')}`);
             }
             newline();
             header('Discovery');
-            info('These skills are automatically detected by agentic IDEs.');
-            info('No additional configuration needed.');
+            info('Claude Code reads .claude/skills/.');
+            info(
+                'Agents that support the Agent Skills standard (OpenCode, Codex, and others) read .agents/skills/.'
+            );
         }
         newline();
         clack.outro('Done');
@@ -179,18 +194,36 @@ const listCommand = new Command('list')
 /** burger-api skills available — list remote skills from GitHub */
 const availableCommand = new Command('available')
     .description('List available skills from the ecosystem')
-    .action(async () => {
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (options: { local?: boolean }) => {
         clack.intro('Available skills');
+        setLocalMode(options.local);
+        announceLocalMode();
 
         let list: string[];
+        let stale = false;
         try {
-            list = await withSpinner(
+            ({ data: list, stale } = await withSpinner(
                 'Fetching available skills...',
-                () => getSkillList()
+                () => getCachedSkillList()
+            ));
+        } catch (err) {
+            logError(
+                err instanceof Error
+                    ? err.message
+                    : 'Could not fetch skill list from GitHub.'
             );
-        } catch {
-            logError('Could not fetch skill list from GitHub.');
             process.exit(1);
+        }
+
+        if (stale) {
+            warning(
+                'GitHub is unreachable — showing a cached list, which may be out of date.'
+            );
+            newline();
         }
 
         if (list.length === 0) {

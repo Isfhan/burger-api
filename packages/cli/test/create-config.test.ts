@@ -1,47 +1,399 @@
-import { describe, it, expect } from 'bun:test';
-import { generateBurgerConfig } from '../src/utils/templates';
-import type { CreateOptions } from '../src/types';
+import { afterEach, beforeEach, describe, it, expect } from 'bun:test';
+import {
+    generateBurgerConfig,
+    generateIndexFile,
+    generateJsConfig,
+    generateOpenAPIConfig,
+    generatePluginsFile,
+    generateProvidersFile,
+    generateRouteFiles,
+    generateTsConfig,
+    generatePackageJson,
+    generatePluginTemplate,
+    unpublishedVersionHint,
+} from '../src/utils/templates';
+import { setLocalMode } from '../src/utils/local-mode';
+import { baseCreateOptions } from './test-utils';
 
 describe('generateBurgerConfig', () => {
     it('generates config with default-like values', () => {
-        const options: CreateOptions = {
+        const options = baseCreateOptions({
             name: 'my-api',
-            useApi: true,
-            apiDir: 'api',
-            apiPrefix: '/api',
-            debug: false,
             usePages: true,
-            pageDir: 'pages',
-            pagePrefix: '/',
-        };
+        });
 
         const content = generateBurgerConfig(options);
 
-        expect(content).toContain("apiDir: \"./src/api\"");
-        expect(content).toContain("pageDir: \"./src/pages\"");
-        expect(content).toContain("apiPrefix: \"/api\"");
-        expect(content).toContain("pagePrefix: \"/\"");
+        expect(content).toContain("apiDir: './src/api'");
+        expect(content).toContain("pageDir: './src/pages'");
+        expect(content).toContain("apiPrefix: '/api'");
+        expect(content).toContain("pagePrefix: '/'");
         expect(content).toContain('debug: false');
     });
 
+    it('omits wsDir when useWs is not set', () => {
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'my-api' })
+        );
+        expect(content).not.toContain('wsDir');
+    });
+
+    it('includes wsDir when useWs is set, like pageDir/usePages', () => {
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'my-api', useWs: true })
+        );
+        expect(content).toContain("wsDir: './src/websocket'");
+    });
+
+    it('types the TS config with satisfies Partial<BuildConfig>', () => {
+        // A scaffold only writes enabled features (no pageDir when pages are
+        // off), so the config is deliberately partial; the CLI merges in
+        // convention defaults.
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'x', usePages: true })
+        );
+
+        expect(content).toContain(
+            "import type { BuildConfig } from 'burger-api';"
+        );
+        expect(content).toContain('} satisfies Partial<BuildConfig>;');
+    });
+
+    it('types the JS config with a partial JSDoc BuildConfig hint', () => {
+        const content = generateBurgerConfig(
+            baseCreateOptions({ name: 'x', usePages: true, lang: 'js' })
+        );
+
+        expect(content).toContain(
+            "/** @type {Partial<import('burger-api').BuildConfig>} */"
+        );
+    });
+
     it('generates config with custom values from prompts', () => {
-        const options: CreateOptions = {
+        const options = baseCreateOptions({
             name: 'custom-app',
-            useApi: true,
             apiDir: 'backend',
             apiPrefix: '/v1',
             debug: true,
             usePages: true,
             pageDir: 'site',
             pagePrefix: '/web',
-        };
+        });
 
         const content = generateBurgerConfig(options);
 
-        expect(content).toContain("apiDir: \"./src/backend\"");
-        expect(content).toContain("pageDir: \"./src/site\"");
-        expect(content).toContain("apiPrefix: \"/v1\"");
-        expect(content).toContain("pagePrefix: \"/web\"");
+        expect(content).toContain("apiDir: './src/backend'");
+        expect(content).toContain("pageDir: './src/site'");
+        expect(content).toContain("apiPrefix: '/v1'");
+        expect(content).toContain("pagePrefix: '/web'");
         expect(content).toContain('debug: true');
+    });
+});
+
+describe('generateIndexFile', () => {
+    const base = baseCreateOptions({ name: 'my-api' });
+
+    it('omits wsDir from the Burger() call when useWs is not set', () => {
+        const content = generateIndexFile(base);
+        expect(content).not.toContain('wsDir');
+    });
+
+    it('wires wsDir into the Burger() call when useWs is set, like pageDir', () => {
+        const content = generateIndexFile({
+            ...base,
+            useWs: true,
+            wsDir: 'websocket',
+        });
+        expect(content).toContain("wsDir: './src/websocket'");
+    });
+
+    it('uses a custom wsDir when provided', () => {
+        const content = generateIndexFile({
+            ...base,
+            useWs: true,
+            wsDir: 'sockets',
+        });
+        expect(content).toContain("wsDir: './src/sockets'");
+    });
+});
+
+describe('generatePackageJson', () => {
+    it('generates package.json with vision-aligned CLI scripts', () => {
+        const content = generatePackageJson('my-project');
+        const pkg = JSON.parse(content);
+
+        expect(pkg.scripts.dev).toBe('burger-api dev');
+        expect(pkg.scripts.start).toBe('burger-api start');
+        expect(pkg.scripts.build).toBe('burger-api build src/index.ts');
+        expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
+    });
+
+    it('includes burger-api dependency', () => {
+        const content = generatePackageJson('my-project');
+        const pkg = JSON.parse(content);
+
+        expect(pkg.dependencies['burger-api']).toBeDefined();
+    });
+
+    it('generates .js entry scripts for JS projects', () => {
+        const pkg = JSON.parse(generatePackageJson('my-project', 'js'));
+
+        // dev/start auto-detect src/index.js — same scripts as TS.
+        expect(pkg.scripts.dev).toBe('burger-api dev');
+        expect(pkg.scripts.start).toBe('burger-api start');
+        expect(pkg.scripts.build).toBe('burger-api build src/index.js');
+        // Plain `tsc` ignores jsconfig.json — JS apps check via -p.
+        expect(pkg.scripts.typecheck).toBe('tsc -p jsconfig.json --noEmit');
+    });
+});
+
+describe('generatePackageJson local mode', () => {
+    const originalLocal = process.env.BURGER_API_LOCAL;
+
+    beforeEach(() => {
+        // A leaked --local flag from another in-process command must not
+        // decide this suite; the env is what is under test.
+        setLocalMode(undefined);
+    });
+
+    afterEach(() => {
+        setLocalMode(undefined);
+        if (originalLocal === undefined) delete process.env.BURGER_API_LOCAL;
+        else process.env.BURGER_API_LOCAL = originalLocal;
+    });
+
+    it('keeps the npm range when local mode is off', () => {
+        delete process.env.BURGER_API_LOCAL;
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('^1.0.0-beta');
+        expect(pkg.devDependencies['@burger-api/cli']).toMatch(/^\^/);
+    });
+
+    it('emits link:burger-api and link:@burger-api/cli with BURGER_API_LOCAL=1', () => {
+        process.env.BURGER_API_LOCAL = '1';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
+        expect(pkg.devDependencies['@burger-api/cli']).toBe(
+            'link:@burger-api/cli'
+        );
+        // No npm ranges, no overrides.
+        expect(pkg.overrides).toBeUndefined();
+        expect(JSON.stringify(pkg)).not.toContain('^1.0.0-beta');
+    });
+
+    it('accepts BURGER_API_LOCAL=true', () => {
+        process.env.BURGER_API_LOCAL = 'true';
+        const pkg = JSON.parse(generatePackageJson('x'));
+        expect(pkg.dependencies['burger-api']).toBe('link:burger-api');
+    });
+});
+
+describe('unpublishedVersionHint', () => {
+    it('hints local mode when burger-api has no matching version', () => {
+        const hint = unpublishedVersionHint(
+            'error: No version matching "burger-api@^1.0.0-beta" found for specifier "burger-api"'
+        );
+        expect(hint).toContain('--local');
+        expect(hint).toContain('BURGER_API_LOCAL=1');
+    });
+
+    it('hints local mode for @burger-api/cli too', () => {
+        expect(
+            unpublishedVersionHint(
+                'No version matching "@burger-api/cli@^1.0.0-beta" found'
+            )
+        ).toBeDefined();
+    });
+
+    it('returns undefined for other install failures', () => {
+        expect(
+            unpublishedVersionHint('error: connection refused')
+        ).toBeUndefined();
+        expect(
+            unpublishedVersionHint(
+                'No version matching "left-pad@^9" found'
+            )
+        ).toBeUndefined();
+    });
+});
+
+describe('JS scaffold (--lang js)', () => {
+    const jsOptions = baseCreateOptions({ name: 'my-api', lang: 'js' });
+
+    it('generateJsConfig enables checkJs and strict JSDoc checking', () => {
+        const config = JSON.parse(generateJsConfig());
+
+        expect(config.compilerOptions.checkJs).toBe(true);
+        expect(config.compilerOptions.strict).toBe(true);
+        expect(config.compilerOptions.noEmit).toBe(true);
+        expect(config.include).toContain('src');
+    });
+
+    it('generateRouteFiles emits .js files with JSDoc types for JS', () => {
+        const files = generateRouteFiles('hello', {}, 'js');
+
+        expect(Object.keys(files).sort()).toEqual([
+            'config.js',
+            'hooks.js',
+            'openapi.js',
+            'route.js',
+            'schema.js',
+        ]);
+        expect(files['route.js']).toContain('defineRoute(GetSchema, (ctx) =>');
+        expect(files['route.js']).not.toContain(': BurgerContext');
+        expect(files['hooks.js']).toContain(
+            "@param {import('burger-api').BurgerContext} ctx"
+        );
+    });
+
+    it('generateRouteFiles keeps .ts files with types for TS', () => {
+        const files = generateRouteFiles('hello', {}, 'ts');
+
+        expect(files['route.ts']).toContain(
+            'export const GET = defineRoute(GetSchema, (ctx) =>'
+        );
+        expect(files['route.js']).toBeUndefined();
+        // Without a schema, the plain typed handler is scaffolded.
+        expect(
+            generateRouteFiles('hello', { schema: false }, 'ts')['route.ts']
+        ).toContain('export function GET(ctx: BurgerContext): Response');
+        expect(
+            generateRouteFiles('hello', { schema: false }, 'js')['route.js']
+        ).toContain("@param {import('burger-api').BurgerContext} ctx");
+    });
+
+    it('generateRouteFiles stamps consumer types (satisfies) on TS convention files', () => {
+        const files = generateRouteFiles('hello', {}, 'ts');
+
+        expect(files['schema.ts']).toContain(
+            "import type { MethodSchema } from 'burger-api';"
+        );
+        expect(files['schema.ts']).toContain('} satisfies MethodSchema;');
+        expect(files['openapi.ts']).toContain(
+            "import type { OpenAPIMeta } from 'burger-api';"
+        );
+        expect(files['openapi.ts']).toContain('} satisfies OpenAPIMeta;');
+        expect(files['config.ts']).toContain(
+            "import type { RouteConfig } from 'burger-api';"
+        );
+        expect(files['config.ts']).toContain('} satisfies RouteConfig;');
+    });
+
+    it('generateRouteFiles adds JSDoc consumer-type hints on JS convention files', () => {
+        const files = generateRouteFiles('hello', {}, 'js');
+
+        // @satisfies keeps the literal type so defineRoute can infer it.
+        expect(files['schema.js']).toContain(
+            "/** @satisfies {import('burger-api').MethodSchema} */"
+        );
+        expect(files['openapi.js']).toContain(
+            "/** @type {import('burger-api').OpenAPIMeta} */"
+        );
+        expect(files['config.js']).toContain(
+            "/** @type {import('burger-api').RouteConfig} */"
+        );
+    });
+
+    it('generateOpenAPIConfig omits type-only imports for JS', () => {
+        const js = generateOpenAPIConfig(jsOptions);
+        const ts = generateOpenAPIConfig({ ...jsOptions, lang: 'ts' });
+
+        expect(js).not.toContain("import type { OpenAPIConfig }");
+        expect(js).not.toContain('satisfies OpenAPIConfig');
+        expect(ts).toContain("import type { OpenAPIConfig }");
+        expect(ts).toContain('satisfies OpenAPIConfig;');
+    });
+
+    it('generateOpenAPIConfig leaves servers unset (docs call the same origin)', () => {
+        const config = generateOpenAPIConfig(jsOptions);
+
+        // Hard-coding localhost:4000 breaks "Try it out" on other ports.
+        expect(config).not.toContain('localhost:4000');
+        expect(config).not.toMatch(/^\s*servers:/m);
+        expect(config).toContain('// servers:');
+    });
+
+    it('generatePluginsFile/generateProvidersFile are type-free for JS', () => {
+        expect(generatePluginsFile('js')).not.toContain('import type');
+        expect(generatePluginsFile('js')).toContain('export default (burger) =>');
+        expect(generateProvidersFile('js')).not.toContain('import type');
+        expect(generateProvidersFile('ts')).toContain(
+            "import type { ProviderRegistrar } from 'burger-api';"
+        );
+    });
+
+    it('types plugins.ts/providers.ts against the narrow registrar types, not the full Burger class', () => {
+        // Regression: typing these files against the full Burger class
+        // exposes serve()/fetchHandler() in autocomplete, which are unsafe
+        // from this registration-time callback. Each file sees only the one
+        // method it exists for.
+        expect(generatePluginsFile('ts')).toContain(
+            "import type { PluginRegistrar } from 'burger-api';"
+        );
+        expect(generatePluginsFile('ts')).toContain(
+            '(burger: PluginRegistrar) =>'
+        );
+        expect(generatePluginsFile('ts')).not.toContain('Burger');
+        expect(generatePluginsFile('js')).toContain(
+            "@param {import('burger-api').PluginRegistrar} burger"
+        );
+
+        expect(generateProvidersFile('ts')).toContain(
+            '(burger: ProviderRegistrar) =>'
+        );
+        expect(generateProvidersFile('ts')).not.toContain('Burger');
+        expect(generateProvidersFile('js')).toContain(
+            "@param {import('burger-api').ProviderRegistrar} burger"
+        );
+    });
+
+    it('generateTsConfig still emits for TS projects', () => {
+        const config = JSON.parse(generateTsConfig());
+
+        expect(config.compilerOptions.strict).toBe(true);
+        expect(config.compilerOptions.types).toEqual(['bun']);
+    });
+});
+
+describe('Scaffold output syntax checks', () => {
+    const transpile = async (source: string): Promise<void> => {
+        new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
+    };
+
+    it('project name with a quote still generates parseable openapi.config.ts', async () => {
+        const content = generateOpenAPIConfig(
+            baseCreateOptions({ name: "Bob's API" })
+        );
+        expect(content).toContain('"Bob\'s API"');
+        await transpile(content);
+    });
+
+    it('openapi.config.ts without a name falls back to a safe default', async () => {
+        const content = generateOpenAPIConfig(baseCreateOptions({ name: '' }));
+        await transpile(content);
+        expect(content).toContain('"Burger API"');
+    });
+
+    it('route files with a quoted route name still parse', async () => {
+        const files = generateRouteFiles("Bob's", {}, 'ts');
+        await transpile(files['openapi.ts']!);
+        await transpile(files['route.ts']!);
+        expect(files['openapi.ts']).toContain('"Bob\'s"');
+    });
+
+    it('burger config with quoted prefixes still parses', async () => {
+        const content = generateBurgerConfig(
+            baseCreateOptions({
+                name: 'x',
+                apiPrefix: "/api-'s",
+                usePages: true,
+                pagePrefix: "/p-'s",
+            })
+        );
+        await transpile(content);
+    });
+
+    it('plugin template with a quoted name still parses', async () => {
+        await transpile(generatePluginTemplate("O'Brien's", 'ts'));
     });
 });

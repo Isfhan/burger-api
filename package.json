@@ -3,7 +3,8 @@
   "author": "Isfhan Ahmed",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "ecosystem/plugins/*"
   ],
   "type": "module",
   "scripts": {
@@ -11,6 +12,7 @@
     "build": "bun run --filter burger-api build",
     "test:framework": "bun run --filter burger-api test",
     "test:cli": "bun run --filter @burger-api/cli test",
+    "test:e2e:full": "bun run --filter @burger-api/cli test:e2e:full",
     "test:route-sync": "bun test test/route-sync.test.ts",
     "test:all": "bun run scripts/test-summary.ts",
     "dev": "bun run --filter burger-api dev"

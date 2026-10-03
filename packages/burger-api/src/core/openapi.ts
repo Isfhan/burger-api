@@ -1,108 +1,170 @@
 // Import stuff from Zod 4.x
-import {
-    toJSONSchema,
-    ZodArray,
-    ZodBoolean,
-    ZodNumber,
-    ZodObject,
-    ZodOptional,
-    ZodString,
-    ZodType,
-} from 'zod';
+import { toJSONSchema, ZodType } from 'zod';
 
 // Import types
-import type { ServerOptions, RouteDefinition } from '../types/index';
+import type {
+    ServerOptions,
+    RouteDefinition,
+    MethodSchema,
+    OpenAPIMeta,
+    RequestHandler,
+    OpenAPIConfig,
+    OpenAPIObject,
+    JsonSchemaConverter,
+} from '../types/index.js';
+import type { SchemaInput } from '../validation/types.js';
 
 /**
- * Maps a Zod type to an OpenAPI schema type.
- * @param zodType - The Zod type to map.
- * @returns The OpenAPI schema type.
- */
-function mapZodTypeToOpenAPIType(zodType: ZodType<unknown, unknown>): string {
-    if (zodType instanceof ZodOptional) {
-        return mapZodTypeToOpenAPIType(
-            zodType.unwrap() as ZodType<unknown, unknown>
-        );
-    }
-    if (zodType instanceof ZodString) return 'string';
-    if (zodType instanceof ZodNumber) return 'number';
-    if (zodType instanceof ZodBoolean) return 'boolean';
-    if (zodType instanceof ZodArray) return 'array';
-    if (zodType instanceof ZodObject) return 'object';
-    return 'string'; // fallback
-}
-
-/**
- * Builds an array of OpenAPI 3.0 parameters based on the Zod schema.
- * For each property in the Zod schema, an OpenAPI parameter is constructed
- * with the same name and required flag. The schema of the parameter is set
- * to a string type.
- * @param zodSchema - The Zod schema to construct parameters from. Can be undefined.
- * @param location - The location of the parameter. Must be either "path" or "query".
- * @returns An array of OpenAPI 3.0 parameter objects or an empty array if the Zod schema is undefined.
+ * Builds OpenAPI parameters from an object schema, using the input side so
+ * `.default()` / `.optional()` fields are not required and each parameter
+ * keeps its enum / format / default / min / max.
+ *
+ * Zod objects and configured Standard Schema converters yield real JSON
+ * Schema. A Standard Schema with no JSON Schema falls back to its field map
+ * (`shape` / `entries`) and emits each name with `schema: {}` — never a
+ * silent omission.
  */
 function buildParameters(
-    zodSchema: unknown,
-    location: 'path' | 'query'
+    schema: unknown,
+    location: 'path' | 'query' | 'header' | 'cookie',
+    mapJsonSchema?: Record<string, JsonSchemaConverter>
 ): any[] {
-    const parameters: any[] = [];
-    if (isZodObjectSchema(zodSchema)) {
-        // Get the shape of the Zod schema
-        const shape: Record<
-            string,
-            ZodType<unknown, unknown>
-        > = zodSchema.shape;
-
-        for (const key in shape) {
-            // Get the definition of the field
-            const fieldDef = shape[key];
-
-            // Determine if the field is optional
-            const isOptional = fieldDef instanceof ZodOptional;
-
-            // Map the Zod type to an OpenAPI schema type
-            const type = mapZodTypeToOpenAPIType(fieldDef) as
-                | 'string'
-                | 'number'
-                | 'boolean'
-                | 'array'
-                | 'object';
-
-            parameters.push({
-                // Set the name of the parameter
-                name: key,
-                // Type of the parameter path or query
+    const json = schemaToJsonSchema(
+        schema as SchemaInput,
+        mapJsonSchema,
+        'input'
+    ) as {
+        properties?: Record<string, unknown>;
+        required?: string[];
+    } | undefined;
+    const properties = json?.properties;
+    if (properties && typeof properties === 'object') {
+        const required = new Set(json?.required ?? []);
+        return Object.entries(properties).map(([name, propertySchema]) => {
+            const source =
+                typeof propertySchema === 'object' && propertySchema !== null
+                    ? (propertySchema as Record<string, unknown>)
+                    : {};
+            const { description, ...rest } = source;
+            return {
+                name,
                 in: location,
-                // Set the required flag
-                required: !isOptional,
-                // Set the schema type
-                schema: { type },
-                // Description of the parameter
-                description: `${location} parameter ${key}`,
-            });
-        }
+                // OpenAPI requires path parameters to be marked required.
+                required: location === 'path' || required.has(name),
+                schema: rest,
+                description:
+                    typeof description === 'string'
+                        ? description
+                        : `${location} parameter ${name}`,
+            };
+        });
     }
 
-    return parameters;
-}
-
-function isZodObjectSchema(value: unknown): value is ZodObject<any, any> {
-    return value instanceof ZodObject;
+    // No JSON Schema available: use the schema's structural field map.
+    const fields = structuralFieldNames(schema);
+    if (!fields) return [];
+    return fields.map((name) => ({
+        name,
+        in: location,
+        required: location === 'path',
+        schema: {},
+        description: `${location} parameter ${name}`,
+    }));
 }
 
 /**
- * Builds a request body object for OpenAPI based on a Zod schema.
- * Converts the Zod schema into JSON schema and constructs an OpenAPI
- * requestBody object with content type "application/json".
- * @param zodSchema - The Zod schema to convert into JSON schema.
- * @returns An OpenAPI requestBody object, or undefined if no schema is provided.
+ * Field names from common structural maps: zod's `shape`, valibot's
+ * `entries`. Returns undefined when the schema exposes no field map.
  */
-function buildRequestBody(zodSchema: unknown): any {
-    // If no schema is provided, return undefined
-    if (!(zodSchema instanceof ZodType)) return undefined;
-    // Convert the Zod schema to a JSON schema
-    const jsonSchema = toJSONSchema(zodSchema);
-    // Return the OpenAPI requestBody object
+function structuralFieldNames(schema: unknown): string[] | undefined {
+    if (typeof schema !== 'object' || schema === null) return undefined;
+    const candidate = schema as { shape?: unknown; entries?: unknown };
+    const map = candidate.shape ?? candidate.entries;
+    if (map && typeof map === 'object' && !Array.isArray(map)) {
+        return Object.keys(map as Record<string, unknown>);
+    }
+    return undefined;
+}
+
+/**
+ * Whether the body schema accepts `undefined` (so the request body is not
+ * required). Runs once at document generation, never per request.
+ */
+function acceptsUndefined(schema: unknown): boolean {
+    const zod = schema as { safeParse?: (value: unknown) => unknown };
+    if (typeof zod.safeParse === 'function') {
+        try {
+            const result = zod.safeParse(undefined) as { success?: boolean };
+            return result?.success === true;
+        } catch {
+            return false;
+        }
+    }
+    const standard = schema as {
+        '~standard'?: { validate?: (value: unknown) => unknown };
+    };
+    try {
+        const result = standard['~standard']?.validate?.(undefined) as
+            | { issues?: unknown }
+            | Promise<unknown>
+            | undefined;
+        if (result === undefined || result instanceof Promise) return false;
+        return !('issues' in result && result.issues);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Converts a SchemaInput to JSON Schema: configured converter first, Zod's
+ * `toJSONSchema` as fallback.
+ *
+ * `io` selects the request side (`'input'`, where `.default()` fields are
+ * optional) or the response side (`'output'`).
+ */
+function schemaToJsonSchema(
+    schema: SchemaInput,
+    mapJsonSchema?: Record<string, JsonSchemaConverter>,
+    io: 'input' | 'output' = 'output'
+): Record<string, unknown> | undefined {
+    if (schema instanceof ZodType) {
+        const jsonSchema = toJSONSchema(schema, {
+            io,
+            unrepresentable: 'any',
+        }) as Record<string, unknown>;
+        // Zod emits `$schema`, which is illegal inside an OpenAPI `schema`
+        // object (OAS defines its own dialect) — drop it.
+        delete jsonSchema.$schema;
+        return jsonSchema;
+    }
+    // Standard Schema: try configured converters
+    if (mapJsonSchema && typeof schema === 'object' && schema !== null) {
+        const stdSchema = schema as unknown as Record<string, unknown>;
+        const vendor =
+            (stdSchema['~standard'] as Record<string, unknown>)?.vendor ??
+            stdSchema.__vendor;
+        if (typeof vendor === 'string' && mapJsonSchema[vendor]) {
+            return mapJsonSchema[vendor](schema);
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Builds a request body object for OpenAPI based on a SchemaInput.
+ */
+function buildRequestBody(
+    zodSchema: unknown,
+    mapJsonSchema?: Record<string, JsonSchemaConverter>
+): any {
+    if (!(zodSchema instanceof ZodType) && !isStandardSchema(zodSchema))
+        return undefined;
+    const jsonSchema = schemaToJsonSchema(
+        zodSchema as SchemaInput,
+        mapJsonSchema,
+        'input'
+    );
+    if (!jsonSchema) return undefined;
     return {
         content: {
             'application/json': {
@@ -110,106 +172,305 @@ function buildRequestBody(zodSchema: unknown): any {
             },
         },
         description: 'Request body',
-        required: true,
+        // Required unless the schema itself accepts `undefined`.
+        required: !acceptsUndefined(zodSchema),
     };
 }
 
 /**
- * Converts a route path from colon-based dynamic segments to OpenAPI's curly brace syntax.
- * Also handles  wildcard routes.
- *
- * @param routePath The original route path with colon-based dynamic segments (e.g., "/user/:id") or wildcards (e.g., "/files/*").
- * @returns The converted route path with curly brace syntax (e.g., "/user/{id}") or wildcard format (e.g., "/files/*").
+ * Type guard for Standard Schema objects (has ~standard property).
  */
-function convertPathForOpenAPI(routePath: string): string {
-    // Fast path: if no special chars, return as-is
-    if (routePath.indexOf(':') === -1 && routePath.indexOf('*') === -1) {
-        return routePath;
-    }
-
-    // Replace occurrences of :param with {param}
-    let converted = routePath.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
-
-    // Handle wildcard routes
-    // OpenAPI 3.0 doesn't have official wildcard syntax, so we keep /* as-is
-    // This will display in Swagger as /api/files/* which is intuitive and common
-    // Alternative: convert to {path*} format if preferred
-    // converted = converted.replace(/\/\*$/g, '/{path*}');
-
-    return converted;
+function isStandardSchema(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && '~standard' in value;
 }
 
-export function generateOpenAPIDocument(
-    apiRoutes: RouteDefinition[],
-    options: ServerOptions
-) {
-    const openapiDoc = {
-        openapi: '3.0.0',
-        info: {
-            title: options.title || 'Burger API',
-            description: options.description || 'Burger API documentation',
-            version: options.version || '1.0.0',
-        },
-        paths: {} as Record<string, any>,
-    };
-
-    // Iterate over each route
-    for (const route of apiRoutes) {
-        // Convert colon-based dynamic segments to OpenAPI's {param} syntax
-        const openApiPath = convertPathForOpenAPI(route.path);
-
-        // Initialize path object if necessary
-        openapiDoc.paths[openApiPath] = openapiDoc.paths[openApiPath] || {};
-
-        // For each HTTP method in the route, add an OpenAPI operation.
-        for (const method in route.handlers) {
-            // If the handler is not a function, skip
-            if (typeof route.handlers[method] !== 'function') continue;
-            // Convert HTTP method to lowercase
-            const lowerMethod = method.toLowerCase();
-
-            // Use provided openapi metadata if available; else, fallback to auto-generated values.
-            const methodMeta = route.openapi?.[lowerMethod] || {};
-
-            // Generate an operationId: e.g., "get_api_product"
-            const operationId =
-                methodMeta.operationId ||
-                `${lowerMethod}_${route.path.replace(/[\/:]/g, '_')}`;
-
-            // Build parameters for both path and query from the schema.
-            let parameters: any[] = [];
-            if (route.schema && route.schema[lowerMethod]) {
-                const schemaDef = route.schema[lowerMethod];
-                parameters = [
-                    ...buildParameters(schemaDef.params, 'path'),
-                    ...buildParameters(schemaDef.query, 'query'),
-                ];
-            }
-
-            // Build requestBody if a body schema exists.
-            let requestBody = undefined;
-            if (route.schema && route.schema[lowerMethod]?.body) {
-                requestBody = buildRequestBody(route.schema[lowerMethod].body);
-            }
-
-            openapiDoc.paths[openApiPath][lowerMethod] = {
-                operationId,
-                summary:
-                    methodMeta.summary || `Summary for ${method} ${route.path}`,
-                description: methodMeta.description || '',
-                tags: methodMeta.tags || [],
-                deprecated: methodMeta.deprecated || false,
-                parameters: parameters,
-                requestBody: requestBody,
-                responses: methodMeta.responses || {
-                    '200': {
-                        description: 'Successful response',
-                    },
-                },
-                externalDocs: methodMeta.externalDocs || undefined,
+/**
+ * Builds OpenAPI responses from a route's response schema, converting each
+ * status code's schema to JSON Schema.
+ */
+function buildResponses(
+    responseSchema: Record<string, SchemaInput> | undefined,
+    openapiMetaResponses: Record<string, any> | undefined,
+    mapJsonSchema?: Record<string, JsonSchemaConverter>
+): Record<string, any> {
+    // Auto-generate from schema.response
+    const autoGenerated: Record<string, any> = {};
+    if (responseSchema) {
+        for (const [statusCode, schema] of Object.entries(responseSchema)) {
+            const jsonSchema = schemaToJsonSchema(schema, mapJsonSchema);
+            autoGenerated[statusCode] = {
+                description: statusCode.startsWith('2')
+                    ? 'Successful response'
+                    : statusCode.startsWith('4')
+                      ? 'Client error'
+                      : statusCode.startsWith('5')
+                        ? 'Server error'
+                        : `Response ${statusCode}`,
+                content: jsonSchema
+                    ? {
+                          'application/json': {
+                              schema: jsonSchema,
+                          },
+                      }
+                    : undefined,
             };
         }
     }
 
-    return openapiDoc;
+    // User-provided responses override auto-generated ones.
+    if (openapiMetaResponses) {
+        return { ...autoGenerated, ...openapiMetaResponses };
+    }
+
+    return Object.keys(autoGenerated).length > 0
+        ? autoGenerated
+        : { '200': { description: 'Successful response' } };
+}
+
+/**
+ * Converts `:param` and `*` route segments to OpenAPI's curly brace syntax.
+ * Param names may carry `-` and `_`; wildcards document as `{wildcard}`.
+ */
+function convertPathForOpenAPI(routePath: string): string {
+    if (routePath.indexOf(':') === -1 && routePath.indexOf('*') === -1) {
+        return routePath;
+    }
+    return routePath
+        .replace(/:([a-zA-Z0-9_-]+)/g, '{$1}')
+        .replace(/\*+/g, '{wildcard}');
+}
+
+/**
+ * Generates a full OpenAPI 3.0 document from API routes.
+ *
+ * @param apiRoutes Compiled route definitions.
+ * @param options Server options (fallback metadata source).
+ * @param config OpenAPI config from `openapi.config.ts` (primary metadata source).
+ */
+export function generateOpenAPIDocument(
+    apiRoutes: RouteDefinition[],
+    options: ServerOptions,
+    config?: OpenAPIConfig
+): OpenAPIObject {
+    // Build info block: config overrides ServerOptions
+    const info: Record<string, any> = {
+        title: config?.title || options.title || 'Burger API',
+        description:
+            config?.description ||
+            options.description ||
+            'Burger API documentation',
+        version: config?.version || options.version || '1.0.0',
+    };
+    if (config?.contact) info.contact = config.contact;
+    if (config?.license) info.license = config.license;
+    if (config?.termsOfService) info.termsOfService = config.termsOfService;
+
+    const doc: OpenAPIObject = {
+        // Zod emits JSON Schema draft 2020-12, which OpenAPI 3.1 matches.
+        openapi: '3.1.0',
+        info,
+        paths: {} as Record<string, any>,
+    };
+
+    // Servers
+    if (config?.servers && config.servers.length > 0) {
+        doc.servers = config.servers;
+    }
+
+    // External docs
+    if (config?.externalDocs) {
+        doc.externalDocs = config.externalDocs;
+    }
+
+    // Root security defaults to `[]` (no auth required): core is auth-agnostic,
+    // and omitting it makes strict linters flag every operation.
+    doc.security =
+        config?.security && config.security.length > 0
+            ? config.security
+            : [];
+
+    // Collect tags used across operations
+    const tagSet = new Set<string>();
+    // OperationIds must be unique and sanitized for OpenAPI
+    // (`^[a-zA-Z0-9_.-]+$`); collisions get a numeric suffix.
+    const usedOperationIds = new Set<string>();
+
+    for (const route of apiRoutes) {
+        const openApiPath = convertPathForOpenAPI(route.path);
+        doc.paths[openApiPath] = doc.paths[openApiPath] || {};
+
+        for (const method in route.handlers) {
+            // Handler/schema/openapi maps are union-keyed at the type level,
+            // so widen per map for runtime lookups.
+            const handlers = route.handlers as Record<string, RequestHandler>;
+            const openapiMeta = (route.openapi ?? {}) as Record<
+                string,
+                OpenAPIMeta
+            >;
+            const schema = (route.schema ?? {}) as Record<
+                string,
+                MethodSchema
+            >;
+
+            if (typeof handlers[method] !== 'function') continue;
+            // Auto-generated OPTIONS (CORS preflight) is not a documented
+            // operation.
+            if ((handlers[method] as { isAutoOptions?: boolean }).isAutoOptions) {
+                continue;
+            }
+            const lowerMethod = method.toLowerCase();
+
+            try {
+                const methodMeta = openapiMeta[lowerMethod] || {};
+
+                // Sanitize the operationId to OpenAPI-legal characters and
+                // dedupe collisions.
+                let operationId =
+                    methodMeta.operationId ||
+                    `${lowerMethod}_${route.path.replace(/[^a-zA-Z0-9_.-]+/g, '_')}`;
+                if (usedOperationIds.has(operationId)) {
+                    let suffix = 2;
+                    let candidate = `${operationId}_${suffix}`;
+                    while (usedOperationIds.has(candidate)) {
+                        suffix += 1;
+                        candidate = `${operationId}_${suffix}`;
+                    }
+                    operationId = candidate;
+                }
+                usedOperationIds.add(operationId);
+
+                let parameters: any[] = [];
+                if (schema[lowerMethod]) {
+                    const schemaDef = schema[lowerMethod];
+                    const mapJsonSchema = config?.mapJsonSchema;
+                    parameters = [
+                        ...buildParameters(
+                            schemaDef.params,
+                            'path',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.query,
+                            'query',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.headers,
+                            'header',
+                            mapJsonSchema
+                        ),
+                        ...buildParameters(
+                            schemaDef.cookies,
+                            'cookie',
+                            mapJsonSchema
+                        ),
+                    ];
+                }
+
+                // Every operation on a templated path must define its path
+                // parameters (OAS `path-parameters-defined`), even with no
+                // schema.
+                for (const match of openApiPath.matchAll(/\{([^}]+)\}/g)) {
+                    const name = match[1]!;
+                    if (
+                        !parameters.some(
+                            (p) => p.in === 'path' && p.name === name
+                        )
+                    ) {
+                        parameters.unshift({
+                            name,
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'string' },
+                            description:
+                                name === 'wildcard'
+                                    ? 'Wildcard path segments (may contain slashes)'
+                                    : `Path parameter ${name}`,
+                        });
+                    }
+                }
+
+                let requestBody = undefined;
+                if (schema[lowerMethod]?.body) {
+                    requestBody = buildRequestBody(
+                        schema[lowerMethod].body,
+                        config?.mapJsonSchema
+                    );
+                }
+
+                const responses = buildResponses(
+                    schema[lowerMethod]?.response,
+                    methodMeta.responses,
+                    config?.mapJsonSchema
+                );
+
+                // Collect tags
+                const tags = methodMeta.tags || [];
+                for (const tag of tags) {
+                    tagSet.add(tag);
+                }
+
+                (doc.paths[openApiPath] as any)[lowerMethod] = {
+                    operationId,
+                    summary:
+                        methodMeta.summary ||
+                        `Summary for ${method} ${route.path}`,
+                    description: methodMeta.description || '',
+                    tags,
+                    deprecated: methodMeta.deprecated || false,
+                    parameters,
+                    requestBody,
+                    responses,
+                    externalDocs: methodMeta.externalDocs || undefined,
+                };
+            } catch (error) {
+                // A schema the converter still cannot express must not take
+                // the whole document (or startup) down — document the
+                // operation with an empty object and warn once.
+                console.warn(
+                    `[burger-api] OpenAPI: could not build ${method.toUpperCase()} ${route.path} — documenting it without schema details:`,
+                    error
+                );
+                (doc.paths[openApiPath] as any)[lowerMethod] = {};
+            }
+        }
+    }
+
+    // Emit the top-level tags array.
+    if (tagSet.size > 0) {
+        (doc as any).tags = Array.from(tagSet).map((name) => ({ name }));
+    }
+
+    // Add components.schemas.ProblemDetail (RFC 9457) when the doc has paths.
+    if (Object.keys(doc.paths).length > 0) {
+        (doc as any).components = {
+            schemas: {
+                ProblemDetail: {
+                    type: 'object',
+                    properties: {
+                        type: {
+                            type: 'string',
+                            description:
+                                'URI reference identifying the problem type',
+                        },
+                        title: {
+                            type: 'string',
+                            description: 'Short human-readable summary',
+                        },
+                        status: {
+                            type: 'integer',
+                            description: 'HTTP status code',
+                        },
+                        detail: {
+                            type: 'string',
+                            description: 'Human-readable explanation',
+                        },
+                    },
+                    required: ['type', 'title', 'status'],
+                },
+            },
+        };
+    }
+
+    return doc;
 }

@@ -1,29 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'path';
-import { mkdtempSync, writeFileSync, existsSync, rmSync, mkdirSync } from 'fs';
-import { tmpdir } from 'os';
+import { mkdirSync, writeFileSync } from 'fs';
 import { parseSkillDescription, flattenSkillFiles } from '../src/utils/github';
-
-const cliEntry = join(import.meta.dir, '..', 'src', 'index.ts');
-
-async function runCli(args: string[], cwd?: string): Promise<{
-    exitCode: number;
-    stdout: string;
-    stderr: string;
-}> {
-    const proc = Bun.spawn(['bun', cliEntry, ...args], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-        cwd,
-        env: process.env,
-    });
-    const [exitCode, stdout, stderr] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-    ]);
-    return { exitCode, stdout, stderr };
-}
+import { makeTempDir, removeDir, runCli } from './test-utils';
 
 describe('skills command', () => {
     test('skills --help exits 0', async () => {
@@ -35,7 +14,11 @@ describe('skills command', () => {
     });
 
     test('skills install --help exits 0', async () => {
-        const { exitCode, stdout } = await runCli(['skills', 'install', '--help']);
+        const { exitCode, stdout } = await runCli([
+            'skills',
+            'install',
+            '--help',
+        ]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('[name]');
     });
@@ -47,42 +30,115 @@ describe('skills command', () => {
     });
 
     test('skills available --help exits 0', async () => {
-        const { exitCode, stdout } = await runCli(['skills', 'available', '--help']);
+        const { exitCode, stdout } = await runCli([
+            'skills',
+            'available',
+            '--help',
+        ]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('List available');
     });
 
     test('skills list exits 0 in project with no skills dir', async () => {
-        const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
-        writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({ name: 'test', version: '0.0.0' }));
-        writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
+        const tmpDir = makeTempDir('skills-test-');
+        try {
+            writeFileSync(
+                join(tmpDir, 'package.json'),
+                JSON.stringify({ name: 'test', version: '0.0.0' })
+            );
+            writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
 
-        const { exitCode, stdout } = await runCli(['skills', 'list'], tmpDir);
-        expect(exitCode).toBe(0);
-        expect(stdout).toContain('No skills installed yet');
-
-        rmSync(tmpDir, { recursive: true });
+            const { exitCode, stdout } = await runCli(['skills', 'list'], {
+                cwd: tmpDir,
+            });
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('No skills installed yet');
+        } finally {
+            removeDir(tmpDir);
+        }
     });
 
     test('skills list displays installed skill from fixture', async () => {
-        const tmpDir = mkdtempSync(join(tmpdir(), 'skills-test-'));
-        writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({ name: 'test', version: '0.0.0' }));
-        writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
+        const tmpDir = makeTempDir('skills-test-');
+        try {
+            writeFileSync(
+                join(tmpDir, 'package.json'),
+                JSON.stringify({ name: 'test', version: '0.0.0' })
+            );
+            writeFileSync(join(tmpDir, 'index.ts'), 'console.log("hello");');
 
-        // Create a fake installed skill
-        const skillDir = join(tmpDir, '.agents', 'skills', 'burger-api');
-        mkdirSync(skillDir, { recursive: true });
-        writeFileSync(
-            join(skillDir, 'SKILL.md'),
-            '---\ndescription: Build APIs with BurgerAPI\n---\n\n# BurgerAPI'
-        );
+            const skillDir = join(tmpDir, '.agents', 'skills', 'burger-api');
+            mkdirSync(skillDir, { recursive: true });
+            writeFileSync(
+                join(skillDir, 'SKILL.md'),
+                '---\ndescription: Build APIs with BurgerAPI\n---\n\n# BurgerAPI'
+            );
 
-        const { exitCode, stdout } = await runCli(['skills', 'list'], tmpDir);
-        expect(exitCode).toBe(0);
-        expect(stdout).toContain('burger-api');
-        expect(stdout).toContain('Build APIs with BurgerAPI');
+            const { exitCode, stdout } = await runCli(['skills', 'list'], {
+                cwd: tmpDir,
+            });
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('burger-api');
+            expect(stdout).toContain('Build APIs with BurgerAPI');
+        } finally {
+            removeDir(tmpDir);
+        }
+    });
 
-        rmSync(tmpDir, { recursive: true });
+    test('skills list dedupes a skill installed in both folders', async () => {
+        const tmpDir = makeTempDir('skills-test-');
+        try {
+            writeFileSync(
+                join(tmpDir, 'package.json'),
+                JSON.stringify({ name: 'test', version: '0.0.0' })
+            );
+
+            for (const root of ['.agents', '.claude']) {
+                const skillDir = join(tmpDir, root, 'skills', 'dedupe-skill');
+                mkdirSync(skillDir, { recursive: true });
+                writeFileSync(
+                    join(skillDir, 'SKILL.md'),
+                    '---\ndescription: Listed once\n---\n\n# Skill'
+                );
+            }
+
+            const { exitCode, stdout } = await runCli(['skills', 'list'], {
+                cwd: tmpDir,
+            });
+            expect(exitCode).toBe(0);
+            expect(stdout.match(/dedupe-skill/g)).toHaveLength(1);
+            expect(stdout).toContain(
+                'installed in .agents/skills, .claude/skills'
+            );
+        } finally {
+            removeDir(tmpDir);
+        }
+    });
+
+    test('skills list shows a skill from .claude/skills/ only', async () => {
+        const tmpDir = makeTempDir('skills-test-');
+        try {
+            writeFileSync(
+                join(tmpDir, 'package.json'),
+                JSON.stringify({ name: 'test', version: '0.0.0' })
+            );
+
+            const skillDir = join(tmpDir, '.claude', 'skills', 'claude-only');
+            mkdirSync(skillDir, { recursive: true });
+            writeFileSync(
+                join(skillDir, 'SKILL.md'),
+                '---\ndescription: Claude folder\n---\n\n# Skill'
+            );
+
+            const { exitCode, stdout } = await runCli(['skills', 'list'], {
+                cwd: tmpDir,
+            });
+            expect(exitCode).toBe(0);
+            expect(stdout).toContain('claude-only');
+            expect(stdout).toContain('installed in .claude/skills');
+        } finally {
+            removeDir(tmpDir);
+        }
     });
 });
 
@@ -147,8 +203,36 @@ version: '1.0.0'
 });
 
 describe('flattenSkillFiles', () => {
-    test('is an exported async function', () => {
-        expect(typeof flattenSkillFiles).toBe('function');
-        expect(flattenSkillFiles.constructor.name).toBe('AsyncFunction');
+    test('flattens a nested tree into relative paths', async () => {
+        const tree: Record<string, { name: string; type: string }[]> = {
+            'ecosystem/skills/demo': [
+                { name: 'SKILL.md', type: 'file' },
+                { name: 'refs', type: 'dir' },
+            ],
+            'ecosystem/skills/demo/refs': [
+                { name: 'guide.md', type: 'file' },
+                { name: 'nested', type: 'dir' },
+            ],
+            'ecosystem/skills/demo/refs/nested': [
+                { name: 'deep.txt', type: 'file' },
+            ],
+        };
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            const path = String(input).split('/contents/')[1]?.split('?')[0];
+            const entries = path ? tree[path] : undefined;
+            if (!entries) return new Response('not found', { status: 404 });
+            return Response.json(entries);
+        }) as typeof fetch;
+        try {
+            const files = await flattenSkillFiles('ecosystem/skills/demo');
+            expect(files).toEqual([
+                'SKILL.md',
+                'refs/guide.md',
+                'refs/nested/deep.txt',
+            ]);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
     });
 });

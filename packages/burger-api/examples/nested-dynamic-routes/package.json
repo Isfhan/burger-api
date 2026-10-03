@@ -1,0 +1,7 @@
+{
+    "name": "nested-dynamic-routes-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

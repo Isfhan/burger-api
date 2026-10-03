@@ -1,1 +1,0 @@
-alert("Hello World from my-static-2.js");

@@ -5,23 +5,35 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  BUN_VERSION: 1.4.2
+  NODE_VERSION: 24
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+
+      # node-server tests run on plain Node (type stripping needs Node 22.6+).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: bun install
 
-      - name: Build example bundle for CLI build-output test
+      - name: Build framework (dist for linked packages + examples)
+        run: bun run build
+
+      - name: Register global links (create-E2E scaffolds resolve local packages)
         run: |
-          cd packages/burger-api/examples/file-base-api-routing
-          bun run ../../../cli/src/index.ts build index.ts --outfile .build/bundle/app.js
+          cd packages/burger-api && bun link
+          cd ../cli && bun link
 
       - name: Full test suite + typecheck
         run: bun run test:all

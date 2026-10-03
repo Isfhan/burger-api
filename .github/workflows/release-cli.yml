@@ -12,7 +12,7 @@ on:
                 type: string
 
 env:
-    BUN_VERSION: 1.3.4
+    BUN_VERSION: 1.4.2
 
 jobs:
     build:
@@ -47,17 +47,17 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Bun
-              uses: oven-sh/setup-bun@v1
+              uses: oven-sh/setup-bun@v2
               with:
                   bun-version: ${{ env.BUN_VERSION }}
 
             - name: Setup Node.js (for bun compatibility)
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
-                  node-version: '20'
+                  node-version: '24'
 
             - name: Install dependencies
               run: |
@@ -111,7 +111,7 @@ jobs:
               if: runner.os == 'Windows'
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: ${{ matrix.asset_name }}
                   path: packages/cli/dist/${{ matrix.output }}
@@ -126,10 +126,10 @@ jobs:
             contents: write
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Download all artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   path: ./releases
 
@@ -184,7 +184,7 @@ jobs:
                   echo "Verified CLI version: $VERSION_OUT"
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   tag_name: cli/${{ env.VERSION }}
                   name: Burger API CLI ${{ env.VERSION }}

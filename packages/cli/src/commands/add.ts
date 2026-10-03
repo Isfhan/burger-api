@@ -1,18 +1,12 @@
-/**
- * Add Command
- *
- * Downloads middleware from the ecosystem and adds it to the user's project.
- * Users can add multiple middleware at once!
- *
- * Example: burger-api add cors logger rate-limiter
- */
+/** Add command — downloads ecosystem hooks and plugins into the project. */
 
 import { Command } from 'commander';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as clack from '@clack/prompts';
-import { generateMiddlewareIndex } from '../utils/templates';
-import { middlewareExists, downloadMiddleware } from '../utils/github';
+import { detectEcosystemType, downloadComponent } from '../utils/github';
+import { announceLocalMode, setLocalMode } from '../utils/local-mode';
+import { validateEcosystemName } from '../utils/names';
 import {
     spinner,
     success,
@@ -25,17 +19,83 @@ import {
     bullet,
 } from '../utils/logger';
 
-/**
- * Create the "add" command
- * Downloads middleware from GitHub and copies to project
- */
-export const addCommand = new Command('add')
-    .description('Add middleware from the ecosystem')
-    .argument('<middleware...>', 'Names of middleware to add')
-    .action(async (middlewareNames: string[]) => {
-        clack.intro('Add middleware to your project');
+/** Converts a hyphenated package name to camelCase (fallback only — see {@link resolveExportName}). */
+export function hyphenToCamelCase(name: string): string {
+    return name.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
 
-        // Make sure we're in a BurgerAPI project
+/**
+ * Resolve the real exported factory name for a downloaded hook/plugin by
+ * reading its main file and taking the first `export function <name>(`.
+ * Packages export their primary factory first, so the first match is the
+ * default import. Falls back to a hyphenToCamelCase guess when the file
+ * can't be read or has no `export function`.
+ */
+export function resolveExportName(mainFilePath: string, packageName: string): string {
+    try {
+        const source = readFileSync(mainFilePath, 'utf-8');
+        const match = source.match(/export function ([A-Za-z_$][\w$]*)\s*\(/);
+        if (match?.[1]) return match[1];
+    } catch {
+        // File missing or unreadable — fall through to the guess below.
+    }
+    return hyphenToCamelCase(packageName);
+}
+
+/**
+ * Copy-pasteable registration hints for official packages: recommended
+ * lifecycle stage and minimal options. Unlisted packages fall back to
+ * `<export>()` (hooks under `beforeRoute`).
+ */
+export const USAGE_HINTS: Record<
+    string,
+    { stage?: 'onRequest' | 'beforeRoute'; call: string }
+> = {
+    // CORS must answer OPTIONS preflights before routing.
+    cors: { stage: 'onRequest', call: 'cors()' },
+    // Rejects floods before any route work.
+    'rate-limiter': { stage: 'onRequest', call: 'rateLimit()' },
+    'body-size-limiter': { stage: 'beforeRoute', call: 'bodySizeLimiter()' },
+    cache: { stage: 'beforeRoute', call: 'cacheControl()' },
+    compression: { stage: 'beforeRoute', call: 'compress()' },
+    logger: { stage: 'beforeRoute', call: 'logger()' },
+    'security-headers': { stage: 'beforeRoute', call: 'securityHeaders()' },
+    timeout: { stage: 'beforeRoute', call: 'requestTimeout()' },
+    'api-key': {
+        call: "apiKey({ keys: (process.env.API_KEYS ?? '').split(',') })",
+    },
+    'basic-auth': {
+        call:
+            'basicAuth({\n' +
+            '    // Replace with a real user lookup.\n' +
+            '    validate: async (username, password) =>\n' +
+            "        username === 'admin' && password === process.env.ADMIN_PASSWORD\n" +
+            '            ? { id: username, username }\n' +
+            '            : null,\n' +
+            '})',
+    },
+    env: { call: 'env()' },
+    'jwt-auth': { call: 'jwtAuth({ secret: process.env.JWT_SECRET })' },
+    oidc: {
+        call: "oidc({ issuer: 'https://accounts.example.com', audience: 'my-client-id' })",
+    },
+    session: { call: 'session({ secret: process.env.SESSION_SECRET })' },
+};
+
+/** `burger-api add` — download ecosystem hooks/plugins from GitHub. */
+export const addCommand = new Command('add')
+    .description('Add a hook or plugin from the ecosystem')
+    .argument('<names...>', 'Names of ecosystem packages to add')
+    .option('--force', 'Overwrite existing installs without prompting')
+    .option(
+        '--local',
+        'Use the local burger-api checkout (bun link) instead of npm/GitHub'
+    )
+    .action(async (packageNames: string[], options: AddCommandOptions) => {
+        clack.intro('Add ecosystem packages to your project');
+        setLocalMode(options.local);
+        announceLocalMode();
+
         if (!existsSync('package.json')) {
             clack.outro('Not in a BurgerAPI project');
             logError(
@@ -45,57 +105,67 @@ export const addCommand = new Command('add')
             process.exit(1);
         }
 
-        // Create ecosystem/middleware directory if it doesn't exist
-        // Ecosystem middleware goes here, user's custom middleware can go in middleware/
+        // Hooks install under ecosystem/hooks/, plugins under ecosystem/plugins/
         const ecosystemDir = join(process.cwd(), 'ecosystem');
-        const middlewareDir = join(ecosystemDir, 'middleware');
-        if (!existsSync(middlewareDir)) {
-            // Create it with a proper starter file
-            await Bun.write(
-                join(middlewareDir, 'index.ts'),
-                generateMiddlewareIndex()
-            );
-            info('Created ecosystem/middleware/ directory');
-            newline();
-        }
+        const hooksDir = join(ecosystemDir, 'hooks');
+        const pluginsDir = join(ecosystemDir, 'plugins');
 
-        // Process each middleware
         const results = {
             success: [] as string[],
             failed: [] as string[],
             skipped: [] as string[],
         };
+        // Package name -> resolved export name (see `resolveExportName`).
+        const exportNames = new Map<string, string>();
 
-        for (const name of middlewareNames) {
+        for (const name of packageNames) {
+            // Reject traversal/special names before touching the network or fs.
+            const nameError = validateEcosystemName(name);
+            if (nameError) {
+                logError(nameError);
+                results.failed.push(name);
+                continue;
+            }
             try {
-                // Check if it exists on GitHub
+                // Exists on GitHub as hook or plugin?
                 let spin = spinner(`Checking ${name}...`);
 
-                let exists;
+                let ecosystemType: 'hook' | 'plugin' | null;
                 try {
-                    exists = await middlewareExists(name);
+                    ecosystemType = await detectEcosystemType(name);
                 } catch (err) {
                     spin.stop('Could not connect to GitHub', true);
                     logError(
-                        'Please check your internet connection and try again.'
+                        err instanceof Error
+                            ? err.message
+                            : 'Please check your internet connection and try again.'
                     );
                     results.failed.push(name);
                     continue;
                 }
 
-                if (!exists) {
-                    spin.stop(`Middleware "${name}" not found`, true);
+                if (!ecosystemType) {
+                    spin.stop(`Package "${name}" not found`, true);
                     results.failed.push(name);
                     continue;
                 }
 
-                spin.update(`Downloading ${name}...`);
+                const targetDir =
+                    ecosystemType === 'plugin'
+                        ? join(pluginsDir, name)
+                        : join(hooksDir, name);
 
-                // Check if it already exists locally
-                const targetDir = join(middlewareDir, name);
-                if (existsSync(targetDir)) {
+                spin.update(`Downloading ${name} (${ecosystemType})...`);
+                if (existsSync(targetDir) && !options.force) {
                     spin.stop();
-                    // Ask if they want to overwrite
+                    if (!process.stdin.isTTY) {
+                        // No terminal to answer the prompt — never hang.
+                        warning(
+                            `${name} already exists — skipped (pass --force to overwrite without a prompt).`
+                        );
+                        results.skipped.push(name);
+                        continue;
+                    }
                     const shouldOverwrite = await clack.confirm({
                         message: `${name} already exists. Overwrite?`,
                         initialValue: false,
@@ -109,14 +179,18 @@ export const addCommand = new Command('add')
                     spin = spinner(`Downloading ${name}...`);
                 }
 
-                // Download the middleware
                 try {
-                    const filesDownloaded = await downloadMiddleware(
+                    const filesDownloaded = await downloadComponent(
                         name,
-                        targetDir
+                        targetDir,
+                        ecosystemType
                     );
                     spin.stop(`Added ${name} (${filesDownloaded} files)`);
                     results.success.push(name);
+                    exportNames.set(
+                        name,
+                        resolveExportName(join(targetDir, `${name}.ts`), name)
+                    );
                 } catch (err) {
                     spin.stop('Download failed', true);
                     if (
@@ -143,60 +217,116 @@ export const addCommand = new Command('add')
             }
         }
 
-        // Show summary
         newline();
         if (results.success.length > 0) {
-            success(`Successfully added ${results.success.length} middleware:`);
+            success(`Successfully added ${results.success.length} package(s):`);
             results.success.forEach((name) => bullet(name));
             newline();
 
-            // Show usage instructions
             header('How to Use');
-            info('Import and use the middleware in your index.ts:');
-            newline();
-            code('import { Burger } from "burger-api";');
+            const plugins = results.success.filter((n) =>
+                existsSync(join(pluginsDir, n))
+            );
+            const hooks = results.success.filter(
+                (n) => !plugins.includes(n)
+            );
+            const call = (name: string) =>
+                USAGE_HINTS[name]?.call ?? `${exportNames.get(name) ?? name}()`;
+            // Import the name the call uses, so hint and import always match.
+            const importName = (name: string) =>
+                USAGE_HINTS[name]?.call.match(/^[A-Za-z_$][\w$]*/)?.[0] ??
+                exportNames.get(name) ??
+                name;
+            // Import paths are relative to src/, where these lines go.
+            const isJs = existsSync('jsconfig.json');
+            if (plugins.length > 0) {
+                code(`// src/plugins.${isJs ? 'js' : 'ts'}`);
+                if (!isJs) {
+                    code("import type { PluginRegistrar } from 'burger-api';");
+                }
+                for (const name of plugins) {
+                    code(
+                        `import { ${importName(name)} } from '../ecosystem/plugins/${name}/${name}';`
+                    );
+                }
+                code('');
+                if (isJs) {
+                    code("/** @param {import('burger-api').PluginRegistrar} burger */");
+                    code('export default (burger) => {');
+                } else {
+                    code('export default (burger: PluginRegistrar) => {');
+                }
+                // usePlugin takes exactly one plugin per call.
+                for (const name of plugins) {
+                    const lines = `burger.usePlugin(${call(name)});`.split('\n');
+                    for (const line of lines) code(`    ${line}`);
+                }
+                code('};');
+                newline();
+            }
+            if (hooks.length > 0) {
+                const byStage = { onRequest: [] as string[], beforeRoute: [] as string[] };
+                for (const name of hooks) {
+                    byStage[USAGE_HINTS[name]?.stage ?? 'beforeRoute'].push(name);
+                }
+                code(`// src/hooks.${isJs ? 'js' : 'ts'}`);
+                for (const name of hooks) {
+                    code(
+                        `import { ${importName(name)} } from '../ecosystem/hooks/${name}/${name}';`
+                    );
+                }
+                for (const stage of ['onRequest', 'beforeRoute'] as const) {
+                    if (byStage[stage].length === 0) continue;
+                    code('');
+                    code(`export const ${stage} = [`);
+                    for (const name of byStage[stage]) code(`    ${call(name)},`);
+                    code('];');
+                }
+                code('');
+                code('// (merge with any existing exports of the same name)');
+                newline();
+            }
+            info('See each package README for options:');
             results.success.forEach((name) => {
-                code(
-                    `import { ${name} } from "./ecosystem/middleware/${name}/${name}";`
+                const isPlugin = existsSync(join(pluginsDir, name));
+                bullet(
+                    `ecosystem/${isPlugin ? 'plugins' : 'hooks'}/${name}/README.md`
                 );
-            });
-            newline();
-            code('const app = new Burger({');
-            code('    apiDir: "./api",');
-            code('    globalMiddleware: [');
-            results.success.forEach((name) => {
-                code(`        ${name}(),`);
-            });
-            code('    ],');
-            code('});');
-            newline();
-            newline();
-
-            info('Check each middleware README for configuration options:');
-            results.success.forEach((name) => {
-                bullet(`ecosystem/middleware/${name}/README.md`);
             });
             newline();
         }
 
         if (results.failed.length > 0) {
-            warning(`Failed to add ${results.failed.length} middleware:`);
+            warning(`Failed to add ${results.failed.length} package(s):`);
             results.failed.forEach((name) => bullet(name));
             newline();
-            info('Run "burger-api list" to see available middleware.');
+            info('Run "burger-api list" to see available hooks and plugins.');
             newline();
         }
 
         if (results.skipped.length > 0) {
-            info(`Skipped ${results.skipped.length} middleware:`);
+            info(`Skipped ${results.skipped.length} package(s):`);
             results.skipped.forEach((name) => bullet(name));
             newline();
         }
 
-        if (results.success.length > 0) {
-            clack.outro('Middleware added successfully!');
-        } else {
-            clack.outro('No middleware were added');
+        if (results.failed.length > 0) {
+            clack.outro(
+                results.success.length > 0
+                    ? `Added ${results.success.length} package(s), ${results.failed.length} failed`
+                    : 'No packages were added'
+            );
             process.exit(1);
+        } else if (results.success.length > 0) {
+            clack.outro('Packages added successfully!');
+        } else {
+            clack.outro('No packages were added');
         }
     });
+
+interface AddCommandOptions {
+    /** true with --force */
+    force?: boolean;
+    /** true with --local */
+    local?: boolean;
+}
