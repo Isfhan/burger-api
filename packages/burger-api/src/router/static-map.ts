@@ -53,6 +53,11 @@ export class StaticMap {
         return this.map.has(path);
     }
 
+    /** Registered static paths, in insertion order. */
+    keys(): IterableIterator<string> {
+        return this.map.keys();
+    }
+
     /**
      * Yields `[path, handler]` pairs for feeding Bun's `routes` map.
      */

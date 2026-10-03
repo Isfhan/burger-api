@@ -1019,10 +1019,10 @@ export class Burger {
         }
         const wsAdapter = this.wsAdapter;
 
-        // Direct lookups are exact static page/asset/docs paths only; native
-        // pattern keys (`:param`, `*`) must never match literally. Bun-only
-        // page values and dynamic pages are not portable: warn instead of
-        // silently 404ing.
+        // Direct lookups are exact static paths: page/asset/docs handlers and
+        // static API routes. Native pattern keys (`:param`, `*`) must never
+        // match literally. Bun-only page values and dynamic pages are not
+        // portable: warn instead of silently 404ing.
         const routes = new Map<string, RequestHandler>();
         const bunOnlyPages: string[] = [];
         const apiPaths = this.apiRoutePaths;
@@ -1048,13 +1048,22 @@ export class Burger {
             );
         }
         const router = this.dynamicRouter;
-        // API-only apps (no page/asset/docs routes) skip the page-map lookup
-        // entirely: the router parses the pathname once in `fetch`.
+        // Static API routes join the same table: one Map.get resolves any
+        // exact static path (page, asset, docs, or API), no second lookup.
+        if (router) {
+            for (const [path, dispatch] of router.staticDispatchMap()) {
+                routes.set(path, dispatch as unknown as RequestHandler);
+            }
+        }
+        // No direct entries: skip the lookup entirely and let the router parse
+        // the pathname once in `fetch` (dynamic-only apps, 404s).
         const hasPageRoutes = routes.size > 0;
 
         /**
-         * Shared HTTP dispatch: page/asset routes first, then the API router.
-         * The pathname is extracted once and reused for both lookups.
+         * Shared HTTP dispatch: the direct static table (pages, assets, docs,
+         * static API routes) first, then the API router for dynamic /
+         * loose-trailing-slash / `/`+`//` requests and 404s. The pathname is
+         * extracted once and reused for both lookups.
          */
         const dispatchHttp = (
             request: Request,

@@ -282,6 +282,66 @@ export class Router {
     }
 
     /**
+     * Exact static API paths as direct dispatchers, keyed by path.
+     * `fetchHandler()` merges these into its page/asset lookup so a static
+     * API request resolves in one `Map.get` instead of a page-map miss plus
+     * a `StaticMap` hit. Each dispatcher mirrors the `fetch` fallback for its
+     * own path: known method → specialized core, otherwise the compiled
+     * method-dispatch handler (405 + Allow), with global response hooks and
+     * the `onRequest` pipeline applied exactly as `fetchWithPath` does.
+     */
+    staticDispatchMap(): Map<string, CompiledHandler> {
+        const out = new Map<string, CompiledHandler>();
+        for (const path of this.staticMap.keys()) {
+            out.set(path, this.buildStaticDispatch(path));
+        }
+        return out;
+    }
+
+    private buildStaticDispatch(path: string): CompiledHandler {
+        // Hook path: reuse the router's own pre-routing pipeline. The path is
+        // exact, so no slash handling is skipped.
+        if (this.hasOnRequest) {
+            return (request, _ctxInit, _prebuilt, env, executionCtx) =>
+                this.dispatchWithOnRequest(request, env, executionCtx, path);
+        }
+        const entry = this.staticMap.getEntry(path)!;
+        // A known method runs its core — the core already carries the global
+        // response plan. Only the method-dispatch fallback (405 + Allow) is a
+        // non-route response, so only it gets `finishNonRouteResponse` —
+        // exactly the split `dispatchMatched` uses.
+        const finishFallback = this.globalResponseActive;
+        return (
+            request: Request,
+            _ctxInit?: ContextInit,
+            _prebuilt?: BurgerContext,
+            env?: BurgerEnv,
+            executionCtx?: BurgerExecutionContext
+        ): Response | Promise<Response> => {
+            const core = entry.cores?.[request.method as HTTPMethod];
+            if (core) {
+                return core(request, undefined, undefined, env, executionCtx);
+            }
+            const response = entry.handler(
+                request,
+                undefined,
+                undefined,
+                env,
+                executionCtx
+            );
+            return finishFallback
+                ? this.finishNonRouteResponse(
+                      response,
+                      request,
+                      undefined,
+                      env,
+                      executionCtx
+                  )
+                : response;
+        };
+    }
+
+    /**
      * Builds the Bun method object for one compiled path. Without hooks each
      * method forwards straight to the compiled core; with hooks each method
      * runs onRequest once before the core and binds the resulting context
