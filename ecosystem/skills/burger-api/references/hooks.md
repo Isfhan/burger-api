@@ -1,6 +1,6 @@
 # Hook Pipeline Reference
 
-Hooks are the only request-lifecycle system in BurgerAPI. There is no separate middleware layer — `middleware.ts` is a forbidden file. Infrastructure code (auth, CORS, logging) is written as hooks in `hooks.ts`.
+Hooks are the only request-lifecycle system in BurgerAPI. There is no separate middleware layer: `middleware.ts` is a forbidden file. Infrastructure code (auth, CORS, logging) is written as hooks in `hooks.ts`.
 
 ## Return Types
 
@@ -14,7 +14,7 @@ Hook functions can return three values:
 
 ## Global Hooks (all routes)
 
-Place hooks in the app's root `src/hooks.ts` — they apply to every route:
+Place hooks in the app's root `src/hooks.ts`; they apply to every route:
 
 ```typescript
 // src/hooks.ts
@@ -31,9 +31,9 @@ export const onRequest = [
 
 ## Route-Specific Hooks
 
-Place hooks in a route directory's `hooks.ts` — they apply only to that route.
+Place hooks in a route directory's `hooks.ts`; they apply only to that route.
 `onRequest` is app/plugin scope only (it runs before a route is even
-matched, so it can't be scoped to one route) — declaring it in a route's
+matched, so it can't be scoped to one route), so declaring it in a route's
 `hooks.ts` is a compile error. Use `beforeRoute` for route-scoped logic:
 
 ```typescript
@@ -48,6 +48,23 @@ export const beforeRoute = [
     },
 ];
 ```
+
+## Transform Keys
+
+`transform` is an object keyed by the context field to attach. Keys are
+checked at startup: a name that matches `BurgerContext` (getters, methods,
+`Request` members) or a reserved name (`cache`, `params`, `set`, `services`,
+and others) throws with the key name instead of shadowing the context.
+
+```typescript
+// src/hooks.ts
+export const transform = {
+    startedAt: () => Date.now(),
+};
+```
+
+Global transform entries apply first, then route-level ones, so a route can
+override a global value.
 
 ## After-Hooks
 
@@ -95,7 +112,7 @@ survive.
 
 ## Ecosystem Hooks
 
-Available via `burger-api add <name>` — these are **hook factories** wired into `hooks.ts`:
+Available via `burger-api add <name>`: these are **hook factories** wired into `hooks.ts`:
 
 | Hook | Description |
 |---|---|
@@ -110,19 +127,19 @@ Available via `burger-api add <name>` — these are **hook factories** wired int
 
 ## Ecosystem Plugins
 
-Also available via `burger-api add <name>`, but these are **plugins** (`burger.usePlugin(...)` in `src/plugins.ts`), not hooks — they need app-level registration, not a `hooks.ts` export. Auth in particular is plugin-only in v1: there is no `hooks.ts`-based auth hook.
+Also available via `burger-api add <name>`, but these are **plugins** (`burger.usePlugin(...)` in `src/plugins.ts`), not hooks: they need app-level registration, not a `hooks.ts` export. Auth in particular is plugin-only in v1: there is no `hooks.ts`-based auth hook.
 
 | Plugin | Description |
 |---|---|
 | jwt-auth | JWT token authentication |
 | api-key | API key authentication |
 | basic-auth | HTTP Basic authentication |
-| session | Cookie-based session auth |
+| session | Cookie-based sessions (`ctx.session`) |
 | oidc | OpenID Connect authentication |
 | env | Validates required environment variables on startup |
 
 Auth plugins read `ctx.config.auth` and default-deny unless it is disabled.
-`config.ts` can scope that per method — the default applies route-wide and an
+`config.ts` can scope that per method: the default applies route-wide and an
 uppercase method export overrides it (shallow merge, method wins):
 
 ```typescript

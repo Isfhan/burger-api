@@ -2,7 +2,7 @@
 
 ## Configuration
 
-OpenAPI is configured via `openapi.config.ts` — an auto-discovered convention file that lives next to the entry point (`src/openapi.config.ts` when `src/` exists, or root for flat structures).
+OpenAPI is configured via `openapi.config.ts`, an auto-discovered convention file that lives next to the entry point (`src/openapi.config.ts` when `src/` exists, or root for flat structures).
 
 ```ts
 // src/openapi.config.ts
@@ -36,7 +36,7 @@ Paths are configurable via `openapi.config.ts`. Both endpoints are disabled with
 
 ## Docs UI
 
-Default: **Swagger UI** via CDN — classic, widely familiar, searchable endpoints.
+Default: **Swagger UI** via CDN: classic, widely familiar, searchable endpoints.
 
 Built-in alternatives:
 
@@ -44,13 +44,14 @@ Built-in alternatives:
 import { scalarDocs, swaggerDocs, redocDocs } from "burger-api";
 
 export default {
-  provider: swaggerDocs(),    // default — classic Swagger UI
+  provider: swaggerDocs(),    // default: classic Swagger UI
   // provider: scalarDocs(),  // modern Scalar UI with dark mode
   // provider: redocDocs(),   // clean three-panel docs
 };
 ```
 
-Custom providers: any function `(spec: OpenAPIObject) => string | Response`.
+Custom providers: any function `(spec: OpenAPIObject, options: { specUrl: string }) => string | Response`.
+`options.specUrl` is the path the spec is served at (`path`, default `/openapi.json`).
 
 ## Docs Protection
 

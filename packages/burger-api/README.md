@@ -6,7 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0--beta-orange.svg)](https://github.com/isfhan/burger-api/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun-1.4.0%2B-black?logo=bun)](https://bun.sh)
 
 > **1.0.0-beta is our biggest release yet.** `npm i burger-api` installs it
 > by default. It is a full rewrite with many new features, so please try it
@@ -48,24 +48,24 @@ burger-api is built to offer a robust developer experience through:
 - 📁 **File-Based Routing:**
  Automatically registers API routes from your file structure using clear
  convention files: `route.ts`, `schema.ts`, `hooks.ts`, `openapi.ts`,
- `config.ts` (`.js`/`.mjs` work the same — JS is first-class). No group or
+ `config.ts` (`.js`/`.mjs` work the same; JS is first-class). No group or
  folder inheritance: every route directory stands on its own.
 
 - 🔄 **Hook lifecycle:**
  `onRequest` → `transform` → validation → `beforeRoute` → handler →
  `afterRoute` → `mapResponse` (`onError` on failure). Global hooks live in
  `src/hooks.ts`; route hooks in `api/**/hooks.ts`. Public context type:
- **`BurgerContext`** — typed, validated, and passed to every hook and handler.
+ **`BurgerContext`**: typed, validated, and passed to every hook and handler.
 
 - ✅ **Type-Safe Validation:**
  Schemas for query, params, headers, cookies, and body are validated before
- your handler runs and exposed as typed `ctx.validated`. Reuse shapes through
- a model registry, enable automatic type conversion, validate responses, and
+ your handler runs and exposed as typed `ctx.validated`. Reuse shapes by
+ importing them, enable automatic type conversion, validate responses, and
  support any Standard Schema library (Zod v4, Valibot, ArkType). Errors follow
  the RFC 9457 Problem Details format.
 
 - 📚 **Automatic OpenAPI Generation:**
- Generates a complete OpenAPI 3.0 specification directly from your routes and
+ Generates a complete OpenAPI 3.1 specification directly from your routes and
  Zod schemas.
 
 - 🔍 **Docs UI Integration:**
@@ -75,7 +75,7 @@ burger-api is built to offer a robust developer experience through:
 - 🌍 **WinterCG Deploy Surface:**
  `app.serve(port)` for Bun; `toFetchHandler(app)` returns
  `(request, ...env) => Promise<Response>` for Cloudflare Workers, Vercel, Deno
- Deploy, and Node 24+ — HTTP-only, no filesystem scanning, no Bun imports.
+ Deploy, and Node 24+: HTTP-only, no filesystem scanning, no Bun imports.
 
 ## 🛠️ CLI Tool
 

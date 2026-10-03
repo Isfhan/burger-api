@@ -347,11 +347,11 @@ export interface OpenAPIMeta {
 }
 
 /**
- * Optional OpenAPI metadata to generate documentation for the route.
+ * Optional OpenAPI metadata to enrich the route's documentation.
  * Keyed by lowercase HTTP method; see {@link OpenAPIMeta}.
  *
- * If the `openapi` property is not defined, the route will not be included in
- * the generated OpenAPI documentation.
+ * Routes without `openapi` metadata ARE included in the generated document:
+ * the operation is derived from the route path, handlers and schema.
  */
 export type openapi = Partial<Record<LowercaseHTTPMethod, OpenAPIMeta>>;
 

@@ -455,7 +455,7 @@ describe('auto OPTIONS and HEAD', () => {
         });
         const res = await fetchVia(burger, '/api/g', { method: 'OPTIONS' });
         expect(res.status).toBe(204);
-        expect(res.headers.get('allow')).toBe('GET, OPTIONS');
+        expect(res.headers.get('allow')).toBe('GET, HEAD, OPTIONS');
         const doc = (await (await fetchVia(burger, '/openapi.json')).json()) as {
             paths: Record<string, Record<string, unknown>>;
         };

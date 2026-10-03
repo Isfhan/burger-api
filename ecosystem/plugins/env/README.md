@@ -20,8 +20,8 @@ Or manually copy to `ecosystem/plugins/env/`.
 
 ## Usage
 
-Register the plugin in `src/plugins.ts`. The module exports a default function
-that receives the `Burger` instance:
+Register the plugin in `src/plugins.ts`. The module's default export receives
+a `PluginRegistrar`:
 
 ```typescript
 // src/plugins.ts
@@ -91,7 +91,7 @@ export default function (burger: PluginRegistrar) {
 |------|-------------|---------|
 | `string` | Any string | `"hello"` |
 | `number` | Numeric value | `"42"`, `"3.14"` |
-| `boolean` | Boolean value | `"true"`, `"false"`, `"yes"`, `"no"` |
+| `boolean` | Boolean value | `"true"`, `"false"`, `"1"`, `"0"`, `"yes"`, `"no"` (case-insensitive) |
 | `url` | Valid URL | `"https://example.com"` |
 | `json` | Valid JSON | `'{"key": "value"}'` |
 

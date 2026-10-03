@@ -45,6 +45,10 @@ Flags (feature flags imply `--yes`; without a TTY `create` never prompts and use
 | `--no-skills` | Skip AI agent skills |
 | `--local` | Use the local checkout (bun link) instead of npm/GitHub |
 
+`--local` is also available on `add`, `list`, `skills install`,
+`skills available`, `generate hook`, and `generate plugin`.
+Set `BURGER_API_LOCAL=1` to turn local mode on for the whole shell.
+
 ### `add <names...>`
 
 Download hooks and plugins from the ecosystem into the project:
@@ -54,7 +58,7 @@ burger-api add cors logger rate-limiter
 ```
 
 Downloads to `ecosystem/hooks/<name>/` (or `ecosystem/plugins/<name>/`). Shows import
-instructions after success — the printed snippet uses the package's real
+instructions after success: the printed snippet uses the package's real
 exported factory name (resolved from the downloaded file, e.g. `jwtAuth()`,
 `rateLimit()`), not a guess from the package name, so it's always
 pasteable as-is.
@@ -106,7 +110,7 @@ skill's `SKILL.md`. Install one with `burger-api skills install <name>`.
 
 ### `list`
 
-List available hooks and plugins from the ecosystem:
+List available hooks and plugins from the ecosystem (alias: `ls`):
 
 ```bash
 burger-api list
@@ -122,6 +126,9 @@ burger-api dev
 burger-api dev --port 4000
 burger-api dev --file src/index.ts
 ```
+
+Default port: `$PORT` or 4000. Default entry: `src/index.ts` (or `.js`/`.mjs`).
+`dev` sets `NODE_ENV=development` when unset, which turns debug output on.
 
 ### `build <file>`
 
@@ -142,7 +149,7 @@ code before deploying.
 
 ### `start`
 
-Run the production build without hot reload (sets `NODE_ENV=production`):
+Run the production server without hot reload (sets `NODE_ENV=production`):
 
 ```bash
 burger-api start
@@ -151,7 +158,8 @@ burger-api start --file dist/index.js
 ```
 
 Entry resolution priority: `--file` flag → `.build/bundle/app.js` (if it
-exists) → `src/index.ts`.
+exists) → `src/index.ts` (or `.js`/`.mjs`). With no build, `start` runs from
+source; run `burger-api build` first to use AOT routes.
 
 ### `generate route <path>`
 
@@ -194,13 +202,13 @@ burger-api generate plugin my-plugin
 
 ### `inspect`
 
-Print a summary of everything discovered in the project — config, API/page/WebSocket routes, hooks, plugins, and convention-file coverage:
+Print a summary of everything discovered in the project: config, API/page/WebSocket routes, hooks, plugins, and convention-file coverage:
 
 ```bash
 burger-api inspect
 ```
 
-Useful to sanity-check a project after scaffolding — a route missing from the printed list usually means a naming or `apiDir` mismatch, not a routing bug.
+Useful to sanity-check a project after scaffolding: a route missing from the printed list usually means a naming or `apiDir` mismatch, not a routing bug.
 
 ### `doctor`
 
@@ -210,7 +218,7 @@ Validate project structure and report issues (missing `src/index.ts`, no discove
 burger-api doctor
 ```
 
-Exits `0` when every check passes, `1` otherwise — safe alongside `bun run typecheck` in CI.
+Exits `0` when every check passes and `1` otherwise, so it is safe alongside `bun run typecheck` in CI.
 
 ### `build:exec <file>`
 

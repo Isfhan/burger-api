@@ -1,6 +1,6 @@
 # @burger-api/node-server
 
-The official Node.js adapter for [burger-api](https://burger-api.com) — one
+The official Node.js adapter for [burger-api](https://burger-api.com): one
 `serve(app)` call bridges `node:http` to burger-api's Fetch-standard
 handler, and wires WebSocket routes automatically when the app has any.
 
@@ -14,6 +14,8 @@ wiring included.
 ```bash
 npm install @burger-api/node-server
 ```
+
+Requires Node 24+ and `burger-api@1.0.0-beta` or later.
 
 ## Usage
 
@@ -39,8 +41,8 @@ server.on("listening", () => {
 `serve()` returns the underlying `http.Server` synchronously, so you can
 attach your own `'listening'`/`'error'` listeners. `.listen()` itself isn't
 called until route processing (and WebSocket bridge wiring, if applicable)
-has finished — no window where a request could arrive before the app is
-actually ready.
+has finished, so there is no window where a request could arrive before the
+app is actually ready.
 
 ## `ctx.ip`
 
@@ -51,7 +53,7 @@ headers are not read; behind a proxy, see the rate-limiter hook's
 
 ## WebSocket
 
-Add `wsRoutes` (or `wsDir` / `app.websocket()`) to the same app — nothing
+Add `wsRoutes` (or `wsDir` / `app.websocket()`) to the same app; nothing
 else changes:
 
 ```ts
@@ -72,14 +74,14 @@ const app = new Burger({
 serve(app, { port: 3000 }); // WebSocket bridge wired automatically
 ```
 
-`ws.subscribe()`/`.publish()` (Bun's native pub/sub) are not available under
-this adapter — they throw on every runtime except Bun. Use a plain
-connection registry (a `Set`/`Map` you manage yourself) and fan out
-messages manually; see burger-api's [WebSocket docs](https://burger-api.com/docs/websocket/overview#nodejs).
+`ws.subscribe()`/`.publish()` and `ctx.publish()` (Bun's native pub/sub) are
+not available under this adapter: they throw, because Node has no Bun server
+behind them. Use a plain connection registry (a `Set`/`Map` you manage
+yourself) and fan out messages manually; see burger-api's [WebSocket docs](https://burger-api.com/docs/websocket/overview#nodejs).
 
 ## Why not just `toFetchHandler` directly?
 
-You can — `toFetchHandler(app)` from `burger-api` gives you a portable
+You can: `toFetchHandler(app)` from `burger-api` gives you a portable
 `(request: Request) => Promise<Response>` that works on every WinterCG
 runtime, Node included. This package exists because Node has no built-in way
 to *feed* that function from a real socket: no native `fetch`-shaped server,

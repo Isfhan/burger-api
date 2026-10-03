@@ -20,8 +20,8 @@ Or manually copy to `ecosystem/plugins/api-key/`.
 
 ## Usage
 
-Register the plugin in `src/plugins.ts`. The module exports a default function
-that receives the `Burger` instance:
+Register the plugin in `src/plugins.ts`. The module's default export receives
+a `PluginRegistrar`:
 
 ```typescript
 // src/plugins.ts
@@ -88,7 +88,7 @@ export default function (burger: PluginRegistrar) {
 | `keys` | `string[]` | `[]` | Static list of valid API keys (or use `validate`) |
 | `validate` | `(key: string) => Promise<boolean>` | - | Dynamic validation function (or use `keys`) |
 | `extract` | `(ctx: BurgerContext) => string \| null` | - | Custom key extraction function |
-| `attachToContext` | `boolean` | `true` | Attach API key info to context |
+| `attachToContext` | `boolean` | `true` | Set `ctx.apiKey` on the `validate` path; static-list keys always attach |
 
 ## Route configuration
 
@@ -115,7 +115,7 @@ export default {
 ## Context properties
 
 After successful validation, the API key is available as `ctx.apiKey`
-(typed by the plugin's `declare module "burger-api"` augmentation — no cast
+(typed by the plugin's `declare module "burger-api"` augmentation, no cast
 needed):
 
 ```typescript
@@ -128,8 +128,8 @@ export async function GET(ctx: BurgerContext) {
 
 ## Error responses
 
-- **401 Unauthorized** — Missing API key or invalid API key
-- **Config error at startup** — Neither `keys` nor `validate` configured
+- **401 Unauthorized**: missing API key or invalid API key
+- **Config error at startup**: neither `keys` nor `validate` configured
 
 ## Security notes
 

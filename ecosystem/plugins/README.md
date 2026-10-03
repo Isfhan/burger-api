@@ -1,27 +1,30 @@
 # BurgerAPI Ecosystem Plugins
 
-Official plugins for BurgerAPI 1.0. Plugins extend the application (register hooks, providers, context types) and live under `ecosystem/plugins/`. Each plugin is a factory that returns a `Plugin` object, registered on the `Burger` instance via `burger.usePlugin()` in `src/plugins.ts`.
+Official plugins for BurgerAPI 1.0. Plugins extend the application (they may
+register hooks, providers, and context types). Each plugin is a factory that
+returns a `Plugin` object, registered in `src/plugins.ts` through the
+`PluginRegistrar` the framework passes in.
 
-## Available plugins
+## Available Plugins
 
 | Plugin | Factory | Description |
 |--------|---------|-------------|
-| [`jwt-auth`](./jwt-auth/) | `jwtAuth(options)` | JWT authentication (HS256/HS384/HS512) |
-| [`session`](./session/) | `session(options)` | Session management with configurable stores |
-| [`api-key`](./api-key/) | `apiKey(options)` | API key authentication via headers |
+| [`jwt-auth`](./jwt-auth/) | `jwtAuth(options)` | JWT authentication (HS256/384/512, RS256/384/512, ES256/384/512) |
+| [`session`](./session/) | `session(options)` | Cookie-based session management |
+| [`api-key`](./api-key/) | `apiKey(options)` | API key authentication via a header |
 | [`basic-auth`](./basic-auth/) | `basicAuth(options)` | HTTP Basic authentication |
 | [`oidc`](./oidc/) | `oidc(options)` | OpenID Connect authentication |
 | [`env`](./env/) | `env(options)` | Environment variable validation |
 
 ## Usage
 
-Install via CLI:
+Install via the CLI:
 
 ```bash
 burger-api add jwt-auth
 ```
 
-Or manually copy the plugin to `ecosystem/plugins/` and register it in `src/plugins.ts`:
+Or copy the plugin into `ecosystem/plugins/` manually and register it:
 
 ```typescript
 // src/plugins.ts
@@ -29,17 +32,18 @@ import type { PluginRegistrar } from 'burger-api';
 import { jwtAuth } from '../ecosystem/plugins/jwt-auth/jwt-auth';
 
 export default function (burger: PluginRegistrar) {
-    burger.usePlugin(jwtAuth({
-        secret: process.env.JWT_SECRET,
-    }));
+    burger.usePlugin(jwtAuth({ secret: process.env.JWT_SECRET }));
 }
 ```
 
-`src/plugins.ts` is auto-discovered (in dev) or passed to `new Burger({ pluginsModule })` in production builds. Never call `burger.usePlugin()` from `index.ts` — plugin registration lives in `src/plugins.ts`.
+`src/plugins.ts` is auto-discovered in dev. In production builds, pass it to
+`new Burger({ pluginsModule })` (the CLI build does this for you). Never call
+`burger.usePlugin()` from `index.ts`: plugin registration lives in
+`src/plugins.ts`.
 
-## Plugin interface
+## Plugin Interface
 
-Each plugin factory returns a `Plugin` object:
+Each factory returns a `Plugin` object:
 
 ```typescript
 interface Plugin {
@@ -55,59 +59,61 @@ interface Plugin {
 }
 ```
 
-A plugin declares its `name` and registers lifecycle hooks directly on the object. For example, `apiKey()` registers a `transform` that attaches `ctx.apiKey` and a `beforeRoute` that enforces it:
+A plugin declares its `name` and lifecycle hooks. For example, `apiKey()`
+registers a `transform` that reads the key and a `beforeRoute` that enforces
+it:
 
 ```typescript
-burger.usePlugin(apiKey({
-    keys: ['demo-api-key-123'],
-}));
+burger.usePlugin(apiKey({ keys: ['demo-api-key-123'] }));
 ```
 
-Registering the same plugin twice (same name + seed) is a no-op. `usePlugin(plugin, scope?, seed?)` also accepts an optional scope override and a seed for disambiguating multiple instances (e.g., two JWT plugins with different secrets).
+Registering the same plugin twice (same `name` plus seed) is ignored with a
+warning. `usePlugin(plugin, scope?, seed?)` also accepts an optional scope
+override and a seed for disambiguating multiple instances (for example, two
+JWT plugins with different secrets).
 
-## Hooks vs plugins
+## Hooks vs Plugins
 
-- **Hooks** control request execution: `onRequest`, `transform`, `beforeRoute`, `afterRoute`, `mapResponse`, `onError`
-- **Plugins** extend the app (may register hooks, providers, context types)
+- **Hooks** control request execution: `onRequest`, `transform`,
+  `beforeRoute`, `afterRoute`, `mapResponse`, `onError`.
+- **Plugins** extend the app and may register hooks, providers, or context
+  types.
 
-They are separate concepts. Hooks are the request lifecycle; plugins are application extensions composed on top of them.
+They are separate: hooks are the request lifecycle, plugins are application
+extensions composed on top of them.
 
-## Creating plugins
-
-Use `burger-api generate plugin <name>` to scaffold a new plugin:
+## Creating Plugins
 
 ```bash
 burger-api generate plugin my-plugin
 ```
 
-This creates `ecosystem/plugins/my-plugin/my-plugin.ts` with a minimal template.
+This creates `ecosystem/plugins/my-plugin/my-plugin.ts` with a minimal
+template.
 
-## Configuration model
+## Configuration Model
 
 Plugins support two-tier configuration:
 
-- **Global defaults** — set in `src/plugins.ts` when registering the plugin
-- **Route overrides** — per-route in `config.ts`
+- **Global defaults** in `src/plugins.ts` when registering the plugin.
+- **Route overrides** per route in `config.ts`.
 
-Example:
+Example: the JWT plugin is configured globally, and the admin route requires
+an `admin` role:
 
 ```typescript
-// src/plugins.ts (global defaults)
-import type { PluginRegistrar } from 'burger-api';
-import { jwtAuth } from '../ecosystem/plugins/jwt-auth/jwt-auth';
-
+// src/plugins.ts
 export default function (burger: PluginRegistrar) {
-    burger.usePlugin(jwtAuth({
-        secret: process.env.JWT_SECRET,
-        algorithm: 'HS256',
-    }));
+    burger.usePlugin(
+        jwtAuth({ secret: process.env.JWT_SECRET, algorithm: 'HS256' })
+    );
 }
 
-// src/api/admin/config.ts (route override)
+// src/api/admin/config.ts
 export default {
-    auth: {
-        required: true,
-        roles: ['admin'],
-    },
+    auth: { required: true, roles: ['admin'] },
 };
 ```
+
+Auth plugins default-deny unless a route sets `auth: false` (or
+`auth: { required: false }`). See each plugin's README for its options.

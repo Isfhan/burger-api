@@ -241,7 +241,7 @@ function convertPathForOpenAPI(routePath: string): string {
 }
 
 /**
- * Generates a full OpenAPI 3.0 document from API routes.
+ * Generates a full OpenAPI 3.1 document from API routes.
  *
  * @param apiRoutes Compiled route definitions.
  * @param options Server options (fallback metadata source).

@@ -55,7 +55,8 @@ export const USAGE_HINTS: Record<
     cors: { stage: 'onRequest', call: 'cors()' },
     // Rejects floods before any route work.
     'rate-limiter': { stage: 'onRequest', call: 'rateLimit()' },
-    'body-size-limiter': { stage: 'beforeRoute', call: 'bodySizeLimiter()' },
+    // Must run before body validation reads the whole body.
+    'body-size-limiter': { stage: 'onRequest', call: 'bodySizeLimiter()' },
     cache: { stage: 'beforeRoute', call: 'cacheControl()' },
     compression: { stage: 'beforeRoute', call: 'compress()' },
     logger: { stage: 'beforeRoute', call: 'logger()' },

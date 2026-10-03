@@ -44,7 +44,7 @@ export default function (burger: PluginRegistrar) {
 
 | Handler does | Result |
 |--------------|--------|
-| Never touches `ctx.session` (no cookie) | Nothing — no store entry, no `Set-Cookie` |
+| Never touches `ctx.session` (no cookie) | Nothing: no store entry, no `Set-Cookie` |
 | `ctx.session = { userId: "42" }` | New session stored, `Set-Cookie` issued |
 | Mutates an existing session (`ctx.session.cart = [...]`) | Data saved; ID rotated (new `Set-Cookie`) unless `regenerateOnAuth: false` |
 | Reads without changing | Nothing written |
@@ -54,7 +54,7 @@ export default function (burger: PluginRegistrar) {
 
 By default **every route requires an existing session** (the plugin's
 `beforeRoute` throws `401 Session required` when there is none). Mark routes
-that must work without a session — at least the login route — with
+that must work without a session (at least the login route) with
 `auth: false`:
 
 ```typescript
@@ -174,11 +174,11 @@ interface SessionStore {
 ## Context properties
 
 `ctx.session` is typed as `Record<string, unknown> | undefined` by the
-plugin's `declare module "burger-api"` augmentation — no casts needed.
+plugin's `declare module "burger-api"` augmentation, so no casts are needed.
 
 ## Error responses
 
-- **401 Unauthorized** — `Session required`: no valid session on a route
+- **401 Unauthorized**: `Session required`, no valid session on a route
   without `auth: false`
 
 ## Security notes

@@ -165,11 +165,17 @@ async function scanApiDir(
         const relativePath = path.join(basePath, entry.name);
 
         if (entry.isDirectory()) {
+            // Named wildcard folders (`[...slug]`) become literal path
+            // segments that can never match — fail loud in dev and build,
+            // exactly like the runtime scanner.
             if (
                 entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
                 entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
             ) {
-                continue;
+                throw new Error(
+                    `Named wildcard folder '${entry.name}' is not supported — ` +
+                        `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
+                );
             }
 
             const isDynamic =

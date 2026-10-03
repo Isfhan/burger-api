@@ -27,6 +27,25 @@ import { ensureAppDirEnv } from '../utils/scanner';
 import { VALID_TARGETS } from '../utils/config';
 import type { RuntimeTarget } from '../types/index';
 
+/**
+ * The path Bun actually emits for a compiled build. On Windows (or when
+ * cross-compiling to a Windows target) Bun appends `.exe` to an outfile that
+ * does not already end in it, so the printed path, the measured size and the
+ * `Run:` line must use this resolved path.
+ */
+export function resolveCompiledOutfile(
+    outfile: string,
+    target: string | undefined
+): string {
+    const isWindows =
+        target?.includes('windows') ||
+        (!target && process.platform === 'win32');
+    if (isWindows && !outfile.toLowerCase().endsWith('.exe')) {
+        return `${outfile}.exe`;
+    }
+    return outfile;
+}
+
 /** Where each target's bundle lands by default, absent an explicit `--outfile`. */
 function defaultOutfile(
     target: RuntimeTarget,
@@ -226,12 +245,13 @@ export const buildCommand = new Command('build')
             },
             onSuccess: (result, spin) => {
                 if (options.compile) {
-                    const size = existsSync(outfile)
-                        ? Bun.file(outfile).size
+                    const emitted = resolveCompiledOutfile(outfile, undefined);
+                    const size = existsSync(emitted)
+                        ? Bun.file(emitted).size
                         : (result.outputs[0]?.size ?? 0);
                     spin.stop('Compilation completed successfully!');
                     newline();
-                    success(`Executable: ${outfile}`);
+                    success(`Executable: ${emitted}`);
                     if (size > 0) info(`Size: ${formatSize(size)}`);
                     newline();
                     info(
@@ -239,10 +259,10 @@ export const buildCommand = new Command('build')
                     );
                     newline();
                     if (process.platform !== 'win32') {
-                        dim(`Make executable: chmod +x ${outfile}`);
-                        dim(`Run: ./${outfile}`);
+                        dim(`Make executable: chmod +x ${emitted}`);
+                        dim(`Run: ./${emitted}`);
                     } else {
-                        dim(`Run: ${outfile}`);
+                        dim(`Run: ${emitted}`);
                     }
                     newline();
                     return;
@@ -349,12 +369,16 @@ export const buildExecutableCommand = new Command('build:exec')
             onBeforeBuild: (spin) =>
                 spin.update('Compiling... (this may take a minute)'),
             onSuccess: (result, spin) => {
-                const size = existsSync(outfileFinal)
-                    ? Bun.file(outfileFinal).size
+                const emitted = resolveCompiledOutfile(
+                    outfileFinal,
+                    options.target
+                );
+                const size = existsSync(emitted)
+                    ? Bun.file(emitted).size
                     : (result.outputs[0]?.size ?? 0);
                 spin.stop('Compilation completed successfully!');
                 newline();
-                success(`Executable: ${outfileFinal}`);
+                success(`Executable: ${emitted}`);
                 if (size > 0) info(`Size: ${formatSize(size)}`);
                 newline();
                 info(
@@ -365,10 +389,10 @@ export const buildExecutableCommand = new Command('build:exec')
                 );
                 newline();
                 if (process.platform !== 'win32') {
-                    dim(`Make executable: chmod +x ${outfileFinal}`);
-                    dim(`Run: ./${outfileFinal}`);
+                    dim(`Make executable: chmod +x ${emitted}`);
+                    dim(`Run: ./${emitted}`);
                 } else {
-                    dim(`Run: ${outfileFinal}`);
+                    dim(`Run: ${emitted}`);
                 }
                 newline();
             },

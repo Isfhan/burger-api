@@ -109,7 +109,8 @@ export interface HookPlan {
     onError: ErrorHook[];
     /**
      * Transform factories that compute values to inject onto the context.
-     * Runs before the handler, after `beforeRoute`. Never mutated at runtime.
+     * Runs after routing, before validation and `beforeRoute`. Never mutated
+     * at runtime.
      */
     transform?: TransformMap;
     /** Compiled route validators; used for response validation post-handler. */

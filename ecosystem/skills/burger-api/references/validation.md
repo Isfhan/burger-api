@@ -26,6 +26,8 @@ export const POST = {
 ```
 
 Schemas are optional. A route without a `schema.ts` skips validation entirely.
+When a method declares a `body` schema, a non-JSON body is rejected with
+`415 Unsupported Media Type` (`application/*+json` counts as JSON).
 
 ## Supported Targets
 
@@ -122,9 +124,10 @@ export const GET = { query: z.object({ n: z.number() }) };
 
 ## Response Validation
 
-Declare what a handler returns and BurgerAPI checks it. Modes:
-`off` | `dev` (default) | `enforce`. Configurable globally
-(`validation.responseValidation`) and per route:
+Declare what a handler returns and BurgerAPI checks it. Modes: `off` (skip),
+`dev` (log a warning, default), `enforce` (replace the response with an
+error). Configurable globally (`validation.responseValidation`) and per route
+(`config.ts`). Only JSON responses are checked.
 
 ```typescript
 // api/users/schema.ts

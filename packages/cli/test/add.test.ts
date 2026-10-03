@@ -61,6 +61,10 @@ describe('resolveExportName', () => {
 });
 
 describe('USAGE_HINTS', () => {
+    it('wires body-size-limiter into onRequest (before body validation)', () => {
+        expect(USAGE_HINTS['body-size-limiter']?.stage).toBe('onRequest');
+    });
+
     // Regression: the logger hint called `logger()` but imported
     // `createLogger`, so the pasted code did not compile.
     it('every hint calls a function its package really exports', () => {

@@ -108,7 +108,7 @@ describe('native method dispatch', () => {
         for (const path of ['/static', '/param/1']) {
             const res = await fetch(`${BASE}${path}`, { method: 'OPTIONS' });
             expect(res.status).toBe(204);
-            expect(res.headers.get('allow')).toBe('GET, OPTIONS');
+            expect(res.headers.get('allow')).toBe('GET, HEAD, OPTIONS');
         }
     });
 

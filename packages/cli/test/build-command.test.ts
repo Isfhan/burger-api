@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { makeTempDir, removeDir, runCli } from './test-utils';
+import { resolveCompiledOutfile } from '../src/commands/build';
 
 let dir = '';
 
@@ -50,6 +51,39 @@ describe('build command — target validation', () => {
         expect(result.exitCode).toBe(1);
         expect(result.stdout).toContain(
             '--compile cannot be combined with --target=browser'
+        );
+    });
+});
+
+describe('compiled outfile resolution (Windows .exe)', () => {
+    it('appends .exe for a Windows compile target', () => {
+        expect(
+            resolveCompiledOutfile('.build/executable/app', 'bun-windows-x64')
+        ).toBe('.build/executable/app.exe');
+    });
+
+    it('keeps an outfile that already ends in .exe', () => {
+        expect(
+            resolveCompiledOutfile(
+                '.build/executable/app.exe',
+                'bun-windows-x64'
+            )
+        ).toBe('.build/executable/app.exe');
+    });
+
+    it('keeps Unix targets untouched', () => {
+        expect(
+            resolveCompiledOutfile('.build/executable/app', 'bun-linux-x64')
+        ).toBe('.build/executable/app');
+    });
+
+    it('follows the current platform when no target is given', () => {
+        const expected =
+            process.platform === 'win32'
+                ? '.build/executable/app.exe'
+                : '.build/executable/app';
+        expect(resolveCompiledOutfile('.build/executable/app', undefined)).toBe(
+            expected
         );
     });
 });

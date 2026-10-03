@@ -85,13 +85,12 @@ describe('scanApiRoutes', () => {
         ).rejects.toThrow('Multiple dynamic route folders');
     });
 
-    it('ignores unsupported [...slug] folders entirely', async () => {
-        const entries = await scanApiRoutes(
-            namedWildcardFixturesDir,
-            './api',
-            '/api'
+    it('throws for named [...slug] folders exactly like the runtime scanner', async () => {
+        await expect(
+            scanApiRoutes(namedWildcardFixturesDir, './api', '/api')
+        ).rejects.toThrow(
+            "Named wildcard folder '[...slug]' is not supported — use '[...]' (anonymous) instead."
         );
-        expect(entries).toHaveLength(0);
     });
 
     it('sets methods on entries when route file exports specific HTTP methods', async () => {

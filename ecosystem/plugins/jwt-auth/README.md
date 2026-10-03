@@ -23,8 +23,8 @@ Or manually copy to `ecosystem/plugins/jwt-auth/`.
 
 ## Usage
 
-Register the plugin in `src/plugins.ts`. The module exports a default function
-that receives the `Burger` instance:
+Register the plugin in `src/plugins.ts`. The module's default export receives
+a `PluginRegistrar`:
 
 ### Basic HMAC (HS256)
 
@@ -42,7 +42,7 @@ export default function (burger: PluginRegistrar) {
 
 `jwtAuth()` without a secret or `publicKey` throws at startup, and an HMAC
 secret shorter than 32 bytes throws with the exact byte count plus the
-`openssl rand -base64 32` hint — a weak secret is never accepted silently.
+`openssl rand -base64 32` hint: a weak secret is never accepted silently.
 
 ### RS256 (Asymmetric)
 
@@ -81,7 +81,7 @@ export default function (burger: PluginRegistrar) {
 
 The plugin verifies tokens; `signJwt` creates them, so a login route can hand
 out a token the plugin accepts. It uses Web Crypto only and sets `iat`. Pass
-`expiresIn` (seconds) to set `exp` — the plugin requires an `exp` claim by
+`expiresIn` (seconds) to set `exp`; the plugin requires an `exp` claim by
 default, so a token signed without it is rejected with 401.
 
 ```typescript
@@ -97,6 +97,14 @@ export async function POST(ctx: BurgerContext) {
   );
   return Response.json({ token });
 }
+```
+
+The login route runs before a token exists, so its `config.ts` must opt out of
+auth:
+
+```typescript
+// src/api/login/config.ts
+export default { auth: false };
 ```
 
 Use the same `secret` and `algorithm` (default `HS256`) the plugin is
@@ -121,7 +129,7 @@ be at least 32 bytes, the same minimum the plugin enforces.
 ### `requireExpiration`
 
 By default every token must carry an `exp` claim (and it must be in the
-future) — a token without an expiration would otherwise be valid forever.
+future); a token without an expiration would otherwise be valid forever.
 Set `requireExpiration: false` only when your tokens are intentionally
 expiration-less:
 
@@ -163,7 +171,7 @@ export default {
 
 After successful authentication, the verified JWT claims are available as
 `ctx.user` (typed by the plugin's `declare module "burger-api"`
-augmentation — no cast needed):
+augmentation, no cast needed):
 
 ```typescript
 import type { BurgerContext } from "burger-api";
@@ -175,9 +183,9 @@ export async function GET(ctx: BurgerContext) {
 
 ## Error responses
 
-- **401 Unauthorized** — Missing token, invalid token, expired token, token
-  without `exp` (when `requireExpiration` is enabled)
-- **403 Forbidden** — Authenticated but insufficient permissions
+- **401 Unauthorized**: missing token, invalid token, expired token, or a
+  token without `exp` (when `requireExpiration` is enabled)
+- **403 Forbidden**: authenticated but insufficient permissions
 
 ## Security notes
 

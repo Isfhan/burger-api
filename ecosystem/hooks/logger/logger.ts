@@ -1,5 +1,12 @@
 import type { BurgerContext, ForwardHookResult } from 'burger-api';
 
+declare module 'burger-api' {
+    interface BurgerContext {
+        /** Request ID set by the logger hook when `requestId` is enabled. */
+        requestId?: string;
+    }
+}
+
 /**
  * Configuration options for the logger hook.
  */
@@ -24,8 +31,9 @@ export interface LoggerOptions {
 
     /**
      * Whether to log request body (for POST/PUT/PATCH requests).
-     * ⚠️ WARNING: This will consume the request body stream, making it unavailable
-     * to subsequent hooks or handlers. This is a limitation of the Web Streams API.
+     * ⚠️ WARNING: Logging bodies can expose tokens and passwords. The hook
+     * clones the request before parsing, so the handler still reads the
+     * original body.
      * Only enable this for debugging purposes, not in production.
      * @default false
      */
@@ -161,11 +169,20 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
     } = options;
 
     return (ctx: BurgerContext): ForwardHookResult => {
+        const method = ctx.method;
+        const url = ctx.url;
+
+        const urlObj = new URL(url);
+        const path = urlObj.pathname;
+        const query = urlObj.search;
+
+        // `skip` matches the pathname, so `/^\/health/` works as users expect
+        // without being confused by the host, port, or query string.
         if (skip) {
-            if (typeof skip === 'string' && ctx.url.includes(skip)) {
+            if (typeof skip === 'string' && path.includes(skip)) {
                 return undefined;
             }
-            if (skip instanceof RegExp && skip.test(ctx.url)) {
+            if (skip instanceof RegExp && skip.test(path)) {
                 return undefined;
             }
             if (typeof skip === 'function' && skip(ctx)) {
@@ -177,12 +194,6 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
         const startTime = typeof Bun !== 'undefined' && Bun.nanoseconds
             ? Bun.nanoseconds()
             : Date.now() * 1_000_000; // Convert to nanoseconds
-        const method = ctx.method;
-        const url = ctx.url;
-
-        const urlObj = new URL(url);
-        const path = urlObj.pathname;
-        const query = urlObj.search;
 
         let requestId: string | undefined;
         if (enableRequestId) {
@@ -194,7 +205,7 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
             }
 
             // Expose the request ID to handlers via ctx.requestId.
-            (ctx as { requestId?: string }).requestId = requestId;
+            ctx.requestId = requestId;
         }
 
         // Log once the response is ready.

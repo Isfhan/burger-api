@@ -116,6 +116,62 @@ describe('body-size-limiter', () => {
         expect(res.status).toBe(411);
     });
 
+    it('default error includes the received and maximum sizes', async () => {
+        const burger = makeBurger(bodySizeLimiter({ maxSize: 100, mode: 'header' }));
+        const handler = await burger.fetchHandler();
+        const res = await handler(
+            new Request('http://localhost/api/echo', {
+                method: 'POST',
+                headers: { 'Content-Length': '500' },
+                body: 'x'.repeat(500),
+            })
+        );
+        expect(res.status).toBe(413);
+        const body = (await res.json()) as Record<string, unknown>;
+        expect(body.received).toBeDefined();
+        expect(body.maximum).toBeDefined();
+    });
+
+    it('includeLimit: false omits the sizes from the default error', async () => {
+        const burger = makeBurger(
+            bodySizeLimiter({ maxSize: 100, mode: 'header', includeLimit: false })
+        );
+        const handler = await burger.fetchHandler();
+        const res = await handler(
+            new Request('http://localhost/api/echo', {
+                method: 'POST',
+                headers: { 'Content-Length': '500' },
+                body: 'x'.repeat(500),
+            })
+        );
+        expect(res.status).toBe(413);
+        const body = (await res.json()) as Record<string, unknown>;
+        expect(body.error).toBe('Payload Too Large');
+        expect(body.received).toBeUndefined();
+        expect(body.maximum).toBeUndefined();
+    });
+
+    it('a custom onError still overrides the default error', async () => {
+        const burger = makeBurger(
+            bodySizeLimiter({
+                maxSize: 100,
+                mode: 'header',
+                includeLimit: false,
+                onError: () => Response.json({ custom: true }, { status: 413 }),
+            })
+        );
+        const handler = await burger.fetchHandler();
+        const res = await handler(
+            new Request('http://localhost/api/echo', {
+                method: 'POST',
+                headers: { 'Content-Length': '500' },
+                body: 'x'.repeat(500),
+            })
+        );
+        expect(res.status).toBe(413);
+        expect(await res.json()).toEqual({ custom: true });
+    });
+
     it('header mode: accepts an in-limit body with a valid Content-Length', async () => {
         const burger = makeBurger(bodySizeLimiter({ maxSize: 100, mode: 'header' }));
         const handler = await burger.fetchHandler();

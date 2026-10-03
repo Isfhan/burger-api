@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
   </a>
   <a href="https://bun.sh">
-    <img src="https://img.shields.io/badge/Bun-1.3.0%2B-black?logo=bun" alt="Bun" />
+    <img src="https://img.shields.io/badge/Bun-1.4.0%2B-black?logo=bun" alt="Bun" />
   </a>
   <a href="https://burger-api.com">
     <img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" />
@@ -60,14 +60,15 @@ published to npm.
 -   ✅ **Type-Safe Validation** - Optional `schema.ts` with per-method exports;
      Standard Schema (Zod default); `ctx.validated`; RFC 9457 errors (throw
      `ValidationError` → 422 via `onError`)
--   📚 **Automatic OpenAPI Generation** - OpenAPI 3.0 + docs UI
+-   📚 **Automatic OpenAPI Generation** - OpenAPI 3.1 + docs UI
 -   🔌 **Plugins & providers** - `src/plugins.ts` / `src/providers.ts`
 -   🎯 **Route convention files** - `route.ts`, `schema.ts`, `hooks.ts`,
      `openapi.ts`, `config.ts` (self-contained routes, no group inheritance)
 -   🔀 **Automatic HEAD** - `HEAD` requests are derived from `GET` automatically
     (same handler, body stripped)
 -   ❌ **Proper 405 Responses** - a known route requested with an unsupported
-    method returns `405` with an `Allow` header listing the supported methods
+    method returns `405` with an `Allow` header listing the supported methods,
+    `HEAD` (when `GET` exists), and `OPTIONS`
 -   🔗 **Loose Trailing Slash** - `/foo` and `/foo/` match the same route
 -   🌍 **WinterCG deploy surface** - `app.serve(port)` on Bun;
     `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+
@@ -87,8 +88,8 @@ your development workflow.
 -   🔨 **Build Tools** - Bundle projects (AOT routes) or compile to standalone
     executables
 -   🔥 **Development Server** - Hot reload development server with auto-restart
--   🎯 **Zero Dependencies** - Uses Bun's native APIs for file operations and
-    downloads
+-   🎯 **Zero native dependencies** - Bun's native APIs handle file operations
+    and downloads; the only npm packages are `commander` and `@clack/prompts`
 -   💻 **Cross-Platform** - Works on Windows, macOS, and Linux
 
 #### 📥 Installation
@@ -128,7 +129,7 @@ For detailed documentation, see
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) installed (version 1.3.0 or later)
+-   [Bun](https://bun.sh) installed (version 1.4.0 or later)
 
 ### Installation
 
@@ -212,7 +213,7 @@ burger-api build:exec src/index.ts
 
 BurgerAPI uses file-based routing. In development, routes are discovered by
 scanning files when the server starts. In production builds, routes are
-discovered when the app is built — prepared ahead of time (AOT) — so no scanning
+discovered when the app is built, prepared ahead of time (AOT), so no scanning
 is needed while the server is running.
 
 Build flow:
@@ -240,7 +241,7 @@ BurgerAPI maps your file structure to routes automatically.
     `ctx.params.id`.
 -   **Wildcard routes** (`[...]`) capture the remaining segments into
     `ctx.wildcardParams` (an array). A wildcard route also matches its own base
-    path — `/api/files/[...]` matches both `/api/files/a/b/c` and `/api/files`.
+    path: `/api/files/[...]` matches both `/api/files/a/b/c` and `/api/files`.
 -   **Trailing slash** is loose by default: a path with a trailing slash is
     retried without it (`/api/users/1/` matches `/api/users/:id`), and a
     `:param` never binds an empty segment (`/api/users/` does not match
@@ -248,11 +249,12 @@ BurgerAPI maps your file structure to routes automatically.
 -   **HEAD** is automatic: a `HEAD` request to a route that defines `GET` runs
     the `GET` handler and returns the response with the body removed.
 -   **405** is correct: requesting a known route with an unsupported method
-    returns `405` with an `Allow` header (e.g. `Allow: GET, POST`).
+    returns `405` with an `Allow` header (e.g. `Allow: GET, HEAD, POST,
+    OPTIONS`), and every route answers `OPTIONS` with `204`.
 
 ## ⚡ Performance
 
--   **On Bun**, `serve()` registers every route — static, `:param`, `*` — as a
+-   **On Bun**, `serve()` registers every route (static, `:param`, `*`) as a
     per-method native Bun route, so dispatch happens without framework code in
     the hot path.
 -   **Fetch path** (`fetchHandler` on Cloudflare / Deno / Vercel, the
@@ -286,8 +288,8 @@ BurgerAPI maps your file structure to routes automatically.
 ```
 
 On Bun, `serve()` registers every route as a per-method native Bun route. The
-`fetch` path — Bun's fallback plus `fetchHandler` on Cloudflare, Deno, Vercel,
-and the node-server adapter — matches dynamic routes with the radix matcher,
+`fetch` path (Bun's fallback plus `fetchHandler` on Cloudflare, Deno, Vercel,
+and the node-server adapter) matches dynamic routes with the radix matcher,
 falling back to the segment trie. Both paths run the **same prepared handler**,
 so method dispatch, `405`/`Allow`, auto-`HEAD`, and hook behavior are identical
 regardless of how the route was matched.

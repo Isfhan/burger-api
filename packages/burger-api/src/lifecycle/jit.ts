@@ -4,6 +4,7 @@ import type { HookPlan, ResponseHook } from './types.js';
 import { applyTransform } from './transform.js';
 import { dispatchOnError, globalErrorFinisher } from './executor.js';
 import { validateResponse } from '../validation/response.js';
+import { isJsonContentType } from '../validation/validator.js';
 import { resolveDebug } from '../utils/env.js';
 import type {
     CompiledRouteValidators,
@@ -103,6 +104,8 @@ interface JitDeps {
     rv?: CompiledRouteValidators;
     vc?: ValidatorConfig;
     dbg?: boolean;
+    /** JSON content-type check, shared with the interpreter. */
+    ij?: typeof isJsonContentType;
 }
 
 /** A thenable guard emitted after a call whose result may be a promise. */
@@ -182,6 +185,7 @@ export function compileJitHookPlan(
         vc: plan.validatorConfig,
         // Resolve the env fallback now so the hot path reads one boolean.
         dbg: resolveDebug(debug ?? plan.debug),
+        ij: isJsonContentType,
     };
 
     const L: string[] = [];
@@ -277,7 +281,7 @@ export function compileJitHookPlan(
     if (plan.validators?.response) {
         L.push(
             'try{const ct=res.headers.get("content-type")??"";' +
-                'if(ct.includes("application/json")){' +
+                'if(D.ij(ct)){' +
                 'const body=await res.clone().json();' +
                 // The method is lowercased before schema lookup — an
                 // uppercase key silently misses and skips enforcement.

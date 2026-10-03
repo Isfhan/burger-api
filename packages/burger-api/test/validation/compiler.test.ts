@@ -50,6 +50,99 @@ describe('compileRouteSchema', () => {
         expect(cv.validate({}).success).toBe(false);
     });
 
+    it('fails at startup for a response key that is not a status code or class', () => {
+        expect(() =>
+            compileRouteSchema(
+                { get: { response: { good: z.string() } } } as never,
+                {},
+                undefined,
+                '/api/status'
+            )
+        ).toThrow(
+            'Invalid response schema key "good" for GET /api/status'
+        );
+    });
+
+    it('fails at startup for an uppercase status class key', () => {
+        expect(() =>
+            compileRouteSchema(
+                { post: { response: { '2XX': z.string() } } } as never,
+                {},
+                undefined,
+                '/api/status'
+            )
+        ).toThrow('Invalid response schema key "2XX" for POST /api/status');
+    });
+
+    it('accepts exact status codes and lowercase status classes', () => {
+        const v = compileRouteSchema(
+            {
+                get: {
+                    response: {
+                        200: z.string(),
+                        '201': z.string(),
+                        '2xx': z.string(),
+                        '4xx': z.string(),
+                    },
+                },
+            } as never
+        );
+        expect(v.response?.get?.['200']).toBeDefined();
+        expect(v.response?.get?.['201']).toBeDefined();
+        expect(v.response?.get?.['2xx']).toBeDefined();
+        expect(v.response?.get?.['4xx']).toBeDefined();
+    });
+
+    it('fails at startup for an uppercase header schema key', () => {
+        expect(() =>
+            compileRouteSchema(
+                {
+                    get: {
+                        headers: z.object({ 'X-Api-Key': z.string() }),
+                    },
+                } as never,
+                {},
+                undefined,
+                '/api/secure'
+            )
+        ).toThrow(
+            'Header schema key "X-Api-Key" for GET /api/secure can never match: header names are lowercased at runtime. Use "x-api-key" instead.'
+        );
+    });
+
+    it('accepts lowercase header schema keys', () => {
+        const v = compileRouteSchema({
+            get: { headers: z.object({ 'x-api-key': z.string() }) },
+        } as never);
+        expect(v.methods.get?.headers).toBeDefined();
+    });
+
+    it('skips the header key check when the schema exposes no shape', () => {
+        const v = compileRouteSchema({
+            get: { headers: z.record(z.string(), z.string()) },
+        } as never);
+        expect(v.methods.get?.headers).toBeDefined();
+    });
+
+    it('checks a Standard Schema that exposes a shape', () => {
+        const standard = {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (value: unknown) => ({ value }),
+            },
+            shape: { 'X-Token': {} },
+        };
+        expect(() =>
+            compileRouteSchema(
+                { get: { headers: standard } } as never,
+                {},
+                undefined,
+                '/api/secure'
+            )
+        ).toThrow('Header schema key "X-Token" for GET /api/secure');
+    });
+
     it('never shares a compiled validator between unrepresentable schemas', () => {
         const upper = z.string().transform((s) => s.toUpperCase());
         const length = z.string().transform((s) => s.length);

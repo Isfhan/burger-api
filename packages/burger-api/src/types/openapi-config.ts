@@ -27,7 +27,7 @@ export interface DocsProviderOptions {
 }
 
 /**
- * Minimal OpenAPI 3.0 document shape used by the docs provider.
+ * Minimal OpenAPI 3.1 document shape used by the docs provider.
  * Full type not imported to avoid pulling in external dependencies.
  */
 export interface OpenAPIObject {
@@ -44,7 +44,7 @@ export interface OpenAPIObject {
 
 /**
  * Converter function that takes a Standard Schema object and returns
- * a JSON Schema compatible with OpenAPI 3.0.
+ * a JSON Schema compatible with OpenAPI 3.1.
  *
  * Each validation library provides its own converter:
  * - Zod 4: `z.toJSONSchema`
@@ -62,7 +62,7 @@ export interface DocsAuth {
 }
 
 /**
- * OpenAPI server object (per OpenAPI 3.0 spec).
+ * OpenAPI server object (per OpenAPI 3.1 spec).
  */
 export interface OpenAPIServer {
     url: string;
@@ -70,7 +70,7 @@ export interface OpenAPIServer {
 }
 
 /**
- * OpenAPI contact object (per OpenAPI 3.0 spec).
+ * OpenAPI contact object (per OpenAPI 3.1 spec).
  */
 export interface OpenAPIContact {
     name?: string;
@@ -79,7 +79,7 @@ export interface OpenAPIContact {
 }
 
 /**
- * OpenAPI license object (per OpenAPI 3.0 spec).
+ * OpenAPI license object (per OpenAPI 3.1 spec).
  */
 export interface OpenAPILicense {
     name: string;
@@ -87,7 +87,7 @@ export interface OpenAPILicense {
 }
 
 /**
- * OpenAPI external docs object (per OpenAPI 3.0 spec).
+ * OpenAPI external docs object (per OpenAPI 3.1 spec).
  */
 export interface OpenAPIExternalDocs {
     url: string;

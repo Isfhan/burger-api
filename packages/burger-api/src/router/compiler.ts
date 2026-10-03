@@ -120,7 +120,7 @@ export function buildGlobalResponsePlan(
 export class RouterCompiler {
     private debug?: boolean;
     private config: ValidatorConfig;
-    /** JIT HookPlan compilation (capability-gated, default off). */
+    /** JIT HookPlan compilation (capability-gated; on unless `jit: false`). */
     private jit: boolean;
 
     constructor(debug?: boolean, config: ValidatorConfig = {}, jit = false) {
@@ -213,10 +213,10 @@ export class RouterCompiler {
                     : requireResponse(h, m, path);
             }
             if (!handlers.OPTIONS) {
-                const autoOptions = createAutoOptionsHandler([
-                    ...allowMethods,
-                    'OPTIONS',
-                ]);
+                // The auto-OPTIONS `Allow` must equal the 405 `Allow`, so
+                // reuse the exact list: HEAD (when GET exists) and OPTIONS
+                // included.
+                const autoOptions = createAutoOptionsHandler(allowList);
                 rawHandlers.OPTIONS = autoOptions as unknown as RequestHandler;
                 handlers.OPTIONS = autoOptions as unknown as RequestHandler;
             }
@@ -234,7 +234,12 @@ export class RouterCompiler {
             const routeHooks = def.hooks;
             const chain = new HookChain();
             if (hasSchema) {
-                const validators = compileRouteSchema(def.schema!, this.config);
+                const validators = compileRouteSchema(
+                    def.schema!,
+                    this.config,
+                    undefined,
+                    path
+                );
                 chain.add({
                     stage: 'validation',
                     fn: createValidationHook(

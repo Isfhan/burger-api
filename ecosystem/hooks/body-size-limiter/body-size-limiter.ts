@@ -58,9 +58,15 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
     const {
         maxSize = 1048576, // 1MB
         mode = 'header',
-        onError = defaultErrorHandler,
+        onError,
         includeLimit = true,
     } = options;
+
+    // A custom handler owns the body; `includeLimit` applies to the default.
+    const errorHandler =
+        onError ??
+        ((size: number, max: number) =>
+            defaultErrorHandler(size, max, includeLimit));
 
     // Warn once per limiter when stream mode runs after the body was read.
     let warnedBodyUsed = false;
@@ -86,7 +92,7 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
                 const size = Number(contentLength);
 
                 if (size > maxSize) {
-                    return onError(size, maxSize);
+                    return errorHandler(size, maxSize);
                 }
             } else if (ctx.body !== null) {
                 // A body without a trustworthy Content-Length (e.g. chunked
@@ -135,7 +141,7 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
                         size += value.byteLength;
                         if (size > maxSize) {
                             await reader.cancel();
-                            return onError(size, maxSize);
+                            return errorHandler(size, maxSize);
                         }
                     }
                 }
@@ -153,27 +159,30 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
 }
 
 /**
- * Default error handler for oversized requests.
+ * Default error handler for oversized requests. `includeLimit: false` keeps
+ * the error shape but omits the received/maximum sizes.
  */
-function defaultErrorHandler(size: number, maxSize: number): Response {
-    const sizeInMB = (size / 1024 / 1024).toFixed(2);
-    const maxSizeInMB = (maxSize / 1024 / 1024).toFixed(2);
+function defaultErrorHandler(
+    size: number,
+    maxSize: number,
+    includeLimit = true
+): Response {
+    const body: Record<string, string> = {
+        error: 'Payload Too Large',
+        message: `Request body exceeds maximum allowed size`,
+    };
+    if (includeLimit) {
+        body.received = `${(size / 1024 / 1024).toFixed(2)}MB`;
+        body.maximum = `${(maxSize / 1024 / 1024).toFixed(2)}MB`;
+    }
 
-    return Response.json(
-        {
-            error: 'Payload Too Large',
-            message: `Request body exceeds maximum allowed size`,
-            received: `${sizeInMB}MB`,
-            maximum: `${maxSizeInMB}MB`,
+    return Response.json(body, {
+        status: 413,
+        statusText: 'Payload Too Large',
+        headers: {
+            'Connection': 'close',
         },
-        {
-            status: 413,
-            statusText: 'Payload Too Large',
-            headers: {
-                'Connection': 'close',
-            },
-        }
-    );
+    });
 }
 
 /**

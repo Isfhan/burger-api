@@ -61,6 +61,34 @@ describe('response validation (full pipeline)', () => {
         expect(await res.json()).toEqual({ id: 123 });
     });
 
+    it('enforce: validates application/*+json responses too', async () => {
+        const res = await fetchRoute(
+            {
+                get: { response: { 200: z.object({ id: z.string() }) } },
+            },
+            () =>
+                new Response(JSON.stringify({ id: 123 }), {
+                    headers: { 'Content-Type': 'application/vnd.api+json' },
+                }),
+            { responseValidation: 'enforce' }
+        );
+        expect(res.status).toBe(500);
+    });
+
+    it('enforce: accepts a matching application/*+json response', async () => {
+        const res = await fetchRoute(
+            {
+                get: { response: { 200: z.object({ id: z.string() }) } },
+            },
+            () =>
+                new Response(JSON.stringify({ id: '7' }), {
+                    headers: { 'Content-Type': 'application/vnd.api+json' },
+                }),
+            { responseValidation: 'enforce' }
+        );
+        expect(res.status).toBe(200);
+    });
+
     it('enforce: status-class (2xx) fallback still applies', async () => {
         const res = await fetchRoute(
             {

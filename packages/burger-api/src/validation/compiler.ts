@@ -54,7 +54,8 @@ const REQUEST_SLOTS: ValidationSlot[] = [
 export function compileRouteSchema(
     schema: RouteSchema,
     config: ValidatorConfig = {},
-    cache: ValidatorCache = validatorCache
+    cache: ValidatorCache = validatorCache,
+    route?: string
 ): CompiledRouteValidators {
     const methods: CompiledRouteValidators['methods'] = {};
     // `export const coerce = true` in schema.ts enables coercion for every
@@ -83,6 +84,9 @@ export function compileRouteSchema(
         for (const slot of REQUEST_SLOTS) {
             const raw = m[slot];
             if (raw === undefined) continue;
+            if (slot === 'headers') {
+                assertLowercaseHeaderKeys(raw, rawMethod.toUpperCase(), route);
+            }
             compiledMethod[slot] = compileSlot(raw, slot, cache);
         }
 
@@ -120,7 +124,7 @@ export function compileRouteSchema(
     }
 
     // Compile response schemas (per-status) when present.
-    const response = compileResponseSchemas(schema, cache);
+    const response = compileResponseSchemas(schema, cache, route);
 
     const result: CompiledRouteValidators = { methods };
     if (response) result.response = response;
@@ -128,12 +132,57 @@ export function compileRouteSchema(
 }
 
 /**
+ * Keys a schema exposes structurally (a Zod object's `.shape`, or a Standard
+ * Schema value carrying a `shape` record). Opaque schemas (`records`, maps)
+ * expose nothing, so they are skipped.
+ */
+function exposedShapeKeys(schema: SchemaInput): string[] | undefined {
+    const shape = (schema as { shape?: unknown }).shape;
+    if (shape === null || typeof shape !== 'object') return undefined;
+    return Object.keys(shape);
+}
+
+/**
+ * Header names are lowercased at runtime (`x-api-key`), so a schema key with
+ * uppercase letters can never match. Fails startup naming the key and the
+ * lowercase form. Only enforced when the schema exposes its keys structurally.
+ */
+function assertLowercaseHeaderKeys(
+    schema: SchemaInput,
+    method: string,
+    route?: string
+): void {
+    const keys = exposedShapeKeys(schema);
+    if (!keys) return;
+    for (const key of keys) {
+        const lower = key.toLowerCase();
+        if (key !== lower) {
+            throw new Error(
+                `Header schema key "${key}" for ` +
+                    `${method}${route ? ` ${route}` : ''} can never match: ` +
+                    `header names are lowercased at runtime. Use "${lower}" instead.`
+            );
+        }
+    }
+}
+
+/** An exact status code (`200`) — the selected form. */
+const STATUS_CODE_KEY = /^[1-5]\d\d$/;
+/** A status class (`2xx`) — the fallback form, lowercase only. */
+const STATUS_CLASS_KEY = /^[1-5]xx$/;
+
+/**
  * Compiles per-status `response` schemas into a map of `CompiledValidator`s.
  * Returns undefined when no `response` schemas are declared.
+ *
+ * A key that is neither a status code nor a lowercase status class can never
+ * be selected at request time, so it fails startup naming the route, method
+ * and key instead of silently never running.
  */
 function compileResponseSchemas(
     schema: RouteSchema,
-    cache: ValidatorCache
+    cache: ValidatorCache,
+    route?: string
 ): Record<string, Record<string, CompiledValidator>> | undefined {
     const response: Record<string, Record<string, CompiledValidator>> = {};
     let any = false;
@@ -148,6 +197,16 @@ function compileResponseSchemas(
         if (!responseSchemas) continue;
         const byStatus: Record<string, CompiledValidator> = {};
         for (const statusKey of Object.keys(responseSchemas)) {
+            if (
+                !STATUS_CODE_KEY.test(statusKey) &&
+                !STATUS_CLASS_KEY.test(statusKey)
+            ) {
+                throw new Error(
+                    `Invalid response schema key "${statusKey}" for ` +
+                        `${rawMethod.toUpperCase()}${route ? ` ${route}` : ''}: ` +
+                        'use a status code ("200") or a status class ("2xx").'
+                );
+            }
             byStatus[statusKey] = compileSlot(
                 responseSchemas[statusKey]!,
                 'body',

@@ -11,6 +11,7 @@ import { applyTransform } from './transform.js';
 import { renderHTTPError, logUnhandledError } from '../errors/http-error.js';
 import { ValidationError } from '../validation/error.js';
 import { validateResponse } from '../validation/response.js';
+import { isJsonContentType } from '../validation/validator.js';
 import { resolveDebug } from '../utils/env.js';
 import { isThenable } from '../utils/thenable.js';
 
@@ -160,7 +161,7 @@ export async function executeHookPlanForHandler(
         if (plan.validators?.response) {
             try {
                 const ct = response.headers.get('content-type') ?? '';
-                if (ct.includes('application/json')) {
+                if (isJsonContentType(ct)) {
                     // Clone to avoid consuming the body stream.
                     const clone = response.clone();
                     const body = await clone.json();

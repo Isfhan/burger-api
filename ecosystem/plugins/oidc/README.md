@@ -22,8 +22,8 @@ Or manually copy to `ecosystem/plugins/oidc/`.
 
 ## Usage
 
-Register the plugin in `src/plugins.ts`. The module exports a default function
-that receives the `Burger` instance:
+Register the plugin in `src/plugins.ts`. The module's default export receives
+a `PluginRegistrar`:
 
 ### Google OIDC
 
@@ -105,7 +105,7 @@ export default {
 
 After successful validation, the verified token claims are available as
 `ctx.user` (typed by the plugin's `declare module "burger-api"`
-augmentation — no cast needed):
+augmentation, no cast needed):
 
 ```typescript
 import type { BurgerContext } from "burger-api";
@@ -117,9 +117,9 @@ export async function GET(ctx: BurgerContext) {
 
 ## Error responses
 
-- **401 Unauthorized** — Missing token, invalid signature, expired token,
+- **401 Unauthorized**: missing token, invalid signature, expired token, or
   invalid issuer/audience
-- **503 Service Unavailable** — OIDC discovery or JWKS could not be reached.
+- **503 Service Unavailable**: OIDC discovery or JWKS could not be reached.
   The failure is logged with `console.error`; the client should retry (the
   token itself was not evaluated).
 

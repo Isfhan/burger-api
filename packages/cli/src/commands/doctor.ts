@@ -335,7 +335,7 @@ export const doctorCommand = new Command('doctor')
             const line =
                 result.message === 'Found'
                     ? result.name
-                    : `${result.name} — ${result.message}`;
+                    : `${result.name}: ${result.message}`;
             if (!result.pass) logError(line);
             else if (result.severity === 'warning') warning(line);
             else if (result.severity === 'info') info(line);

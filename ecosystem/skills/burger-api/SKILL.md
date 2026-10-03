@@ -1,6 +1,6 @@
 ---
 name: burger-api
-description: Build APIs with BurgerAPI — Bun-first, file-based routing, Standard Schema validation, hook lifecycle, plugins/providers, OpenAPI. Use when creating routes, schema.ts, hooks, config.ts, plugins, or CLI workflows.
+description: Build APIs with BurgerAPI: Bun-first, file-based routing, Standard Schema validation, hook lifecycle, plugins/providers, OpenAPI. Use when creating routes, schema.ts, hooks, config.ts, plugins, or CLI workflows.
 ---
 
 # BurgerAPI Development Skill
@@ -9,13 +9,15 @@ description: Build APIs with BurgerAPI — Bun-first, file-based routing, Standa
 
 ## Overview
 
-BurgerAPI is a Bun-first, WinterCG-compatible TypeScript framework:
+BurgerAPI is a Bun-first, WinterCG-compatible TypeScript framework. It runs
+on Bun 1.4.0+ (primary), Node 24+, and other WinterCG targets through
+`toFetchHandler`.
 
 - File-based routing (route = directory of sibling files)
 - **Hooks** = request lifecycle
 - **Plugins** = application extensions
 - Standard Schema validation (Zod default)
-- OpenAPI generation
+- OpenAPI 3.1 generation
 - Handlers return standard Web `Response`
 - Public context type: **`BurgerContext`**
 
@@ -57,7 +59,7 @@ Groups `(name)` only strip from the URL.
 Per-method named exports (`GET`, `POST`, …) on route/schema/openapi.
 
 `config.ts` can also override per method: `export default { auth: false }`
-plus `export const POST = { auth: { required: true } }` — each method gets a
+plus `export const POST = { auth: { required: true } }`. Each method gets a
 shallow merge of default + its own export (method keys win).
 
 ## Quick start
@@ -96,19 +98,19 @@ With a `schema.ts`, wrap the handler in
 
 Handlers and hooks receive `ctx`:
 
-- `ctx.request` — raw `Request`; `ctx.method`, `ctx.url`, `ctx.headers`,
+- `ctx.request`: raw `Request`; `ctx.method`, `ctx.url`, `ctx.headers`,
   `ctx.body` (`ctx.json()` / `ctx.text()`)
-- `ctx.params` — `[param]` segments; `ctx.wildcardParams` — `[...]` segments
-- `ctx.query`, `ctx.cookies` — parsed lazily
-- `ctx.validated` — schema-checked data (see Validation)
-- `ctx.route` — matched route metadata; `ctx.config` — from `config.ts`
-- `ctx.ip` — client socket address, resolved lazily; `undefined` where the
+- `ctx.params`: `[param]` segments; `ctx.wildcardParams`: `[...]` segments
+- `ctx.query`, `ctx.cookies`: parsed lazily
+- `ctx.validated`: schema-checked data (see Validation)
+- `ctx.route`: matched route metadata; `ctx.config`: from `config.ts`
+- `ctx.ip`: client socket address, resolved lazily; `undefined` where the
   runtime exposes no client address (the Node adapter reads the socket)
-- `ctx.publish(topic, message)` — send to every WS socket subscribed to
+- `ctx.publish(topic, message)`: send to every WS socket subscribed to
   `topic` (Bun only; throws on other runtimes / before `app.serve()`)
-- `ctx.set` — response mutations
-- `ctx.env` — platform bindings on WinterCG targets
-- `ctx.services` — app services; app-scoped, shared and frozen (read only)
+- `ctx.set`: response mutations
+- `ctx.env`: platform bindings on WinterCG targets
+- `ctx.services`: app services; app-scoped, shared and frozen (read only)
 
 ## Validation (`schema.ts`)
 
@@ -171,7 +173,7 @@ export default (burger: PluginRegistrar) => {
 };
 ```
 
-`PluginRegistrar` exposes only `usePlugin` — not the full `Burger` class
+`PluginRegistrar` exposes only `usePlugin`, not the full `Burger` class
 (no `serve`/`fetchHandler`/etc. in autocomplete here; those would re-enter
 route compilation if called this early).
 
@@ -234,7 +236,7 @@ export const POST = { auth: { required: true } }; // POST requires a user
 ```
 
 With an auth plugin registered, **WebSocket routes are gated too**: a public
-WS route needs `config.ts` with `auth: false` under the ws dir — otherwise
+WS route needs `config.ts` with `auth: false` under the ws dir; otherwise
 the plugin default-denies the upgrade.
 
 ## Plugin Development
@@ -244,7 +246,7 @@ the plugin default-denies the upgrade.
 ```typescript
 interface Plugin {
   name: string;
-  hooks?: GlobalHooks; // plugin scope — onRequest is allowed here, unlike route-level RouteHooks
+  hooks?: GlobalHooks; // plugin scope: onRequest is allowed here, unlike route-level RouteHooks
 }
 ```
 
@@ -298,20 +300,20 @@ ecosystem/plugins/<name>/
 
 ### Available plugins
 
-- `jwt-auth` — JWT authentication (HS256/HS384/HS512, RS256, ES256)
-- `session` — Session management with configurable stores
-- `api-key` — API key authentication via headers
-- `basic-auth` — HTTP Basic authentication
-- `oidc` — OpenID Connect authentication
-- `env` — Environment variable validation
+- `jwt-auth`: JWT authentication (HS256/HS384/HS512, RS256, ES256)
+- `session`: Session management with configurable stores
+- `api-key`: API key authentication via headers
+- `basic-auth`: HTTP Basic authentication
+- `oidc`: OpenID Connect authentication
+- `env`: Environment variable validation
 
 ## OpenAPI
 
-- `openapi.config.ts` — auto-discovered convention file (metadata, endpoints, docs UI, docs auth)
+- `openapi.config.ts`: auto-discovered convention file (metadata, endpoints, docs UI, docs auth)
 - Swagger UI is the default docs UI (CDN-based, no npm dependency)
-- Built-in docs protection via `docsAuth: { username, password }` — guards `/docs` and `/openapi.json`
+- Built-in docs protection via `docsAuth: { username, password }`: guards `/docs` and `/openapi.json`
 - Per-route `openapi.ts` with per-method exports (override auto-generated responses)
-- `mapJsonSchema` — validator-agnostic schema conversion (Zod, Valibot, ArkType)
+- `mapJsonSchema`: validator-agnostic schema conversion (Zod, Valibot, ArkType)
 - `/openapi.json`, `/docs` (configurable paths, can be disabled)
 
 ## CLI
@@ -326,7 +328,9 @@ burger-api skills install|list|available
 burger-api list
 ```
 
-`burger.build.ts` is build-time only (dirs, prefixes, debug).
+`burger.build.ts` is build-time only (dirs, prefixes, debug). Debug output
+turns on with `debug: true` in `new Burger({ ... })` or
+`NODE_ENV=development` (which `burger-api dev` sets).
 
 ## Ecosystem layout
 

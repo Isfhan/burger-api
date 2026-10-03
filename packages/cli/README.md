@@ -166,7 +166,7 @@ falls back to the network.
 
 ### `burger-api list`
 
-Show official ecosystem packages you can add — hooks under
+Show official ecosystem packages you can add: hooks under
 `ecosystem/hooks/`, plugins under `ecosystem/plugins/`.
 
 **Hooks** control the request lifecycle. **Plugins** extend the application.
@@ -319,7 +319,7 @@ it is installed in both places.
 
 ### `burger-api build <file>`
 
-Bundle your project with route discovery prepared ahead of time (AOT) — routes
+Bundle your project with route discovery prepared ahead of time (AOT): routes
 are found when the app is built, not while it is running.
 The CLI scans routes first, generates a virtual entry file, then runs Bun build.
 
@@ -390,7 +390,8 @@ burger-api build:exec src/index.ts --outfile my-server.exe
 
 **Options:**
 
-- `--outfile <path>` - Output file path
+- `--outfile <path>` - Output file path. On Windows (or a `bun-windows-*`
+  target), `.exe` is appended when the path does not already end in it.
 - `--target <target>` - Target platform
 - `--minify` - Minify the output (enabled by default)
 - `--no-bytecode` - Disable bytecode compilation
@@ -441,8 +442,8 @@ burger-api dev --port 8080 --file app.ts
 
 **Options:**
 
-- `-p, --port <port>` - Port to run on (default: 4000)
-- `-f, --file <file>` - Entry file (default: `src/index.ts`)
+- `-p, --port <port>` - Port to run on (default: `$PORT` or 4000)
+- `-f, --file <file>` - Entry file (default: `src/index.ts` or `.js`/`.mjs`)
 
 **What you'll see:**
 
@@ -475,10 +476,12 @@ burger-api start --port 8080
 
 **Options:**
 
-- `-p, --port <port>` - Port to run on (default: 4000)
-- `-f, --file <file>` - Production entry file (default: `src/index.ts`)
+- `-p, --port <port>` - Port to run on (default: `$PORT` or 4000)
+- `-f, --file <file>` - Production entry file (default:
+  `.build/bundle/app.js` if built, else `src/index.ts` or `.js`/`.mjs`)
 
-Run `burger-api build` first, or let `start` build the bundle for you.
+Run `burger-api build` first. If no bundle exists, `start` runs
+`src/index.ts` (or `.js`/`.mjs`) from source.
 
 ---
 
@@ -490,7 +493,7 @@ Scaffold routes, hooks, and plugins into your project:
 # Scaffold a complete route directory
 burger-api generate route users
 
-# Route, hook, plugin, or websocket — language follows the project
+# Route, hook, plugin, or websocket; language follows the project
 # (or --lang js/ts)
 burger-api generate hook custom-log
 burger-api generate plugin stripe
@@ -528,24 +531,26 @@ my-api/
 ├── burger.build.ts # Build-time config (dirs, prefixes, debug)
 ├── tsconfig.json # TypeScript config (jsconfig.json for --lang js)
 ├── AGENTS.md # Project rules for AI agents
-├── ecosystem/
-│ └── hooks/
-│     └── index.ts # Installed hooks/plugins land here
 ├── src/
 │ ├── index.ts # Burger instance + serve() ONLY
 │ ├── hooks.ts # Global lifecycle hooks
 │ ├── plugins.ts # burger.usePlugin(...)
 │ ├── providers.ts # burger.provide(name, service)
 │ ├── openapi.config.ts # OpenAPI metadata + docs UI
+│ ├── types.ts # App-wide type extensions (TS projects)
 │ └── api/
 │     ├── route.ts # Example route handler
-│     ├── schema.ts # Per-method Zod schemas
+│     ├── schema.ts # Per-method schemas
 │     └── openapi.ts # Per-method OpenAPI metadata
 ├── .agents/skills/ # AI agent skills (optional)
 ├── .claude/skills/ # AI agent skills for Claude Code (optional)
 ├── .gitignore
 └── .prettierrc
 ```
+
+`src/pages/` is added when you enable pages, and `src/websocket/` when you
+enable WebSocket routes. The `ecosystem/` folder is not scaffolded: `burger-api
+add` creates it on demand.
 
 With `--lang js`, every `*.ts` file becomes `*.js` and `tsconfig.json` becomes
 `jsconfig.json` (`checkJs: true`).
@@ -824,7 +829,8 @@ BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
 
 ### Design Principles
 
-- **Minimal dependencies** - Only use `commander` and `@clack/prompts`
+- **Minimal dependencies** - `commander` and `@clack/prompts` for parsing and
+  prompts; everything else uses Bun's native APIs
 - **Beautiful output** - Use colors and symbols for clarity
 - **Simple language** - No jargon, clear explanations
 - **Well commented** - Explain why, not just what

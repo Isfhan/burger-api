@@ -1,426 +1,84 @@
 # Compression Hook
 
-HTTP compression hook factory for burger-api framework. Hook factories are code that runs around your handler — before and/or after it. This hook compresses response bodies using gzip or deflate compression to reduce bandwidth usage and improve load times.
+Compresses response bodies with gzip or deflate when the client supports it.
 
 ## Features
 
-- ✅ gzip and deflate compression (brotli requests are skipped — see the note below)
-- ✅ Automatic client capability detection
-- ✅ Configurable compression threshold
-- ✅ Smart content-type filtering
-- ✅ Automatic exclusion of pre-compressed content
-- ✅ Only compresses when it reduces size
-- ✅ Sets proper Content-Encoding headers
-- ✅ Zero configuration required
+- gzip and deflate encoding, chosen from `Accept-Encoding`
+- Minimum-size threshold
+- Content-type include and exclude filters
+- Skips already compressed and bodiless responses
+- Only uses the compressed body when it is smaller
+- Sets `Content-Encoding` and `Vary: Accept-Encoding`
 
 ## Installation
 
-Copy this hook factory into your project following the standardized ecosystem structure:
-
 ```bash
-# Copy the entire ecosystem folder to your project
-cp -r burger-api/ecosystem ./
-
-# Or install via the CLI
 burger-api add compression
 ```
 
 ## Usage
 
-### Basic Usage
-
-```typescript
-// src/hooks.ts — global hooks, applies to every request
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = [
-    compress() // Compress all responses with defaults
-];
-
-// index.ts
-import { Burger } from 'burger-api';
-
-const app = new Burger({
-    apiDir: './src/api',
-});
-
-app.serve(4000);
-```
-
-**Recommended stage:** `beforeRoute` — the hook returns a response
-transform, so it runs after the handler and can compress its response.
-Global (`src/hooks.ts`) or route-level (`hooks.ts`) both work.
-
-### Custom Threshold
+The hook returns a response transform, so wire it into `beforeRoute`.
 
 ```typescript
 // src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
+export const beforeRoute = [compress()];
+```
+
+### Custom threshold
+
+```typescript
 export const beforeRoute = [
-    compress({
-        threshold: 2048 // Only compress responses larger than 2KB
-    })
+    compress({ threshold: 2048 }), // only responses larger than 2KB
 ];
 ```
 
-### Note: Brotli Support in Bun
-
-**Important**: the hook does not implement Brotli. If the client sends
-`Accept-Encoding: br` and `'br'` is in `encodings`, compression is skipped
-with a `console.warn` and the response is sent uncompressed (with no
-`Content-Encoding` header). Because the hook picks the first encoding both
-sides support, putting `'br'` first would also shadow `gzip`/`deflate` for
-browsers — list only `gzip` and `deflate`:
+### Restrict content types
 
 ```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
 export const beforeRoute = [
     compress({
-        encodings: ['gzip', 'deflate']
-    })
-];
-```
-
-### Compress Specific Content Types
-
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = [
-    compress({
-        contentTypes: [
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'application/javascript',
-            'application/json',
-            'text/xml',
-            'application/xml'
-        ]
-    })
-];
-```
-
-### Use Regex for Content Types
-
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = [
-    compress({
-        contentTypes: /^(text\/|application\/(json|javascript|xml))/
-    })
-];
-```
-
-### Custom Exclusions
-
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = [
-    compress({
-        excludeContentTypes: [
-            'image/',
-            'video/',
-            'audio/',
-            'font/',
-            'application/pdf',
-            'application/zip'
-        ]
-    })
-];
-```
-
-## Configuration Options
-
-### `threshold`
-
-- **Type**: `number`
-- **Default**: `1024` (1KB)
-
-Minimum response size in bytes to compress. Responses smaller than this will not be compressed, as the overhead may not be worth it.
-
-**Recommended values:**
-- `512`: More aggressive compression
-- `1024`: Balanced (default)
-- `2048`: Conservative, better for high-CPU scenarios
-
-### `encodings`
-
-- **Type**: `('gzip' | 'deflate' | 'br')[]`
-- **Default**: `['gzip', 'deflate']`
-
-Compression algorithms to support, in order of preference. The hook picks
-the first entry the client's `Accept-Encoding` allows.
-
-**Encoding comparison:**
-- **gzip**: Best compatibility, good compression ✅ Implemented
-- **deflate**: Similar to gzip, slightly less common ✅ Implemented
-- **br** (brotli): ❌ Skipped with a warning (see the Brotli note above) —
-  including it shadows any `gzip`/`deflate` entry that follows it
-
-### `contentTypes`
-
-- **Type**: `string[] | RegExp`
-- **Default**: `undefined` (compress all)
-
-If specified, only compress responses with matching content types. Use this to be selective about what gets compressed.
-
-**Common compressible types:**
-- `text/html`
-- `text/css`
-- `text/javascript` / `application/javascript`
-- `application/json`
-- `text/xml` / `application/xml`
-- `text/plain`
-
-### `excludeContentTypes`
-
-- **Type**: `string[] | RegExp`
-- **Default**: `['image/', 'video/', 'audio/', 'font/']`
-
-Content types to exclude from compression. By default, excludes media types that are already compressed.
-
-**Common pre-compressed types:**
-- Images (JPEG, PNG, GIF, WebP)
-- Videos (MP4, WebM)
-- Audio (MP3, AAC)
-- Fonts (WOFF, WOFF2)
-- Archives (ZIP, GZIP)
-
-## How It Works
-
-1. **Client Detection**: Checks the `Accept-Encoding` header to see which compression algorithms the client supports.
-
-2. **Encoding Selection**: Selects the first supported encoding from your `encodings` preference list.
-
-3. **Content Filtering**: Checks if the response should be compressed based on:
-   - Response has a body
-   - Not already compressed
-   - Content type matches filters
-   - Body size exceeds threshold
-
-4. **Compression**: Compresses the response body using the selected algorithm.
-
-5. **Size Check**: Only uses compressed version if it's actually smaller than the original.
-
-6. **Headers**: Sets appropriate headers:
-   - `Content-Encoding`: The compression algorithm used
-   - `Vary: Accept-Encoding`: Tells caches to vary by encoding
-   - Updates or removes `Content-Length`
-
-## Advanced Examples
-
-### Production Configuration
-
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = [
-    compress({
-        threshold: 1024,
-        encodings: ['gzip', 'deflate'],
         contentTypes: /^(text\/|application\/(json|javascript|xml))/,
-        excludeContentTypes: [
-            'image/',
-            'video/',
-            'audio/',
-            'font/',
-            'application/zip',
-            'application/gzip',
-            'application/pdf'
-        ]
-    })
+    }),
 ];
 ```
 
-### API-Only Compression
+## Options
 
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `threshold` | `number` | `1024` | Minimum body size in bytes to compress |
+| `encodings` | `('gzip' \| 'deflate' \| 'br')[]` | `['gzip', 'deflate']` | Supported encodings, in preference order |
+| `contentTypes` | `string[] \| RegExp` | - | Only compress matching content types |
+| `excludeContentTypes` | `string[] \| RegExp` | `['image/', 'video/', 'audio/', 'font/']` | Skip matching content types |
 
-export const beforeRoute = [
-    compress({
-        contentTypes: ['application/json'],
-        threshold: 512 // Compress smaller JSON responses
-    })
-];
-```
+## How it works
 
-### Route-Specific Compression
+1. Reads `Accept-Encoding` and picks the first configured encoding the client
+   accepts.
+2. Skips responses that already have `Content-Encoding`, have no body, or are
+   `204`/`304`.
+3. Skips excluded content types, and non-matching types when `contentTypes`
+   is set.
+4. Compresses the body and uses the result only if it is smaller than the
+   original.
+5. On compression, sets `Content-Encoding`, adds `Vary: Accept-Encoding`, and
+   removes `Content-Length`.
 
-```typescript
-// src/api/large-data/hooks.ts
-import { compress } from '../../ecosystem/hooks/compression/compression';
+## Brotli
 
-// Aggressive compression for large data endpoints
-export const beforeRoute = [
-    compress({
-        threshold: 0, // Compress everything
-        encodings: ['gzip', 'deflate']
-    })
-];
-```
+This hook does not implement Brotli. If `'br'` is in `encodings` and the
+client asks for it, compression is skipped with a warning and the response is
+sent uncompressed. Because the first matching encoding wins, listing `'br'`
+before `gzip` also shadows gzip for browsers. Keep the default
+`['gzip', 'deflate']`.
 
-### Conditional Compression
+## Notes
 
-```typescript
-// src/hooks.ts
-import { compress } from '../ecosystem/hooks/compression/compression';
-
-export const beforeRoute = process.env.NODE_ENV === 'production'
-    ? [compress()]
-    : [];
-```
-
-## Performance Considerations
-
-### Compression Ratios
-
-Typical compression ratios for different content types:
-
-- **JSON**: 60-90% reduction
-- **HTML**: 60-80% reduction
-- **CSS**: 60-80% reduction
-- **JavaScript**: 50-70% reduction
-- **XML**: 70-90% reduction
-
-### CPU vs Bandwidth Trade-off
-
-Compression uses CPU to save bandwidth. Consider:
-
-- **High CPU costs**: Use higher threshold, fewer encodings
-- **High bandwidth costs**: Use lower threshold, keep gzip enabled
-- **CDN in front**: Let CDN handle compression
-
-### Recommendations
-
-```typescript
-// Low-traffic, bandwidth-sensitive
-compress({
-    threshold: 256,
-    encodings: ['gzip', 'deflate']
-})
-
-// High-traffic, CPU-sensitive
-compress({
-    threshold: 2048,
-    encodings: ['gzip']
-})
-
-// Balanced (recommended)
-compress({
-    threshold: 1024,
-    encodings: ['gzip', 'deflate']
-})
-```
-
-## Response Headers
-
-### Compressed Response
-
-```
-HTTP/1.1 200 OK
-Content-Type: application/json
-Content-Encoding: gzip
-Vary: Accept-Encoding
-```
-
-### Uncompressed Response
-
-```
-HTTP/1.1 200 OK
-Content-Type: application/json
-Content-Length: 1234
-```
-
-## Browser Support
-
-### Gzip
-
-✅ All browsers (universal support)
-
-### Deflate
-
-✅ All modern browsers
-
-### Brotli (br)
-
-✅ Chrome 50+
-✅ Firefox 44+
-✅ Safari 11+
-✅ Edge 15+
-❌ IE (not supported)
-❌ Not yet supported in Bun.js runtime
-
-## Common Issues
-
-### Compression Not Applied
-
-**Possible causes:**
-1. Response is below threshold
-2. Content type is excluded
-3. Client doesn't support compression
-4. Response is already compressed
-
-**Solution:**
-```typescript
-compress({
-    threshold: 0, // Lower threshold for testing
-    encodings: ['gzip', 'deflate']
-})
-```
-
-### Double Compression
-
-If you see garbled output, you might be compressing twice (e.g., CDN + this hook).
-
-**Solution:** Disable this hook's compression and let the CDN handle it, or vice versa.
-
-### Images Still Being Compressed
-
-Ensure your excludeContentTypes includes image MIME types:
-
-```typescript
-compress({
-    excludeContentTypes: ['image/', 'video/', 'audio/']
-})
-```
-
-## Testing
-
-Test compression with curl:
-
-```bash
-# Request with gzip
-curl -H "Accept-Encoding: gzip" http://localhost:4000/api/data -v
-
-# Request with brotli — stays uncompressed (unsupported; warning logged)
-curl -H "Accept-Encoding: br" http://localhost:4000/api/data -v
-
-# Request without compression
-curl http://localhost:4000/api/data -v
-```
-
-## Security Notes
-
-- ✅ Compression is safe for most content
-- ⚠️ Be aware of BREACH attack for sensitive data (use CSRF tokens)
-- ✅ The hook only compresses, never decompresses requests
-- ✅ Content-Type is preserved
-
-## References
-
-- [MDN: Content-Encoding](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding)
-- [Google: Enable Text Compression](https://developers.google.com/speed/docs/insights/EnableCompression)
-- [Brotli Compression](https://github.com/google/brotli)
-
+- Compression runs on the whole body, so very large streaming responses are
+  buffered before they are sent.
+- If a CDN in front of your app already compresses, disable this hook to
+  avoid double compression.

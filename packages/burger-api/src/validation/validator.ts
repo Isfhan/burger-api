@@ -173,6 +173,14 @@ function isJsonMediaType(mediaType: string): boolean {
     return mediaType.startsWith('application/') && mediaType.endsWith('+json');
 }
 
+/**
+ * True when a raw `Content-Type` header value is JSON (`application/json` or
+ * `application/…+json`). Shared by request-body and response validation.
+ */
+export function isJsonContentType(raw: string): boolean {
+    return isJsonMediaType(mediaTypeOf(raw));
+}
+
 /** True when the value is empty or whitespace only (no `trim()` allocation). */
 function isBlank(value: string): boolean {
     for (let i = 0; i < value.length; i++) {

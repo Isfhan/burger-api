@@ -20,8 +20,8 @@ Or manually copy to `ecosystem/plugins/basic-auth/`.
 
 ## Usage
 
-Register the plugin in `src/plugins.ts`. The module exports a default function
-that receives the `Burger` instance:
+Register the plugin in `src/plugins.ts`. The module's default export receives
+a `PluginRegistrar`:
 
 ```typescript
 // src/plugins.ts
@@ -45,7 +45,7 @@ export default function (burger: PluginRegistrar) {
 Every route now requires credentials (except routes with `auth: false` in
 their `config.ts`). Without valid credentials the plugin responds `401` with
 `WWW-Authenticate: Basic realm="Restricted"`, so browsers show their login
-prompt. `validate` is required — `basicAuth()` without it throws at startup.
+prompt. `validate` is required: `basicAuth()` without it throws at startup.
 
 ### With custom realm
 
@@ -127,7 +127,7 @@ augmentation (shared with jwt-auth and oidc).
 
 ## Error responses
 
-- **401 Unauthorized** — Missing Basic authentication or invalid credentials.
+- **401 Unauthorized**: missing Basic authentication or invalid credentials.
   RFC 9457 `application/problem+json` body plus
   `WWW-Authenticate: Basic realm="<realm>", charset="UTF-8"`.
   Successful responses carry no `WWW-Authenticate` header.

@@ -2,14 +2,27 @@
 
 ## Route Discovery
 
-Routes are discovered by scanning the filesystem for `route.ts` files. In production builds, the CLI scans routes when the app is built — prepared ahead of time (AOT) — and embeds them.
+Routes are discovered by scanning the filesystem for `route.ts` files
+(`route.js` and `route.mjs` work the same; never mix extensions in one
+directory). In production builds, the CLI scans routes when the app is built
+(discovered ahead of time, AOT) and embeds them.
 
 ## Priority Order
 
 Routes are matched in this order:
-1. **Static** — exact path matches first
-2. **Dynamic** — `[param]` segments matched next
-3. **Wildcard** — `[...]` segments matched last
+1. **Static**: exact path matches first
+2. **Dynamic**: `[param]` segments matched next
+3. **Wildcard**: `[...]` segments matched last
+
+## Method Handling
+
+- **HEAD**: a `HEAD` request to a route that defines `GET` runs the `GET`
+  handler. The server sends the response headers and drops the body.
+- **OPTIONS**: every route answers `OPTIONS` with `204` and an `Allow`
+  header, without running `beforeRoute` hooks.
+- **405**: a known route requested with an unsupported method returns `405`.
+  `Allow` lists the supported methods plus `HEAD` (when `GET` exists) and
+  `OPTIONS`, so it is never empty.
 
 ## Dynamic Routes
 
@@ -21,15 +34,14 @@ export async function GET(ctx: BurgerContext) {
 }
 ```
 
-Dynamic segments are accessed via `ctx.params` (unvalidated) or `ctx.validated.params` (after Zod validation).
+Dynamic segments are accessed via `ctx.params` (unvalidated) or `ctx.validated.params` (after schema validation).
 
 ## Wildcard Routes
 
 ```typescript
 // api/files/[...]/route.ts
 export async function GET(ctx: BurgerContext) {
-    const segments = ctx.wildcardParams || [];
-    return Response.json({ path: segments.join('/') });
+    return Response.json({ path: ctx.wildcardParams.join('/') });
 }
 ```
 
@@ -59,8 +71,8 @@ export async function GET(ctx: BurgerContext) {
 ## Page Routes
 
 Pages live under `pageDir` (default `src/pages`) and are discovered the same
-way API routes are. Two file types are supported — **both are real, neither
-is a fallback for the other**:
+way API routes are. Two file types are supported, and neither is a fallback
+for the other:
 
 ```
 src/pages/index.html          →  /
@@ -68,8 +80,8 @@ src/pages/about.html          →  /about
 src/pages/blog/[slug]/index.tsx  →  /blog/:slug
 ```
 
-- **`.html`** — served as static markup.
-- **`.tsx`** — a plain handler function that returns a `Response`, exactly
+- **`.html`**: served as static markup.
+- **`.tsx`**: a plain handler function that returns a `Response`, exactly
   like an API route handler:
 
 ```typescript
@@ -77,14 +89,14 @@ src/pages/blog/[slug]/index.tsx  →  /blog/:slug
 import type { BurgerContext } from 'burger-api';
 
 export default async function GET(ctx: BurgerContext): Promise<Response> {
-    const slug = (ctx.params as Record<string, string>)?.slug ?? 'unknown';
+    const slug = ctx.params.slug ?? 'unknown';
     return new Response(`<h1>Post: ${slug}</h1>`, {
         headers: { 'Content-Type': 'text/html' },
     });
 }
 ```
 
-`.tsx` here does **not** mean React or JSX server-side rendering — there is
+`.tsx` here does **not** mean React or JSX server-side rendering. There is
 no SSR/hydration step. It's a `.tsx` file purely so JSX-shaped return values
 type-check if you choose to use them; a page handler that returns a plain
 `Response` (as above) works identically.
@@ -99,17 +111,14 @@ Pages, assets, `/docs` and `/openapi.json` answer `GET` and `HEAD` only.
 Other methods get `405` with `Allow: GET, HEAD`.
 
 API routes, pages, assets, `/docs` and `/openapi.json` share one URL space:
-two sources resolving to the same path fail at startup with an error naming
-both. Two dynamic page files at the same level (`[a].tsx` + `[b].tsx`) also
-fail at startup.
-
-A route `405` lists `HEAD` (when `GET` exists) and `OPTIONS`, so `Allow` is
-never empty.
+two sources resolving to the same path (including two API route directories)
+fail at startup with an error naming both. Two dynamic page files at the same
+level (`[a].tsx` + `[b].tsx`) also fail at startup.
 
 ## WebSocket Route Scaffolding
 
 WebSocket routes live under `wsDir` (default `src/websocket`) and use their
-own convention files — **not** `route.ts`:
+own convention files, not `route.ts`:
 
 ```
 src/websocket/chat/ws.ts       # handlers: open, message, close, drain, ping, pong
@@ -150,6 +159,11 @@ export function open(ws: BurgerWS) {
 }
 ```
 
+Messages for one socket are delivered in order and only after `open` has
+finished. Route matching uses HTTP specificity (static > param > wildcard).
+`ws.user` shares the `ctx.user` type through the `BurgerAuthUser`
+augmentation point.
+
 HTTP handlers can broadcast to WS subscribers with
 `ctx.publish(topic, message)` (Bun only; throws on other runtimes and before
 `app.serve()`). `ws.publish` does **not** echo to the publishing socket;
@@ -158,7 +172,7 @@ subscribed.
 
 With an auth plugin registered, WS upgrades are gated by that plugin. A
 public WS route needs a `config.ts` with `auth: false` under the ws route
-directory — otherwise the plugin default-denies the upgrade.
+directory; otherwise the plugin default-denies the upgrade.
 
 Scaffold with `burger-api generate ws <path>` (see `cli.md`), or opt into a
 sample route at project creation time via `create`'s "Do you need WebSocket
@@ -172,11 +186,11 @@ Routes are prepared ahead of time (AOT), i.e. built into the app before it runs.
 1. Scans the apiDir and pageDir when the app is built
 2. Generates a virtual entry file with static imports
 3. Bun bundles the app with embedded route metadata
-4. The running server uses these pre-built routes — no filesystem scanning
+4. The running server uses these pre-built routes, with no filesystem scanning
 
 The CLI build generates this wiring for you. The `Burger` constructor also
 accepts pre-built `apiRoutes` / `pageRoutes` arrays instead of `apiDir` /
-`pageDir` — that is how the generated production entry (and custom AOT
+`pageDir`. That is how the generated production entry (and custom AOT
 setups) registers routes without scanning the filesystem.
 
 ## Directory Path Resolution
@@ -185,6 +199,6 @@ setups) registers routes without scanning the filesystem.
 
 1. Absolute path, used as-is.
 2. Relative to the project root (e.g. `./src/api`).
-3. Relative to the entry file's directory when run via `burger-api dev`/`build` — for the default entry `src/index.ts` that is `src/`, so `apiDir: 'api'` finds `src/api`.
+3. Relative to the entry file's directory when run via `burger-api dev`/`build`. For the default entry `src/index.ts` that is `src/`, so `apiDir: 'api'` finds `src/api`.
 
 The project root wins when both exist. Bare `bun src/index.ts` (no CLI) skips the entry fallback. Unresolvable dirs fail with an error naming the exact paths tried (e.g. `Routes directory "backend" does not exist. Tried "./backend" (project root) and "./src/backend" (src/).`).

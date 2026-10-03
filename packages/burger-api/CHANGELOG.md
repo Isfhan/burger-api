@@ -16,6 +16,30 @@ This is a breaking rewrite: the `0.9.x` line stays on npm
 Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
 if anything breaks or feels wrong.
 
+#### 🔍 Audit round 3 (docs pass fixes)
+
+- Auto-`OPTIONS` and `405` now send the exact same `Allow` header (the
+  auto-OPTIONS list includes `HEAD` when `GET` exists).
+- Response validation also runs for `application/*+json` responses, the same
+  media-type rule request bodies already used.
+- A `response` schema key that is neither a status code (`200`) nor a status
+  class (`2xx`) now fails at startup, naming the route, method and key.
+- A `headers` schema key with uppercase letters now fails at startup, naming
+  the key and the lowercase form (only when the schema exposes its keys).
+- The CLI build scanner now throws for named wildcard folders (`[...slug]`),
+  exactly like the runtime scanner, instead of silently skipping them.
+- On Windows, `build --compile` and `build:exec` resolve the emitted `.exe`
+  path for the printed location, size and `Run:` line, including a custom
+  `--outfile` without an extension.
+- `@burger-api/node-server` declares Node 24+ in `engines.node`.
+- Logger: `skip` matches the request pathname (not the full URL), `ctx.requestId`
+  is typed through module augmentation, and `logBody` documents that it clones
+  the request instead of consuming it.
+- Body-size-limiter: `includeLimit: false` omits the sizes from the default
+  `413` error body.
+- `burger-api add body-size-limiter` now wires the hook into `onRequest`, so it
+  runs before body validation reads the body.
+
 #### 🔍 Audit round 2 (behaviour, parity, types)
 
 - `ctx.set.headers` is always defined (created on first access), so
@@ -161,13 +185,11 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
   `schema` export.
 - Compiled validators: prepared once per route and cached by structural key, so
   identical schemas share one validator.
-- Model registry: define a shape once in `ServerOptions.models` and reference
-  it by name from any route's `schema` slot.
 - Opt-in coercion for query, params, headers, and cookies (`validation.coerce`
   app-wide or `coerce: true` per route).
-- Response validation: `off` (default), `dev` (observe, never break), or
-  `enforce` (safe error on mismatch).
-- Header and cookie validation via the `headers` / `cookie` schema slots.
+- Response validation: `dev` (default, observe-only), `off`, or `enforce`
+  (safe error on mismatch).
+- Header and cookie validation via the `headers` / `cookies` schema slots.
 - Problem Details errors (RFC 9457) via `validation.errorFormat`; production
   error bodies never leak stacks or schema internals.
 - Query/header coercion wraps single values for `z.array(...)` fields, coerces
@@ -175,7 +197,7 @@ Step-by-step guide: [Migrating from 0.9.x](https://burger-api.com/docs/migration
 
 **OpenAPI & docs**
 
-- OpenAPI 3.0 generated from routes and schemas, with Swagger UI, Scalar, and
+- OpenAPI 3.1 generated from routes and schemas, with Swagger UI, Scalar, and
   Redoc built in (`/openapi.json`, `/docs`).
 - `src/openapi.config.ts`: OpenAPI metadata, docs UI choice, and docs auth.
 
