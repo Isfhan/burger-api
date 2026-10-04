@@ -1455,6 +1455,7 @@ export function generateAgentsMd(
     lines.push('- `bun run dev` - start the dev server with hot reload');
     lines.push('- `bun run build` - bundle the project for production');
     lines.push('- `bun run start` - run the production bundle');
+    lines.push('- `bun run typecheck` - check types');
     lines.push('- `burger-api doctor` - check the project for problems');
     lines.push(
         '- `burger-api inspect --json` - list discovered routes, hooks, and plugins'
@@ -1575,7 +1576,7 @@ export function generateAgentsMd(
 
     lines.push('## After changes');
     lines.push('');
-    lines.push('Run `burger-api doctor`.');
+    lines.push('Run `bun run typecheck` and `burger-api doctor`.');
     lines.push('');
 
     lines.push('## Learn more');
