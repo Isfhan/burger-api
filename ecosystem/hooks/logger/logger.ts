@@ -1,0 +1,397 @@
+import type { BurgerContext, ForwardHookResult } from 'burger-api';
+
+declare module 'burger-api' {
+    interface BurgerContext {
+        /** Request ID set by the logger hook when `requestId` is enabled. */
+        requestId?: string;
+    }
+}
+
+/**
+ * Configuration options for the logger hook.
+ */
+export interface LoggerOptions {
+    /**
+     * Whether to enable colorized output.
+     * @default true
+     */
+    colors?: boolean;
+
+    /**
+     * Whether to log request headers.
+     * @default false
+     */
+    logHeaders?: boolean;
+
+    /**
+     * Whether to log query parameters.
+     * @default false
+     */
+    logQuery?: boolean;
+
+    /**
+     * Whether to log request body (for POST/PUT/PATCH requests).
+     * ⚠️ WARNING: Logging bodies can expose tokens and passwords. The hook
+     * clones the request before parsing, so the handler still reads the
+     * original body.
+     * Only enable this for debugging purposes, not in production.
+     * @default false
+     */
+    logBody?: boolean;
+
+    /**
+     * Whether to generate and include request IDs in logs.
+     * @default true
+     */
+    requestId?: boolean;
+
+    /**
+     * Header name to check for existing request ID (e.g., from upstream proxy).
+     * If provided, uses existing ID from header; otherwise generates new one.
+     * @default "X-Request-ID"
+     */
+    requestIdHeader?: string;
+
+    /**
+     * Whether to include request ID in log output.
+     * @default true
+     */
+    includeRequestIdInLog?: boolean;
+
+    /**
+     * Output format.
+     * - "text": Human-readable text format
+     * - "json": Structured JSON format
+     * @default "text"
+     */
+    format?: "text" | "json";
+
+    /**
+     * Custom log formatter function.
+     * If provided, overrides the default logging format.
+     *
+     * @param info - Log information object
+     * @returns Formatted log string
+     */
+    formatter?: (info: LogInfo) => string;
+
+    /**
+     * Custom log function.
+     * By default, uses console.log. You can provide a custom function
+     * to log to a file, external service, etc.
+     *
+     * @param message - The formatted log message
+     */
+    logFn?: (message: string) => void;
+
+    /**
+     * Skip logging for specific paths (e.g., health checks).
+     * Can be a string, regex, or function.
+     */
+    skip?: string | RegExp | ((ctx: BurgerContext) => boolean);
+}
+
+/**
+ * Information passed to the log formatter.
+ */
+export interface LogInfo {
+    method: string;
+    url: string;
+    path: string;
+    status: number;
+    duration: number;
+    timestamp: string;
+    requestId?: string;
+    headers?: Record<string, string>;
+    query?: string;
+    body?: any;
+}
+
+/**
+ * ANSI color codes for terminal output.
+ */
+const colors = {
+    reset: '\x1b[0m',
+    bright: '\x1b[1m',
+    dim: '\x1b[2m',
+    
+    // Foreground colors
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    white: '\x1b[37m',
+    gray: '\x1b[90m',
+};
+
+/**
+ * Creates a hook that logs each request with method, path, status code,
+ * and duration. Supports colors, JSON output, request IDs, and filtering.
+ *
+ * @param options - Configuration options for logging behavior
+ * @returns A hook function that logs requests and responses
+ *
+ * @example
+ * ```typescript
+ * // Basic usage with default settings
+ * const logger = createLogger();
+ *
+ * // Custom options
+ * const logger = createLogger({
+ *   logQuery: true,
+ *   skip: '/health'
+ * });
+ *
+ * // JSON format
+ * const logger = createLogger({ format: 'json' });
+ *
+ * // Custom formatter
+ * const logger = createLogger({
+ *   formatter: (info) => `[${info.timestamp}] ${info.method} ${info.path} - ${info.status} (${info.duration}ms)`
+ * });
+ * ```
+ */
+export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
+    const {
+        colors: useColors = true,
+        logHeaders = false,
+        logQuery = false,
+        logBody = false,
+        requestId: enableRequestId = true,
+        requestIdHeader = 'X-Request-ID',
+        includeRequestIdInLog = true,
+        format = 'text',
+        formatter = format === 'json' ? jsonFormatter : defaultFormatter,
+        logFn = console.log,
+        skip,
+    } = options;
+
+    return (ctx: BurgerContext): ForwardHookResult => {
+        const method = ctx.method;
+        const url = ctx.url;
+
+        const urlObj = new URL(url);
+        const path = urlObj.pathname;
+        const query = urlObj.search;
+
+        // `skip` matches the pathname, so `/^\/health/` works as users expect
+        // without being confused by the host, port, or query string.
+        if (skip) {
+            if (typeof skip === 'string' && path.includes(skip)) {
+                return undefined;
+            }
+            if (skip instanceof RegExp && skip.test(path)) {
+                return undefined;
+            }
+            if (typeof skip === 'function' && skip(ctx)) {
+                return undefined;
+            }
+        }
+
+        // Bun's nanosecond timer when available, Date.now() otherwise.
+        const startTime = typeof Bun !== 'undefined' && Bun.nanoseconds
+            ? Bun.nanoseconds()
+            : Date.now() * 1_000_000; // Convert to nanoseconds
+
+        let requestId: string | undefined;
+        if (enableRequestId) {
+            const existingId = ctx.headers.get(requestIdHeader);
+            if (existingId) {
+                requestId = existingId;
+            } else {
+                requestId = crypto.randomUUID();
+            }
+
+            // Expose the request ID to handlers via ctx.requestId.
+            ctx.requestId = requestId;
+        }
+
+        // Log once the response is ready.
+        return async (response: Response): Promise<Response> => {
+            const endTime = typeof Bun !== 'undefined' && Bun.nanoseconds
+                ? Bun.nanoseconds()
+                : Date.now() * 1_000_000;
+            const duration = Math.round((endTime - startTime) / 1_000_000); // Convert to milliseconds
+            const status = response.status;
+            const timestamp = new Date().toISOString();
+
+            const logInfo: LogInfo = {
+                method,
+                url,
+                path,
+                status,
+                duration,
+                timestamp,
+                requestId: includeRequestIdInLog ? requestId : undefined,
+            };
+
+            if (logQuery && query) {
+                logInfo.query = query;
+            }
+
+            if (logHeaders) {
+                logInfo.headers = Object.fromEntries(ctx.headers as any);
+            }
+
+            if (logBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
+                try {
+                    const contentType = ctx.headers.get('content-type');
+                    if (contentType?.includes('application/json')) {
+                        // Clone the request so the handler can still read it.
+                        const clonedReq = ctx.clone();
+                        logInfo.body = await clonedReq.json();
+                    }
+                } catch {
+                    // Ignore errors parsing body
+                }
+            }
+
+            const message = formatter(logInfo);
+            const coloredMessage = useColors ? colorize(logInfo, message) : message;
+            logFn(coloredMessage);
+
+            return response;
+        };
+    };
+}
+
+/**
+ * Default log formatter.
+ */
+function defaultFormatter(info: LogInfo): string {
+    const parts = [
+        `[${info.timestamp}]`,
+    ];
+
+    // Add request ID if available
+    if (info.requestId) {
+        parts.push(`[${info.requestId}]`);
+    }
+
+    parts.push(
+        info.method,
+        info.path,
+        `${info.status}`,
+        `${info.duration}ms`
+    );
+
+    if (info.query) {
+        parts.push(info.query);
+    }
+
+    return parts.join(' ');
+}
+
+/**
+ * JSON log formatter.
+ */
+function jsonFormatter(info: LogInfo): string {
+    const logObject: Record<string, unknown> = {
+        timestamp: info.timestamp,
+        method: info.method,
+        path: info.path,
+        status: info.status,
+        duration: info.duration,
+    };
+
+    if (info.requestId) {
+        logObject.requestId = info.requestId;
+    }
+
+    if (info.query) {
+        logObject.query = info.query;
+    }
+
+    if (info.headers) {
+        logObject.headers = info.headers;
+    }
+
+    if (info.body !== undefined) {
+        logObject.body = info.body;
+    }
+
+    return JSON.stringify(logObject);
+}
+
+/**
+ * Colorize the log message based on HTTP method and status code.
+ */
+function colorize(info: LogInfo, message: string): string {
+    // Color the HTTP method
+    let methodColor = colors.white;
+    switch (info.method) {
+        case 'GET':
+            methodColor = colors.green;
+            break;
+        case 'POST':
+            methodColor = colors.cyan;
+            break;
+        case 'PUT':
+            methodColor = colors.yellow;
+            break;
+        case 'PATCH':
+            methodColor = colors.magenta;
+            break;
+        case 'DELETE':
+            methodColor = colors.red;
+            break;
+        case 'OPTIONS':
+            methodColor = colors.gray;
+            break;
+    }
+
+    // Color the status code
+    let statusColor = colors.green;
+    if (info.status >= 500) {
+        statusColor = colors.red + colors.bright;
+    } else if (info.status >= 400) {
+        statusColor = colors.yellow;
+    } else if (info.status >= 300) {
+        statusColor = colors.cyan;
+    } else if (info.status >= 200) {
+        statusColor = colors.green;
+    }
+
+    const parts = message.split(' ');
+    const colorizedParts: string[] = [];
+
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]!;
+
+        if (part.startsWith('[') && part.endsWith(']')) {
+            colorizedParts.push(colors.gray + part + colors.reset);
+        }
+        else if (part === info.method) {
+            colorizedParts.push(methodColor + colors.bright + part + colors.reset);
+        }
+        else if (part === info.status.toString()) {
+            colorizedParts.push(statusColor + part + colors.reset);
+        }
+        else if (part.endsWith('ms')) {
+            colorizedParts.push(colors.dim + part + colors.reset);
+        }
+        else {
+            colorizedParts.push(part);
+        }
+    }
+
+    return colorizedParts.join(' ');
+}
+
+/**
+ * Convenience function: Simple logger with default settings.
+ *
+ * @example
+ * ```typescript
+ * // api/hooks.ts
+ * import { logger } from '../ecosystem/hooks/logger/logger';
+ *
+ * export const beforeRoute = [logger()];
+ * ```
+ */
+export function logger(): (ctx: BurgerContext) => Promise<ForwardHookResult> | ForwardHookResult {
+    return createLogger();
+}
+

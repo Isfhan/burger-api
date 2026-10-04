@@ -1,0 +1,7 @@
+{
+    "name": "basic-js-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

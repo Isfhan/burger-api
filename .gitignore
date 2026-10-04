@@ -184,6 +184,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+.edge-build/
 
 # Environment files
 .env
@@ -219,9 +220,6 @@ Thumbs.db
 
 # Bun
 bun.lockb
-bun-experiment/*
-
-examples/my-burger-api-app/*
 bun.lock
 
 # Burger API CLI build output

@@ -25,6 +25,11 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'router',
+        cmd: ['bun', 'test', 'test/router.test.ts'],
+        kind: 'tests',
+    },
+    {
         label: 'framework',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'test:examples'],
         kind: 'tests',
@@ -40,18 +45,112 @@ const suites: Suite[] = [
         kind: 'tests',
     },
     {
+        label: 'cli-e2e',
+        cmd: ['bun', 'run', '--filter', '@burger-api/cli', 'test:e2e'],
+        kind: 'tests',
+    },
+    {
+        label: 'lifecycle',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:lifecycle'],
+        kind: 'tests',
+    },
+    {
+        label: 'context',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:context'],
+        kind: 'tests',
+    },
+    {
+        label: 'router-unit',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:router'],
+        kind: 'tests',
+    },
+    {
+        label: 'smoke',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:smoke'],
+        kind: 'tests',
+    },
+    {
+        label: 'chain',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:chain'],
+        kind: 'tests',
+    },
+    {
+        label: 'plugin',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:plugin'],
+        kind: 'tests',
+    },
+    {
+        label: 'core',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:core'],
+        kind: 'tests',
+    },
+    {
+        label: 'errors',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:errors'],
+        kind: 'tests',
+    },
+    {
+        label: 'validation',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:validation'],
+        kind: 'tests',
+    },
+    {
+        label: 'compiler',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:compiler'],
+        kind: 'tests',
+    },
+    {
+        label: 'adapter',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:adapter'],
+        kind: 'tests',
+    },
+    {
+        label: 'node-server',
+        cmd: ['bun', 'run', '--filter', '@burger-api/node-server', 'test'],
+        kind: 'tests',
+    },
+    {
+        label: 'provider',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:provider'],
+        kind: 'tests',
+    },
+    {
+        label: 'ws',
+        cmd: ['bun', 'run', '--filter', 'burger-api', 'test:ws'],
+        kind: 'tests',
+    },
+    {
         label: 'typecheck',
         cmd: ['bun', 'run', '--filter', 'burger-api', 'typecheck'],
         kind: 'typecheck',
     },
 ];
 
+// The full CLI end-to-end suite takes minutes, so `test:all` only includes
+// it when explicitly requested (E2E_FULL=1).
+if (process.env.E2E_FULL === '1') {
+    suites.push({
+        label: 'cli-e2e-full',
+        cmd: ['bun', 'run', '--filter', '@burger-api/cli', 'test:e2e:full'],
+        kind: 'tests',
+    });
+}
+
 function parseTestCounts(output: string): { pass: number; fail: number } | null {
-    const passMatches = [...output.matchAll(/(\d+)\s+pass\b/gi)];
-    const failMatches = [...output.matchAll(/(\d+)\s+fail\b/gi)];
+    // bun test prints "12 pass"; node --test prints "# pass 12" (spec
+    // reporter) or "ℹ pass 12" (Node 24's default reporter).
+    const bunPass = [...output.matchAll(/(\d+)\s+pass\b/gi)];
+    const passMatches =
+        bunPass.length > 0
+            ? bunPass
+            : [...output.matchAll(/(?:#|ℹ)\s*pass\s+(\d+)/gi)];
     if (passMatches.length === 0) {
         return null;
     }
+    const failMatches =
+        bunPass.length > 0
+            ? [...output.matchAll(/(\d+)\s+fail\b/gi)]
+            : [...output.matchAll(/(?:#|ℹ)\s*fail\s+(\d+)/gi)];
     const pass = Number(passMatches[passMatches.length - 1][1]);
     const fail =
         failMatches.length > 0

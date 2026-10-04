@@ -1,0 +1,7 @@
+{
+    "name": "page-routing-example",
+    "private": true,
+    "dependencies": {
+        "burger-api": "link:burger-api"
+    }
+}

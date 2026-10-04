@@ -1,0 +1,897 @@
+/**
+ * Matches upgrade requests to routes and wires sockets to their handlers.
+ */
+
+import type { WebSocketRouter } from './router.js';
+import type {
+    CompiledWebSocketRoute,
+    BurgerWS,
+    WebSocketConfig,
+} from './types.js';
+import { BurgerWSContext } from './types.js';
+import { HTTPError, renderHTTPError } from '../errors/http-error.js';
+import { BurgerContext } from '../context/context.js';
+import type {
+    BurgerEnv,
+    BurgerExecutionContext,
+    RequestIPHolder,
+} from '../context/context.js';
+import type { Hook, TransformMap } from '../lifecycle/types.js';
+import { applyTransform } from '../lifecycle/transform.js';
+import {
+    acceptWsUpgrade,
+    detectWsPlatform,
+    normalizeWsMessage,
+    type NodeWsBridge,
+    type NodeWsBridgeOptions,
+    type WsEventSink,
+    type WsPlatformName,
+    type WsUpgradeOutcome,
+} from './platform.js';
+import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../runtime/capabilities.js';
+import { resolveDebug } from '../utils/env.js';
+
+/** Internal socket-data slot holding the route matched at upgrade. */
+const WS_ROUTE = Symbol('burger-api.ws.route');
+
+interface WsMatch {
+    route: CompiledWebSocketRoute;
+    params: Record<string, string>;
+    /** Decoded wildcard segments (mirrors HTTP `ctx.wildcardParams`). */
+    wildcardParams?: string[];
+    /** The upgrade request URL, captured once at match time (for `ws.url`). */
+    url?: string;
+}
+
+/**
+ * WebSocket adapter options
+ */
+export interface WebSocketAdapterOptions {
+    /**
+     * WebSocket router
+     */
+    router: WebSocketRouter;
+
+    /**
+     * Global WebSocket config
+     */
+    config?: WebSocketConfig;
+
+    /**
+     * Debug mode
+     */
+    debug?: boolean;
+
+    /**
+     * Application services (providers) to inject into WebSocket handlers
+     */
+    providers?: Map<string, unknown>;
+
+    /**
+     * Resolved plugin hooks for auth execution during upgrade
+     */
+    pluginTransform?: TransformMap;
+
+    /**
+     * Resolved plugin beforeRoute hooks for auth execution during upgrade
+     */
+    pluginBeforeRoute?: ((ctx: BurgerContext) => unknown | Promise<unknown>)[];
+
+    /**
+     * Resolved framework-scope beforeRoute hooks (run before plugin hooks).
+     */
+    frameworkBeforeRoute?: Hook[];
+
+    /**
+     * Pre-routing onRequest hooks, in the same Framework → Plugin → Global
+     * order the HTTP path uses. Always run on upgrade — auth must not fail open.
+     */
+    onRequestHooks?: Hook[];
+
+    /**
+     * App-level (`src/hooks.ts`) transform factories, applied after plugin ones.
+     */
+    globalTransform?: TransformMap;
+
+    /**
+     * App-level (`src/hooks.ts`) beforeRoute hooks — run after plugin hooks.
+     */
+    globalBeforeRoute?: Hook[];
+
+    /**
+     * Per-app `ctx.ip` holder, so upgrade hooks resolve the socket peer like
+     * HTTP hooks do.
+     */
+    ipHolder?: RequestIPHolder;
+
+    /**
+     * The deployment target declared by `burger-api build --target`, if any.
+     * When present, resolves the handoff via `RUNTIME_CAPABILITIES` instead of
+     * live probing (Node and Vercel look identical to `globalThis` detection).
+     */
+    runtimeTarget?: RuntimeTarget;
+}
+
+/**
+ * The WebSocket option object handed to `Bun.serve`'s `websocket` key.
+ * Framework handlers plus forwarded connection limits from `WebSocketConfig`.
+ */
+export interface WebSocketServeOption {
+    open: (ws: any) => void | Promise<void>;
+    message: (ws: any, message: string | Buffer) => void | Promise<void>;
+    close: (ws: any, code: number, reason: string) => void | Promise<void>;
+    drain: (ws: any) => void | Promise<void>;
+    ping: (ws: any) => void | Promise<void>;
+    pong: (ws: any) => void | Promise<void>;
+    maxPayloadLength?: number;
+    idleTimeout?: number;
+    backpressureLimit?: number;
+    closeOnBackpressureLimit?: boolean;
+    compression?: boolean;
+}
+
+/**
+ * WebSocket adapter: upgrade handoff, auth gate and per-connection contexts.
+ */
+export class WebSocketAdapter {
+    private router: WebSocketRouter;
+    private config: WebSocketConfig;
+    private debug: boolean;
+    private providers?: Map<string, unknown>;
+    private pluginTransform?: TransformMap;
+    private pluginBeforeRoute?: ((
+        ctx: BurgerContext
+    ) => unknown | Promise<unknown>)[];
+    private frameworkBeforeRoute: Hook[];
+    private onRequestHooks: Hook[];
+    private globalTransform?: TransformMap;
+    private globalBeforeRoute: Hook[];
+    private ipHolder?: RequestIPHolder;
+    private runtimeTarget?: RuntimeTarget;
+
+    /** One context per connection, so `ws.data` mutations persist. */
+    private wsContexts = new WeakMap<object, BurgerWS>();
+
+    /** Matched route per connection (see `getMatch`). */
+    private wsMatches = new WeakMap<object, WsMatch>();
+
+    /**
+     * Per-socket event chain: messages (and close/drain/ping/pong) are
+     * delivered in order and only after `open` finished. The first event runs
+     * synchronously; only queued events wait on the chain.
+     */
+    private wsChains = new WeakMap<object, Promise<unknown>>();
+
+    constructor(options: WebSocketAdapterOptions) {
+        this.router = options.router;
+        this.config = options.config ?? {};
+        this.debug = resolveDebug(options.debug);
+        this.providers = options.providers;
+        this.pluginTransform = options.pluginTransform;
+        this.pluginBeforeRoute = options.pluginBeforeRoute;
+        this.frameworkBeforeRoute = options.frameworkBeforeRoute ?? [];
+        this.onRequestHooks = options.onRequestHooks ?? [];
+        this.globalTransform = options.globalTransform;
+        this.globalBeforeRoute = options.globalBeforeRoute ?? [];
+        this.ipHolder = options.ipHolder;
+        this.runtimeTarget = options.runtimeTarget;
+    }
+
+    /**
+     * Create the websocket option for Bun.serve()
+     */
+    createWebSocketOption(): WebSocketServeOption {
+        const self = this;
+
+        // Forward only defined connection limits; Bun's defaults apply otherwise.
+        const option: WebSocketServeOption = {
+            open(ws: any) {
+                return self.handleOpen(ws);
+            },
+            message(ws: any, message: string | Buffer) {
+                return self.handleMessage(ws, message);
+            },
+            close(ws: any, code: number, reason: string) {
+                return self.handleClose(ws, code, reason);
+            },
+            drain(ws: any) {
+                return self.handleDrain(ws);
+            },
+            ping(ws: any) {
+                return self.handlePing(ws);
+            },
+            pong(ws: any) {
+                return self.handlePong(ws);
+            },
+        };
+        if (this.config.maxPayloadLength !== undefined) {
+            option.maxPayloadLength = this.config.maxPayloadLength;
+        }
+        if (this.config.idleTimeout !== undefined) {
+            option.idleTimeout = this.config.idleTimeout;
+        }
+        if (this.config.backpressureLimit !== undefined) {
+            option.backpressureLimit = this.config.backpressureLimit;
+        }
+        if (this.config.closeOnBackpressureLimit !== undefined) {
+            option.closeOnBackpressureLimit =
+                this.config.closeOnBackpressureLimit;
+        }
+        if (this.config.compression !== undefined) {
+            option.compression = this.config.compression;
+        }
+        return option;
+    }
+
+    /**
+     * Serializes events per socket. The first event starts synchronously (a
+     * sync handler keeps its immediate behavior); queued events run in order
+     * after it. Handlers catch their own errors, so the chain never rejects.
+     */
+    private enqueue<T>(ws: any, work: () => Promise<T>): Promise<T> {
+        const previous = this.wsChains.get(ws);
+        if (previous === undefined) {
+            const result = work();
+            this.wsChains.set(ws, Promise.resolve(result).catch(() => {}));
+            return result;
+        }
+        const next = previous.then(() => work());
+        this.wsChains.set(ws, next.catch(() => {}));
+        return next;
+    }
+
+    private handleOpen(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runOpen(ws));
+    }
+
+    private async runOpen(ws: any): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) {
+            console.warn(
+                '[burger-api] WebSocket connection has no matched route (socket data missing) — handlers will not run.'
+            );
+            return;
+        }
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        // Run hooks first
+        if (route.hooks?.onOpen) {
+            try {
+                await route.hooks.onOpen(burgerWs);
+            } catch (error) {
+                console.error('[WebSocket] onOpen hook error:', error);
+            }
+        }
+
+        // Run handler
+        if (route.handlers.open) {
+            try {
+                await route.handlers.open(burgerWs);
+            } catch (error) {
+                console.error('[WebSocket] open handler error:', error);
+            }
+        }
+    }
+
+    private handleMessage(
+        ws: any,
+        message: string | Buffer
+    ): Promise<void> {
+        return this.enqueue(ws, () => this.runMessage(ws, message));
+    }
+
+    private async runMessage(
+        ws: any,
+        message: string | Buffer
+    ): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) return;
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        // Run hooks first
+        if (route.hooks?.onMessage) {
+            try {
+                await route.hooks.onMessage(burgerWs, message);
+            } catch (error) {
+                console.error('[WebSocket] onMessage hook error:', error);
+            }
+        }
+
+        // Run handler
+        if (route.handlers.message) {
+            try {
+                await route.handlers.message(burgerWs, message);
+            } catch (error) {
+                console.error('[WebSocket] message handler error:', error);
+            }
+        }
+    }
+
+    private handleClose(
+        ws: any,
+        code: number,
+        reason: string
+    ): Promise<void> {
+        return this.enqueue(ws, () => this.runClose(ws, code, reason));
+    }
+
+    private async runClose(
+        ws: any,
+        code: number,
+        reason: string
+    ): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) return;
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        // Run hooks first
+        if (route.hooks?.onClose) {
+            try {
+                await route.hooks.onClose(burgerWs, code, reason);
+            } catch (error) {
+                console.error('[WebSocket] onClose hook error:', error);
+            }
+        }
+
+        // Run handler
+        if (route.handlers.close) {
+            try {
+                await route.handlers.close(burgerWs, code, reason);
+            } catch (error) {
+                console.error('[WebSocket] close handler error:', error);
+            }
+        }
+
+        // Connection is gone — drop the cached context and its chain.
+        this.wsContexts.delete(ws);
+        this.wsChains.delete(ws);
+    }
+
+    private handleDrain(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runDrain(ws));
+    }
+
+    private async runDrain(ws: any): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) return;
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        if (route.handlers.drain) {
+            try {
+                await route.handlers.drain(burgerWs);
+            } catch (error) {
+                console.error('[WebSocket] drain handler error:', error);
+            }
+        }
+    }
+
+    private handlePing(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runPing(ws));
+    }
+
+    private async runPing(ws: any): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) return;
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        if (route.handlers.ping) {
+            try {
+                await route.handlers.ping(burgerWs);
+            } catch (error) {
+                console.error('[WebSocket] ping handler error:', error);
+            }
+        }
+    }
+
+    private handlePong(ws: any): Promise<void> {
+        return this.enqueue(ws, () => this.runPong(ws));
+    }
+
+    private async runPong(ws: any): Promise<void> {
+        const route = this.getRouteFromWs(ws);
+        if (!route) return;
+
+        const burgerWs = this.createBurgerWS(ws);
+
+        if (route.handlers.pong) {
+            try {
+                await route.handlers.pong(burgerWs);
+            } catch (error) {
+                console.error('[WebSocket] pong handler error:', error);
+            }
+        }
+    }
+
+    /**
+     * Entry point for WebSocket handling on every runtime: detects the
+     * platform, matches the route, runs the auth gate and performs the
+     * protocol handoff. Returns an explicit outcome so callers can never
+     * confuse "not an upgrade" with "socket taken over".
+     *
+     * @param request incoming request (upgrade or normal)
+     * @param server Bun serve handle when running under `Bun.serve`
+     * @param env platform bindings (bound onto the temporary auth context)
+     */
+    async handleUpgrade(
+        request: Request,
+        server?: unknown,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<WsUpgradeOutcome> {
+        const upgradeHeader = request.headers.get('upgrade');
+        if (upgradeHeader?.toLowerCase() !== 'websocket') {
+            return { handled: false };
+        }
+
+        const result = await this.matchAndAuthorize(
+            request,
+            env,
+            executionCtx
+        );
+        if (!result.ok) {
+            return { handled: true, response: result.response };
+        }
+
+        if (
+            this.runtimeTarget &&
+            !RUNTIME_CAPABILITIES[this.runtimeTarget].websocket
+        ) {
+            return this.capabilityUnsupportedResponse(this.runtimeTarget);
+        }
+
+        // A declared target resolves the handoff directly; otherwise fall back
+        // to live probing. `!== 'vercel'` is unreachable here (the capability
+        // guard above returned already) — it only narrows the type.
+        const platform: WsPlatformName =
+            this.runtimeTarget && this.runtimeTarget !== 'vercel'
+                ? this.runtimeTarget
+                : detectWsPlatform(server);
+        if (platform === 'node') {
+            return this.nodeFetchUpgradeUnsupported();
+        }
+
+        const response = acceptWsUpgrade({
+            platform,
+            request,
+            server,
+            data: result.data,
+            events: this.eventSink(),
+        });
+        return { handled: true, response };
+    }
+
+    /**
+     * Route-match + auth, shared by every platform's upgrade handoff. The Node
+     * bridge cannot reuse {@link handleUpgrade} because that always routes
+     * through {@link detectWsPlatform}, which falls back to `'node'` there.
+     */
+    private async matchAndAuthorize(
+        request: Request,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<
+        { ok: false; response: Response } | { ok: true; data: Record<string, unknown> }
+    > {
+        const url = new URL(request.url);
+        const match = this.router.match(url.pathname);
+        if (!match) {
+            return {
+                ok: false,
+                response: new Response('WebSocket route not found', {
+                    status: 404,
+                }),
+            };
+        }
+
+        const routeConfig = match.route.config;
+        const authResult = await this.runAuthHooks(
+            request,
+            routeConfig,
+            env,
+            executionCtx
+        );
+        if (authResult.response) {
+            return { ok: false, response: authResult.response };
+        }
+
+        // The matched route rides in a non-enumerable symbol slot (invisible in
+        // `ws.data` copies/JSON) but travels with every platform that attaches
+        // `data` to the socket. The URL is stored once here so `ws.url` and
+        // `ws.query` parse lazily per socket, never per request.
+        const data: Record<string, unknown> = {};
+        Object.defineProperty(data, WS_ROUTE, {
+            value: {
+                route: match.route,
+                params: match.params,
+                wildcardParams: match.wildcardParams,
+                url: request.url,
+            },
+            enumerable: false,
+        });
+        if (authResult.user !== undefined) {
+            data.user = authResult.user;
+        }
+        return { ok: true, data };
+    }
+
+    /**
+     * Node cannot complete a WebSocket handshake inside a fetch handler —
+     * surface an explicit 501 with remediation instead of a thrown error.
+     */
+    private nodeFetchUpgradeUnsupported(): WsUpgradeOutcome {
+        return {
+            handled: true,
+            response: new Response(
+                'WebSocket upgrades on Node require burger.createNodeWsBridge(...) ' +
+                    "wired to node:http's 'upgrade' event.",
+                { status: 501 }
+            ),
+        };
+    }
+
+    /**
+     * Declared-target counterpart to {@link nodeFetchUpgradeUnsupported}: a
+     * target with `websocket: false` (only `vercel` today) gets a "not
+     * supported here" response — the Node bridge would be wrong advice, since
+     * that target has no persistent process.
+     */
+    private capabilityUnsupportedResponse(
+        target: RuntimeTarget
+    ): WsUpgradeOutcome {
+        return {
+            handled: true,
+            response: new Response(
+                `WebSocket is not supported on the "${target}" deployment ` +
+                    'target: this platform has no persistent-connection ' +
+                    'model for WebSocket upgrades. See the compatibility ' +
+                    'docs for what each runtime supports.',
+                { status: 501 }
+            ),
+        };
+    }
+
+    /** Shared event sink pushed into by non-Bun platforms. */
+    private eventSink(): WsEventSink {
+        return {
+            onOpen: (raw) => this.handleOpen(raw),
+            onMessage: (raw, message) => this.handleMessage(raw, message),
+            onClose: (raw, code, reason) =>
+                this.handleClose(raw, code, reason),
+        };
+    }
+
+    /**
+     * Fetch-shaped wrapper around {@link handleUpgrade}, kept for backward
+     * compatibility. Returns `undefined` for BOTH "not an upgrade" and "socket
+     * taken over" — prefer {@link handleUpgrade} when the distinction matters.
+     */
+    createFetchHandler() {
+        return async (
+            request: Request,
+            server?: unknown
+        ): Promise<Response | undefined> => {
+            const outcome = await this.handleUpgrade(request, server);
+            return outcome.handled ? outcome.response : undefined;
+        };
+    }
+
+    /**
+     * Node integration: bridges node:http's `'upgrade'` event into the framework
+     * pipeline using a framing library's `WebSocketServer` (e.g. the `ws`
+     * package). `fetchHandler()` must run at least once first — WS routes are
+     * processed there.
+     *
+     * ```ts
+     * import http from 'node:http';
+     * import { WebSocketServer } from 'ws';
+     *
+     * const fetchHandler = await burger.fetchHandler();
+     * const bridge = burger.createNodeWsBridge({ WebSocketServer });
+     * http.createServer((req, res) => { ... }) // bridge req/res <-> Request/Response
+     *     .on('upgrade', (req, socket, head) => bridge.handleUpgrade(req, socket, head))
+     *     .listen(3000);
+     * ```
+     */
+    createNodeWsBridge(options: NodeWsBridgeOptions): NodeWsBridge {
+        const wss = new options.WebSocketServer({ noServer: true });
+        const adapter = this;
+        return {
+            async handleUpgrade(req, socket, head): Promise<void> {
+                const destroy = () =>
+                    (socket as { destroy?(): void }).destroy?.();
+
+                const raw = req as {
+                    url?: string;
+                    headers: Record<
+                        string,
+                        string | string[] | undefined
+                    >;
+                };
+
+                // Copy real headers, not just `host`: auth hooks may read
+                // cookies/Authorization, and the Upgrade check needs them.
+                const headers = new Headers();
+                for (const [key, value] of Object.entries(raw.headers)) {
+                    if (value === undefined) continue;
+                    if (Array.isArray(value)) {
+                        for (const v of value) headers.append(key, v);
+                    } else {
+                        headers.set(key, value);
+                    }
+                }
+                const host = String(raw.headers.host ?? 'localhost');
+                let request: Request;
+                try {
+                    request = new Request(`http://${host}${raw.url ?? '/'}`, {
+                        headers,
+                    });
+                } catch {
+                    // A malformed Host header throws here, inside an async
+                    // 'upgrade' handler — an unhandled rejection would kill
+                    // the Node process. Reject the socket instead.
+                    destroy();
+                    return;
+                }
+
+                const upgradeHeader = request.headers.get('upgrade');
+                if (upgradeHeader?.toLowerCase() !== 'websocket') {
+                    destroy();
+                    return;
+                }
+
+                // Not `adapter.handleUpgrade()`: it would detect `'node'` and
+                // return a 501. Node's handoff happens below via
+                // `wss.handleUpgrade`.
+                const result = await adapter.matchAndAuthorize(request);
+                if (!result.ok) {
+                    // Unmatched route or auth rejection — destroy the raw
+                    // socket; there is no Response channel.
+                    destroy();
+                    return;
+                }
+
+                wss.handleUpgrade(req, socket, head, (ws) => {
+                    // `ws` sockets do not carry `data` natively (Bun sets it via
+                    // `server.upgrade`), so attach it for the handlers to find
+                    // the matched route (and any resolved user).
+                    (ws as { data?: unknown }).data = result.data;
+                    ws.on('message', (...args: any[]) => {
+                        void adapter.handleMessage(
+                            ws,
+                            // `ws`'s `'message'` event signature is
+                            // `(data: Buffer, isBinary: boolean)`.
+                            normalizeWsMessage(args[0], args[1] as boolean)
+                        );
+                    });
+                    ws.on('close', (...args: any[]) => {
+                        void adapter.handleClose(
+                            ws,
+                            (args[0] as unknown as number) ?? 1005,
+                            (args[1] as unknown as string) ?? ''
+                        );
+                    });
+                    void adapter.handleOpen(ws);
+                });
+            },
+        };
+    }
+
+    /**
+     * Get route from WebSocket data
+     */
+    private getRouteFromWs(ws: any): CompiledWebSocketRoute | null {
+        return this.getMatch(ws)?.route ?? null;
+    }
+
+    /**
+     * The route + params matched at upgrade, cached per socket so a handler
+     * replacing `ws.data` cannot orphan the connection from its route.
+     */
+    private getMatch(ws: any): WsMatch | undefined {
+        let match = this.wsMatches.get(ws);
+        if (!match) {
+            match = ws?.data?.[WS_ROUTE] as WsMatch | undefined;
+            // Hand-wired sockets (custom bridges, tests) may still carry the
+            // `data.route` shape.
+            const legacy = ws?.data?.route as
+                | (CompiledWebSocketRoute & { params?: Record<string, string> })
+                | undefined;
+            if (!match && legacy?.handlers) {
+                match = {
+                    route: legacy,
+                    params: legacy.params ?? {},
+                    wildcardParams: [],
+                };
+            }
+            if (match) this.wsMatches.set(ws, match);
+        }
+        return match;
+    }
+
+    /**
+     * Creates (or reuses) the BurgerWS context for a connection: one per
+     * connection, so `ws.data` mutations in one handler persist into the next.
+     */
+    private createBurgerWS(ws: any): BurgerWS {
+        let burgerWs = this.wsContexts.get(ws);
+        if (!burgerWs) {
+            const match = this.getMatch(ws);
+            burgerWs = new BurgerWSContext(
+                ws,
+                this.providers,
+                match?.params ?? {},
+                match?.url,
+                match?.wildcardParams ?? []
+            );
+            this.wsContexts.set(ws, burgerWs);
+        }
+        return burgerWs;
+    }
+
+    /**
+     * Runs the upgrade request through the same pre-handler chain HTTP uses —
+     * onRequest → transform → beforeRoute (Framework → Plugin → Global) —
+     * then enforces `config.auth.required` / `roles`. Always runs: auth
+     * check must never depend on a plugin being registered. `env` /
+     * `executionCtx` are bound onto the context so hooks can read bindings.
+     */
+    private async runAuthHooks(
+        request: Request,
+        routeConfig?: WebSocketConfig,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<{ response?: Response; user?: unknown }> {
+        // One temporary BurgerContext for the upgrade request. Needed even
+        // with no hooks, because `auth.required` / `roles` are enforced here.
+        const ctx = BurgerContext.create(
+            request,
+            {},
+            undefined,
+            this.providers,
+            routeConfig as Record<string, unknown> | undefined,
+            env,
+            executionCtx,
+            this.ipHolder
+        );
+        // Mappers registered by onRequest / beforeRoute still wrap rejections
+        // (e.g. a cors hook adds headers to the 401).
+        const mappers: ((res: Response) => Response | Promise<Response>)[] = [];
+        const reject = async (response: Response) => ({
+            response: await this.applyMappers(response, mappers),
+        });
+
+        try {
+            // 1. onRequest — same ordered array the HTTP path runs.
+            for (const hook of this.onRequestHooks) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
+            }
+
+            // 2. transform — plugin factories first, app-level hooks override.
+            if (this.pluginTransform) {
+                await applyTransform(ctx, this.pluginTransform);
+            }
+            if (this.globalTransform) {
+                await applyTransform(ctx, this.globalTransform);
+            }
+
+            // 3. beforeRoute — Framework → Plugin → Global.
+            for (const hook of this.frameworkBeforeRoute) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
+            }
+            for (const hook of this.pluginBeforeRoute ?? []) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+            }
+            for (const hook of this.globalBeforeRoute) {
+                const result = await hook(ctx);
+                if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') mappers.push(result);
+            }
+
+            // Extract user from context (set by transform hooks)
+            const user = (ctx as any).user;
+
+            const authConfig =
+                routeConfig?.auth !== undefined &&
+                typeof routeConfig.auth === 'object'
+                    ? routeConfig.auth
+                    : undefined;
+
+            // Auth is enforced regardless of whether any hook ran.
+            if (authConfig?.required && !user) {
+                return reject(
+                    renderHTTPError(
+                        new HTTPError(401, 'Authentication required'),
+                        this.debug
+                    )
+                );
+            }
+
+            // Role-scoped routes reject with 403 unless the user holds a role.
+            if (
+                authConfig?.roles &&
+                authConfig.roles.length > 0 &&
+                !hasAnyRole(user, authConfig.roles)
+            ) {
+                return reject(
+                    renderHTTPError(
+                        new HTTPError(403, 'Insufficient permissions'),
+                        this.debug
+                    )
+                );
+            }
+
+            return { user };
+        } catch (error) {
+            return reject(this.renderAuthError(error));
+        }
+    }
+
+    /**
+     * Renders a throw from the upgrade auth chain. Only framework
+     * `HTTPError`s keep their status; anything else is a server bug and
+     * renders a generic 500 (never a fake 401 echoing the thrown message).
+     */
+    private renderAuthError(error: unknown): Response {
+        if (this.debug) {
+            console.error('[WebSocket] Auth hook error:', error);
+        }
+        if (error instanceof HTTPError) {
+            return renderHTTPError(error, this.debug);
+        }
+        return renderHTTPError(
+            new HTTPError(
+                500,
+                'Internal Server Error',
+                error instanceof Error ? { cause: error } : undefined
+            ),
+            this.debug
+        );
+    }
+
+    /** Applies collected mappers onion-style (last registered runs first). */
+    private async applyMappers(
+        response: Response,
+        mappers: ((res: Response) => Response | Promise<Response>)[]
+    ): Promise<Response> {
+        let res = response;
+        for (let i = mappers.length - 1; i >= 0; i--) {
+            res = await mappers[i]!(res);
+        }
+        return res;
+    }
+}
+
+/**
+ * Checks whether an authenticated user holds at least one of the required
+ * roles. Supports three shapes: a plain role string, an array of roles, or
+ * an object with a `roles` array (e.g. JWT payloads).
+ */
+function hasAnyRole(
+    user: unknown,
+    required: string[]
+): boolean {
+    if (user === null || user === undefined) return false;
+    if (typeof user === 'string') {
+        return required.includes(user);
+    }
+    if (Array.isArray(user)) {
+        return user.some((role) => required.includes(role));
+    }
+    if (typeof user === 'object') {
+        const roles = (user as Record<string, unknown>).roles;
+        if (Array.isArray(roles)) {
+            return roles.some((role) => required.includes(role));
+        }
+    }
+    return false;
+}

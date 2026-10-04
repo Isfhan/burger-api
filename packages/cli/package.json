@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/cli",
-  "version": "0.9.9",
+  "version": "1.0.0-beta",
   "description": "Simple command-line tool for Burger API projects",
   "module": "src/index.ts",
   "type": "module",
@@ -14,11 +14,14 @@
     "LICENSE"
   ],
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.4.0"
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "bun test --timeout 30000 ./test",
+    "test": "bun test --timeout 30000 ./test --path-ignore-patterns='**/e2e/**' --path-ignore-patterns='**/e2e-full/**'",
+    "test:e2e": "bun test --timeout 30000 ./test/e2e",
+    "test:e2e:full": "bun test --timeout 600000 ./test/e2e-full",
+    "typecheck": "tsc --noEmit",
     "test:build": "bun test test/scanner.test.ts test/virtual-entry.test.ts test/entry-options.test.ts test/build-preserve-options.test.ts",
     "build:win": "bun run scripts/build-executable.ts win",
     "build:linux": "bun run scripts/build-executable.ts linux",
@@ -27,12 +30,12 @@
     "build:all": "bun run build:win && bun run build:linux && bun run build:mac && bun run build:mac-intel"
   },
   "dependencies": {
-    "commander": "^11.1.0",
-    "@clack/prompts": "^0.7.0"
+    "@clack/prompts": "^1.8.1",
+    "burger-api": "^1.0.0-beta",
+    "commander": "^11.1.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "burger-api": "workspace:*"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -91,11 +91,13 @@ bun run typecheck
 - Bun-native APIs (`Bun.serve`, `Bun.write`, `Bun.file`) over Node.js
   alternatives.
 
+
+
 ## Documentation
 
-- Framework docs are at `packages/burger-api/README.md`.
-- CLI docs are at `packages/cli/README.md`.
-- Official website: [burger-api.com](https://burger-api.com).
+- Framework: `packages/burger-api/README.md`
+- CLI: `packages/cli/README.md`
+- Website: [burger-api.com](https://burger-api.com)
 
 ## License
 
