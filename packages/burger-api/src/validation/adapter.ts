@@ -51,10 +51,13 @@ export function isZodSchema(value: unknown): value is z.ZodTypeAny {
     return typeof internals === 'object' && internals !== null;
 }
 
-/** True when the value carries the Standard Schema v1 `~standard` contract. */
+/**
+ * True when the value carries the Standard Schema v1 `~standard` contract.
+ * Some libraries make schemas callable, so functions count too.
+ */
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
     return (
-        typeof value === 'object' &&
+        (typeof value === 'object' || typeof value === 'function') &&
         value !== null &&
         '~standard' in value &&
         typeof (value as StandardSchemaV1)['~standard']?.validate === 'function'

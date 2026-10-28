@@ -58,7 +58,7 @@ export const StandardAdapter: ValidatorAdapter = {
 
     supports(schema: SchemaInput): boolean {
         return (
-            typeof schema === 'object' &&
+            (typeof schema === 'object' || typeof schema === 'function') &&
             schema !== null &&
             '~standard' in schema &&
             typeof (schema as StandardSchemaV1)['~standard']?.validate ===

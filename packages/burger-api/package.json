@@ -137,6 +137,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "arktype": "^2.2.9",
     "valibot": "^1.4.2"
   },
   "peerDependencies": {

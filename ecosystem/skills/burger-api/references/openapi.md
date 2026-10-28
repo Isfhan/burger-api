@@ -103,14 +103,13 @@ Generated details:
 - Non-Zod (Standard Schema) params/query/headers are emitted by name. With a converter the parameter gets the real schema; without one it gets `schema: {}` instead of being dropped.
 - `docsAuth` accepts UTF-8 usernames/passwords.
 
-For non-Zod validators (Valibot, ArkType, Effect Schema), provide a converter via `mapJsonSchema`:
+Zod and validators that support Standard JSON Schema (`~standard.jsonSchema`, e.g. ArkType) are converted automatically. For other validators (e.g. Valibot), provide a converter via `mapJsonSchema` (it wins over the built-in conversion):
 
 ```ts
 export default {
   mapJsonSchema: {
     zod: z.toJSONSchema,        // Zod 4 built-in (auto-detected)
     valibot: toJsonSchema,      // user provides
-    arktype: toJsonSchema,      // user provides
   },
 };
 ```

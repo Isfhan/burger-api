@@ -235,7 +235,12 @@ export interface DoctorResult {
     version: number;
     ok: boolean;
     errorCount: number;
-    checks: { name: string; pass: boolean; message: string }[];
+    checks: {
+        name: string;
+        pass: boolean;
+        message: string;
+        severity?: 'info' | 'warning';
+    }[];
 }
 
 /** `inspect --json`, parsed and asserted to exit 0. */
@@ -255,6 +260,26 @@ export async function doctorJson(
 ): Promise<DoctorResult> {
     const result = await cli(cwd, ['doctor', '--json'], env);
     return JSON.parse(result.out) as DoctorResult;
+}
+
+/**
+ * `doctor` passes in text and JSON with no scaffold warnings. A "Node version"
+ * warning is about the host machine, not the project, so it is ignored.
+ */
+export async function expectDoctorClean(
+    cwd: string,
+    env: Record<string, string | undefined>
+): Promise<void> {
+    const text = await cli(cwd, ['doctor'], env);
+    expect(text.code).toBe(0);
+
+    const json = await doctorJson(cwd, env);
+    expect(json.ok).toBe(true);
+    expect(json.errorCount).toBe(0);
+    const warnings = json.checks.filter(
+        (c) => c.severity === 'warning' && c.name !== 'Node version'
+    );
+    expect(warnings).toEqual([]);
 }
 
 export interface ServerSpec {

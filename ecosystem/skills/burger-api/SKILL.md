@@ -313,7 +313,7 @@ ecosystem/plugins/<name>/
 - Swagger UI is the default docs UI (CDN-based, no npm dependency)
 - Built-in docs protection via `docsAuth: { username, password }`: guards `/docs` and `/openapi.json`
 - Per-route `openapi.ts` with per-method exports (override auto-generated responses)
-- `mapJsonSchema`: validator-agnostic schema conversion (Zod, Valibot, ArkType)
+- Zod and Standard JSON Schema validators (ArkType, ...) convert automatically; `mapJsonSchema` adds converters for others (Valibot)
 - `/openapi.json`, `/docs` (configurable paths, can be disabled)
 
 ## CLI

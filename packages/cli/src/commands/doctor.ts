@@ -44,6 +44,62 @@ function check(
 
 const CONVENTION_EXTS = ['.ts', '.js', '.mjs'] as const;
 
+/** Oldest Bun with the October 2026 security fixes. */
+export const MIN_BUN = '1.4.4';
+
+/** Oldest Node per release line with the October 2026 security fixes. */
+const MIN_NODE: Record<number, string> = { 24: '24.22.1', 26: '26.12.1' };
+
+/** Runtime version checks: Bun must be patched; an old Node is a warning. */
+export function runtimeChecks(
+    bunVersion: string,
+    nodeVersion: string | undefined
+): CheckResult[] {
+    const results: CheckResult[] = [];
+    const bunOk = Bun.semver.order(bunVersion, MIN_BUN) >= 0;
+    results.push(
+        check(
+            'Bun version',
+            bunOk,
+            bunOk
+                ? bunVersion
+                : `${bunVersion} is older than ${MIN_BUN} and misses security fixes — run: bun upgrade`
+        )
+    );
+    if (nodeVersion) {
+        const version = nodeVersion.replace(/^v/, '');
+        const major = Number.parseInt(version, 10);
+        const min = MIN_NODE[major];
+        const ok =
+            major > 26 ||
+            (min !== undefined && Bun.semver.order(version, min) >= 0);
+        results.push(
+            ok
+                ? check('Node version', true, version)
+                : check(
+                      'Node version',
+                      true,
+                      `${version} misses security fixes — use Node ${MIN_NODE[24]}+ or ${MIN_NODE[26]}+ for the node target`,
+                      'warning'
+                  )
+        );
+    }
+    return results;
+}
+
+/** `node --version`, or undefined when Node is not installed. */
+function installedNodeVersion(): string | undefined {
+    try {
+        const out = Bun.spawnSync(['node', '--version'], {
+            stdout: 'pipe',
+            stderr: 'ignore',
+        });
+        return out.success ? out.stdout.toString().trim() : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Finds the first existing file among `${cwd}/${base}${ext}` for each ext. */
 function findExisting(
     cwd: string,
@@ -74,6 +130,8 @@ async function tryImport(file: string): Promise<string | undefined> {
 export async function runChecks(cwd: string): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
     const rel = (p: string) => relative(cwd, p).split('\\').join('/');
+
+    results.push(...runtimeChecks(Bun.version, installedNodeVersion()));
 
     // 1. package.json
     const hasPkg = existsSync(join(cwd, 'package.json'));

@@ -138,7 +138,11 @@ function schemaToJsonSchema(
         return jsonSchema;
     }
     // Standard Schema: try configured converters
-    if (mapJsonSchema && typeof schema === 'object' && schema !== null) {
+    if (
+        mapJsonSchema &&
+        (typeof schema === 'object' || typeof schema === 'function') &&
+        schema !== null
+    ) {
         const stdSchema = schema as unknown as Record<string, unknown>;
         const vendor =
             (stdSchema['~standard'] as Record<string, unknown>)?.vendor ??
@@ -147,7 +151,24 @@ function schemaToJsonSchema(
             return mapJsonSchema[vendor](schema);
         }
     }
+    // Standard JSON Schema: validators that can describe themselves.
+    const converter = (
+        schema as
+            | { '~standard'?: { jsonSchema?: StandardJsonSchemaConverter } }
+            | undefined
+    )?.['~standard']?.jsonSchema;
+    if (converter && typeof converter[io] === 'function') {
+        const jsonSchema = converter[io]({ target: 'draft-2020-12' });
+        delete jsonSchema.$schema;
+        return jsonSchema;
+    }
     return undefined;
+}
+
+/** `~standard.jsonSchema` from the Standard JSON Schema spec. */
+interface StandardJsonSchemaConverter {
+    input(options: { target: string }): Record<string, unknown>;
+    output(options: { target: string }): Record<string, unknown>;
 }
 
 /**
@@ -181,7 +202,11 @@ function buildRequestBody(
  * Type guard for Standard Schema objects (has ~standard property).
  */
 function isStandardSchema(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && '~standard' in value;
+    return (
+        (typeof value === 'object' || typeof value === 'function') &&
+        value !== null &&
+        '~standard' in value
+    );
 }
 
 /**

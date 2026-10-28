@@ -125,7 +125,7 @@ describe('generatePackageJson', () => {
         expect(pkg.scripts.dev).toBe('burger-api dev');
         expect(pkg.scripts.start).toBe('burger-api start');
         expect(pkg.scripts.build).toBe('burger-api build src/index.ts');
-        expect(pkg.scripts.typecheck).toBe('tsc --noEmit');
+        expect(pkg.scripts.typecheck).toBe('bun check');
     });
 
     it('includes burger-api dependency', () => {
@@ -143,7 +143,7 @@ describe('generatePackageJson', () => {
         expect(pkg.scripts.start).toBe('burger-api start');
         expect(pkg.scripts.build).toBe('burger-api build src/index.js');
         // Plain `tsc` ignores jsconfig.json — JS apps check via -p.
-        expect(pkg.scripts.typecheck).toBe('tsc -p jsconfig.json --noEmit');
+        expect(pkg.scripts.typecheck).toBe('bun check -p jsconfig.json');
     });
 });
 

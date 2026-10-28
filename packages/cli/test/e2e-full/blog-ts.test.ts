@@ -22,7 +22,7 @@ import {
     copyBundleAlone,
     createFullProject,
     createLinkSandbox,
-    doctorJson,
+    expectDoctorClean,
     e2eEnv,
     inspectJson,
     runCommand,
@@ -118,13 +118,7 @@ describe('e2e-full: blog-ts', () => {
         'doctor passes (text and --json)',
         () =>
             step('blog-ts: doctor', async () => {
-                const text = await cli(dir, ['doctor'], env);
-                expect(text.code).toBe(0);
-                expect(text.out).toContain('All checks passed');
-
-                const json = await doctorJson(dir, env);
-                expect(json.ok).toBe(true);
-                expect(json.errorCount).toBe(0);
+                await expectDoctorClean(dir, env);
             }),
         T
     );

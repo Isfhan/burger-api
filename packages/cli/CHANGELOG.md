@@ -29,7 +29,10 @@ if anything breaks or feels wrong.
   directory restarts the server instead of 404ing until a manual restart.
 - **Ecosystem source:** `add`, `list` and `skills` always download from the
   `main` branch (override with `BURGER_API_BRANCH`).
-- Requires **Bun 1.4.4+** (October 2026 security fixes).
+- Requires **Bun 1.4.4+** (October 2026 security fixes). `doctor` fails on an
+  older Bun and warns on an unpatched Node.
+- New projects type-check with `bun check` (Bun's built-in checker) and pin
+  `typescript` ^7; `jsconfig.json` loads Bun types.
 
 ### ⚠️ Breaking changes
 

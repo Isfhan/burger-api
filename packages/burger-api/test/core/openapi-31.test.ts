@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import * as v from 'valibot';
+import { type } from 'arktype';
 import { generateOpenAPIDocument } from '../../src/core/openapi';
 import { Burger } from '../../src/index';
 import type { RouteDefinition } from '../../src/types/index';
@@ -149,6 +150,45 @@ describe('OpenAPI 3.1 document', () => {
             (p: any) => p.in === 'query' && p.name === 'q'
         );
         expect(q.schema).toEqual({ type: 'string' });
+    });
+
+    it('documents a Standard JSON Schema validator with no converter', () => {
+        const Body = type({ name: 'string', 'age?': 'number' });
+        const routes: RouteDefinition[] = [
+            makeRoute({
+                path: '/api/people',
+                handlers: { POST: () => Response.json({}) },
+                schema: {
+                    post: { body: Body, query: type({ q: 'string' }) },
+                } as never,
+            }),
+        ];
+        const doc = generateOpenAPIDocument(routes, baseOptions);
+        const post = (doc.paths['/api/people'] as any).post;
+        const schema = post.requestBody.content['application/json'].schema;
+        expect(schema.$schema).toBeUndefined();
+        expect(schema.properties.name).toEqual({ type: 'string' });
+        expect(schema.required).toEqual(['name']);
+        const q = post.parameters.find((p: any) => p.name === 'q');
+        expect(q.schema).toEqual({ type: 'string' });
+    });
+
+    it('prefers a configured converter over ~standard.jsonSchema', () => {
+        const routes: RouteDefinition[] = [
+            makeRoute({
+                path: '/api/people2',
+                handlers: { POST: () => Response.json({}) },
+                schema: { post: { body: type({ name: 'string' }) } } as never,
+            }),
+        ];
+        const config: OpenAPIConfig = {
+            mapJsonSchema: { arktype: () => ({ type: 'object', title: 'Mapped' }) },
+        };
+        const doc = generateOpenAPIDocument(routes, baseOptions, config);
+        const post = (doc.paths['/api/people2'] as any).post;
+        expect(post.requestBody.content['application/json'].schema.title).toBe(
+            'Mapped'
+        );
     });
 });
 

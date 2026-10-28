@@ -123,11 +123,11 @@ export function generatePackageJson(
             dev: 'burger-api dev',
             start: 'burger-api start',
             build: `burger-api build ${entry}`,
-            // JS projects check with jsconfig.json; plain `tsc` prints help.
+            // Bun's built-in type checker; JS projects check with jsconfig.json.
             typecheck:
                 lang === 'js'
-                    ? 'tsc -p jsconfig.json --noEmit'
-                    : 'tsc --noEmit',
+                    ? 'bun check -p jsconfig.json'
+                    : 'bun check',
         },
         dependencies: {
             'burger-api': burgerApiSpecifier,

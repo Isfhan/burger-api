@@ -23,6 +23,12 @@ if anything breaks or feels wrong.
 - Tested with Zod 4.6. Its OpenAPI output differs only in the `email` format
   pattern.
 - Published to npm with provenance.
+- **Fix:** Standard Schema libraries whose schemas are functions (ArkType)
+  were rejected at startup. They now validate and appear in OpenAPI.
+- OpenAPI uses a validator's own Standard JSON Schema converter
+  (`~standard.jsonSchema`, e.g. ArkType) when no `mapJsonSchema` converter is set.
+- TypeScript 7 ready: type-checks with `tsc` 7.0 and 5.x; the `typescript`
+  peer range is now `>=5`.
 
 #### 🔍 Audit round 3 (docs pass fixes)
 

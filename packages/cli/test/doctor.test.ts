@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
-import { runChecks } from '../src/commands/doctor';
+import { MIN_BUN, runChecks, runtimeChecks } from '../src/commands/doctor';
 import { makeTempDir, removeDir } from './test-utils';
 
 let tmpDir = '';
@@ -210,5 +210,34 @@ describe('runChecks (real validation, not just file presence)', () => {
         const hooks = results.find((r) => r.name === 'src/hooks');
         expect(hooks?.severity).toBe('info');
         expect(hooks?.message).toContain('optional');
+    });
+});
+
+describe('runtimeChecks', () => {
+    it('fails a Bun older than the security floor', () => {
+        const [bun] = runtimeChecks('1.4.3', undefined);
+        expect(bun!.pass).toBe(false);
+        expect(bun!.message).toContain('bun upgrade');
+    });
+
+    it('passes a patched Bun and skips Node when it is not installed', () => {
+        const results = runtimeChecks(MIN_BUN, undefined);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.pass).toBe(true);
+    });
+
+    it('warns (without failing) on an unpatched Node', () => {
+        for (const node of ['v24.22.0', 'v26.12.0', 'v22.23.4', 'v25.1.0']) {
+            const [, check] = runtimeChecks(MIN_BUN, node);
+            expect(check!.pass).toBe(true);
+            expect(check!.severity).toBe('warning');
+        }
+    });
+
+    it('accepts patched Node 24 and 26 lines', () => {
+        for (const node of ['v24.22.1', 'v26.12.1', 'v26.13.0']) {
+            const [, check] = runtimeChecks(MIN_BUN, node);
+            expect(check!.severity).toBeUndefined();
+        }
     });
 });
