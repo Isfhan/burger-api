@@ -5,7 +5,7 @@
   "module": "src/index.ts",
   "type": "module",
   "bin": {
-    "burger-api": "./src/index.ts"
+    "burger-api": "src/index.ts"
   },
   "files": [
     "src",

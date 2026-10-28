@@ -2,6 +2,8 @@
 
 ### Version 0.1.0
 
+Requires **Node 24.22.1+ or 26.12.1+** (October 2026 security fixes).
+
 First release. The official Node.js adapter for burger-api — `serve(app)`
 bridges `node:http` to `toFetchHandler`, and wires `createNodeWsBridge()` +
 the `ws` package automatically when the app has WebSocket routes configured.

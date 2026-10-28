@@ -27,6 +27,9 @@ if anything breaks or feels wrong.
   cache fallback when GitHub is unreachable.
 - **A more reliable `dev`:** it watches the whole app directory, so a new route
   directory restarts the server instead of 404ing until a manual restart.
+- **Ecosystem source:** `add`, `list` and `skills` always download from the
+  `main` branch (override with `BURGER_API_BRANCH`).
+- Requires **Bun 1.4.4+** (October 2026 security fixes).
 
 ### ⚠️ Breaking changes
 

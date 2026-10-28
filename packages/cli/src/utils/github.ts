@@ -22,36 +22,8 @@ import { assertValidEcosystemName } from './names';
 /** Repo config; override with BURGER_API_REPO_OWNER, BURGER_API_REPO_NAME, BURGER_API_BRANCH. */
 const REPO_OWNER = process.env.BURGER_API_REPO_OWNER ?? 'isfhan';
 const REPO_NAME = process.env.BURGER_API_REPO_NAME ?? 'burger-api';
-/** Injected at build time when compiling to executable (--define CLI_VERSION). */
-declare const CLI_VERSION: string | undefined;
-
-/**
- * True when the installed CLI is a prerelease (`1.0.0-beta`, `-rc.1`, …).
- * Prereleases read ecosystem content from the 1.0 development branch until
- * stable 1.0 ships on `main`.
- */
-export function isPrereleaseBuild(): boolean {
-    let version = typeof CLI_VERSION !== 'undefined' ? CLI_VERSION : '';
-    if (!version) {
-        try {
-            const pkgPath = join(import.meta.dir, '..', '..', 'package.json');
-            version =
-                (JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
-                    version?: string;
-                }).version ?? '';
-        } catch {
-            return false;
-        }
-    }
-    return /-(?:beta|rc|alpha)(?:[.-]|$)/.test(version);
-}
-
-/** Ecosystem branch for prerelease CLIs (see {@link isPrereleaseBuild}). */
-export const PRERELEASE_BRANCH = 'feat/burger-api-v1';
-
-const BRANCH =
-    process.env.BURGER_API_BRANCH ??
-    (isPrereleaseBuild() ? PRERELEASE_BRANCH : 'main');
+/** Ecosystem content always comes from `main` unless BURGER_API_BRANCH overrides it. */
+const BRANCH = process.env.BURGER_API_BRANCH ?? 'main';
 
 const RAW_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 const API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
@@ -65,8 +37,7 @@ function ecosystemKey(name: string): string {
     });
 }
 
-// Contents API needs an explicit ref, or list/add/skills return empty results
-// while the 1.0 branch has not merged to the default branch yet.
+// Contents API takes an explicit ref so BURGER_API_BRANCH applies to listings too.
 const contentsUrl = (path: string): string =>
     `${API_URL}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`;
 

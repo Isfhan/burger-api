@@ -1,7 +1,6 @@
 /**
- * GitHub ecosystem caches must be scoped to owner/repo/branch: a beta CLI
- * (prerelease branch), a stable CLI (main), and a BURGER_API_BRANCH override
- * must never share a cache entry.
+ * GitHub ecosystem caches must be scoped to owner/repo/branch: the default
+ * branch (main) and a BURGER_API_BRANCH override must never share a cache entry.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync, readdirSync, rmSync } from 'fs';
@@ -13,7 +12,6 @@ import { withMockedFetch } from './test-utils';
 let cacheDir: string;
 const originalCacheDir = process.env.BURGER_API_CACHE_DIR;
 const originalBranch = process.env.BURGER_API_BRANCH;
-const originalVersion = (globalThis as { CLI_VERSION?: string }).CLI_VERSION;
 
 beforeEach(() => {
     cacheDir = mkdtempSync(join(tmpdir(), 'burger-cache-key-'));
@@ -25,15 +23,10 @@ afterEach(() => {
     else process.env.BURGER_API_CACHE_DIR = originalCacheDir;
     if (originalBranch === undefined) delete process.env.BURGER_API_BRANCH;
     else process.env.BURGER_API_BRANCH = originalBranch;
-    if (originalVersion === undefined) {
-        delete (globalThis as { CLI_VERSION?: string }).CLI_VERSION;
-    } else {
-        (globalThis as { CLI_VERSION?: string }).CLI_VERSION = originalVersion;
-    }
     rmSync(cacheDir, { recursive: true, force: true });
 });
 
-/** Fresh module instance, so branch/version are recomputed at load time. */
+/** Fresh module instance, so the branch is recomputed at load time. */
 async function importFreshGithub(): Promise<
     typeof import('../src/utils/github')
 > {
@@ -51,7 +44,7 @@ describe('ecosystemCacheKey', () => {
         expect(
             ecosystemCacheKey('component-list', {
                 ...base,
-                branch: 'feat/burger-api-v1',
+                branch: 'feat/next',
             })
         ).not.toBe(key);
         expect(
@@ -66,29 +59,21 @@ describe('ecosystemCacheKey', () => {
         const key = ecosystemCacheKey('skill-list', {
             owner: 'isfhan',
             repo: 'burger-api',
-            branch: 'feat/burger-api-v1',
+            branch: 'feat/next',
         });
         expect(key).not.toContain('/');
         expect(key).not.toContain('\\');
-        expect(key).toContain('feat%2Fburger-api-v1');
+        expect(key).toContain('feat%2Fnext');
     });
 });
 
 describe('GitHub cache scoping', () => {
-    it('never shares entries across beta, stable, and branch override', async () => {
+    it('never shares entries between main and a branch override', async () => {
         delete process.env.BURGER_API_BRANCH;
-        (globalThis as { CLI_VERSION?: string }).CLI_VERSION = '1.0.0-beta';
-        const beta = await importFreshGithub();
+        const main = await importFreshGithub();
         await withMockedFetch(
             () => Response.json([]),
-            () => beta.getCachedSkillList()
-        );
-
-        (globalThis as { CLI_VERSION?: string }).CLI_VERSION = '1.0.0';
-        const stable = await importFreshGithub();
-        await withMockedFetch(
-            () => Response.json([]),
-            () => stable.getCachedSkillList()
+            () => main.getCachedSkillList()
         );
 
         process.env.BURGER_API_BRANCH = 'custom-branch';
@@ -99,8 +84,7 @@ describe('GitHub cache scoping', () => {
         );
 
         const files = readdirSync(cacheDir).sort();
-        expect(files.length).toBe(3);
-        expect(files.some((f) => f.includes('feat%2Fburger-api-v1'))).toBe(true);
+        expect(files.length).toBe(2);
         expect(files.some((f) => f.includes('-main'))).toBe(true);
         expect(files.some((f) => f.includes('custom-branch'))).toBe(true);
     });

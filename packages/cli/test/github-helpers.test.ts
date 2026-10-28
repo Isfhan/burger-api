@@ -9,7 +9,6 @@ import {
     downloadComponent,
     downloadFile,
     getComponentInfo,
-    isPrereleaseBuild,
     wrapFetchError,
 } from '../src/utils/github';
 import {
@@ -18,47 +17,15 @@ import {
     withMockedFetch,
 } from './test-utils';
 
-describe('isPrereleaseBuild', () => {
-    afterEach(() => {
-        delete (globalThis as { CLI_VERSION?: string }).CLI_VERSION;
-    });
-
-    it('treats beta, rc, and alpha versions as prereleases', () => {
-        for (const version of ['1.0.0-beta', '1.0.0-rc.1', '2.0.0-alpha.3']) {
-            (globalThis as { CLI_VERSION?: string }).CLI_VERSION = version;
-            expect(isPrereleaseBuild()).toBe(true);
-        }
-    });
-
-    it('treats stable versions as releases', () => {
-        for (const version of ['1.0.0', '2.3.4', '1.0.0-betamax']) {
-            (globalThis as { CLI_VERSION?: string }).CLI_VERSION = version;
-            expect(isPrereleaseBuild()).toBe(false);
-        }
-    });
-});
-
-describe('isPrereleaseBuild branch selection', () => {
+describe('ecosystem branch', () => {
     const originalBranch = process.env.BURGER_API_BRANCH;
-    const originalVersion = (globalThis as { CLI_VERSION?: string })
-        .CLI_VERSION;
 
     afterEach(() => {
         if (originalBranch === undefined) delete process.env.BURGER_API_BRANCH;
         else process.env.BURGER_API_BRANCH = originalBranch;
-        if (originalVersion === undefined) {
-            delete (globalThis as { CLI_VERSION?: string }).CLI_VERSION;
-        } else {
-            (globalThis as { CLI_VERSION?: string }).CLI_VERSION =
-                originalVersion;
-        }
     });
 
-    /**
-     * A fresh module instance recomputes its branch at load time, so these
-     * tests control $BURGER_API_BRANCH and the injected CLI version instead
-     * of inheriting the shell's environment or this package.json version.
-     */
+    /** A fresh module instance recomputes its branch at load time. */
     async function importFreshGithub(): Promise<
         typeof import('../src/utils/github')
     > {
@@ -68,12 +35,8 @@ describe('isPrereleaseBuild branch selection', () => {
         return (await import(spec)) as typeof import('../src/utils/github');
     }
 
-    it('fetches from the prerelease branch for a prerelease CLI', async () => {
-        delete process.env.BURGER_API_BRANCH;
-        (globalThis as { CLI_VERSION?: string }).CLI_VERSION = '1.0.0-beta';
+    async function requestedSkillListUrl(): Promise<string> {
         const github = await importFreshGithub();
-        expect(github.isPrereleaseBuild()).toBe(true);
-
         let requestedUrl = '';
         await withMockedFetch(
             (input) => {
@@ -82,27 +45,17 @@ describe('isPrereleaseBuild branch selection', () => {
             },
             () => github.getSkillList()
         );
+        return requestedUrl;
+    }
 
-        expect(requestedUrl).toContain(
-            encodeURIComponent(github.PRERELEASE_BRANCH)
-        );
+    it('fetches from main by default', async () => {
+        delete process.env.BURGER_API_BRANCH;
+        expect(await requestedSkillListUrl()).toContain('ref=main');
     });
 
-    it('$BURGER_API_BRANCH wins over the version-derived branch', async () => {
+    it('$BURGER_API_BRANCH overrides main', async () => {
         process.env.BURGER_API_BRANCH = 'custom-branch';
-        (globalThis as { CLI_VERSION?: string }).CLI_VERSION = '1.0.0-beta';
-        const github = await importFreshGithub();
-
-        let requestedUrl = '';
-        await withMockedFetch(
-            (input) => {
-                requestedUrl = String(input);
-                return Response.json([]);
-            },
-            () => github.getSkillList()
-        );
-
-        expect(requestedUrl).toContain('custom-branch');
+        expect(await requestedSkillListUrl()).toContain('ref=custom-branch');
     });
 });
 

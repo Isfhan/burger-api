@@ -82,7 +82,7 @@ bun test ./test/e2e
   overwrite confirm with a scripted `@clack/prompts` mock; yes replaces
   both copies, no/cancel keep them and download nothing.
 - `github-helpers.test.ts` — GitHub helpers with a mocked fetch
-  (`isPrereleaseBuild`, `detectEcosystemType`, downloads, error messages).
+  (`detectEcosystemType`, downloads, error messages).
 - `platform-config.test.ts` — wrangler/deno/vercel config scaffolding
   (content and never-overwrite behavior).
 - `dev-command.test.ts` — `dev` boots a temp project and hot-reloads an

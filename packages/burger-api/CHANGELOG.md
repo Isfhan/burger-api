@@ -16,6 +16,14 @@ This is a breaking rewrite: the `0.9.x` line stays on npm
 Please try it and [open an issue](https://github.com/isfhan/burger-api/issues)
 if anything breaks or feels wrong.
 
+#### 🔒 Runtime requirements
+
+- Requires **Bun 1.4.4+** and, on Node, **24.22.1+ or 26.12.1+**. These
+  versions carry the October 2026 security fixes (Brotli, TLS).
+- Tested with Zod 4.6. Its OpenAPI output differs only in the `email` format
+  pattern.
+- Published to npm with provenance.
+
 #### 🔍 Audit round 3 (docs pass fixes)
 
 - Auto-`OPTIONS` and `405` now send the exact same `Allow` header (the

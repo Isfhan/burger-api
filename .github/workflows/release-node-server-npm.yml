@@ -1,0 +1,101 @@
+name: Publish node-server to npm
+
+on:
+    push:
+        tags:
+            - 'node-server/v*'
+    workflow_dispatch:
+        inputs:
+            version:
+                description: 'Version to publish (e.g., node-server/v0.1.0 or v0.1.0)'
+                required: true
+                type: string
+
+env:
+    BUN_VERSION: 1.4.4
+
+jobs:
+    publish:
+        name: Publish to npm
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+
+            - name: Setup Node.js (for npm and the tests)
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version: '24'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Get version from tag
+              id: get_version
+              run: |
+                  if [ "${{ github.event.inputs.version }}" != "" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                    VERSION="${VERSION#node-server/}"
+                  else
+                    VERSION="${GITHUB_REF#refs/tags/node-server/}"
+                  fi
+                  VERSION="${VERSION#v}"
+                  echo "VERSION=${VERSION}" >> $GITHUB_ENV
+                  echo "version=${VERSION}" >> $GITHUB_OUTPUT
+              shell: bash
+
+
+            - name: Verify package.json version matches tag
+              run: |
+                  cd packages/node-server
+                  PACKAGE_VERSION=$(bun -e "console.log(require('./package.json').version)")
+                  if [ "$PACKAGE_VERSION" != "${{ env.VERSION }}" ]; then
+                    echo "❌ Version mismatch: package.json has $PACKAGE_VERSION but tag is ${{ env.VERSION }}"
+                    exit 1
+                  fi
+                  echo "✅ Version match: $PACKAGE_VERSION"
+              shell: bash
+
+            # The adapter's tests import the framework's dist.
+            - name: Build burger-api
+              run: bun run build
+
+            - name: Run typecheck
+              run: |
+                  cd packages/node-server
+                  bun run typecheck
+              shell: bash
+
+            - name: Build and test (plain Node)
+              run: |
+                  cd packages/node-server
+                  bun run test
+              shell: bash
+
+            - name: Check what will be published
+              run: |
+                  cd packages/node-server
+                  npm pack --dry-run
+              shell: bash
+
+            - name: Publish to npm
+              run: |
+                  cd packages/node-server
+                  npm publish --access public --provenance --tag latest
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: Verify publication
+              run: |
+                  echo "✅ Published @burger-api/node-server@${{ env.VERSION }} to npm"
+                  echo "📦 Package: https://www.npmjs.com/package/@burger-api/node-server"
+              shell: bash
