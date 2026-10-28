@@ -138,7 +138,7 @@ export function generatePackageJson(
         devDependencies: {
             '@burger-api/cli': cliSpecifier(),
             '@types/bun': 'latest',
-            typescript: '^5',
+            typescript: '^7',
         },
     };
 
@@ -206,6 +206,9 @@ export function generateJsConfig(): string {
             esModuleInterop: true,
             skipLibCheck: true,
             noEmit: true,
+
+            // Types (TypeScript 7 loads none by default)
+            types: ['bun'],
         },
         include: ['src'],
     };

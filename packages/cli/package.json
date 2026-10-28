@@ -38,7 +38,7 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   },
   "keywords": [
     "burger-api",

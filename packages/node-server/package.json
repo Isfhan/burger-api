@@ -49,7 +49,7 @@
   },
   "peerDependencies": {
     "burger-api": ">=1.0.0-beta",
-    "typescript": "^5"
+    "typescript": ">=5"
   },
   "publishConfig": {
     "access": "public"

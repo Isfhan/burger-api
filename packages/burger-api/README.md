@@ -19,7 +19,7 @@
 file-based routing, a hook-based request lifecycle, Standard Schema validation
 (Zod default), plugins/providers, and automatic OpenAPI generation. It runs on
 Bun in development and production, and deploys to any WinterCG runtime
-(Cloudflare Workers, Vercel, Deno Deploy, Node 24+) through `toFetchHandler`.
+(Cloudflare Workers, Vercel, Deno, Node 24+) through `toFetchHandler`.
 
 **Hooks** control the request lifecycle. **Plugins** extend the application.
 They are separate concepts.

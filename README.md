@@ -71,7 +71,7 @@ published to npm.
     `HEAD` (when `GET` exists), and `OPTIONS`
 -   🔗 **Loose Trailing Slash** - `/foo` and `/foo/` match the same route
 -   🌍 **WinterCG deploy surface** - `app.serve(port)` on Bun;
-    `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno Deploy, Node 24+
+    `toFetchHandler(app)` for Cloudflare Workers, Vercel, Deno, Node 24+
 -   🟨 **JavaScript first-class** - same conventions in `.ts` / `.js` / `.mjs`
 
 ### 🛠️ [`packages/cli`](./packages/cli)

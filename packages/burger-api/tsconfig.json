@@ -17,6 +17,7 @@
         // Best practices
         "strict": true,
         "skipLibCheck": true,
+        "types": ["bun"],
         "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
 
@@ -28,10 +29,9 @@
         // Project settings
         "rootDir": "../../",
         "outDir": "./dist",
-        "baseUrl": ".",
         "paths": {
             // This is the path to the burger-api package in the root directory
-            "burger-api": ["src/index.ts"]
+            "burger-api": ["./src/index.ts"]
         }
     },
     "include": ["src/**/*", "test/**/*", "examples/**/*"],

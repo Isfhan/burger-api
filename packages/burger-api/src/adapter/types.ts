@@ -51,7 +51,7 @@ export interface ServerHandle {
  * The runtime adapter seam. A concrete adapter wraps one runtime's server
  * bootstrap (`Bun.serve`, `Deno.serve`, `node:http`, etc.); only this surface
  * touches runtime-specific APIs. Deploy targets that export a `fetch` handler
- * (Workers, Vercel, Deno Deploy, Node 24+) use `toFetchHandler()` instead.
+ * (Workers, Vercel, Deno, Node 24+) use `toFetchHandler()` instead.
  */
 export interface RuntimeAdapter {
     start(opts: AdapterStartOptions): ServerHandle;
