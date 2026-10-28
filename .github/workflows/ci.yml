@@ -6,12 +6,16 @@ on:
   pull_request:
 
 env:
-  BUN_VERSION: 1.4.2
-  NODE_VERSION: 24
+  BUN_VERSION: 1.4.4
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [24, 26]
+    name: test (Node ${{ matrix.node }})
     steps:
       - uses: actions/checkout@v7
 
@@ -19,13 +23,13 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # node-server tests run on plain Node (type stripping needs Node 22.6+).
+      # node-server tests and the node build target run on plain Node.
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ matrix.node }}
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build framework (dist for linked packages + examples)
         run: bun run build

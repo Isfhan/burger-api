@@ -1,0 +1,242 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`OpenAPI output snapshot (Zod) stays stable 1`] = `
+{
+  "/api/posts/{id}": {
+    "get": {
+      "deprecated": false,
+      "description": "",
+      "externalDocs": undefined,
+      "operationId": "get__api_posts_id",
+      "parameters": [
+        {
+          "description": "path parameter id",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string",
+          },
+        },
+        {
+          "description": "query parameter page",
+          "in": "query",
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer",
+          },
+        },
+        {
+          "description": "query parameter q",
+          "in": "query",
+          "name": "q",
+          "required": false,
+          "schema": {
+            "type": "string",
+          },
+        },
+      ],
+      "requestBody": undefined,
+      "responses": {
+        "def": {
+          "content": undefined,
+          "description": "Response def",
+        },
+        "omit": {
+          "content": undefined,
+          "description": "Response omit",
+        },
+        "type": {
+          "content": undefined,
+          "description": "Response type",
+        },
+      },
+      "summary": "Summary for GET /api/posts/:id",
+      "tags": [],
+    },
+    "put": {
+      "deprecated": false,
+      "description": "",
+      "externalDocs": undefined,
+      "operationId": "put__api_posts_id",
+      "parameters": [
+        {
+          "description": "path parameter id",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string",
+          },
+        },
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "author": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                        },
+                        "type": {
+                          "const": "user",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "type",
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                        },
+                        "type": {
+                          "const": "bot",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "type",
+                        "name",
+                      ],
+                      "type": "object",
+                    },
+                  ],
+                },
+                "body": {
+                  "type": "string",
+                },
+                "day": {
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                  "type": "string",
+                },
+                "email": {
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                  "type": "string",
+                },
+                "flags": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "boolean",
+                    },
+                    {
+                      "type": "number",
+                    },
+                  ],
+                  "type": "array",
+                },
+                "kind": {
+                  "const": "post",
+                  "type": "string",
+                },
+                "meta": {
+                  "additionalProperties": {},
+                  "propertyNames": {
+                    "type": "string",
+                  },
+                  "type": "object",
+                },
+                "publishedAt": {
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                  "type": "string",
+                },
+                "rating": {
+                  "default": 0,
+                  "maximum": 5,
+                  "minimum": 0,
+                  "type": "number",
+                },
+                "status": {
+                  "enum": [
+                    "draft",
+                    "published",
+                  ],
+                  "type": "string",
+                },
+                "tags": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "maxItems": 10,
+                  "type": "array",
+                },
+                "title": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "format": "uri",
+                      "type": "string",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "views": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "type": "object",
+              "~standard": {
+                "jsonSchema": {
+                  "input": [Function],
+                  "output": [Function],
+                },
+                "validate": [Function],
+                "vendor": "zod",
+                "version": 1,
+              },
+            },
+          },
+        },
+        "description": "Request body",
+        "required": true,
+      },
+      "responses": {
+        "def": {
+          "content": undefined,
+          "description": "Response def",
+        },
+        "omit": {
+          "content": undefined,
+          "description": "Response omit",
+        },
+        "type": {
+          "content": undefined,
+          "description": "Response type",
+        },
+      },
+      "summary": "Summary for PUT /api/posts/:id",
+      "tags": [],
+    },
+  },
+}
+`;

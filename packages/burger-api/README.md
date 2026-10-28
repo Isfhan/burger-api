@@ -6,7 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0--beta-orange.svg)](https://github.com/isfhan/burger-api/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.4.0%2B-black?logo=bun)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun)](https://bun.sh)
 
 > **1.0.0-beta is our biggest release yet.** `npm i burger-api` installs it
 > by default. It is a full rewrite with many new features, so please try it
@@ -128,7 +128,7 @@ burger-api --version
 
 - **npm package:**
  [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.4.0
+- **Requires:** Bun >=1.4.4
 
 ### Quick Start
 

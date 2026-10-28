@@ -10,7 +10,7 @@ description: Build APIs with BurgerAPI: Bun-first, file-based routing, Standard 
 ## Overview
 
 BurgerAPI is a Bun-first, WinterCG-compatible TypeScript framework. It runs
-on Bun 1.4.0+ (primary), Node 24+, and other WinterCG targets through
+on Bun 1.4.4+ (primary), Node 24+, and other WinterCG targets through
 `toFetchHandler`.
 
 - File-based routing (route = directory of sibling files)

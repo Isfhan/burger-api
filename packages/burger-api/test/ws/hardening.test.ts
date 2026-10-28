@@ -126,7 +126,8 @@ describe('WS hardening', () => {
         await waitForOpen(ws2);
         ws2.close();
 
-        ws1.close();
+        // Bun 1.4.4+ reports 1005 for close() with no code, so send one.
+        ws1.close(1000);
         const close = await waitForClose(ws1);
         expect(close.code).toBe(1000);
         expect(await serverClose).toBe(true);

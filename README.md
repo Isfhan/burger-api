@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
   </a>
   <a href="https://bun.sh">
-    <img src="https://img.shields.io/badge/Bun-1.4.0%2B-black?logo=bun" alt="Bun" />
+    <img src="https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun" alt="Bun" />
   </a>
   <a href="https://burger-api.com">
     <img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" />
@@ -120,7 +120,7 @@ Or download the executable from [GitHub Releases](https://github.com/isfhan/burg
 
 **Package Details:**
 - **NPM Package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.4.0
+- **Requires:** Bun >=1.4.4
 
 For detailed documentation, see
 [`packages/cli/README.md`](./packages/cli/README.md).
@@ -129,7 +129,7 @@ For detailed documentation, see
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) installed (version 1.4.0 or later)
+-   [Bun](https://bun.sh) installed (version 1.4.4 or later)
 
 ### Installation
 

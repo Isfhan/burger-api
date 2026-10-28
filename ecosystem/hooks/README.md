@@ -27,7 +27,7 @@ separate middleware layer: hooks are the lifecycle.
 
 ## Quick Start
 
-Requires Bun 1.4.0 or later and the BurgerAPI framework:
+Requires Bun 1.4.4 or later and the BurgerAPI framework:
 
 ```bash
 bun add burger-api

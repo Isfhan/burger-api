@@ -15,7 +15,7 @@ wiring included.
 npm install @burger-api/node-server
 ```
 
-Requires Node 24+ and `burger-api@1.0.0-beta` or later.
+Requires Node 24.22.1+ (or 26.12.1+) and `burger-api@1.0.0-beta` or later.
 
 ## Usage
 
