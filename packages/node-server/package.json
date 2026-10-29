@@ -8,8 +8,8 @@
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
     }
   },
   "files": [
@@ -28,7 +28,7 @@
     "http",
     "websocket"
   ],
-  "description": "Official Node.js adapter for burger-api — one serve(app) call bridges node:http to burger-api's Fetch-standard handler, wiring WebSocket routes automatically when present.",
+  "description": "Run a burger-api app on Node.js: one serve(app) call starts a node:http server, with WebSocket routes wired automatically.",
   "license": "MIT",
   "repository": {
     "type": "git",

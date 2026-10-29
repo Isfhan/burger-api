@@ -1,7 +1,7 @@
 {
   "name": "@burger-api/cli",
   "version": "1.0.0-beta",
-  "description": "Simple command-line tool for Burger API projects",
+  "description": "Official CLI for BurgerAPI: create projects, add hooks and plugins, run a dev server, and build for Bun, Node, Cloudflare Workers, Deno and Vercel.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
@@ -48,6 +48,7 @@
   ],
   "author": "Isfhan Ahmed",
   "license": "MIT",
+  "homepage": "https://burger-api.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/isfhan/burger-api.git",

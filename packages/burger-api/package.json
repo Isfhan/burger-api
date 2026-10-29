@@ -1,6 +1,7 @@
 {
   "name": "burger-api",
   "version": "1.0.0-beta",
+  "description": "Fast, file-based API framework for Bun with hooks, Standard Schema validation, OpenAPI and WebSockets. Runs on Bun, Node, Cloudflare Workers, Deno and Vercel.",
   "author": "Isfhan Ahmed",
   "type": "module",
   "sideEffects": false,
@@ -8,36 +9,36 @@
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
     },
     "./validation": {
-      "import": "./dist/src/validation/index.js",
-      "types": "./dist/src/validation/index.d.ts"
+      "types": "./dist/src/validation/index.d.ts",
+      "import": "./dist/src/validation/index.js"
     },
     "./compiler": {
-      "import": "./dist/src/compiler/index.js",
-      "types": "./dist/src/compiler/index.d.ts"
+      "types": "./dist/src/compiler/index.d.ts",
+      "import": "./dist/src/compiler/index.js"
     },
     "./openapi": {
-      "import": "./dist/src/core/openapi.js",
-      "types": "./dist/src/core/openapi.d.ts"
+      "types": "./dist/src/core/openapi.d.ts",
+      "import": "./dist/src/core/openapi.js"
     },
     "./ws": {
-      "import": "./dist/src/ws/index.js",
-      "types": "./dist/src/ws/index.d.ts"
+      "types": "./dist/src/ws/index.d.ts",
+      "import": "./dist/src/ws/index.js"
     },
     "./adapter": {
-      "import": "./dist/src/adapter/index.js",
-      "types": "./dist/src/adapter/index.d.ts"
+      "types": "./dist/src/adapter/index.d.ts",
+      "import": "./dist/src/adapter/index.js"
     },
     "./adapter/web-standard": {
-      "import": "./dist/src/adapter/web-standard/index.js",
-      "types": "./dist/src/adapter/web-standard/index.d.ts"
+      "types": "./dist/src/adapter/web-standard/index.d.ts",
+      "import": "./dist/src/adapter/web-standard/index.js"
     },
     "./adapter/bun": {
-      "import": "./dist/src/adapter/bun/index.js",
-      "types": "./dist/src/adapter/bun/index.d.ts"
+      "types": "./dist/src/adapter/bun/index.d.ts",
+      "import": "./dist/src/adapter/bun/index.js"
     }
   },
   "files": [
@@ -68,61 +69,26 @@
   },
   "keywords": [
     "burger-api",
-    "burger-api-framework",
     "bun",
-    "bunjs",
     "bun-framework",
-    "fast-backend",
-    "javascript-backend",
-    "high-performance",
-    "esm",
-    "typescript",
-    "openapi",
-    "swagger-ui",
-    "declarative-routing",
     "api-framework",
-    "modern-backend",
-    "backend-framework",
-    "server",
-    "bun-native",
-    "js-backend",
-    "fast-api",
-    "scalable-backend",
-    "backend-development",
-    "modern-api",
-    "api-development",
-    "backend-engine",
-    "efficient",
-    "minimalist-backend",
-    "bun-powered",
-    "open-source",
-    "typescript-backend",
-    "performance",
-    "rapid-development",
     "web-framework",
-    "api-server",
-    "dynamic-routing",
-    "backend-routing",
-    "extensible",
-    "modular",
-    "declarative-api",
-    "lightweight",
-    "contemporary-backend",
-    "fast-javascript",
-    "bun-js-framework",
-    "bun-backend",
-    "bun-api-framework",
-    "pakistan-backend",
-    "pakistan-api-framework",
-    "pakistan-api-server",
-    "pakistan-backend-framework",
-    "pakistan-bunjs-framework",
-    "pakistan-javascript-framework"
+    "backend-framework",
+    "typescript",
+    "javascript",
+    "file-based-routing",
+    "openapi",
+    "zod",
+    "standard-schema",
+    "websocket",
+    "wintercg",
+    "cloudflare-workers"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/isfhan/burger-api.git"
+    "url": "git+https://github.com/isfhan/burger-api.git",
+    "directory": "packages/burger-api"
   },
   "bugs": {
     "url": "https://github.com/isfhan/burger-api/issues"

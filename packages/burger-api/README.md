@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/npm/v/burger-api.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/badge/version-1.0.0--beta-orange.svg" alt="Version 1.0.0-beta" /></a>
   <a href="https://github.com/isfhan/burger-api/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun" alt="Bun 1.4.4+" /></a>
 </p>
@@ -66,12 +66,13 @@ export const POST = {
 
 ```ts
 // src/api/users/route.ts
-import type { BurgerContext } from 'burger-api';
+import { defineRoute } from 'burger-api';
+import { POST as PostSchema } from './schema';
 
-export async function POST(ctx: BurgerContext) {
-    const user = ctx.validated.body;
+export const POST = defineRoute(PostSchema, (ctx) => {
+    const user = ctx.validated.body; // typed from schema.ts
     return Response.json({ created: user }, { status: 201 });
-}
+});
 ```
 
 `POST /api/users` now validates the body, returns a clear `422` error when it

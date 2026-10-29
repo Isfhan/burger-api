@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/npm/v/burger-api.svg?label=burger-api" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/badge/version-1.0.0--beta-orange.svg" alt="Version 1.0.0-beta" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun" alt="Bun 1.4.4+" /></a>
   <a href="https://burger-api.com"><img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" /></a>
