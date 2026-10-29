@@ -1,23 +1,18 @@
-## 📣 Release Notes - @burger-api/node-server
+# Changelog: @burger-api/node-server
 
-### Version 0.1.0
+## 0.1.0 (Unreleased)
 
-Requires **Node 24.22.1+ or 26.12.1+** (October 2026 security fixes).
+First release: the official Node.js server for the new
+[`burger-api@1.0.0-beta`](https://burger-api.com).
 
-First release. The official Node.js adapter for burger-api — `serve(app)`
-bridges `node:http` to `toFetchHandler`, and wires `createNodeWsBridge()` +
-the `ws` package automatically when the app has WebSocket routes configured.
-`ctx.ip` comes from the Node socket (`req.socket.remoteAddress`); forwarded
-headers are never read.
+- `serve(app)` runs a burger-api app on `node:http`.
+- WebSocket routes work automatically through the `ws` package.
+- `ctx.ip` comes from the Node socket. Forwarded headers are never read.
+- Every `Set-Cookie` header is kept, and `HEAD` responses never send a body.
 
-Extracted and hardened from a hand-built Node example (`node:http`⇄`Request`/
-`Response` bridge, `createNodeWsBridge` wiring) verified end-to-end during
-burger-api's 1.0.0-beta release audit — real HTTP requests (GET/POST/
-validation/404) and a real two-client WebSocket broadcast round-trip, both
-against the compiled package running under plain Node, not Bun.
+**Requirements:** Node 24.22.1+ or 26.12.1+ and `burger-api` 1.0.0-beta or
+later.
 
-**Known limitations**
-- `ws.subscribe()`/`.publish()` (Bun's native pub/sub) are not available
-  through this adapter — they throw on every non-Bun runtime, Node included.
-  Use a plain connection registry and fan out manually.
-- Requires `burger-api` `>=1.0.0-beta`.
+**Known limitation:** `ws.subscribe()`, `ws.publish()` and `ctx.publish()` use
+Bun's pub/sub and throw on Node. Keep your own list of connections and send to
+each one.

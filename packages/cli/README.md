@@ -1,259 +1,162 @@
-# BurgerAPI CLI 👨‍💻
+# @burger-api/cli
 
-A Command-Line Tool for Creating and Managing BurgerAPI Projects.
+The official CLI for [BurgerAPI](https://burger-api.com): create projects, add
+hooks and plugins, run a dev server, and build for production.
 
-> **1.0.0-beta is our biggest release yet.** `npm i -g @burger-api/cli`
-> installs it by default, tracking `burger-api@1.0.0-beta`. It is a full
-> rewrite with many new features, so please try it and
-> [open an issue](https://github.com/isfhan/burger-api/issues) if anything
-> breaks or feels wrong. Coming from `0.9.x`? See `CHANGELOG.md` for
-> breaking changes; the `0.9.x` line is still on npm
-> (`@burger-api/cli@0.9.9`).
+> **1.0.0-beta is a new CLI for the new BurgerAPI.** It is a rewrite that goes
+> with `burger-api@1.0.0-beta`. Coming from `0.9.9`? Read the
+> [migration guide](https://burger-api.com/docs/migration).
+> Found a problem? [Open an issue](https://github.com/isfhan/burger-api/issues).
 
-## Installation
+## Install
 
-### Option 1: Bun Global Installation (Recommended if you have Bun installed)
-
-**Global Installation:**
+Requires [Bun](https://bun.sh) 1.4.4+.
 
 ```bash
 bun add -g @burger-api/cli
+
+# or run it without installing
+bunx @burger-api/cli create my-api
 ```
 
-**Or use with bunx (No Installation Needed):**
+Or install the standalone executable (no Bun needed to run the CLI):
 
 ```bash
-bunx @burger-api/cli create my-project
-```
-
-### Option 2: Standalone Executable (Alternative Installation Method)
-
-**macOS, Linux, WSL:**
-
-```bash
+# macOS, Linux, WSL
 curl -fsSL https://burger-api.com/install.sh | bash
 ```
 
-**Windows PowerShell:**
-
 ```powershell
+# Windows PowerShell
 irm https://burger-api.com/install.ps1 | iex
 ```
 
-### Option 3: Manual Download (Alternative Installation Method)
+Executables are also on [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
+Check the install with `burger-api --version`.
 
-1. Download the executable for your platform from
-   [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
-2. Add to PATH
-3. Make executable (Linux/macOS): `chmod +x burger-api`
-
-### Verify Installation (To Check if the CLI is Installed Correctly)
+## Quick start
 
 ```bash
-burger-api --version
+burger-api create my-api
+cd my-api
+bun run dev
 ```
 
-## Available Commands (To Manage Your Project)
+Your API runs at http://localhost:4000, with docs at `/docs`.
 
-### `burger-api create <project-name>`
+## Commands
 
-Create a new Burger API project with interactive prompts.
+| Command | What it does |
+| --- | --- |
+| `create <name>` | Create a new project |
+| `dev` | Run the dev server, restarting on changes |
+| `start` | Run the production build |
+| `build [file]` | Bundle the app for production |
+| `build:exec [file]` | Compile to a standalone executable |
+| `generate` (`g`) | Create a route, hook, plugin or WebSocket route |
+| `add <names...>` | Add official hooks or plugins |
+| `list` (`ls`) | List official hooks and plugins |
+| `skills` | Install AI agent skills |
+| `inspect` | Show the routes, hooks and plugins the app finds |
+| `doctor` | Check the project for problems |
 
-**Questions You Will Be Asked:**
+Run `burger-api <command> --help` for every option.
 
-- Do you need API routes? (default: yes)
-- API directory name (default: api)
-- API route prefix (default: /api)
-- Enable debug mode? (default: no)
-- Do you need Page routes? (default: no)
-- Page directory name (default: pages)
-- Page route prefix (default: /)
-- Do you need WebSocket routes? (default: no)
-- WebSocket directory name (default: websocket)
-- Add AI agent skills? (recommended for agentic IDEs, default: yes)
+### `create <name>`
 
-**Flags:**
-
-- `-l, --lang <ts|js>` - Project language (default: ts)
-- `-y, --yes` - Use default answers for all prompts (alias: `--defaults`)
-- `--pages` - Include page routes (`src/pages`)
-- `--ws` - Include file-based WebSocket routes (`src/websocket`)
-- `--no-api` - Skip API routes
-- `--api-dir <dir>` - API routes directory under `src/` (default: api)
-- `--api-prefix <prefix>` - URL prefix for API routes (default: /api)
-- `--no-skills` - Skip downloading AI agent skills
-- `--local` - Use the local burger-api checkout (bun link) instead of npm/GitHub
-
-Feature flags imply `--yes` (no prompts). Without a TTY (CI, pipes) `create`
-never prompts: it uses the defaults plus any flags.
-
-Skip all prompts with default answers:
+Asks a few questions (API routes, pages, WebSocket routes, debug mode, AI
+skills), then creates the project and installs dependencies.
 
 ```bash
-burger-api create my-api --defaults
-
-# Choose the language up front (default: ts)
-burger-api create my-api --lang js
+burger-api create my-api              # interactive
+burger-api create my-api --yes        # all defaults, no questions
+burger-api create my-api --lang js    # JavaScript project
+burger-api create my-api --pages --ws # with pages and WebSocket routes
 ```
 
-**What you get:**
+| Flag | Description |
+| --- | --- |
+| `-l, --lang <ts\|js>` | Project language (default: `ts`) |
+| `-y, --yes`, `--defaults` | Use the default answers |
+| `--pages` | Add page routes (`src/pages`) |
+| `--ws` | Add WebSocket routes (`src/websocket`) |
+| `--no-api` | Skip API routes |
+| `--api-dir <dir>` | API folder under `src/` (default: `api`) |
+| `--api-prefix <prefix>` | URL prefix for API routes (default: `/api`) |
+| `--no-skills` | Skip the AI agent skills |
 
-- ✅ Full project structure (`src/index.ts`, `src/api/`, convention files)
-- ✅ TypeScript configured (`jsconfig.json` with `checkJs` when `--lang js`)
-- ✅ Dependencies installed
-- ✅ `burger.build.ts` generated from your answers (build-time only)
-- ✅ Example routes with schema + openapi files
-- ✅ Ready to run!
-- ✅ `AGENTS.md` (project rules for AI agents, read by Claude Code and other agents), always written
-- ✅ AI agent skills installed at `.agents/skills/burger-api/` and `.claude/skills/burger-api/` (when opted in)
-- ✅ When page routes are enabled, the sample `index.html` matches your choices
-  (API prefix for “Try API”, and edit hints for your API/page directories)
+Feature flags skip the questions. In CI (no terminal), `create` never asks and
+uses the defaults.
 
-Generated config example:
-
-```ts
-export default {
-    apiDir: './src/api',
-    pageDir: './src/pages',
-    apiPrefix: '/api',
-    pagePrefix: '/',
-    debug: false,
-};
-```
-
-Edit `burger.build.ts` anytime to change routes, prefixes, or debug mode.
-Runtime options belong in `new Burger({...})`, `src/plugins.ts`, and route
-`config.ts`.
-
----
-
-### Local Mode (Working From the Checkout)
-
-When you work on BurgerAPI itself, you can scaffold and install from the local
-checkout instead of npm/GitHub.
+### `dev` and `start`
 
 ```bash
-# One-off: every command that reads npm/GitHub takes --local
-burger-api create my-api --local
-burger-api add cors --local
-burger-api list --local
-burger-api skills install --local
-burger-api skills available --local
-burger-api generate plugin audit-log --local
-
-# Or turn it on for the whole shell
-export BURGER_API_LOCAL=1   # also accepts true
+burger-api dev                 # port $PORT or 4000, entry src/index.ts
+burger-api dev --port 8080
+burger-api start               # runs .build/bundle/app.js after a build
 ```
 
-Local mode reads the checkout the CLI runs from, so run the CLI from the repo,
-not a globally installed copy. Register the packages once:
+`dev` watches the whole app folder, so new route folders work right away.
+
+### `build` and `build:exec`
 
 ```bash
-cd burger-api/packages/burger-api && bun link
-cd burger-api/packages/cli && bun link
+burger-api build src/index.ts                       # .build/bundle/app.js
+burger-api build src/index.ts --target=cloudflare   # bun, node, cloudflare, deno, vercel
+burger-api build:exec src/index.ts                  # .build/executable/<project>
+burger-api build:exec src/index.ts --target bun-linux-x64
 ```
 
-`create --local` writes `link:burger-api` and `link:@burger-api/cli`, so new
-projects use your checkout (no npm ranges, no overrides). Hooks, plugins, and
-skills come from `<repo>/ecosystem/`. Local mode never reads or writes the
-ecosystem cache.
+Routes are found at build time, so production never scans files. Settings come
+from `burger.build.ts` (or `.js`) when present.
 
-If the CLI is not running from a checkout, or the links are missing, the
-command fails with the exact `bun link` commands to run. It never silently
-falls back to the network.
+| `build` option | Description |
+| --- | --- |
+| `--target <target>` | `bun` (default), `node`, `cloudflare`, `deno` or `vercel` |
+| `--outfile <path>` | Output file (default depends on the target) |
+| `--minify` | Minify the output (`bun` and `node` only) |
+| `--sourcemap <type>` | `inline`, `linked` or `none` (`bun` and `node` only) |
 
----
+| `build:exec` option | Description |
+| --- | --- |
+| `--target <target>` | `bun-windows-x64`, `bun-linux-x64`, `bun-linux-arm64`, `bun-darwin-x64`, `bun-darwin-arm64` |
+| `--outfile <path>` | Output file (`.exe` is added for Windows) |
+| `--no-bytecode` | Turn off bytecode compilation |
 
-### `burger-api list`
+An executable runs on a server with no Bun or Node installed. For an app with
+pages, deploy the whole `.build/bundle/` folder.
 
-Show official ecosystem packages you can add: hooks under
-`ecosystem/hooks/`, plugins under `ecosystem/plugins/`.
+### `generate`
 
-**Hooks** control the request lifecycle. **Plugins** extend the application.
-They are separate concepts.
+```bash
+burger-api generate route users
+burger-api generate hook audit-log
+burger-api generate plugin billing
+burger-api generate ws chat
+```
 
-**Example:**
+Files follow your project's language. If an official hook or plugin with that
+name exists, the CLI tells you to `burger-api add` it instead.
+
+### `add` and `list`
 
 ```bash
 burger-api list
-
-# Read the local checkout instead of GitHub
-burger-api list --local
-```
-
-**Alias:**
-
-```bash
-burger-api ls
-```
-
-**Output:**
-
-```
-Available Hooks & Plugins
-────────────────────────────────
-
-Name Description
-─────────────────────────────────────────────────
-cors Cross-Origin Resource Sharing
-logger Request/response logging
-rate-limiter Request rate limiting
-jwt-auth JWT authentication
-session Session management
-...
-```
-
----
-
-### `burger-api add <name>`
-
-Add one or more official hooks or plugins to your project. The CLI figures out
-whether each name is a hook or a plugin.
-
-**Examples:**
-
-```bash
-# Add a single hook
-burger-api add cors
-
-# Add multiple hooks at once
 burger-api add cors logger rate-limiter
-
-# Add plugins (authentication, sessions, ...)
 burger-api add jwt-auth session
-
-# Replace an existing install without a prompt (works without a TTY)
-burger-api add cors --force
-
-# Read the local checkout instead of GitHub
-burger-api add cors --local
 ```
 
-**What it does:**
+`add` copies the code into your project's `ecosystem/` folder, so you can read
+and change it, and prints the code to wire it in:
 
-1. Downloads the hook/plugin code from GitHub
-2. Copies it into your `ecosystem/hooks/` or `ecosystem/plugins/` folder
-3. Shows you example code to wire it in
-4. You can modify the code to fit your needs!
-
-If a package is already installed, `add` asks before overwriting in a
-terminal. Without a TTY it skips the package and tells you to pass `--force`.
-
-**After adding:** the CLI shows you exactly how to use it in your project.
-Hooks go into your lifecycle arrays:
-
-```typescript
+```ts
 // src/hooks.ts
-import { logger } from '../ecosystem/hooks/logger';
 import { cors } from '../ecosystem/hooks/cors';
 
 export const onRequest = [cors()];
-export const beforeRoute = [logger()];
 ```
 
-Plugins register on the app:
-
-```typescript
+```ts
 // src/plugins.ts
 import type { PluginRegistrar } from 'burger-api';
 import { jwtAuth } from '../ecosystem/plugins/jwt-auth';
@@ -263,603 +166,68 @@ export default function (burger: PluginRegistrar) {
 }
 ```
 
----
+Use `--force` to replace an existing install without a prompt.
 
-### `burger-api skills`
-
-Manage AI agent skills for your project. Skills help AI-assisted IDEs understand
-your BurgerAPI project structure.
-
-**Subcommands:**
-
-| Command | Description |
-|---|---|
-| `burger-api skills install [name]` | Download a skill (defaults to `burger-api`) |
-| `burger-api skills list` | Show locally installed skills |
-| `burger-api skills available` | List remote skills available on GitHub |
-
-**Examples:**
+### `skills`
 
 ```bash
-# Install the default burger-api skill
-burger-api skills install
-
-# Replace an existing install without a prompt (works without a TTY)
-burger-api skills install burger-api --force
-
-# List what's installed
+burger-api skills install      # the burger-api skill
 burger-api skills list
-
-# See what skills are available (or read the local checkout)
 burger-api skills available
-burger-api skills available --local
 ```
 
-**What gets installed:** the skill is downloaded once into
-`.agents/skills/burger-api/` and copied to `.claude/skills/burger-api/`.
-
-```
-.agents/skills/burger-api/ # Agent Skills standard (OpenCode, Codex, ...)
-.claude/skills/burger-api/ # Claude Code project skills
-├── SKILL.md # Main skill definition
-└── references/ # Reference documentation
-    ├── routing.md
-    ├── validation.md
-    ├── hooks.md
-    ├── cli.md
-    └── openapi.md
-```
-
-**Compatible agents:** `Claude Code` reads from `.claude/skills/`. Agents that
-support the Agent Skills standard (OpenCode, Codex, and others) read from
-`.agents/skills/`. `skills list` shows each skill once with both locations when
-it is installed in both places.
-
----
-
-### `burger-api build <file>`
-
-Bundle your project with route discovery prepared ahead of time (AOT): routes
-are found when the app is built, not while it is running.
-The CLI scans routes first, generates a virtual entry file, then runs Bun build.
-
-**Example:**
-
-```bash
-# Basic build
-burger-api build src/index.ts
-
-# Build with minification
-burger-api build src/index.ts --minify
-
-# Custom output location
-burger-api build src/index.ts --outfile dist/app.js
-
-# With sourcemaps
-burger-api build src/index.ts --sourcemap linked
-```
-
-**Options:**
-
-- `--outfile <path>` - Output file path (default: `.build/bundle/app.js`)
-- `--minify` - Minify the output for smaller file size
-- `--sourcemap <type>` - Generate sourcemaps (inline, linked, or none)
-- `--target <target>` - Target environment (e.g., bun, node)
-- `--no-bun-check` - Skip the Bun-only API warning for portable targets
-  (cloudflare, deno, vercel, node)
-
-Build config is loaded from `burger.build.ts` or `burger.build.js` when
-present. If no config exists, the CLI uses defaults:
-`apiDir=./src/api`, `pageDir=./src/pages`, `apiPrefix=/api`, `pagePrefix=/`.
-
-**Output:**
-
-```
-✓ Build completed successfully!
-    Output: .build/bundle/app.js
-    Size: 42.5 KB
-```
-
-- API-only apps: `app.js` is usually enough to deploy.
-- Apps with pages/assets: deploy the full `.build/bundle/` directory.
-
----
-
-### `burger-api build:exec <file>`
-
-Compile your project to a standalone executable that runs without Bun installed!
-
-**Example:**
-
-```bash
-# Build for current platform
-burger-api build:exec src/index.ts
-
-# Build for Windows
-burger-api build:exec src/index.ts --target bun-windows-x64
-
-# Build for Linux
-burger-api build:exec src/index.ts --target bun-linux-x64
-
-# Build for Mac (ARM)
-burger-api build:exec src/index.ts --target bun-darwin-arm64
-
-# Custom output name
-burger-api build:exec src/index.ts --outfile my-server.exe
-```
-
-**Options:**
-
-- `--outfile <path>` - Output file path. On Windows (or a `bun-windows-*`
-  target), `.exe` is appended when the path does not already end in it.
-- `--target <target>` - Target platform
-- `--minify` - Minify the output (enabled by default)
-- `--no-bytecode` - Disable bytecode compilation
-
-**Targets:**
-
-- `bun-windows-x64` - Windows (64-bit)
-- `bun-linux-x64` - Linux (64-bit)
-- `bun-linux-arm64` - Linux (ARM 64-bit)
-- `bun-darwin-x64` - macOS (Intel)
-- `bun-darwin-arm64` - macOS (Apple Silicon)
-
-**Output:**
-
-```
-✓ Compilation completed successfully!
-    Executable: .build/executable/<project>.exe
-    Size: 45.2 MB
-
-    Your standalone executable is ready to run!
-    Run it: .build/executable/<project>.exe
-```
-
-**Use case:** Perfect for deploying your API to production servers without
-installing Bun or Node.js!
-
----
-
-### `burger-api dev`
-
-Start a development server with hot reload (auto-restart on file changes).
-
-**Example:**
-
-```bash
-# Default (port 4000, src/index.ts)
-burger-api dev
-
-# Custom port
-burger-api dev --port 4000
-
-# Custom entry file
-burger-api dev --file server.ts
-
-# Both
-burger-api dev --port 8080 --file app.ts
-```
-
-**Options:**
-
-- `-p, --port <port>` - Port to run on (default: `$PORT` or 4000)
-- `-f, --file <file>` - Entry file (default: `src/index.ts` or `.js`/`.mjs`)
-
-**What you'll see:**
-
-```
-→ Starting development server...
-
-✓ Server running on http://localhost:4000
-ℹ Press Ctrl+C to stop
-    File changes will automatically restart the server
-```
-
-**Pro tip:** Edit your code and save - the server restarts automatically! No
-need to manually restart.
-
----
-
-### `burger-api start`
-
-Run the production build (AOT routes, no filesystem scanning at runtime).
-
-**Example:**
-
-```bash
-# Default (port 4000, src/index.ts)
-burger-api start
-
-# Custom port
-burger-api start --port 8080
-```
-
-**Options:**
-
-- `-p, --port <port>` - Port to run on (default: `$PORT` or 4000)
-- `-f, --file <file>` - Production entry file (default:
-  `.build/bundle/app.js` if built, else `src/index.ts` or `.js`/`.mjs`)
-
-Run `burger-api build` first. If no bundle exists, `start` runs
-`src/index.ts` (or `.js`/`.mjs`) from source.
-
----
-
-### `burger-api generate` (alias `g`)
-
-Scaffold routes, hooks, and plugins into your project:
-
-```bash
-# Scaffold a complete route directory
-burger-api generate route users
-
-# Route, hook, plugin, or websocket; language follows the project
-# (or --lang js/ts)
-burger-api generate hook custom-log
-burger-api generate plugin stripe
-burger-api generate ws chat
-```
-
----
-
-### `burger-api inspect`
-
-Display discovered routes, hooks, plugins, and providers:
+Skills teach AI coding agents how a BurgerAPI project works. They are installed
+in `.agents/skills/` (OpenCode, Codex and others) and `.claude/skills/`
+(Claude Code).
+
+### `inspect` and `doctor`
 
 ```bash
 burger-api inspect
-```
-
----
-
-### `burger-api doctor`
-
-Validate your project structure and detect issues:
-
-```bash
 burger-api doctor
+burger-api doctor --json
 ```
 
----
+`doctor` checks the project structure, config files, every route module, and
+your Bun and Node versions. It exits with an error code when something is
+wrong. `--json` prints one result object for tools and AI agents.
 
-## Project Structure
-
-When you create a project, this is what you get:
+## Project layout
 
 ```
 my-api/
-├── burger.build.ts # Build-time config (dirs, prefixes, debug)
-├── tsconfig.json # TypeScript config (jsconfig.json for --lang js)
-├── AGENTS.md # Project rules for AI agents
+├── burger.build.ts       # build settings (folders, prefixes)
+├── AGENTS.md             # rules for AI coding agents
 ├── src/
-│ ├── index.ts # Burger instance + serve() ONLY
-│ ├── hooks.ts # Global lifecycle hooks
-│ ├── plugins.ts # burger.usePlugin(...)
-│ ├── providers.ts # burger.provide(name, service)
-│ ├── openapi.config.ts # OpenAPI metadata + docs UI
-│ ├── types.ts # App-wide type extensions (TS projects)
-│ └── api/
-│     ├── route.ts # Example route handler
-│     ├── schema.ts # Per-method schemas
-│     └── openapi.ts # Per-method OpenAPI metadata
-├── .agents/skills/ # AI agent skills (optional)
-├── .claude/skills/ # AI agent skills for Claude Code (optional)
-├── .gitignore
-└── .prettierrc
+│   ├── index.ts          # creates the app and starts the server
+│   ├── hooks.ts          # global hooks
+│   ├── plugins.ts        # burger.usePlugin(...)
+│   ├── providers.ts      # burger.provide(...) → ctx.services
+│   ├── openapi.config.ts # OpenAPI and docs UI settings
+│   ├── types.ts          # app-wide types
+│   └── api/              # API routes
+└── tsconfig.json         # jsconfig.json for JavaScript projects
 ```
 
-`src/pages/` is added when you enable pages, and `src/websocket/` when you
-enable WebSocket routes. The `ecosystem/` folder is not scaffolded: `burger-api
-add` creates it on demand.
-
-With `--lang js`, every `*.ts` file becomes `*.js` and `tsconfig.json` becomes
-`jsconfig.json` (`checkJs: true`).
-
-### Adding Routes
-
-Create a new file in the `src/api/` folder:
-
-```typescript
-// src/api/users/route.ts
-import type { BurgerContext } from 'burger-api';
-
-export async function GET(ctx: BurgerContext) {
-    return Response.json({
-        users: ['Alice', 'Bob', 'Charlie'],
-    });
-}
-
-export async function POST(ctx: BurgerContext) {
-    const body = await ctx.request.json();
-    return Response.json({
-        message: 'User created',
-        data: body,
-    });
-}
-```
-
-That's it! The route is automatically available at `/api/users`
-
-### Adding Pages
-
-Create a new file in the `pages/` folder:
-
-```html
-<!-- pages/about.html -->
-<html>
-    <body>
-        <h1>About Page</h1>
-        <p>This is the about page.</p>
-    </body>
-</html>
-```
-
-That's it! The page is automatically available at `/about`
+`src/pages/` and `src/websocket/` are added when you choose them.
+`ecosystem/` is created by `burger-api add`.
 
 ## Troubleshooting
 
-### "Directory already exists"
-
-**Solution:** Choose a different project name or remove the existing directory:
-
-```bash
-burger-api create my-api-v2
-```
-
-### "Could not get hooks/plugins list from GitHub"
-
-**Solution:** Check your internet connection. The CLI needs internet to download
-the ecosystem list from GitHub.
-
-### "Entry file not found: index.ts"
-
-**Solution:** Make sure you're in the project directory and the entry lives at
-`src/index.ts`:
-
-```bash
-cd my-project
-burger-api dev
-```
-
-### Build fails with errors
-
-**Solution:** Check that:
-
-1. You're in a Burger API project directory
-2. The entry file exists
-3. There are no TypeScript errors in your code
-4. Route folder rules are valid (no mixed dynamic + wildcard siblings)
-
-Run `bun run dev` first to see any errors.
-
-If you use custom folders or prefixes, verify your `burger.build.ts` /
-`burger.build.js` values.
-
-### Cross-compilation fails from Windows (D:\ drive)
-
-**Error:**
-
-```
-Failed to extract executable for 'bun-linux-x64-v1.3.4'. The download may be incomplete.
-```
-
-**Cause:** Bun's cross-compilation has a bug when working from non-system drives
-on Windows (D:\, E:\, etc.).
-
-**Solution:** Move your project to `C:\` drive. Cross-compilation works
-correctly from the system drive.
-
-**Example:**
-
-```bash
-# ❌ This fails if project is on D:\
-cd D:\Coding\burger-api\packages\cli
-bun run build:linux
-
-# ✅ This works from C:\
-cd C:\burger-api\packages\cli
-bun run build:linux
-```
-
-## Getting Help
-
-Get help for any command:
-
-```bash
-burger-api --help # General help
-burger-api create --help # Command-specific help
-```
-
-**Resources:**
-
-- Main website: https://burger-api.com
-- GitHub: https://github.com/isfhan/burger-api
-- Issues: https://github.com/isfhan/burger-api/issues
-
----
-
-### Migration from `.llm-context`
-
-Projects created with older CLI versions may have an `ecosystem/.llm-context/`
-folder. Modern versions of the CLI no longer auto-install this folder. To adopt
-the new skills format:
-
-```bash
-cd my-project
-burger-api skills install
-```
-
-This downloads the burger-api skill to `.agents/skills/burger-api/` and
-`.claude/skills/burger-api/` for agentic IDEs. The old
-`ecosystem/.llm-context/` folder can be safely removed.
-
----
-
-## Development
-
-Want to contribute or develop locally?
-
-### Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/isfhan/burger-api.git
-cd burger-api/packages/cli
-
-# Install dependencies
-bun install
-
-# Run locally
-bun run src/index.ts --help
-```
-
-### Project Structure
-
-```
-packages/cli/
-├── src/
-│ ├── index.ts # Main entry point
-│ ├── commands/ # All CLI commands
-│ ├── utils/ # Shared utilities
-│ └── types/ # TypeScript types
-├── package.json # Dependencies and scripts
-└── README.md # This file
-```
-
-### Build Executables
-
-Build standalone executables for all platforms:
-
-```bash
-bun run build:win # Windows (x64)
-bun run build:linux # Linux (x64)
-bun run build:mac # macOS (ARM64/Apple Silicon)
-bun run build:mac-intel # macOS (Intel x64)
-bun run build:all # All platforms
-```
-
-**Cross-Compilation from Windows:**
-
-Bun supports cross-compilation - you can build Linux and macOS executables from
-Windows using the `--target` flag:
-
-```bash
-# Build for Linux from Windows
-bun build ./src/index.ts --compile --target bun-linux-x64 --outfile dist/burger-api-linux --minify
-
-# Build for macOS ARM64 from Windows
-bun build ./src/index.ts --compile --target bun-darwin-arm64 --outfile dist/burger-api-mac --minify
-
-# Build for macOS Intel from Windows
-bun build ./src/index.ts --compile --target bun-darwin-x64 --outfile dist/burger-api-mac-intel --minify
-```
-
-**Important: Windows D:\ Drive Bug**
-
-If you see this error when cross-compiling from Windows:
-
-```
-Error: Failed to extract executable for 'bun-linux-x64-v1.3.4'. The download may be incomplete.
-```
-
-**Cause:** Cross-compilation fails when working from non-system drives (like
-`D:\`) on Windows due to cross-volume file move operations failing when Bun
-tries to cache the downloaded base executable.
-
-**Solution:** Move your project to the `C:\` drive and run the build from there.
-Cross-compilation works correctly from the system drive.
-
-**Caution: `--bytecode` Flag with Cross-Compilation**
-
-The `--bytecode` flag improves startup time, but there are known issues where
-cross-compiled executables with `--bytecode` may segfault on the target OS. If
-you encounter crashes, rebuild without `--bytecode`. The build scripts use
-`--minify` only for safety with cross-compilation.
-
-### Testing
-
-Run tests (from `packages/cli`):
-
-```bash
-# Run all CLI tests
-bun run test
-
-# Run build tests only (check production matches dev)
-bun run test:build
-
-# Run one test file
-bun test test/build-output.test.ts
-```
-
-From the **repo root**, run all CLI tests with:
-
-```bash
-bun run test:cli
-```
-
-Optional: run the GitHub-backed `ls` exit integration test (skipped by default):
-
-```bash
-BURGER_API_CLI_LIST_EXIT_TEST=1 bun test test/cli-process-exit.test.ts
-```
-
-### Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes
-4. Test everything manually
-5. Submit a Pull Request
-
-**Guidelines:**
-
-- Use simple, beginner-friendly language
-- Add comments explaining your code
-- Test all commands before submitting
-- Update README if adding new features
-- Keep route rules in one place:
-  - runtime/shared rules: `packages/burger-api/src/utils/pathConversion.ts`
-  - scanner traversal: `packages/cli/src/utils/scanner.ts`
-- Run build tests when changing routing/build (keeps dev and production behavior the same):
-  - `bun run test:build`
-- CLI: commands that should return to the shell when finished must not leave
-  stray timers, unread pipes, or hung `fetch` work behind. Use the HTTP helper
-  in `src/utils/github.ts` for outbound requests. `dev` is meant to stay
-  running until you stop it.
-
-### Design Principles
-
-- **Minimal dependencies** - `commander` and `@clack/prompts` for parsing and
-  prompts; everything else uses Bun's native APIs
-- **Beautiful output** - Use colors and symbols for clarity
-- **Simple language** - No jargon, clear explanations
-- **Well commented** - Explain why, not just what
-
-## Technical Details
-
-**Built with:**
-
-- TypeScript for type safety
-- Bun.js for speed and native APIs
-- Commander for CLI framework
-- @clack/prompts for beautiful prompts
-
-**Zero external dependencies for:**
-
-- File operations (uses `Bun.write()`)
-- Downloads (uses native `fetch()`)
-- Process spawning (uses `Bun.spawn()`)
-
-**Supported platforms:**
-
-- Windows (x64)
-- Linux (x64, ARM64)
-- macOS (Intel, Apple Silicon)
-
----
+- **"Could not get hooks/plugins list from GitHub":** check your connection.
+  The CLI falls back to its cache when it has one. Set `GITHUB_TOKEN` if
+  GitHub rate-limits you.
+- **"Entry file not found":** run the command from the project folder, or pass
+  `--file`.
+- **Something looks wrong:** run `burger-api doctor`.
+
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/isfhan/burger-api/blob/main/CONTRIBUTING.md).
+To test the CLI against your local checkout, use `--local` (or
+`BURGER_API_LOCAL=1`); see
+[LOCAL_TESTING.md](https://github.com/isfhan/burger-api/blob/main/LOCAL_TESTING.md).
 
 ## License
 
-MIT License - See [LICENSE](../../LICENSE) for details.
-
-**Built with ❤️ for the BurgerAPI community**
+[MIT](https://github.com/isfhan/burger-api/blob/main/LICENSE)

@@ -1,94 +1,76 @@
 # @burger-api/node-server
 
-The official Node.js adapter for [burger-api](https://burger-api.com): one
-`serve(app)` call bridges `node:http` to burger-api's Fetch-standard
-handler, and wires WebSocket routes automatically when the app has any.
-
-burger-api ships a Bun adapter and a WinterCG `toFetchHandler` for edge
-runtimes, but nothing to run a real, long-lived server on plain Node. This
-package is that missing piece: a small `node:http` bridge with WebSocket
-wiring included.
+Run a [burger-api](https://burger-api.com) app on Node.js. One `serve(app)`
+call starts a `node:http` server, and WebSocket routes work automatically.
 
 ## Install
 
 ```bash
-npm install @burger-api/node-server
+npm install burger-api @burger-api/node-server
 ```
 
-Requires Node 24.22.1+ (or 26.12.1+) and `burger-api@1.0.0-beta` or later.
+Requires Node 24.22.1+ (or 26.12.1+) and `burger-api` 1.0.0-beta or later.
 
 ## Usage
 
 ```ts
-import { serve } from "@burger-api/node-server";
-import { Burger } from "burger-api";
+import { Burger } from 'burger-api';
+import { serve } from '@burger-api/node-server';
 
 const app = new Burger({
-  apiRoutes: [
-    {
-      path: "/api/hello",
-      handlers: { GET: () => Response.json({ message: "Hello!" }) },
-    },
-  ],
+    apiRoutes: [
+        {
+            path: '/api/hello',
+            handlers: { GET: () => Response.json({ message: 'Hello!' }) },
+        },
+    ],
 });
 
 const server = serve(app, { port: 3000 });
-server.on("listening", () => {
-  console.log("Server running on http://localhost:3000");
+server.on('listening', () => {
+    console.log('Server running on http://localhost:3000');
 });
 ```
 
-`serve()` returns the underlying `http.Server` synchronously, so you can
-attach your own `'listening'`/`'error'` listeners. `.listen()` itself isn't
-called until route processing (and WebSocket bridge wiring, if applicable)
-has finished, so there is no window where a request could arrive before the
-app is actually ready.
+`serve()` returns the Node `http.Server` right away, so you can add your own
+`'listening'` and `'error'` listeners. It only starts listening once the app is
+ready, so no request arrives too early.
 
-## `ctx.ip`
-
-Requests through this adapter get `ctx.ip` from the Node socket
-(`req.socket.remoteAddress`), matching Bun's native behavior. Forwarded
-headers are not read; behind a proxy, see the rate-limiter hook's
-`trustProxy` option.
+With the CLI, `burger-api build --target=node` builds a file-based project
+for Node and uses this package for you.
 
 ## WebSocket
 
-Add `wsRoutes` (or `wsDir` / `app.websocket()`) to the same app; nothing
-else changes:
+Add WebSocket routes to the same app. Nothing else changes:
 
 ```ts
 const app = new Burger({
-  apiRoutes,
-  wsRoutes: [
-    {
-      path: "/chat",
-      handlers: {
-        open(ws) {
-          ws.sendText("connected");
+    apiRoutes,
+    wsRoutes: [
+        {
+            path: '/chat',
+            handlers: {
+                open(ws) {
+                    ws.sendText('connected');
+                },
+            },
         },
-      },
-    },
-  ],
+    ],
 });
 
-serve(app, { port: 3000 }); // WebSocket bridge wired automatically
+serve(app, { port: 3000 });
 ```
 
-`ws.subscribe()`/`.publish()` and `ctx.publish()` (Bun's native pub/sub) are
-not available under this adapter: they throw, because Node has no Bun server
-behind them. Use a plain connection registry (a `Set`/`Map` you manage
-yourself) and fan out messages manually; see burger-api's [WebSocket docs](https://burger-api.com/docs/websocket/overview#nodejs).
+`ws.subscribe()`, `ws.publish()` and `ctx.publish()` use Bun's pub/sub, so they
+throw on Node. Keep your own `Set` of connections and send to each one. See the
+[WebSocket docs](https://burger-api.com/docs/websocket/overview#nodejs).
 
-## Why not just `toFetchHandler` directly?
+## `ctx.ip`
 
-You can: `toFetchHandler(app)` from `burger-api` gives you a portable
-`(request: Request) => Promise<Response>` that works on every WinterCG
-runtime, Node included. This package exists because Node has no built-in way
-to *feed* that function from a real socket: no native `fetch`-shaped server,
-and no native WebSocket upgrade handling. `serve()` is that missing wiring,
-done once, tested, so you don't hand-roll an `IncomingMessage`⇄`Request`
-bridge yourself.
+`ctx.ip` comes from the Node socket (`req.socket.remoteAddress`), the same as on
+Bun. Forwarded headers are not read. Behind a proxy, see the rate-limiter
+hook's `trustProxy` option.
 
 ## License
 
-MIT
+[MIT](https://github.com/isfhan/burger-api/blob/main/LICENSE)

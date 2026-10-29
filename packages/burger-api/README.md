@@ -1,213 +1,118 @@
 <div align="center">
- <a href="https://burger-api.com">
- <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI"/>
- </a>
+  <a href="https://burger-api.com">
+    <img src="https://github.com/user-attachments/assets/0d9b376e-1d89-479a-aa7f-e7ee3c6b2342" alt="BurgerAPI"/>
+  </a>
 </div>
 
-[![Version](https://img.shields.io/badge/version-1.0.0--beta-orange.svg)](https://github.com/isfhan/burger-api/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun)](https://bun.sh)
+<p align="center">
+  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/npm/v/burger-api.svg" alt="npm version" /></a>
+  <a href="https://github.com/isfhan/burger-api/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun" alt="Bun 1.4.4+" /></a>
+</p>
 
-> **1.0.0-beta is our biggest release yet.** `npm i burger-api` installs it
-> by default. It is a full rewrite with many new features, so please try it
-> and [open an issue](https://github.com/isfhan/burger-api/issues) if
-> anything breaks or feels wrong. Coming from `0.9.x`? See `CHANGELOG.md`
-> for breaking changes; the `0.9.x` line is still on npm
-> (`burger-api@0.9.7`).
+**burger-api** is a fast, file-based API framework for Bun, for TypeScript and
+JavaScript. Write routes as files, validate with the schema library you like,
+and get OpenAPI docs for free. Deploy to Bun, Node, Cloudflare Workers, Deno or
+Vercel.
 
-**burger-api** is a Bun-first, WinterCG-compatible API framework with
-file-based routing, a hook-based request lifecycle, Standard Schema validation
-(Zod default), plugins/providers, and automatic OpenAPI generation. It runs on
-Bun in development and production, and deploys to any WinterCG runtime
-(Cloudflare Workers, Vercel, Deno, Node 24+) through `toFetchHandler`.
+> **1.0.0-beta is a new BurgerAPI**, rewritten from the ground up. Coming from
+> `0.9.7`? Read the [migration guide](https://burger-api.com/docs/migration).
+> Found a problem? [Open an issue](https://github.com/isfhan/burger-api/issues).
 
-**Hooks** control the request lifecycle. **Plugins** extend the application.
-They are separate concepts.
-
-## 📚 Table of Contents
-
-- [Overview](#-overview)
-- [CLI Tool](#-cli-tool)
-- [Changelog](#-changelog)
-- [Contributing](#-contributing)
-- [License](#-license)
-
-## 📖 Documentation
-
-For detailed documentation and examples, visit the
-[BurgerAPI official docs](https://burger-api.com/).
-
-## 🚀 Overview
-
-burger-api is built to offer a robust developer experience through:
-
-- ⚡ **Bun-Native Performance:**
- Leverages Bun's high-performance HTTP server, with AOT route compilation for
- production bundles (`burger-api build`).
-
-- 📁 **File-Based Routing:**
- Automatically registers API routes from your file structure using clear
- convention files: `route.ts`, `schema.ts`, `hooks.ts`, `openapi.ts`,
- `config.ts` (`.js`/`.mjs` work the same; JS is first-class). No group or
- folder inheritance: every route directory stands on its own.
-
-- 🔄 **Hook lifecycle:**
- `onRequest` → `transform` → validation → `beforeRoute` → handler →
- `afterRoute` → `mapResponse` (`onError` on failure). Global hooks live in
- `src/hooks.ts`; route hooks in `api/**/hooks.ts`. Public context type:
- **`BurgerContext`**: typed, validated, and passed to every hook and handler.
-
-- ✅ **Type-Safe Validation:**
- Schemas for query, params, headers, cookies, and body are validated before
- your handler runs and exposed as typed `ctx.validated`. Reuse shapes by
- importing them, enable automatic type conversion, validate responses, and
- support any Standard Schema library (Zod v4, Valibot, ArkType). Errors follow
- the RFC 9457 Problem Details format.
-
-- 📚 **Automatic OpenAPI Generation:**
- Generates a complete OpenAPI 3.1 specification directly from your routes and
- Zod schemas.
-
-- 🔍 **Docs UI Integration:**
- Out-of-the-box interactive API documentation (Swagger UI default, Scalar and
- Redoc built in, or any custom `DocsProvider`).
-
-- 🌍 **WinterCG Deploy Surface:**
- `app.serve(port)` for Bun; `toFetchHandler(app)` returns
- `(request, ...env) => Promise<Response>` for Cloudflare Workers, Vercel, Deno
- Deploy, and Node 24+: HTTP-only, no filesystem scanning, no Bun imports.
-
-## 🛠️ CLI Tool
-
-burger-api comes with a powerful CLI (`@burger-api/cli`) that scaffolds
-projects, runs a dev server, builds AOT production bundles, and manages
-ecosystem hooks and plugins. Install it globally to get started:
-
-### Installation
-
-**Option 1: Bun Global Installation (Recommended if you have Bun installed)**
-
-````bash
-# Global installation
-bun add -g @burger-api/cli
-````
-**Or use with bunx (No Installation Needed):**
-
-````bash
-bunx @burger-api/cli create my-project
-````
-
-**Option 2: Standalone Executable (Alternative Installation Method)**
-
-**macOS, Linux, WSL:**
+## Get started
 
 ```bash
-curl -fsSL https://burger-api.com/install.sh | bash
-```
-
-**Windows PowerShell:**
-
-```powershell
-irm https://burger-api.com/install.ps1 | iex
-```
-
-**Option 3: Manual Download (Alternative Installation Method)**
-
-1. Download the executable for your platform from
- [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest)
-2. Add to PATH
-3. Make executable (Linux/macOS): `chmod +x burger-api`
-
-**Verify Installation (To Check if the CLI is Installed Correctly)**
-
-```bash
-burger-api --version
-```
-
-**Package Details:**
-
-- **npm package:**
- [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.4.4
-
-### Quick Start
-
-```bash
-# Create a new burger-api project (add --lang js for JavaScript)
-burger-api create my-api
-
-# Navigate to your project
+bunx @burger-api/cli create my-api
 cd my-api
-
-# Start development server
 bun run dev
 ```
 
-### Installing Ecosystem Hooks and Plugins
-
-The CLI makes it easy to add official hooks and plugins to your project:
+Or add it to an existing project:
 
 ```bash
-# List all available hooks and plugins
-burger-api list
-
-# Add hooks to your project
-burger-api add cors logger rate-limiter
-
-# Add plugins (auth, sessions, env, ...)
-burger-api add jwt-auth
+bun add burger-api
 ```
 
-**Popular Hook Factories Available:**
+Requires Bun 1.4.4+ (or Node 24.22.1+ with
+[`@burger-api/node-server`](https://www.npmjs.com/package/@burger-api/node-server)).
 
-- **`cors`** - Cross-Origin Resource Sharing
-- **`logger`** - Request/response logging
-- **`rate-limiter`** - Request rate limiting
-- **`cache`** - HTTP caching headers
-- **`compression`** - Response compression (gzip/deflate)
-- **`security-headers`** - Security HTTP headers
-- **`timeout`** - Request timeout
-- **`body-size-limiter`** - Request body size limits
+## Example
 
-**Plugins Available:**
+```
+src/
+├── index.ts
+└── api/
+    └── users/
+        ├── route.ts     # handlers
+        └── schema.ts    # validation
+```
 
-- **`jwt-auth`** / **`api-key`** / **`basic-auth`** - Authentication
-- **`session`** - Session management
-- **`env`** - Environment configuration
-- **`oidc`** - OpenID Connect
+```ts
+// src/index.ts
+import { Burger } from 'burger-api';
 
-After adding hooks or plugins, the CLI shows you exactly how to wire them into
-your `src/hooks.ts` and `src/plugins.ts`. For more information, visit the
-[CLI documentation](../cli/README.md).
+const app = new Burger({ apiDir: './src/api' });
+app.serve(4000);
+```
 
-## 📣 Changelog
+```ts
+// src/api/users/schema.ts
+import { z } from 'zod';
 
-### Latest Version: 1.0.0-beta
+export const POST = {
+    body: z.object({ name: z.string(), email: z.email() }),
+};
+```
 
-- 🚀 **1.0.0-beta (public beta).** Vision-locked architecture: `BurgerContext`, the six
- hook points (`onRequest`, `transform`, `beforeRoute`, `afterRoute`,
- `mapResponse`, `onError`), plugins/providers, and WinterCG deploy surface
- (`toFetchHandler`).
-- 🗑️ **Removed legacy API:** `BurgerRequest`, `beforeHandle`/`afterHandle`/
- `onResponse`/`provide`, the middleware system, `Burger.use`, group/folder
- inheritance, `use.ts`/`webhook.ts`, CLI `serve`, and auth hooks (now plugins).
-- 🟨 **JavaScript is first-class:** `.ts`/`.js`/`.mjs` conventions, `create
- --lang js`, JSDoc types, lang-aware `generate`.
-- 🔌 **Ecosystem:** official hooks and plugins installable via `burger-api add`.
+```ts
+// src/api/users/route.ts
+import type { BurgerContext } from 'burger-api';
 
-For previous versions, see the [Changelog](./CHANGELOG.md).
+export async function POST(ctx: BurgerContext) {
+    const user = ctx.validated.body;
+    return Response.json({ created: user }, { status: 201 });
+}
+```
 
-## 🤝 Contributing
+`POST /api/users` now validates the body, returns a clear `422` error when it
+is wrong, and shows up in the docs at `/docs`.
 
-We welcome contributions from the community! If you have suggestions or
-improvements, please open an issue or submit a pull request. Let's build
-something amazing together.
+## Features
 
-## 📄 License
+- **File-based routing:** `[param]` and `[...]` wildcard folders; `HEAD`,
+  `OPTIONS` and `405` handled for you.
+- **Hooks:** `onRequest`, `transform`, `beforeRoute`, `afterRoute`,
+  `mapResponse` and `onError`, global in `src/hooks.ts` or per route.
+- **Validation:** any Standard Schema library (Zod, Valibot, ArkType) for body,
+  query, params, headers, cookies and responses. Errors follow RFC 9457.
+- **OpenAPI 3.1:** generated from your routes and schemas, with Swagger UI,
+  Scalar or Redoc.
+- **Plugins and providers:** add hooks with `burger.usePlugin()`, share services
+  with `burger.provide()`.
+- **WebSockets:** file-based routes under `src/websocket/`.
+- **Pages:** HTML pages and static assets under `src/pages/`.
+- **Deploy anywhere:** `app.serve()` on Bun, `toFetchHandler(app)` for Node,
+  Cloudflare Workers, Deno and Vercel.
+- **JavaScript is first-class:** the same conventions in `.js` and `.mjs`.
 
-This project is licensed under the MIT License - see the
-[LICENSE](./LICENSE) file for details.
+## Ecosystem
 
-The MIT License is a permissive license that is short and to the point. It lets
-people do anything they want with your code as long as they provide attribution
-back to you and don't hold you liable.
+Official hooks and plugins you can copy into your project with the CLI:
+
+```bash
+burger-api add cors logger rate-limiter jwt-auth
+```
+
+- **Hooks:** cors, logger, rate-limiter, cache, compression, security-headers,
+  timeout, body-size-limiter
+- **Plugins:** jwt-auth, api-key, basic-auth, session, oidc, env
+
+## Documentation
+
+- **Docs:** [burger-api.com](https://burger-api.com)
+- **CLI:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
+- **Changelog:** [CHANGELOG.md](https://github.com/isfhan/burger-api/blob/main/packages/burger-api/CHANGELOG.md)
+
+## License
+
+[MIT](https://github.com/isfhan/burger-api/blob/main/LICENSE)
