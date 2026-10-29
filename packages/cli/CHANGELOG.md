@@ -1,6 +1,6 @@
 # Changelog: @burger-api/cli
 
-## 1.0.0-beta (Unreleased)
+## 1.0.0-beta (October 30, 2026)
 
 > **A new CLI for the new BurgerAPI.** 1.0.0-beta is a rewrite that goes with
 > `burger-api@1.0.0-beta`, not an update to `0.9.9`. It scaffolds,
