@@ -34,6 +34,18 @@ irm https://burger-api.com/install.ps1 | iex
 Executables are also on [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
 Check the install with `burger-api --version`.
 
+### Update
+
+Getting an error? Update to the latest version first:
+
+```bash
+bun add -g @burger-api/cli@latest   # if you installed with Bun
+```
+
+If you used the install script, run it again. It removes old versions first
+(a global `@burger-api/cli` from Bun or npm, and the previous executable), then
+installs the latest one.
+
 ## Quick start
 
 ```bash
@@ -214,6 +226,11 @@ my-api/
 
 ## Troubleshooting
 
+- **Any error:** first update the CLI (`bun add -g @burger-api/cli@latest`) and
+  the framework in your project (`bun add burger-api@latest`).
+- **`burger-api --version` shows an old version:** another `burger-api` comes
+  first on your `PATH`. Run the install script; it removes old versions and
+  shows where any other copy is.
 - **"Could not get hooks/plugins list from GitHub":** check your connection.
   The CLI falls back to its cache when it has one. Set `GITHUB_TOKEN` if
   GitHub rate-limits you.

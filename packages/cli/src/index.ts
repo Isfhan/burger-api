@@ -136,5 +136,8 @@ await program.parseAsync(process.argv).catch((err: unknown) => {
         process.exit(err.exitCode);
     }
     console.error(err instanceof Error ? err.message : String(err));
+    console.error(
+        'If this keeps happening, update to the latest CLI: bun add -g @burger-api/cli@latest'
+    );
     process.exit(1);
 });

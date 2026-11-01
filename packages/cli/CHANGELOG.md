@@ -89,6 +89,13 @@
   failure.
 - `--json` on both gives one versioned result object.
 
+**Install and update**
+
+- The install scripts remove old versions first (a global `@burger-api/cli`
+  from Bun or npm, and the previous executable), and warn when another
+  `burger-api` still comes first on `PATH`.
+- Unexpected errors end with a hint to update to the latest CLI.
+
 **Local mode**
 
 - `--local` (or `BURGER_API_LOCAL=1`) uses your local burger-api checkout

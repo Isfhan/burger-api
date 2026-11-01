@@ -17,7 +17,9 @@ Vercel.
 
 > **1.0.0-beta is a new BurgerAPI**, rewritten from the ground up. Coming from
 > `0.9.7`? Read the [migration guide](https://burger-api.com/docs/migration).
-> Found a problem? [Open an issue](https://github.com/isfhan/burger-api/issues).
+> Getting an error? Update to the latest version first
+> (`bun add burger-api@latest` and `bun add -g @burger-api/cli@latest`). Still
+> broken? [Open an issue](https://github.com/isfhan/burger-api/issues).
 
 ## Get started
 
