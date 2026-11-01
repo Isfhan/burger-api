@@ -1,6 +1,6 @@
 # Changelog: burger-api
 
-## 1.0.0-beta (October 30, 2026)
+## 1.0.0-beta (November 2, 2026)
 
 > **A new BurgerAPI.** 1.0.0-beta is a ground-up rewrite of the framework, not
 > an update to `0.9.7`. The ideas stay the same (Bun first, file-based routes,

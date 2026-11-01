@@ -1,6 +1,6 @@
 # Changelog: @burger-api/node-server
 
-## 0.1.0 (October 30, 2026)
+## 0.1.0 (November 2, 2026)
 
 First release: the official Node.js server for the new
 [`burger-api@1.0.0-beta`](https://burger-api.com).
