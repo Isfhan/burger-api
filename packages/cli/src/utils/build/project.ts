@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, rmSync } from 'fs';
+import { join, relative } from 'path';
 
 /** Project name from package.json, or 'app'. */
 export function getProjectName(cwd: string = process.cwd()): string {
@@ -52,6 +52,25 @@ export function validatePort(raw: string): { port: string } | { error: string } 
         };
     }
     return { port: String(n) };
+}
+
+/**
+ * Remove a build output folder before writing a new build. On Windows a
+ * running app locks its bundle, so say that instead of a raw EBUSY.
+ */
+export function clearBuildDir(dir: string, rm: typeof rmSync = rmSync): void {
+    try {
+        rm(dir, { recursive: true, force: true });
+    } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === 'EBUSY' || code === 'EPERM') {
+            const shown = relative(process.cwd(), dir).split('\\').join('/') || dir;
+            throw new Error(
+                `Cannot replace ${shown}: a running app is using it. Stop the app and build again.`
+            );
+        }
+        throw err;
+    }
 }
 
 /**

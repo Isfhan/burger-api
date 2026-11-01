@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { existsSync, rmSync } from 'fs';
+import { existsSync } from 'fs';
 import { dirname, resolve } from 'path';
 import type { Spinner } from '../utils/logger';
 import {
@@ -22,7 +22,7 @@ import {
     runVirtualEntryBuild,
     type VirtualBuildResult,
 } from '../utils/build/pipeline';
-import { getProjectName, resolveEntryFile } from '../utils/build/project';
+import { clearBuildDir, getProjectName, resolveEntryFile } from '../utils/build/project';
 import { ensureAppDirEnv } from '../utils/scanner';
 import { VALID_TARGETS } from '../utils/config';
 import type { RuntimeTarget } from '../types/index';
@@ -213,10 +213,12 @@ export const buildCommand = new Command('build')
         // default location: a custom --outfile directory may hold anything.
         if (!options.outfile && !options.compile && !isBrowserPassthrough &&
             (platformTarget === 'bun' || platformTarget === 'node')) {
-            rmSync(resolve(cwd, '.build', 'bundle'), {
-                recursive: true,
-                force: true,
-            });
+            try {
+                clearBuildDir(resolve(cwd, '.build', 'bundle'));
+            } catch (err) {
+                logError(err instanceof Error ? err.message : String(err));
+                process.exit(1);
+            }
         }
 
         await runBuildWithSpinner({

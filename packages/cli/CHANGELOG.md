@@ -1,5 +1,10 @@
 # Changelog: @burger-api/cli
 
+## Unreleased
+
+- `build` on Windows: rebuilding while the app still runs from the old build
+  now says to stop the app first, instead of failing with a raw `EBUSY` error.
+
 ## 1.0.0-beta (November 2, 2026)
 
 > **A new CLI for the new BurgerAPI.** 1.0.0-beta is a rewrite that goes with

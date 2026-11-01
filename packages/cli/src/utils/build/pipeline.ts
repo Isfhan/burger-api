@@ -17,11 +17,12 @@ import {
     prepareVirtualEntry,
 } from './entry';
 import { scaffoldPlatformConfig } from './platform-config';
+import { clearBuildDir } from './project';
 import {
     cleanupEntryOptionsModule,
     prepareEntryOptionsModule,
 } from '../entry-options';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
 
@@ -419,7 +420,7 @@ export async function runVirtualEntryBuild(options: {
                 .split('\\')
                 .join('/');
             if (relOutDir === '.build' || relOutDir.startsWith('.build/')) {
-                rmSync(portableOutDir, { recursive: true, force: true });
+                clearBuildDir(portableOutDir);
             }
             mkdirSync(portableOutDir, { recursive: true });
 
