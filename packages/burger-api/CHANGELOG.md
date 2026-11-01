@@ -1,5 +1,11 @@
 # Changelog: burger-api
 
+## Unreleased
+
+- **Fix:** on Node (`@burger-api/node-server` / `createNodeWsBridge`), a
+  WebSocket `close` handler received the reason as a `Buffer` instead of a
+  string. It is now a string, as on Bun.
+
 ## 1.0.0-beta (November 2, 2026)
 
 > **A new BurgerAPI.** 1.0.0-beta is a ground-up rewrite of the framework, not

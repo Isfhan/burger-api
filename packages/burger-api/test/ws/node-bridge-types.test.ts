@@ -148,7 +148,8 @@ describe('createNodeWsBridge against a real framing-library WebSocketServer shap
             Buffer.from('hello from a real socket', 'utf-8'),
             false
         );
-        wsInstance!.emit('close', 1000, 'bye');
+        // Real 'close' events hand the reason as a Buffer too.
+        wsInstance!.emit('close', 1000, Buffer.from('bye', 'utf-8'));
 
         // Messages are queued behind `open` and delivered in order — let the
         // per-socket chain drain before asserting.
