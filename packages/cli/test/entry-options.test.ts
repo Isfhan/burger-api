@@ -10,6 +10,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
     cleanupEntryOptionsModule,
+    findDroppedEntryCode,
     prepareEntryOptionsModule,
 } from '../src/utils/entry-options';
 
@@ -31,7 +32,7 @@ describe('prepareEntryOptionsModule', () => {
             entryPath,
             `
 import { Burger } from 'burger-api';
-import { globalMiddleware } from './middleware';
+import { hostname } from './settings';
 
 const title = 'My API';
 
@@ -39,8 +40,7 @@ const app = new Burger({
   title,
   description: 'desc',
   version: '1.2.3',
-  hostname: '0.0.0.0',
-  globalMiddleware,
+  hostname,
 });
 
 app.serve(4000);
@@ -60,11 +60,11 @@ app.serve(4000);
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
         expect(tempSource).toContain("import { Burger } from 'burger-api';");
         expect(tempSource).toContain(
-            "import { globalMiddleware } from './middleware';"
+            "import { hostname } from './settings';"
         );
         expect(tempSource).toContain("const title = 'My API';");
         expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('globalMiddleware');
+        expect(tempSource).toContain('hostname');
         expect(tempSource).not.toContain('const app =');
 
         cleanupEntryOptionsModule(result.tempFilePath);
@@ -241,12 +241,13 @@ app.serve(4000, () => { return 1; });
         expect(existsSync(result.tempFilePath!)).toBe(true);
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
-        expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
-        expect(tempSource).toContain('nested');
-        expect(tempSource).toContain('text');
-        expect(tempSource).toContain('`');
-        cleanupEntryOptionsModule(result.tempFilePath);
+        try {
+            expect(tempSource).toContain('export const burgerOptions = {');
+            expect(tempSource).toContain("hostname: '0.0.0.0'");
+            expect(tempSource).toContain('title: `${`nested`} text`,');
+        } finally {
+            cleanupEntryOptionsModule(result.tempFilePath);
+        }
     });
 
     it('extracts full options when title uses deeply nested template literals', () => {
@@ -279,11 +280,60 @@ app.serve(4000, () => { return 1; });
         expect(existsSync(result.tempFilePath!)).toBe(true);
 
         const tempSource = readFileSync(result.tempFilePath!, 'utf-8');
-        expect(tempSource).toContain('export const burgerOptions = {');
-        expect(tempSource).toContain('hostname: \'0.0.0.0\'');
-        expect(tempSource).toContain('a');
-        expect(tempSource).toContain('b');
-        expect(tempSource).toContain('c');
-        cleanupEntryOptionsModule(result.tempFilePath);
+        try {
+            expect(tempSource).toContain('export const burgerOptions = {');
+            expect(tempSource).toContain("hostname: '0.0.0.0'");
+            expect(tempSource).toContain('title: `${`a${`b`}c`}`,');
+        } finally {
+            cleanupEntryOptionsModule(result.tempFilePath);
+        }
+    });
+});
+
+describe('findDroppedEntryCode', () => {
+    it('returns nothing when there is no Burger constructor', () => {
+        expect(findDroppedEntryCode('const x = 1;\n')).toEqual([]);
+    });
+
+    it('ignores the usual imports, constructor and serve tail', () => {
+        const source = [
+            "import { Burger } from 'burger-api';",
+            '',
+            "const app = new Burger({ title: 'API' });",
+            '',
+            'const port = Number(process.env.PORT) || 4000;',
+            'app.serve(port, () => {',
+            "    console.log('up');",
+            '});',
+            '',
+        ].join('\n');
+        expect(findDroppedEntryCode(source)).toEqual([]);
+    });
+
+    it('reports code after the constructor that the build would drop', () => {
+        const source = [
+            "const app = new Burger({ title: 'API' });",
+            'const extra = setup();',
+            'app.serve(4000);',
+            'afterServe();',
+            '',
+        ].join('\n');
+        expect(findDroppedEntryCode(source)).toEqual([
+            'const extra = setup();',
+            'afterServe();',
+        ]);
+    });
+
+    it('strips comments and the export default tail', () => {
+        const source = [
+            "const app = new Burger({ title: 'API' });",
+            '/* block',
+            'comment */',
+            'app.serve(4000);',
+            'export default app;',
+            '// trailing note',
+            '',
+        ].join('\n');
+        expect(findDroppedEntryCode(source)).toEqual([]);
     });
 });

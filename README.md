@@ -3,287 +3,83 @@
 </p>
 
 <p align="center">
-  <strong>A modern, high-performance API framework built on Bun.js</strong>
+  <strong>A fast, file-based API framework for Bun, with TypeScript and JavaScript</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/isfhan/burger-api">
-    <img src="https://img.shields.io/badge/under%20development-red.svg" alt="Under Development" />
-  </a>
-  <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
-  </a>
-  <a href="https://bun.sh">
-    <img src="https://img.shields.io/badge/Bun-1.2.20-black?logo=bun" alt="Bun" />
-  </a>
-  <a href="https://burger-api.com">
-    <img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" />
-  </a>
+  <a href="https://www.npmjs.com/package/burger-api"><img src="https://img.shields.io/badge/version-1.0.0--beta-orange.svg" alt="Version 1.0.0-beta" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/Bun-1.4.4%2B-black?logo=bun" alt="Bun 1.4.4+" /></a>
+  <a href="https://burger-api.com"><img src="https://img.shields.io/badge/docs-burger--api.com-green.svg" alt="Documentation" /></a>
 </p>
 
-## 📖 About
+> **1.0.0-beta is a new BurgerAPI.** The framework and the CLI were rewritten
+> from the ground up: a new core, a hook-based lifecycle, plugins, Standard
+> Schema validation and more. Coming from `burger-api@0.9.7` or
+> `@burger-api/cli@0.9.9`? Read the
+> [migration guide](https://burger-api.com/docs/migration).
 
-This monorepo contains the **burger-api** ecosystem - a modern, open-source API
-framework built on [Bun.js](https://bun.sh). The framework combines the
-simplicity of file-based routing with powerful features like built-in
-middleware, Zod-based schema validation, and automatic OpenAPI generation.
-
-**This project is under active development and should not be used in production
-yet.** 📌 Releases: **burger-api** 0.9.7 · **@burger-api/cli** 0.9.8 (May 16, 2026).
-
-## 📦 Packages
-
-This monorepo is organized into the following packages:
-
-### 🚀 [`packages/burger-api`](./packages/burger-api)
-
-The core **burger-api** framework package. This is the main framework that gets
-published to npm.
-
-#### ✨ Key Features
-
--   ⚡ **Bun-Native Performance** - Leverages Bun's high-performance HTTP server
--   📁 **File-Based Routing** - Automatically registers API routes from your
-    file structure
--   🚀 **Optimized Middleware** - Specialized fast paths for 0, 1, 2, and 3+
-    middlewares
--   ✅ **Type-Safe Validation** - Utilizes Zod for request validation with full
-    type safety
--   📚 **Automatic OpenAPI Generation** - Generates complete OpenAPI 3.0
-    specifications
--   🔍 **Swagger UI Integration** - Out-of-the-box Swagger UI endpoint for
-    interactive API docs
--   🎯 **Developer Friendly** - Simple, clear middleware patterns that are easy
-    to understand
-
-### 🛠️ [`packages/cli`](./packages/cli)
-
-The **Burger API CLI** tool for scaffolding new burger-api projects and managing
-your development workflow.
-
-#### ✨ Key Features
-
--   🚀 **Project Scaffolding** - Create new burger-api projects with interactive
-    prompts
--   📦 **Middleware Management** - Browse and add middleware from the ecosystem
--   🔨 **Build Tools** - Bundle projects or compile to standalone executables
--   🔥 **Development Server** - Hot reload development server with auto-restart
--   🎯 **Zero Dependencies** - Uses Bun's native APIs for file operations and
-    downloads
--   💻 **Cross-Platform** - Works on Windows, macOS, and Linux
-
-#### 📥 Installation
-
-**Option 1: Bun Global Installation (Recommended if you have Bun installed)**
+## Quick start
 
 ```bash
-# Global installation
-bun add -g @burger-api/cli
-
-# Or use with bunx (No Installation Needed)
-bunx @burger-api/cli create my-project
-```
-
-**Option 2: Standalone Executable**
-
-**macOS, Linux, WSL:**
-```bash
-curl -fsSL https://burger-api.com/install.sh | bash
-```
-
-**Windows PowerShell:**
-```powershell
-irm https://burger-api.com/install.ps1 | iex
-```
-
-Or download the executable from [GitHub Releases](https://github.com/isfhan/burger-api/releases/latest).
-
-**Package Details:**
-- **NPM Package:** [`@burger-api/cli`](https://www.npmjs.com/package/@burger-api/cli)
-- **Requires:** Bun >=1.3.0
-
-For detailed documentation, see
-[`packages/cli/README.md`](./packages/cli/README.md).
-
-## 🚀 Quick Start
-
-### Prerequisites
-
--   [Bun](https://bun.sh) installed (version 1.2.20 or later)
-
-### Installation
-
-Install dependencies for all packages:
-
-```bash
-bun install
-```
-
-### Development
-
-#### Work on Individual Packages
-
-```bash
-# Work on burger-api framework
-cd packages/burger-api
-
-# Work on CLI
-cd packages/cli
-```
-
-#### Use Workspace Commands from Root
-
-```bash
-# Typecheck burger-api
-bun run typecheck
-
-# Build burger-api
-bun run build
-
-# Full suite: route-sync + framework (examples + ecosystem smoke) + CLI + typecheck
-bun run test:all
-
-# Framework package only (examples + ecosystem middleware smoke tests)
-bun run test:framework
-
-# CLI tests only
-bun run test:cli
-
-# Run burger-api dev server
+bunx @burger-api/cli create my-api
+cd my-api
 bun run dev
 ```
 
-## 🔨 Production Builds
+Open http://localhost:4000/docs to see your API documentation.
 
-BurgerAPI has two production build modes using the CLI:
+A route is a folder with a `route.ts` file:
 
-### 1) Bundle mode
+```ts
+// src/api/users/[id]/route.ts  →  GET /api/users/:id
+import type { BurgerContext } from 'burger-api';
+
+export async function GET(ctx: BurgerContext) {
+    return Response.json({ id: ctx.params.id });
+}
+```
+
+## Features
+
+- **File-based routing:** folders become URLs, with `[param]` and `[...]`
+  wildcard routes.
+- **Hooks:** six lifecycle points (`onRequest`, `transform`, `beforeRoute`,
+  `afterRoute`, `mapResponse`, `onError`), global or per route.
+- **Validation:** Zod, Valibot or ArkType for body, query, params, headers,
+  cookies and responses, with fully typed `ctx.validated`.
+- **OpenAPI 3.1:** generated from your routes, with Swagger UI, Scalar or Redoc
+  at `/docs`.
+- **Plugins and providers:** add features in `src/plugins.ts`, share services in
+  `src/providers.ts`.
+- **WebSockets and pages:** file-based, next to your API.
+- **Runs everywhere:** Bun, Node, Cloudflare Workers, Deno and Vercel.
+- **Fast:** every route becomes a native Bun route.
+
+## Packages
+
+| Package | Description |
+| --- | --- |
+| [`burger-api`](./packages/burger-api) | The framework |
+| [`@burger-api/cli`](./packages/cli) | Create, run, build and check projects |
+| [`@burger-api/node-server`](./packages/node-server) | Run a burger-api app on Node.js |
+| [`ecosystem/`](./ecosystem) | Official hooks and plugins, installed with `burger-api add` |
+
+## Documentation
+
+Everything is on **[burger-api.com](https://burger-api.com)**: guides, API
+reference, deployment and examples.
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. See
+[CONTRIBUTING.md](./CONTRIBUTING.md) to set up the repo and run the tests.
 
 ```bash
-burger-api build src/index.ts
+bun install
+bun run test:all
 ```
 
-- Default output: `.build/bundle/app.js`
-- Run with Bun:
+## License
 
-```bash
-bun .build/bundle/app.js
-```
-
-### 2) Standalone executable mode
-
-```bash
-burger-api build:exec src/index.ts
-```
-
-- Default output:
-  - Windows: `.build/executable/<project>.exe`
-  - Linux/macOS: `.build/executable/<project>`
-- No Bun install required on the target machine.
-
-### Useful options
-
-- `--outfile <path>` custom output path
-- `--target <platform>` cross-compile executable target
-- `--minify` minified output
-- `--sourcemap <type>` (`inline`, `linked`, `none`) for bundle mode
-- `--no-bytecode` disable bytecode in executable mode
-
-## ⚙️ AOT Routing (How builds work)
-
-BurgerAPI uses file-based routing. In development, routes are discovered by
-scanning files at runtime. In production builds, routes are discovered at build
-time (AOT) so runtime scanning is not needed.
-
-Build flow:
-
-1. CLI scans route/page directories.
-2. CLI generates a temporary entry file with static imports.
-3. Bun bundles the app and embedded route metadata.
-4. Runtime uses embedded routes directly.
-
-This keeps production startup reliable in bundled and executable outputs.
-
-## 🧭 Routing/Build Ownership (Contributor Guide)
-
-If you want to contribute, this split helps:
-
-- Framework route behavior:
-  - `packages/burger-api/src/core/api-router.ts`
-  - `packages/burger-api/src/core/page-router.ts`
-  - `packages/burger-api/src/utils/pathConversion.ts`
-- CLI build scanning and generation:
-  - `packages/cli/src/utils/scanner.ts`
-  - `packages/cli/src/utils/virtual-entry.ts`
-  - `packages/cli/src/utils/build/pipeline.ts`
-  - `packages/cli/src/utils/build/bun.ts`
-  - `packages/cli/src/utils/build/entry.ts`
-
-When changing route or path conversion logic in either the framework or the CLI, run `bun run test:route-sync` from the repo root and update the other implementation if the test fails.
-
-## 📚 Documentation
-
--   **Framework Documentation:**
-    [`packages/burger-api/README.md`](./packages/burger-api/README.md)
--   **Official Website:** [burger-api.com](https://burger-api.com/)
--   **Publishing Guide:**
-    [`packages/burger-api/PUBLISHING.md`](./packages/burger-api/PUBLISHING.md)
-
-## 🏗️ Project Structure
-
-```
-burger-api/
-├── packages/
-│   ├── burger-api/          # Core framework (published to npm)
-│   │   ├── src/             # Source code
-│   │   ├── examples/        # Example projects
-│   │   └── dist/            # Build output
-│   └── cli/                 # CLI tool (under development)
-│       └── src/             # CLI source code
-├── ecosystem/               # Middleware templates (ready-to-use)
-├── package.json             # Workspace root configuration
-└── README.md                # This file
-```
-
-## 🤝 Contributing
-
-We welcome contributions from the community! Whether it's:
-
--   🐛 Reporting bugs
--   💡 Suggesting features
--   📝 Improving documentation
--   🔧 Submitting pull requests
-
-Please feel free to open an issue or submit a pull request. Let's build
-something amazing together!
-
-**Contributing Guidelines:**
-
--   Check existing issues before creating new ones
--   Follow the existing code style
--   Add tests for new features
--   Update documentation as needed
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the
-[LICENSE](./packages/burger-api/LICENSE) file for details.
-
-The MIT License is a permissive license that allows people to do anything with
-your code as long as they provide attribution back to you and don't hold you
-liable.
-
-## 🔗 Links
-
--   **Website:** [burger-api.com](https://burger-api.com/)
--   **GitHub:**
-    [github.com/isfhan/burger-api](https://github.com/isfhan/burger-api)
--   **Issues:**
-    [github.com/isfhan/burger-api/issues](https://github.com/isfhan/burger-api/issues)
--   **Bun.js:** [bun.sh](https://bun.sh)
-
----
-
-<p align="center">
-  Made with ❤️ for the Bun.js community by <a href="https://github.com/isfhan">Isfhan Ahmed</a>
-</p>
+[MIT](./LICENSE) © [Isfhan Ahmed](https://github.com/isfhan)

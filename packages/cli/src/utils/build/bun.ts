@@ -81,10 +81,22 @@ export function createBunBuildOptions(options: {
         target: (options.target as 'bun') || 'bun',
         minify: options.minify ?? false,
         splitting: false,
+        // Import .html pages as raw markup: Bun's HTML loader would try to
+        // resolve the scaffold's root-absolute /assets/... URLs and bypass
+        // the embedded `assetRoutes` table production relies on.
+        loader: {
+            '.html': 'text',
+        },
+        // Bake production mode in: dev-only diagnostics must never leak when
+        // the bundle runs without NODE_ENV (e.g. `bun .build/bundle/app.js`).
+        define: {
+            'process.env.NODE_ENV': JSON.stringify('production'),
+        },
         sourcemap:
             options.sourcemap === undefined
                 ? undefined
-                : (options.sourcemap as 'none' | 'linked' | 'inline' | 'external'),
+                : (options.sourcemap as
+                      'none' | 'linked' | 'inline' | 'external'),
     };
 
     const ext = buildOptions as unknown as Record<string, unknown>;
@@ -115,7 +127,8 @@ export async function runBunBuildOrThrow(
         result = await Bun.build(buildOptions);
     } catch (err) {
         const detail = extractBunBuildDetails(err);
-        const message = err instanceof Error ? err.message : 'Bun.build failed.';
+        const message =
+            err instanceof Error ? err.message : 'Bun.build failed.';
         if (detail) {
             throw new Error(`${message}\n${detail}`);
         }

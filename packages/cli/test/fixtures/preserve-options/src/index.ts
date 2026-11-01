@@ -1,15 +1,7 @@
-import { Burger, setDir, type Middleware } from '../../../../../burger-api/src/index';
-
-const globalMiddleware: Middleware[] = [
-    () =>
-        new Response('blocked by global middleware', {
-            status: 418,
-        }),
-];
+import { Burger, setDir } from '../../../../../burger-api/src/index';
 
 const app = new Burger({
     apiDir: setDir(__dirname, 'api'),
-    globalMiddleware,
     title: 'Preserve Options Test',
     description: 'Ensures build keeps Burger constructor options.',
     version: '9.9.9',

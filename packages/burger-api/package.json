@@ -1,14 +1,44 @@
 {
   "name": "burger-api",
-  "version": "0.9.7",
+  "version": "1.0.0-beta",
+  "description": "Fast, file-based API framework for Bun with hooks, Standard Schema validation, OpenAPI and WebSockets. Runs on Bun, Node, Cloudflare Workers, Deno and Vercel.",
   "author": "Isfhan Ahmed",
   "type": "module",
+  "sideEffects": false,
   "module": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./validation": {
+      "types": "./dist/src/validation/index.d.ts",
+      "import": "./dist/src/validation/index.js"
+    },
+    "./compiler": {
+      "types": "./dist/src/compiler/index.d.ts",
+      "import": "./dist/src/compiler/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/src/core/openapi.d.ts",
+      "import": "./dist/src/core/openapi.js"
+    },
+    "./ws": {
+      "types": "./dist/src/ws/index.d.ts",
+      "import": "./dist/src/ws/index.js"
+    },
+    "./adapter": {
+      "types": "./dist/src/adapter/index.d.ts",
+      "import": "./dist/src/adapter/index.js"
+    },
+    "./adapter/web-standard": {
+      "types": "./dist/src/adapter/web-standard/index.d.ts",
+      "import": "./dist/src/adapter/web-standard/index.js"
+    },
+    "./adapter/bun": {
+      "types": "./dist/src/adapter/bun/index.d.ts",
+      "import": "./dist/src/adapter/bun/index.js"
     }
   },
   "files": [
@@ -16,85 +46,67 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --project tsconfig.build.json",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json",
     "prepare": "bun run build",
-    "test": "bun run test:examples && bun run test:ecosystem",
-    "test:examples": "bun test --timeout 30000 --max-concurrency 1 examples/**/*.test.ts",
-    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-middleware-smoke.test.ts",
-    "dev": "bun run examples/file-base-static-page-routing-app/index.ts"
+    "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:utils && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:validation && bun run test:compiler && bun run test:adapter && bun run test:provider && bun run test:smoke && bun run test:ws",
+    "test:examples": "bun test --timeout 30000 --max-concurrency 1 ./examples",
+    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-smoke.test.ts test/ecosystem/u16-hardening.test.ts",
+    "test:lifecycle": "bun test --timeout 30000 ./test/lifecycle",
+    "test:context": "bun test --timeout 30000 ./test/context",
+    "test:utils": "bun test --timeout 30000 ./test/utils",
+    "test:chain": "bun test --timeout 30000 ./test/chain",
+    "test:plugin": "bun test --timeout 30000 ./test/plugin",
+    "test:router": "bun test --timeout 30000 ./test/router",
+    "test:core": "bun test --timeout 30000 ./test/core",
+    "test:errors": "bun test --timeout 30000 ./test/errors",
+    "test:smoke": "bun test --timeout 30000 test/plugin-smoke.test.ts",
+    "test:ws": "bun test --timeout 30000 ./test/ws",
+    "test:validation": "bun test --timeout 30000 ./test/validation",
+    "test:compiler": "bun test --timeout 30000 ./test/compiler",
+    "test:adapter": "bun test --timeout 30000 ./test/adapter",
+    "test:provider": "bun test --timeout 30000 ./test/provider",
+    "dev": "bun run examples/basic/src/index.ts"
   },
   "keywords": [
     "burger-api",
-    "burger-api-framework",
     "bun",
-    "bunjs",
     "bun-framework",
-    "fast-backend",
-    "javascript-backend",
-    "high-performance",
-    "esm",
-    "typescript",
-    "openapi",
-    "swagger-ui",
-    "declarative-routing",
     "api-framework",
-    "modern-backend",
-    "backend-framework",
-    "server",
-    "bun-native",
-    "js-backend",
-    "fast-api",
-    "scalable-backend",
-    "backend-development",
-    "modern-api",
-    "api-development",
-    "backend-engine",
-    "efficient",
-    "minimalist-backend",
-    "bun-powered",
-    "open-source",
-    "typescript-backend",
-    "performance",
-    "rapid-development",
     "web-framework",
-    "api-server",
-    "dynamic-routing",
-    "backend-routing",
-    "extensible",
-    "modular",
-    "declarative-api",
-    "lightweight",
-    "contemporary-backend",
-    "fast-javascript",
-    "bun-js-framework",
-    "bun-backend",
-    "bun-api-framework",
-    "pakistan-backend",
-    "pakistan-api-framework",
-    "pakistan-api-server",
-    "pakistan-backend-framework",
-    "pakistan-bunjs-framework",
-    "pakistan-javascript-framework"
+    "backend-framework",
+    "typescript",
+    "javascript",
+    "file-based-routing",
+    "openapi",
+    "zod",
+    "standard-schema",
+    "websocket",
+    "wintercg",
+    "cloudflare-workers"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/isfhan/burger-api.git"
+    "url": "git+https://github.com/isfhan/burger-api.git",
+    "directory": "packages/burger-api"
   },
   "bugs": {
     "url": "https://github.com/isfhan/burger-api/issues"
   },
   "homepage": "https://burger-api.com",
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.4.4",
+    "node": ">=24.22.1"
   },
   "dependencies": {
-    "zod": "^4.0.17"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "arktype": "^2.2.9",
+    "valibot": "^1.4.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": ">=5"
   }
 }

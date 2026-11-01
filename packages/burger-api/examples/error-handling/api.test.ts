@@ -93,7 +93,7 @@ describe('Error Handling Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -108,7 +108,7 @@ describe('Error Handling Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -124,7 +124,7 @@ describe('Error Handling Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -140,7 +140,7 @@ describe('Error Handling Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -156,7 +156,7 @@ describe('Error Handling Example', () => {
                     }),
                 });
 
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('body');
@@ -191,7 +191,7 @@ describe('Error Handling Example', () => {
 
             it('should return validation error for invalid ID (non-numeric)', async () => {
                 const response = await fetchAPI('/api/products/invalid');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('params');
@@ -199,7 +199,7 @@ describe('Error Handling Example', () => {
 
             it('should return validation error for invalid ID (zero)', async () => {
                 const response = await fetchAPI('/api/products/0');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('params');
@@ -207,7 +207,7 @@ describe('Error Handling Example', () => {
 
             it('should return validation error for invalid ID (negative)', async () => {
                 const response = await fetchAPI('/api/products/-1');
-                expect(response.status).toBe(400);
+                expect(response.status).toBe(422);
                 const data = await response.json();
                 expect(data).toHaveProperty('errors');
                 expect(data.errors).toHaveProperty('params');
@@ -242,7 +242,7 @@ describe('Error Handling Example', () => {
                     body: 'invalid json',
                 });
 
-                expect([400, 500]).toContain(response.status);
+                expect([400, 422, 500]).toContain(response.status);
             });
         });
     });

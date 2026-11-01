@@ -1,115 +1,144 @@
-## 📣 Release Notes - Burger API CLI
+# Changelog: @burger-api/cli
 
-All notable changes to the Burger API CLI will be documented in this file.
+## 1.0.0-beta (November 2, 2026)
 
-## Version 0.9.9 - (June 29, 2026)
+> **A new CLI for the new BurgerAPI.** 1.0.0-beta is a rewrite that goes with
+> `burger-api@1.0.0-beta`, not an update to `0.9.9`. It scaffolds,
+> builds and checks projects for the new framework.
+>
+> `npm i -g @burger-api/cli` now installs 1.0.0-beta. The old line stays on npm
+> as `@burger-api/cli@0.9.9`. Upgrading an existing app? Follow
+> [Migrating from 0.9.x](https://burger-api.com/docs/migration).
+>
+> This is a beta: please [open an issue](https://github.com/isfhan/burger-api/issues)
+> if anything breaks or feels wrong.
 
--   **Added** – `burger-api skills install [name]` to download AI agent skills
-    (defaults to `burger-api`).
--   **Added** – `burger-api skills list` to show locally installed skills.
--   **Added** – `burger-api skills available` to list remote skills from the
-    ecosystem.
--   **Added** – Optional "Add AI agent skills?" prompt during `create` (default:
-    yes).
--   **Changed** – `create` no longer auto-installs `.llm-context/`. Skills are
-    downloaded to `.agents/skills/burger-api/` instead.
--   **Migration** – Existing projects with `ecosystem/.llm-context/` can adopt
-    the new format with `burger-api skills install`.
+### Requirements
 
-## Version 0.9.8 - (May 16, 2026)
+- **Bun 1.4.4+** (October 2026 security fixes).
+- Published to npm with provenance.
 
--   **Create** – Scaffolded `index.html` uses your API route prefix and
-    `src/<apiDir>` / `src/<pageDir>` paths in hints and the “Try API” link;
-    pages-only projects no longer show a broken `/api` link or API file hint.
--   **Tests** – Coverage for `generateIndexPage` (custom prefix, defaults,
-    pages-only).
+### Highlights
 
-## Version 0.9.7 - (May 16, 2026)
+- **`create`** for TypeScript or JavaScript projects, with optional pages,
+  WebSocket routes and AI agent skills.
+- **`generate`** for routes, hooks, plugins and WebSocket routes.
+- **`inspect` and `doctor`** to see and check a project, with `--json` output
+  for tools and AI agents.
+- **`build --target`** for Bun, Node, Cloudflare Workers, Deno and Vercel.
+- **A more reliable `dev`** that picks up new route folders without a restart.
 
--   **CLI** – One-shot commands return to the shell reliably (GitHub `fetch`
-    timeouts clear after each request; `bun install` stderr is drained).
--   **CLI** – `parseAsync` at the entry so async command errors do not strand
-    the process.
--   **CLI** – `serve` uses one-shot signal listeners (`once`) for Ctrl+C /
-    Ctrl+Break.
--   **Tests** – Process-exit checks for `--version` and invalid `list` flags;
-    optional GitHub `ls` test via `BURGER_API_CLI_LIST_EXIT_TEST=1`.
+### Breaking changes from 0.9.x
 
-## Version 0.9.6 - (March 18, 2026)
+- `burger-api serve` is removed: use `burger-api dev`.
+- `burger.config.ts` is no longer read: rename it to `burger.build.ts`.
 
--   ✨ **Create** – New projects get a config file (`burger.config.ts`) from
-    your answers; the build uses this config when present.
--   🔨 **Build** – One build pipeline for both bundle and executable; routes
-    are found at build time so production is fast and reliable.
--   📂 **Defaults** – Executable output: `.build/executable/<project>` (or
-    `.exe` on Windows); bundle: `.build/bundle/app.js`.
--   🧪 **Tests** – New tests for routes, config, and build output; CI catches
-    broken builds early.
--   🐛 **Fixed** – Invalid route combinations are caught at build time.
--   🐛 **Fixed** – Production build keeps your middleware and options (e.g.
-    title, description) instead of dropping them.
--   📚 **Docs** – README updated with production build steps and test
-    commands.
+### What's new
 
-## Version 0.7.0 - (December 23, 2025)
+**`create`**
 
-### Added
-- npm publishing support - CLI is now available on npm as `@burger-api/cli`
-- Users can install via `bun add -g @burger-api/cli` or use `bunx @burger-api/cli`
-- Lightweight npm package (~27KB) as alternative to 100MB executables
-- GitHub Actions workflow for automated npm publishing (when organization is configured)
+- `--lang ts|js`: JavaScript projects use `jsconfig.json` with type checking
+  and JSDoc types.
+- `--yes` / `--defaults`, `--pages`, `--ws`, `--no-api`, `--api-dir`,
+  `--api-prefix` and `--no-skills`. Without a terminal (CI), `create` never
+  prompts.
+- Every project gets an `AGENTS.md` with rules for AI agents, and TypeScript
+  projects get a `src/types.ts` for app-wide types.
+- New projects type-check with `bun check` and use TypeScript 7.
+- If setup fails, the half-created folder is removed.
 
+**`generate` (alias `g`)**
 
-## Version 0.6.6 - (December 23, 2025)
+- `generate route|hook|plugin|ws <name>` follows the project's language
+  (or `--lang`).
+- `generate hook` and `generate plugin` tell you when an official package
+  already exists, so you can `burger-api add` it instead.
 
-### Added
-- `.llm-context` folder to the project with AI context files
-- `llms.txt`, `llms-small.txt`, and `llms-full.txt` files
-- Updated README.md
+**`add`, `list` and `skills`**
 
-## Version 0.6.3 - (December 17, 2025)
+- `add` works for both hooks and plugins and prints the exact code to wire
+  them in.
+- `--force` replaces an existing install without a prompt.
+- The ecosystem list is cached locally for a few hours. If GitHub is
+  unreachable, the CLI uses the cached copy and says so.
+- Downloads come from the `main` branch (override with `BURGER_API_BRANCH`).
+- `skills install` puts skills in both `.agents/skills/` and
+  `.claude/skills/`, so every agent finds them.
 
-### Added
-- GitHub Actions release workflow
-- Updated README.md
+**`build` and `build:exec`**
 
-## Version 0.1.0 - (December 14, 2025)
+- `--target=bun|node|cloudflare|deno|vercel` writes a ready-to-deploy build for
+  each platform.
+- Portable targets warn about Bun-only code (`Bun.*`, `bun:*`, pub/sub).
+- Production builds keep every route file (`hooks`, `schema`, `openapi`,
+  `config`) and every app file, for TypeScript and JavaScript.
+- Projects with pages build and run with custom prefixes.
 
-### Added
-- Initial release of Burger API CLI
-- `create` command to generate new projects with interactive prompts
-- `list` command to show available middleware from ecosystem
-- `add` command to download and install middleware
-- `build` command to bundle projects to single JS file
-- `build:exec` command to compile to standalone executable
-- `serve` command for development server with hot reload
-- Beautiful console output with colors and symbols
-- Zero external dependencies for file operations (uses Bun's native APIs)
-- Comprehensive documentation and examples
-- Support for Windows, macOS, and Linux
+**`dev` and `start`**
 
-### Technical Details
-- Built with TypeScript and Bun.js
-- Uses only 2 dependencies: `commander` and `@clack/prompts`
-- All file downloads use Bun's native `fetch()` API
-- All file operations use Bun's fast file system APIs
-- All process spawning uses `Bun.spawn()`
-- Comprehensive JSDoc comments throughout codebase
+- `dev` watches the whole app folder and keeps running after a crash.
+- `start` names the file it runs and warns when the build is older than
+  `src/`.
+- Both check `--port` (1–65535).
 
-## Release Process
+**`inspect` and `doctor`**
 
-See [RELEASING.md](./RELEASING.md) for the release process.
+- `inspect` lists every route, hook, plugin and convention file.
+- `doctor` checks the project structure, the config files, that every route
+  loads, and your Bun and Node versions. It exits with an error code on
+  failure.
+- `--json` on both gives one versioned result object.
+
+**Install and update**
+
+- The install scripts remove old versions first (a global `@burger-api/cli`
+  from Bun or npm, and the previous executable), and warn when another
+  `burger-api` still comes first on `PATH`.
+- Unexpected errors end with a hint to update to the latest CLI.
+
+**Local mode**
+
+- `--local` (or `BURGER_API_LOCAL=1`) uses your local burger-api checkout
+  instead of npm and GitHub. For working on BurgerAPI itself.
 
 ---
 
-## Change Categories
+## Previous versions (0.x)
 
-We use these categories to organize changes:
+### 0.9.9 (June 29, 2026)
 
-- **Added** - New features or commands
-- **Changed** - Changes to existing functionality
-- **Deprecated** - Features that will be removed in future
-- **Removed** - Features that have been removed
-- **Fixed** - Bug fixes
-- **Security** - Security improvements
+- Added `skills install`, `skills list` and `skills available`.
+- `create` asks whether to add AI agent skills, which replace
+  `.llm-context/`.
 
+### 0.9.8 (May 16, 2026)
+
+- The scaffolded `index.html` uses your API prefix and folder names.
+
+### 0.9.7 (May 16, 2026)
+
+- Commands exit cleanly when they finish; Ctrl+C handling for `serve`.
+
+### 0.9.6 (March 18, 2026)
+
+- `create` writes a `burger.config.ts` from your answers.
+- One build pipeline for bundles and executables, with routes found at build
+  time.
+- Production builds keep middleware and OpenAPI options.
+
+### 0.7.0 (December 23, 2025)
+
+- Published to npm as `@burger-api/cli` (`bun add -g @burger-api/cli`).
+
+### 0.6.6 (December 23, 2025)
+
+- Added `.llm-context` AI context files to new projects.
+
+### 0.6.3 (December 17, 2025)
+
+- Added a release workflow for executables.
+
+### 0.1.0 (December 14, 2025)
+
+- First release: `create`, `list`, `add`, `build`, `build:exec` and `serve`,
+  on Windows, macOS and Linux.

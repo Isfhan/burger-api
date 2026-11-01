@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { resolve } from 'node:path';
 
 // Export constants
 export {
@@ -7,7 +7,7 @@ export {
     compareRoutes,
     getRouteSpecificity,
     collectRoutes,
-} from './routing';
+} from './routing.js';
 
 /**
  * Resolves the given path to the specified directory.

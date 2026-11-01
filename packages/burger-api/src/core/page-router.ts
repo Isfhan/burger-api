@@ -1,6 +1,8 @@
-// Import stuff from node
-import { readdirSync } from 'fs';
-import * as path from 'path';
+// Bun has no native recursive directory walker, so traversal uses Node's
+// `fs/promises` via Bun's compatibility layer. `node:path` is only used for
+// OS-agnostic path string joins.
+import { readdir } from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Import utils
 import {
@@ -8,25 +10,24 @@ import {
     normalizePath,
     compareRoutes,
     ROUTE_CONSTANTS,
-} from '../utils/index';
-import { filePathToPageRoutePath } from '../utils/pathConversion';
+} from '../utils/index.js';
+import { resolveScanDir } from '../utils/fs.js';
+import { filePathToPageRoutePath } from '../utils/pathConversion.js';
 
 // Import types
-import type { PageDefinition } from '../types/index';
+import type { PageDefinition, RequestHandler } from '../types/index.js';
 
 /**
- * PageRouter class for handling file-based page routing.
- * Loads pages from a directory structure and matches requests to the appropriate page handlers.
- * Supports dynamic segments (e.g., [id]) and uses default exports as page handlers.
+ * File-based page router: loads pages from a directory tree, matches requests,
+ * and supports dynamic segments (e.g. `[id]`). Default exports are handlers.
  */
 export class PageRouter {
     /** Array of loaded page definitions */
     public pages: PageDefinition[] = [];
 
     /**
-     * Constructor for the PageRouter class.
-     * @param pagesDir The directory path where page modules are located.
-     * @param prefix Optional prefix to prepend to all routes (e.g., "pages" becomes "/pages/...").
+     * @param pagesDir Directory containing page modules.
+     * @param prefix Optional prefix for every route (e.g. "pages" → "/pages/...").
      */
     constructor(
         private pagesDir: string,
@@ -36,26 +37,20 @@ export class PageRouter {
             throw new Error('Pages directory path must be provided');
         }
 
-        // Normalize the pagesDir path
-        this.pagesDir = path.normalize(pagesDir);
+        this.pagesDir = path.normalize(resolveScanDir(pagesDir, 'Pages', 'pageDir'));
 
-        // Normalize the prefix if provided
         if (prefix) {
             this.prefix = cleanPrefix(prefix);
         }
     }
 
     /**
-     * Loads page modules from the specified directory and adds them to the pages array.
-     * After loading, sorts the pages to prioritize static routes over dynamic ones based on specificity.
-     * @returns A promise that resolves when all page modules have been loaded and sorted.
+     * Loads and sorts page modules (static routes before dynamic ones).
      */
     public async loadPages(): Promise<void> {
-        // Clear the pages array
         this.pages = [];
         try {
             await this.scanDirectory(this.pagesDir);
-            // Sort pages to ensure static routes are matched before dynamic ones
             this.pages.sort((a, b) => compareRoutes(a, b));
         } catch (error) {
             console.error('Failed to load pages:', error);
@@ -68,24 +63,39 @@ export class PageRouter {
     }
 
     /**
-     * Recursively scans the directory for page modules and adds them to the pages array.
-     * @param dir The current directory to scan.
-     * @param basePath The base path for constructing the route path.
+     * Recursively scans `dir` for page modules.
+     * @param dir Directory to scan.
+     * @param basePath Base path used to build route paths.
      */
     private async scanDirectory(
         dir: string,
         basePath: string = ''
     ): Promise<void> {
-        // Track if a dynamic folder has been found at this directory level
+        // Tracks whether a dynamic folder or file was already seen at this
+        // level (two `[param]` entries would be ambiguous).
         let dynamicFolderFound = false;
+        let dynamicFileFound = false;
 
         try {
-            const entries = readdirSync(dir, { withFileTypes: true });
+            const entries = await readdir(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const entryPath = path.join(dir, entry.name);
                 const relativePath = path.join(basePath, entry.name);
 
                 if (entry.isDirectory()) {
+                    // Named wildcard folders (`[...slug]`) can never match a
+                    // page route — fail loud instead of silently dropping them.
+                    if (
+                        entry.name.startsWith(
+                            ROUTE_CONSTANTS.WILDCARD_START
+                        ) &&
+                        entry.name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+                    ) {
+                        throw new Error(
+                            `Named wildcard folder '${entry.name}' is not supported — ` +
+                                `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
+                        );
+                    }
                     if (entry.name.startsWith(ROUTE_CONSTANTS.WILDCARD_START)) {
                         continue;
                     }
@@ -111,50 +121,75 @@ export class PageRouter {
                         entry.name.endsWith(ext)
                     )
                 ) {
+                    // Two dynamic files (`[a].tsx` + `[b].tsx`) at the same
+                    // level are ambiguous — fail loud like dynamic folders.
+                    if (
+                        entry.name.startsWith(
+                            ROUTE_CONSTANTS.DYNAMIC_FOLDER_START
+                        ) &&
+                        entry.name.includes(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END)
+                    ) {
+                        if (dynamicFileFound) {
+                            throw new Error(
+                                `Multiple dynamic page files found in the same directory: '${entry.name}' conflicts with another dynamic file.`
+                            );
+                        }
+                        dynamicFileFound = true;
+                    }
+
                     // Convert file path to route path and load the module
                     const cleanedRoutePath = filePathToPageRoutePath(
                         relativePath,
                         this.prefix
                     );
 
-                    // Get the module path
-                    const modulePath = path.resolve(entryPath);
+                    // `.html` files are imported as raw markup — Bun's default
+                    // `.html` import yields an HTMLBundle that would crash on
+                    // `toFetchHandler`.
+                    const isHtmlPage = entry.name.endsWith('.html');
+                    const modulePath = path.resolve(
+                        isHtmlPage ? entryPath + '?raw' : entryPath
+                    );
 
-                    try {
-                        // Import the module
-                        const pageModule = await import(modulePath);
+                    const pageModule = await import(modulePath);
 
-                        // Get the default export as the page handler
-                        if (
-                            entry.name.endsWith('.tsx') &&
-                            typeof pageModule.default !== 'function'
-                        ) {
-                            throw new Error(
-                                `Page at ${entryPath} must export a default function as its handler.`
-                            );
-                        }
-
-                        // Create page definition
-                        const pageDefWithSlash: PageDefinition = {
-                            path: cleanedRoutePath + '/',
-                            handler: pageModule.default,
-                            middleware: pageModule.middleware,
-                        };
-
-                        // Create page definition
-                        const pageDef: PageDefinition = {
-                            path: cleanedRoutePath,
-                            handler: pageModule.default,
-                            middleware: pageModule.middleware,
-                        };
-
-                        // Add the page definition to the pages array
-                        this.pages.push(pageDefWithSlash, pageDef);
-                    } catch (importError) {
-                        console.error(
-                            `Failed to import module at ${modulePath}:`,
-                            importError
+                    // `.tsx` pages export a function; `.html` pages export raw
+                    // markup — wrap it so both Bun and WinterCG serve text/html.
+                    let handler: RequestHandler;
+                    if (typeof pageModule.default === 'function') {
+                        handler = pageModule.default;
+                    } else if (typeof pageModule.default === 'string') {
+                        handler = () =>
+                            new Response(pageModule.default, {
+                                headers: {
+                                    'Content-Type':
+                                        'text/html; charset=utf-8',
+                                },
+                            });
+                    } else {
+                        throw new Error(
+                            `Page at ${entryPath} must export a default function or an HTML string as its handler.`
                         );
+                    }
+
+                    const pageDef: PageDefinition = {
+                        path: cleanedRoutePath,
+                        handler,
+                        source: entryPath,
+                    };
+                    this.pages.push(pageDef);
+                    // Non-root pages also answer the trailing-slash variant.
+                    // The root already ends in `/` — adding another would
+                    // create the odd `//` route key.
+                    if (
+                        cleanedRoutePath !== '/' &&
+                        !cleanedRoutePath.endsWith('/')
+                    ) {
+                        this.pages.push({
+                            path: cleanedRoutePath + '/',
+                            handler,
+                            source: entryPath,
+                        });
                     }
                 }
             }
@@ -165,9 +200,9 @@ export class PageRouter {
     }
 
     /**
-     * Resolves the given request by finding a matching page and extracting dynamic parameters.
+     * Finds the page matching the request and extracts dynamic params.
      * @param request The request to resolve.
-     * @returns An object containing the matched page and parameters, or an empty params object if no match.
+     * @returns The matched page + params, or empty params when nothing matches.
      */
     public resolve(request: Request): {
         page?: PageDefinition;
@@ -194,10 +229,10 @@ export class PageRouter {
     }
 
     /**
-     * Checks if the request path matches the page path, extracting dynamic parameters if matched.
+     * Matches a request path against a page path.
      * @param requestPath The request path to check.
      * @param pagePath The page path to match against.
-     * @returns A record of dynamic parameters if matched, otherwise null.
+     * @returns Captured params when matched, otherwise null.
      */
     private matchRoute(
         requestPath: string,
@@ -212,14 +247,20 @@ export class PageRouter {
 
         const params: Record<string, string> = {};
         for (let i = 0; i < reqSegments.length; i++) {
-            const pSegment = pageSegments[i];
-            const reqSegment = reqSegments[i];
+            const pSegment = pageSegments[i]!;
+            const reqSegment = reqSegments[i]!;
 
             if (pSegment.startsWith(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX)) {
                 const paramName = pSegment.slice(
                     ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX.length
                 );
-                params[paramName] = reqSegment;
+                // Percent-decode the captured value; fall back to the raw
+                // segment on malformed encoding.
+                try {
+                    params[paramName] = decodeURIComponent(reqSegment);
+                } catch {
+                    params[paramName] = reqSegment;
+                }
             } else if (pSegment !== reqSegment) {
                 return null;
             }

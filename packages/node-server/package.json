@@ -1,0 +1,57 @@
+{
+  "name": "@burger-api/node-server",
+  "version": "0.1.0",
+  "author": "Isfhan Ahmed",
+  "type": "module",
+  "sideEffects": false,
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json",
+    "test": "bun run build && node --experimental-strip-types --test test/serve.test.ts"
+  },
+  "keywords": [
+    "burger-api",
+    "node",
+    "node-server",
+    "adapter",
+    "http",
+    "websocket"
+  ],
+  "description": "Run a burger-api app on Node.js: one serve(app) call starts a node:http server, with WebSocket routes wired automatically.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isfhan/burger-api.git",
+    "directory": "packages/node-server"
+  },
+  "homepage": "https://burger-api.com",
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/ws": "^8.5.13",
+    "burger-api": "workspace:*"
+  },
+  "peerDependencies": {
+    "burger-api": ">=1.0.0-beta",
+    "typescript": ">=5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
