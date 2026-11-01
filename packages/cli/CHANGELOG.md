@@ -1,6 +1,6 @@
 # Changelog: @burger-api/cli
 
-## Unreleased
+## 1.0.0-beta.1 (November 2, 2026)
 
 - `build` on Windows: rebuilding while the app still runs from the old build
   now says to stop the app first, instead of failing with a raw `EBUSY` error.
