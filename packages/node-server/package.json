@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/isfhan/burger-api.git",
+    "url": "git+https://github.com/Isfhan/burger-api.git",
     "directory": "packages/node-server"
   },
   "homepage": "https://burger-api.com",
