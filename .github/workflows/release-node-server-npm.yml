@@ -69,16 +69,17 @@ jobs:
             - name: Build burger-api
               run: bun run build
 
-            - name: Run typecheck
-              run: |
-                  cd packages/node-server
-                  bun run typecheck
-              shell: bash
-
+            # Builds dist/ first, which the tests and the typecheck import.
             - name: Build and test (plain Node)
               run: |
                   cd packages/node-server
                   bun run test
+              shell: bash
+
+            - name: Run typecheck
+              run: |
+                  cd packages/node-server
+                  bun run typecheck
               shell: bash
 
             - name: Check what will be published
