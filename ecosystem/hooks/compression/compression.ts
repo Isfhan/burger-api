@@ -97,6 +97,16 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
 
             const contentType = response.headers.get('Content-Type') || '';
 
+            // Skip responses that must not be transformed: range responses,
+            // live event streams, and `Cache-Control: no-transform`.
+            if (
+                response.status === 206 ||
+                contentType.toLowerCase().startsWith('text/event-stream') ||
+                hasNoTransform(response.headers.get('Cache-Control'))
+            ) {
+                return response;
+            }
+
             // Apply the exclude list, and the include list when one is set.
             if (shouldExcludeContentType(contentType, excludeContentTypes)) {
                 return response;
@@ -142,7 +152,7 @@ export function compress(options: CompressionOptions = {}): (ctx: BurgerContext)
 
             if (shouldUseCompressed) {
                 headers.set('Content-Encoding', selectedEncoding);
-                headers.set('Vary', 'Accept-Encoding');
+                appendVary(headers, 'Accept-Encoding');
             }
 
             headers.set('Content-Length', finalBody.byteLength.toString());
@@ -214,6 +224,42 @@ async function compressData(
     // No CompressionStream: send the body uncompressed.
     console.warn('CompressionStream not available, skipping compression');
     return data;
+}
+
+/**
+ * True when `Cache-Control` contains the `no-transform` directive.
+ */
+function hasNoTransform(cacheControl: string | null): boolean {
+    if (!cacheControl) {
+        return false;
+    }
+    return cacheControl
+        .split(',')
+        .some((directive) => directive.trim().toLowerCase() === 'no-transform');
+}
+
+/**
+ * Append `token` to `Vary` without dropping tokens set by other hooks.
+ * De-duplicates case-insensitively; `Vary: *` already covers everything.
+ */
+function appendVary(headers: Headers, token: string): void {
+    const vary = headers.get('Vary');
+    if (!vary) {
+        headers.set('Vary', token);
+        return;
+    }
+
+    const tokens = vary
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const lower = tokens.map((value) => value.toLowerCase());
+
+    if (lower.includes('*') || lower.includes(token.toLowerCase())) {
+        return;
+    }
+
+    headers.set('Vary', `${tokens.join(', ')}, ${token}`);
 }
 
 /**

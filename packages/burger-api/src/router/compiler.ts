@@ -25,6 +25,7 @@ import {
 import type { GlobalResponsePlan } from '../lifecycle/executor.js';
 import { compileJitHookPlan } from '../lifecycle/jit.js';
 import type {
+    Hook,
     HookPlan,
     ResponseHook,
     RouteHooks,
@@ -133,7 +134,7 @@ export class RouterCompiler {
         defs: RouteDefinition[],
         plugins?: ResolvedPlugin[],
         providers?: Map<string, unknown> | BurgerServices,
-        onRequestHooksCount: number = 0,
+        onRequestHooks: Hook[] = [],
         globalHooks?: RouteHooks,
         ipHolder?: RequestIPHolder
     ): CompiledRouter {
@@ -158,7 +159,11 @@ export class RouterCompiler {
         // Plugin / app-level hook functions every route runs; the route-access
         // analyzer scans them alongside the route's own source (once per
         // compile pass).
-        const accessSources = collectAccessSources(plugins, globalHooks);
+        const accessSources = collectAccessSources(
+            plugins,
+            globalHooks,
+            onRequestHooks
+        );
 
         // Reserved transform keys fail startup, even for apps without routes.
         assertTransformKeys(globalHooks?.transform, 'global hooks');
@@ -177,6 +182,7 @@ export class RouterCompiler {
 
         for (const def of defs) {
             const path = def.path;
+            assertUsableRoutePath(path);
 
             // Allow header: every method the route answers. HEAD is advertised
             // when GET exists (auto-HEAD) or was defined explicitly; OPTIONS is
@@ -368,7 +374,7 @@ export class RouterCompiler {
                     path,
                     { ...def, handlers },
                     hasSchema,
-                    onRequestHooksCount
+                    onRequestHooks.length
                 );
             } else {
                 if (registeredPaths.has(path)) {
@@ -768,7 +774,8 @@ function omitResponseValidators(
  */
 function collectAccessSources(
     plugins?: ResolvedPlugin[],
-    globalHooks?: RouteHooks
+    globalHooks?: RouteHooks,
+    onRequestHooks?: Hook[]
 ): unknown[] {
     const out: unknown[] = [];
     const pushStage = (value: unknown): void => {
@@ -780,12 +787,14 @@ function collectAccessSources(
         }
     };
     const pushHooks = (hooks: {
+        onRequest?: unknown;
         beforeRoute?: unknown;
         afterRoute?: unknown;
         mapResponse?: unknown;
         onError?: unknown;
         transform?: unknown;
     }): void => {
+        pushStage(hooks.onRequest);
         pushStage(hooks.beforeRoute);
         pushStage(hooks.afterRoute);
         pushStage(hooks.mapResponse);
@@ -796,6 +805,9 @@ function collectAccessSources(
     if (plugins) {
         for (let i = 0; i < plugins.length; i++) pushHooks(plugins[i]!.hooks);
     }
+    // `onRequest` runs before routing, so its mappers read params outside the
+    // route handler and must be part of the analysis.
+    if (onRequestHooks) pushStage(onRequestHooks);
     return out;
 }
 
@@ -893,9 +905,21 @@ function buildMethodCore(
         // extraction.
         const bunParams = (request as { params?: Record<string, string> })
             .params;
-        return bunParams !== undefined
-            ? { params: bunParams, pattern }
-            : extractCtxInitWithSegments(request, pattern, compiledPattern!);
+        if (bunParams !== undefined) {
+            // Bun turns malformed percent escapes into U+FFFD; re-extract
+            // from the URL so the raw segment survives, like the fetch path.
+            for (const key in bunParams) {
+                if (bunParams[key]!.includes('\uFFFD')) {
+                    return extractCtxInitWithSegments(
+                        request,
+                        pattern,
+                        compiledPattern!
+                    );
+                }
+            }
+            return { params: bunParams, pattern };
+        }
+        return extractCtxInitWithSegments(request, pattern, compiledPattern!);
     };
 
     const makeCtx = (
@@ -1159,6 +1183,48 @@ function isStaticPath(path: string): boolean {
         !path.includes(ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX) &&
         !path.includes(ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX)
     );
+}
+
+/**
+ * Route path segments allow every RFC 3986 path character, plus the `:param`,
+ * `*` and `(group)` conventions. Fail at startup instead of emitting a dead
+ * route (or crashing `Bun.serve` on non-ASCII).
+ */
+const USABLE_SEGMENT_CHARS = /^[A-Za-z0-9._~!$&'()*+,;=:@-]+$/;
+
+function assertUsableRoutePath(path: string): void {
+    const segments = path.split('/');
+    for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i]!;
+        if (segment === '') continue;
+        if (
+            segment === ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX ||
+            segment.charCodeAt(0) === 58 /* ':' */
+        ) {
+            continue;
+        }
+        let label = segment;
+        if (
+            segment.length >= 2 &&
+            segment[0] === '(' &&
+            segment[segment.length - 1] === ')'
+        ) {
+            label = segment.slice(1, -1);
+        } else if (
+            segment.length >= 2 &&
+            segment[0] === '[' &&
+            segment[segment.length - 1] === ']'
+        ) {
+            label = segment.slice(1, -1);
+            if (label === '...') continue;
+            if (label.startsWith('...')) label = label.slice(3);
+        }
+        if (label.length === 0 || !USABLE_SEGMENT_CHARS.test(label)) {
+            throw new Error(
+                `Unusable route path segment '${label || segment}' in '${path}': use only letters, digits and - . _ ~ ! $ & ' ( ) * + , ; = : @ (spaces and non-ASCII characters can never match a request).`
+            );
+        }
+    }
 }
 
 /**

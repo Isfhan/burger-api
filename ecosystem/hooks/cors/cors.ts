@@ -351,7 +351,7 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
 
             // Vary: Origin unless wildcard.
             if (varyHeader.Vary) {
-                headers.set('Vary', varyHeader.Vary);
+                appendVary(headers, varyHeader.Vary);
             }
 
             if (credentials) {
@@ -381,4 +381,28 @@ export function cors(options: CorsOptions = {}): (ctx: BurgerContext) => Promise
             });
         };
     }
+}
+
+/**
+ * Append `token` to `Vary` without dropping tokens set by other hooks.
+ * De-duplicates case-insensitively; `Vary: *` already covers everything.
+ */
+function appendVary(headers: Headers, token: string): void {
+    const vary = headers.get('Vary');
+    if (!vary) {
+        headers.set('Vary', token);
+        return;
+    }
+
+    const tokens = vary
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const lower = tokens.map((value) => value.toLowerCase());
+
+    if (lower.includes('*') || lower.includes(token.toLowerCase())) {
+        return;
+    }
+
+    headers.set('Vary', `${tokens.join(', ')}, ${token}`);
 }

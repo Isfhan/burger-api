@@ -97,7 +97,7 @@ export const beforeRoute = [publicCache(600)];
 | `noTransform` | `boolean` | `false` | Add `no-transform` |
 | `custom` | `string` | - | Full `Cache-Control` value; overrides the options above |
 | `etag` | `boolean` | `false` | Add an `ETag` and answer `304` |
-| `vary` | `string \| string[]` | - | Set the `Vary` header |
+| `vary` | `string \| string[]` | - | Append to the `Vary` header (existing tokens are kept, de-duplicated case-insensitively; `*` stays `*`) |
 
 ## ETag behavior
 
@@ -108,7 +108,8 @@ export const beforeRoute = [publicCache(600)];
   prefix is ignored and `*` matches any tag.
 - On a match the response is `304 Not Modified` with no body and no
   `Content-Length`.
-- `Vary` is set before the `304`, so caches key the response correctly.
+- `Vary` is appended before the `304`, keeping tokens other hooks set, so
+  caches key the response correctly.
 
 ## Notes
 

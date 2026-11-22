@@ -18,7 +18,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError, timingSafeEqual } from "burger-api";
+import { UnauthorizedError, ForbiddenError, timingSafeEqual } from "burger-api";
 
 declare module "burger-api" {
   interface BurgerContext {
@@ -171,35 +171,41 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
       },
 
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
+        const config = ctx.config as
+          | { auth?: boolean | { required?: boolean; roles?: string[] } }
+          | undefined;
 
         // Skip auth check if explicitly disabled
         if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
           return;
         }
 
-        // Already validated in transform
-        if (ctx.apiKey) {
-          return;
-        }
+        if (!ctx.apiKey) {
+          const keyToValidate = (ctx as { _apiKeyToValidate?: string })._apiKeyToValidate;
+          if (!keyToValidate) {
+            throw new UnauthorizedError("Missing API key");
+          }
 
-        const keyToValidate = (ctx as { _apiKeyToValidate?: string })._apiKeyToValidate;
-        if (!keyToValidate) {
-          throw new UnauthorizedError("Missing API key");
-        }
+          if (validate) {
+            const isValid = await validate(keyToValidate);
+            if (!isValid) {
+              throw new UnauthorizedError("Invalid API key");
+            }
 
-        if (validate) {
-          const isValid = await validate(keyToValidate);
-          if (!isValid) {
+            if (attachToContext) {
+              ctx.apiKey = keyToValidate;
+            }
+          } else {
+            // No validator configured: the static list did not match.
             throw new UnauthorizedError("Invalid API key");
           }
+        }
 
-          if (attachToContext) {
-            ctx.apiKey = keyToValidate;
-          }
-        } else {
-          // No validator configured: the static list did not match.
-          throw new UnauthorizedError("Invalid API key");
+        // An API key has no roles: a route that lists roles must fail closed.
+        const requiredRoles =
+          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+          throw new ForbiddenError("Insufficient permissions");
         }
       },
     },

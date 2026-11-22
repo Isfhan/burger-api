@@ -1,5 +1,29 @@
 # Changelog: @burger-api/cli
 
+## 1.0.0-beta.2 (November 23, 2026)
+
+- `build` works when the entry uses `export const app = new Burger({...})`.
+- `build` works when the project path contains an apostrophe (for example
+  `C:\Users\O'Brien`).
+- `build` reads `target` from `burger.build.ts` when `--target` is not given.
+- After `build --target=vercel` (or `cloudflare`, `deno`), the project's
+  `bun run typecheck` passes: generated entries are excluded from type checks.
+- `build` warns when the `new Burger(...)` options are not an inline object
+  literal, instead of dropping them silently.
+- `build`: a route folder name with characters that can never match a request
+  (spaces, non-ASCII) fails the build with a clear message, the same rule as
+  the framework.
+- `build --target=deno` (and `vercel`) works for projects with pages: page
+  HTML is embedded in the build instead of imported as a file.
+- `build --target=vercel` refuses to write `api/index.ts` when your API (or
+  pages, or websocket) folder is the project-root `api/`, instead of hiding
+  your routes from later builds.
+- `dev` restarts when files in `ecosystem/` or `burger.build.ts` change.
+- Install scripts:
+  - On Windows, an error no longer closes your PowerShell window.
+  - The old CLI is removed only after the new one is downloaded and
+    verified, so a failed download leaves your current CLI working.
+
 ## 1.0.0-beta.1 (November 2, 2026)
 
 - `build` on Windows: rebuilding while the app still runs from the old build

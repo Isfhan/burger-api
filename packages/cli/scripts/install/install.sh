@@ -132,23 +132,15 @@ fi
 # Download URL
 DOWNLOAD_URL="https://github.com/isfhan/burger-api/releases/download/$LATEST_VERSION/$EXECUTABLE_NAME"
 INSTALL_PATH="$INSTALL_DIR/burger-api"
-
-# Remove old versions first, so the new CLI is the only burger-api on PATH
-print_info "Removing old BurgerAPI CLI versions..."
-if command -v bun >/dev/null 2>&1 && bun pm ls -g 2>/dev/null | grep -q "@burger-api/cli"; then
-    bun remove -g @burger-api/cli >/dev/null 2>&1 && print_success "Removed the global Bun package @burger-api/cli" || true
-fi
-if command -v npm >/dev/null 2>&1 && npm ls -g --depth=0 @burger-api/cli >/dev/null 2>&1; then
-    npm uninstall -g @burger-api/cli >/dev/null 2>&1 && print_success "Removed the global npm package @burger-api/cli" || true
-fi
-rm -f "$INSTALL_PATH"
+# Download next to the install path, so the existing install stays untouched on failure
+DOWNLOAD_PATH="$INSTALL_DIR/burger-api.download"
 
 # Download the executable
 print_info "Downloading from GitHub..."
 echo ""
 
 # Use curl with progress bar for better user experience
-if curl -fL --progress-bar -H "User-Agent: BurgerAPI-Installer/1.0" -o "$INSTALL_PATH" "$DOWNLOAD_URL"; then
+if curl -fL --progress-bar -H "User-Agent: BurgerAPI-Installer/1.0" -o "$DOWNLOAD_PATH" "$DOWNLOAD_URL"; then
     # Verify checksum when release provides checksums.txt
     CHECKSUMS_URL="https://github.com/isfhan/burger-api/releases/download/$LATEST_VERSION/checksums.txt"
     if CHECKSUMS=$(curl -sfL -H "User-Agent: BurgerAPI-Installer/1.0" "$CHECKSUMS_URL" 2>/dev/null); then
@@ -156,12 +148,12 @@ if curl -fL --progress-bar -H "User-Agent: BurgerAPI-Installer/1.0" -o "$INSTALL
         EXPECTED_HASH=$(echo "$CHECKSUMS" | grep -F "/$EXECUTABLE_NAME\`:" | grep -oE '`[a-fA-F0-9]{64}`' | tr -d '`' | head -1)
         if [ -n "$EXPECTED_HASH" ]; then
             if command -v sha256sum >/dev/null 2>&1; then
-                ACTUAL_HASH=$(sha256sum "$INSTALL_PATH" | awk '{print $1}')
+                ACTUAL_HASH=$(sha256sum "$DOWNLOAD_PATH" | awk '{print $1}')
             else
-                ACTUAL_HASH=$(shasum -a 256 "$INSTALL_PATH" | awk '{print $1}')
+                ACTUAL_HASH=$(shasum -a 256 "$DOWNLOAD_PATH" | awk '{print $1}')
             fi
             if [ "$(echo "$ACTUAL_HASH" | tr '[:upper:]' '[:lower:]')" != "$(echo "$EXPECTED_HASH" | tr '[:upper:]' '[:lower:]')" ]; then
-                rm -f "$INSTALL_PATH"
+                rm -f "$DOWNLOAD_PATH"
                 print_error "Checksum verification failed. The downloaded file may be corrupted or modified."
                 exit 1
             fi
@@ -172,6 +164,8 @@ if curl -fL --progress-bar -H "User-Agent: BurgerAPI-Installer/1.0" -o "$INSTALL
     print_success "Downloaded successfully"
 else
     EXIT_CODE=$?
+    # Never leave a partial download behind
+    rm -f "$DOWNLOAD_PATH"
     echo ""
     print_error "Failed to download the executable"
     
@@ -194,6 +188,23 @@ else
     esac
     
     print_info "Download URL: $DOWNLOAD_URL"
+    exit 1
+fi
+
+# Remove old versions now that the new one is downloaded and verified,
+# so the new CLI is the only burger-api on PATH
+print_info "Removing old BurgerAPI CLI versions..."
+if command -v bun >/dev/null 2>&1 && bun pm ls -g 2>/dev/null | grep -q "@burger-api/cli"; then
+    bun remove -g @burger-api/cli >/dev/null 2>&1 && print_success "Removed the global Bun package @burger-api/cli" || true
+fi
+if command -v npm >/dev/null 2>&1 && npm ls -g --depth=0 @burger-api/cli >/dev/null 2>&1; then
+    npm uninstall -g @burger-api/cli >/dev/null 2>&1 && print_success "Removed the global npm package @burger-api/cli" || true
+fi
+# Move the verified download into place; -f replaces the old binary in one step
+if ! mv -f "$DOWNLOAD_PATH" "$INSTALL_PATH"; then
+    print_error "Could not replace the existing burger-api"
+    print_info "The running burger-api may be locked. Close it and run this installer again."
+    rm -f "$DOWNLOAD_PATH"
     exit 1
 fi
 

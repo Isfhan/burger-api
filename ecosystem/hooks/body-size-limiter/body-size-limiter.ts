@@ -72,8 +72,9 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
     let warnedBodyUsed = false;
 
     return async (ctx: BurgerContext): Promise<ForwardHookResult> => {
-        // Skip check for methods that typically don't have bodies
-        if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(ctx.method)) {
+        // Decide by body presence, not method: GET and DELETE may carry a
+        // body too, and it must be limited like any other.
+        if (!ctx.body) {
             return undefined;
         }
 
@@ -110,10 +111,6 @@ export function bodySizeLimiter(options: BodySizeLimiterOptions = {}): (ctx: Bur
             // so the original stays readable for validation and the handler.
             // At most `maxSize` bytes (plus one chunk) are buffered; an
             // oversized body is aborted mid-stream.
-
-            if (!ctx.body) {
-                return undefined; // No body to check
-            }
 
             if (ctx.bodyUsed) {
                 // Body validation (or another hook) already read the whole

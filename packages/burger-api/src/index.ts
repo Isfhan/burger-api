@@ -201,6 +201,15 @@ export class Burger {
     /** Set once page + asset routes are registered (serve / fetchHandler). */
     private pagesProcessed?: Promise<boolean>;
 
+    /**
+     * Memoized API + WebSocket processing: concurrent `fetchHandler()` /
+     * `serve()` calls share one compilation and one plugins/providers run.
+     * A failed attempt clears the memo so a later call retries instead of
+     * replaying the rejection forever.
+     */
+    private apiRoutesProcessed?: Promise<boolean>;
+    private wsRoutesProcessed?: Promise<boolean>;
+
     /** Set when the scanned API directory contained no route files. */
     private emptyApiDir?: string;
 
@@ -353,6 +362,34 @@ export class Burger {
         return (this.pagesProcessed ??= this.processPageRoutes());
     }
 
+    /** Compiles API routes once (shared by serve and fetchHandler). */
+    private async processApiRoutesOnce(): Promise<boolean> {
+        const pending = (this.apiRoutesProcessed ??= this.processApiRoutes());
+        try {
+            return await pending;
+        } catch (error) {
+            // Don't cache a failed startup; the next call retries.
+            if (this.apiRoutesProcessed === pending) {
+                this.apiRoutesProcessed = undefined;
+            }
+            throw error;
+        }
+    }
+
+    /** Processes WebSocket routes once (shared by serve and fetchHandler). */
+    private async processWebSocketRoutesOnce(): Promise<boolean> {
+        const pending = (this.wsRoutesProcessed ??=
+            this.processWebSocketRoutes());
+        try {
+            return await pending;
+        } catch (error) {
+            if (this.wsRoutesProcessed === pending) {
+                this.wsRoutesProcessed = undefined;
+            }
+            throw error;
+        }
+    }
+
     /** Loads prebuilt or filesystem page routes. */
     private async processPageRoutes(): Promise<boolean> {
         // Production path: use pre-built page routes (no filesystem scan)
@@ -450,14 +487,28 @@ export class Burger {
                       executionCtx,
                       this.dynamicRouter?.getRequestIPHolder()
                   );
-            const response = await handler(ctx);
-            // With no outer onRequest/global-hook wrapper there is nobody
-            // else to apply `ctx.set`; do it here.
-            return prebuilt
-                ? response
-                : ctx.hasSet()
-                  ? applySet(response, ctx.set)
-                  : response;
+            try {
+                const response = await handler(ctx);
+                // With no outer onRequest/global-hook wrapper there is
+                // nobody else to apply `ctx.set`; do it here.
+                return prebuilt
+                    ? response
+                    : ctx.hasSet()
+                      ? applySet(response, ctx.set)
+                      : response;
+            } catch (error) {
+                // The outer onRequest wrapper owns the error chain when
+                // present; otherwise this page wrapper is the only one that
+                // can run it.
+                if (prebuilt || !this.dynamicRouter) throw error;
+                return this.dynamicRouter.renderNonRouteError(
+                    error,
+                    request,
+                    ctx,
+                    env,
+                    executionCtx
+                );
+            }
         };
         return wrapped as unknown as RequestHandler;
     }
@@ -1004,7 +1055,7 @@ export class Burger {
      * ```
      */
     public async fetchHandler(): Promise<EnvFetchHandler> {
-        await this.processApiRoutes();
+        await this.processApiRoutesOnce();
         await this.processPageRoutesOnce();
 
         // Prepare WebSocket handling for WinterCG runtimes (Cloudflare /
@@ -1015,7 +1066,7 @@ export class Burger {
             this.programmaticWsRoutes.size > 0 ||
             !!this.wsDir;
         if (!this.wsAdapter && hasWsSources) {
-            await this.processWebSocketRoutes();
+            await this.processWebSocketRoutesOnce();
         }
         const wsAdapter = this.wsAdapter;
 
@@ -1166,10 +1217,10 @@ export class Burger {
         }
         // Process API routes first so convention files (plugins.ts, providers.ts)
         // are loaded before WebSocket reads the registries (avoids race).
-        const apiConfigured = await this.processApiRoutes();
+        const apiConfigured = await this.processApiRoutesOnce();
         const [pagesConfigured, wsConfigured] = await Promise.all([
             this.processPageRoutesOnce(),
-            this.processWebSocketRoutes(),
+            this.processWebSocketRoutesOnce(),
         ]);
 
         const routesConfigured =
@@ -1354,8 +1405,16 @@ function mergeWsConfig(
             globalAuth === false || routeAuth === false
                 ? false
                 : {
-                      ...(typeof globalAuth === 'object' ? globalAuth : {}),
-                      ...(typeof routeAuth === 'object' ? routeAuth : {}),
+                      ...(globalAuth === true
+                          ? { required: true }
+                          : typeof globalAuth === 'object'
+                            ? globalAuth
+                            : {}),
+                      ...(routeAuth === true
+                          ? { required: true }
+                          : typeof routeAuth === 'object'
+                            ? routeAuth
+                            : {}),
                   };
     }
     return merged;

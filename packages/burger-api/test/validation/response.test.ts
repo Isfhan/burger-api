@@ -105,6 +105,21 @@ describe('ResponseValidator', () => {
         expect(out.ok).toBe(true);
     });
 
+    it('HEAD falls back to the GET response schema', () => {
+        // HEAD runs the GET handler, so it must be held to the same contract.
+        const v = makeValidators();
+        const out = validateResponse(
+            v,
+            'head',
+            200,
+            { ok: 'nope' },
+            { responseValidation: 'enforce' },
+            false
+        );
+        expect(out.ok).toBe(false);
+        expect(out.errorResponse?.status).toBe(500);
+    });
+
     it('does not apply another method response schema', () => {
         const v = makeValidators();
         // POST declares no response schema, so a GET-only schema must not leak.

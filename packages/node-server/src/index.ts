@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { toFetchHandler, setRequestIP } from 'burger-api';
 import type { Burger } from 'burger-api';
-import { sendWebResponse, toWebRequest } from './bridge.js';
+import { sendWebResponse, toWebRequest, InvalidHostError } from './bridge.js';
 
 export { toWebRequest, sendWebResponse } from './bridge.js';
 
@@ -38,7 +38,7 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
     const server = http.createServer((req, res) => {
         void (async () => {
             try {
-                const request = toWebRequest(req);
+                const request = toWebRequest(req, res);
                 // Expose the peer address as ctx.ip (native on Bun).
                 if (req.socket.remoteAddress) {
                     setRequestIP(request, req.socket.remoteAddress);
@@ -46,6 +46,11 @@ export function serve(app: Burger, options: ServeOptions = {}): Server {
                 const response = await fetchHandler(request);
                 await sendWebResponse(res, response);
             } catch (err) {
+                if (err instanceof InvalidHostError) {
+                    res.statusCode = 400;
+                    res.end('Bad Request');
+                    return;
+                }
                 console.error('[@burger-api/node-server] request error:', err);
                 if (!res.headersSent) res.statusCode = 500;
                 res.end('Internal Server Error');

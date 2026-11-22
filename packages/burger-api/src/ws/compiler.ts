@@ -52,7 +52,11 @@ export class WebSocketCompiler {
         scanned: ScannedWebSocketRoute
     ): Promise<CompiledWebSocketRoute> {
         // Import ws.ts module
-        const wsModule = (await import(scanned.wsFile)) as WebSocketModule;
+        const wsModule = await importConvention<WebSocketModule>(
+            scanned.wsFile,
+            'route module',
+            scanned.path
+        );
 
         // Build handlers from module exports
         const handlers: WebSocketHandlers = {
@@ -67,9 +71,11 @@ export class WebSocketCompiler {
         // Import hooks if present
         let hooks: WebSocketHooks | undefined;
         if (scanned.hooksFile) {
-            const hooksModule = (await import(
-                scanned.hooksFile
-            )) as WebSocketHooksModule;
+            const hooksModule = await importConvention<WebSocketHooksModule>(
+                scanned.hooksFile,
+                'hooks module',
+                scanned.path
+            );
             hooks = {
                 onOpen: hooksModule.onOpen,
                 onMessage: hooksModule.onMessage,
@@ -80,10 +86,9 @@ export class WebSocketCompiler {
         // Import config if present
         let routeConfig: WebSocketConfig = {};
         if (scanned.configFile) {
-            const configModule = (await import(scanned.configFile)) as Record<
-                string,
-                unknown
-            >;
+            const configModule = await importConvention<
+                Record<string, unknown>
+            >(scanned.configFile, 'config module', scanned.path);
             routeConfig =
                 (configModule.default as WebSocketConfig) ??
                 ({ ...configModule } as WebSocketConfig);
@@ -114,8 +119,16 @@ export class WebSocketCompiler {
                 globalAuth === false || routeAuth === false
                     ? false
                     : {
-                          ...(typeof globalAuth === 'object' ? globalAuth : {}),
-                          ...(typeof routeAuth === 'object' ? routeAuth : {}),
+                          ...(globalAuth === true
+                              ? { required: true }
+                              : typeof globalAuth === 'object'
+                                ? globalAuth
+                                : {}),
+                          ...(routeAuth === true
+                              ? { required: true }
+                              : typeof routeAuth === 'object'
+                                ? routeAuth
+                                : {}),
                       };
         }
 
@@ -147,9 +160,11 @@ export class WebSocketCompiler {
                 const compiledRoute = await this.compile(route);
                 compiled.push(compiledRoute);
             } catch (error) {
-                console.error(
-                    `[WebSocket] Failed to compile route: ${route.path}`,
-                    error
+                const detail =
+                    error instanceof Error ? error.message : String(error);
+                throw new Error(
+                    `[WebSocket] Failed to compile route "${route.path}": ${detail}`,
+                    { cause: error }
                 );
             }
         }
@@ -165,6 +180,26 @@ export class WebSocketCompiler {
         route?: WebSocketHooks
     ): WebSocketHooks | undefined {
         return mergeWsHooks(global, route);
+    }
+}
+
+/**
+ * Imports a convention module, naming both the route and file on failure so
+ * a broken module fails loud at startup instead of disappearing.
+ */
+async function importConvention<T>(
+    file: string,
+    kind: string,
+    routePath: string
+): Promise<T> {
+    try {
+        return (await import(file)) as T;
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+            `[WebSocket] Failed to load ${kind} for route "${routePath}" from "${file}": ${detail}`,
+            { cause: error }
+        );
     }
 }
 

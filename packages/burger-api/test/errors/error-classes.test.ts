@@ -210,6 +210,51 @@ describe('renderHTTPError', () => {
         const body = await res.json();
         expect(body.cause).toEqual({ message: 'string cause' });
     });
+
+    it('hides the message of a duck-typed 5xx error in production', async () => {
+        // A library error that only carries a numeric `status` is not a
+        // developer-written HTTPError: its message may hold secrets.
+        const err = Object.assign(new Error('db password=hunter2'), {
+            status: 503,
+            name: 'PgPoolError',
+        });
+        const body = await renderHTTPError(err, false).json();
+        expect(body.status).toBe(503);
+        expect(body.title).toBe('Service Unavailable');
+        expect(body.detail).toBe('Service Unavailable');
+        expect(JSON.stringify(body)).not.toContain('hunter2');
+        expect(JSON.stringify(body)).not.toContain('PgPoolError');
+
+        // Unlisted 5xx: a generic title, never the error's own name.
+        const odd = Object.assign(new Error('secret'), {
+            status: 599,
+            name: 'SecretError',
+        });
+        const oddBody = await renderHTTPError(odd, false).json();
+        expect(oddBody.status).toBe(599);
+        expect(JSON.stringify(oddBody)).not.toContain('Secret');
+    });
+
+    it('keeps the message of a real HTTPError 5xx and a duck-typed 4xx in production', async () => {
+        const real = await renderHTTPError(
+            new HTTPError(503, 'Maintenance until 10:00'),
+            false
+        ).json();
+        expect(real.detail).toBe('Maintenance until 10:00');
+
+        const duck4xx = await renderHTTPError(
+            Object.assign(new Error('Slow down'), { status: 429 }),
+            false
+        ).json();
+        expect(duck4xx.status).toBe(429);
+        expect(duck4xx.detail).toBe('Slow down');
+    });
+
+    it('shows the message of a duck-typed 5xx error in dev mode', async () => {
+        const err = Object.assign(new Error('db down'), { status: 503 });
+        const body = await renderHTTPError(err, true).json();
+        expect(body.detail).toBe('db down');
+    });
 });
 
 // ─────────────────────────────────────────────────────

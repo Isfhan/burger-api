@@ -16,6 +16,7 @@ import {
     filePathToPageRoutePath,
 } from './route-conventions';
 import { CONVENTION_DEFAULTS } from './config';
+import { warning } from './logger';
 import { contentTypeFor } from 'burger-api';
 
 /**
@@ -99,6 +100,50 @@ function findConventionFile(
     return found;
 }
 
+/**
+ * Non-route convention stems a folder can carry. Without `route.ts` /
+ * `ws.ts` they apply to nothing, so the scanner warns instead of silently
+ * ignoring them.
+ */
+const UNROUTED_API_FILE_STEMS = [
+    'schema',
+    'hooks',
+    'openapi',
+    'config',
+] as const;
+const UNROUTED_WS_FILE_STEMS = ['hooks', 'config'] as const;
+
+/**
+ * List the convention files present in `dir` for `stems`, without throwing
+ * on conflicting extensions (this path only ever warns).
+ */
+function listConventionFiles(dir: string, stems: readonly string[]): string[] {
+    const names: string[] = [];
+    for (const stem of stems) {
+        for (const ext of ROUTE_CONSTANTS.CONVENTION_EXTENSIONS) {
+            const name = `${stem}${ext}`;
+            if (existsSync(path.join(dir, name))) names.push(name);
+        }
+    }
+    return names.sort();
+}
+
+/**
+ * Warn that a folder's convention files apply to nothing: routes do not
+ * inherit from parent folders.
+ */
+function warnUnusedConventionFiles(
+    relativeFolder: string,
+    fileNames: string[],
+    routeFileName: string
+): void {
+    const folder = relativeFolder.split(path.sep).join('/') || '.';
+    warning(
+        `[burger-api] ${folder} has ${fileNames.join(', ')} but no ${routeFileName}, so they apply to nothing. ` +
+            `Convention files are not inherited by child routes: put hooks.ts/config.ts next to each ${routeFileName}.`
+    );
+}
+
 export interface ApiRouteScanEntry {
     /** Absolute import path used by generated build entry */
     importPath: string;
@@ -150,6 +195,34 @@ export async function scanApiRoutes(
     return entries;
 }
 
+/**
+ * Route folder labels allow every RFC 3986 path character except `(` `)` `[`
+ * `]`, which stay reserved for the `(group)`, `[param]` and `[...]`
+ * conventions. Anything else can never match (or crashes `Bun.serve`), so it
+ * fails at startup instead of silently 404ing.
+ */
+const USABLE_FOLDER_CHARS = /^[A-Za-z0-9._~!$&'*+,;=:@-]+$/;
+
+function assertUsableFolderName(name: string, dir: string): void {
+    let label = name;
+    if (name.length >= 2 && name[0] === '(' && name[name.length - 1] === ')') {
+        label = name.slice(1, -1);
+    } else if (
+        name.length >= 2 &&
+        name[0] === '[' &&
+        name[name.length - 1] === ']'
+    ) {
+        label = name.slice(1, -1);
+        if (label === '...') return; // anonymous wildcard
+        if (label.startsWith('...')) label = label.slice(3);
+    }
+    if (label.length === 0 || !USABLE_FOLDER_CHARS.test(label)) {
+        throw new Error(
+            `Unusable route folder name '${name}' in '${dir}': use only letters, digits and - . _ ~ ! $ & ' * + , ; = : @ (spaces and non-ASCII characters can never match a request).`
+        );
+    }
+}
+
 async function scanApiDir(
     dir: string,
     basePath: string,
@@ -177,6 +250,8 @@ async function scanApiDir(
                         `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
                 );
             }
+
+            assertUsableFolderName(entry.name, dir);
 
             const isDynamic =
                 entry.name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
@@ -248,6 +323,14 @@ async function scanApiDir(
             scanEntry.configPath = configFile.split(path.sep).join('/');
         }
         out.push(scanEntry);
+    } else {
+        const orphanFiles = listConventionFiles(
+            dir,
+            UNROUTED_API_FILE_STEMS
+        );
+        if (orphanFiles.length > 0) {
+            warnUnusedConventionFiles(basePath, orphanFiles, 'route.ts');
+        }
     }
 }
 
@@ -456,6 +539,14 @@ async function scanWsDir(
         }
 
         out.push(scanEntry);
+    } else {
+        const orphanFiles = listConventionFiles(
+            dir,
+            UNROUTED_WS_FILE_STEMS
+        );
+        if (orphanFiles.length > 0) {
+            warnUnusedConventionFiles(basePath, orphanFiles, 'ws.ts');
+        }
     }
 }
 

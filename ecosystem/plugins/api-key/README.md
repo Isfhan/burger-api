@@ -112,6 +112,12 @@ export default {
 };
 ```
 
+### Routes that list roles
+
+API keys have no roles. A route whose `config.auth` lists `roles` **fails
+closed**: after the key is validated the plugin responds `403`, never letting
+the request through. Leave `roles` off routes protected by this plugin.
+
 ## Context properties
 
 After successful validation, the API key is available as `ctx.apiKey`
@@ -129,6 +135,8 @@ export async function GET(ctx: BurgerContext) {
 ## Error responses
 
 - **401 Unauthorized**: missing API key or invalid API key
+- **403 Forbidden**: the route lists `auth.roles` (API keys have no roles, so
+  the plugin fails closed)
 - **Config error at startup**: neither `keys` nor `validate` configured
 
 ## Security notes

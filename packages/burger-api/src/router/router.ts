@@ -47,7 +47,7 @@ import {
     createServices,
     isRequestIPSource,
 } from '../context/context.js';
-import type { HTTPMethod } from '../utils/routing.js';
+import { HTTP_METHODS, type HTTPMethod } from '../utils/routing.js';
 
 interface OnRequestOutcome {
     shortCircuit: Response | undefined;
@@ -156,7 +156,7 @@ export class Router {
             defs,
             plugins,
             this.appServices,
-            onRequestHooks?.length ?? 0,
+            onRequestHooks,
             globalHooks,
             this.ipHolder
         );
@@ -253,8 +253,9 @@ export class Router {
     /**
      * Returns the static routes as a `Bun.serve` `routes` map: one **method
      * object** per path (`{ GET: fnGet, POST: fnPost, HEAD: fnHead, ... }`).
-     * Each method is specialized at compile time; methods not present fall
-     * through to `fetch`, which answers 405 + Allow for known paths.
+     * Each method is specialized at compile time; a method the route does not
+     * declare answers 405 + Allow here, so Bun never falls through to a less
+     * specific route.
      */
     staticRoutes(): Record<string, NativeMethodHandlers> {
         if (this.cachedStaticRoutes) return this.cachedStaticRoutes;
@@ -269,7 +270,8 @@ export class Router {
     /**
      * Same method-object shape for `:param` / `*` routes: Bun matches the
      * pattern natively and passes decoded `request.params`, so no URL
-     * re-parsing happens on the hot path.
+     * re-parsing happens on the hot path. Every HTTP method key is present,
+     * matching the fetch path's 405 + Allow instead of falling through.
      */
     nativeRoutes(): Record<string, NativeMethodHandlers> {
         if (this.cachedNativeRoutes) return this.cachedNativeRoutes;
@@ -342,23 +344,57 @@ export class Router {
     }
 
     /**
-     * Builds the Bun method object for one compiled path. Without hooks each
-     * method forwards straight to the compiled core; with hooks each method
-     * runs onRequest once before the core and binds the resulting context
-     * onto the route.
+     * Builds the Bun method object for one compiled path. Every HTTP method
+     * key is present: a declared method runs its compiled core (wrapped by
+     * onRequest when hooks exist), an undeclared one answers the same
+     * 405 + Allow as the fetch path.
      */
     private buildMethods(path: string): NativeMethodHandlers {
         const cores = this.methodCores.get(path)!;
         const out: NativeMethodHandlers = {};
+        const allow = this.allowCache.get(path) ?? '';
+
         if (!this.hasOnRequest) {
-            for (const key of Object.keys(cores) as HTTPMethod[]) {
-                const core = cores[key]!;
-                out[key] = (request) => core(request);
+            // Every method key must exist on a matched path: Bun falls
+            // through to a less specific route when the key is missing.
+            const missing: NativeMethodHandler = this.globalResponseActive
+                ? (request) =>
+                      this.finishNonRouteResponse(
+                          methodNotAllowed(allow),
+                          request,
+                          undefined
+                      )
+                : () => methodNotAllowed(allow);
+            for (const key of HTTP_METHODS) {
+                const core = cores[key];
+                out[key] = core
+                    ? (request) => core(request)
+                    : missing;
             }
             return out;
         }
-        for (const key of Object.keys(cores) as HTTPMethod[]) {
-            const core = cores[key]!;
+
+        // Missing methods still run onRequest once and the global response
+        // hooks, exactly like the fetch path's 405.
+        const missing: NativeMethodHandler = async (request) => {
+            const outcome = await this.runOnRequest(request);
+            if (outcome.shortCircuit) return outcome.shortCircuit;
+            const finished = await this.finishNonRouteResponse(
+                methodNotAllowed(allow),
+                request,
+                outcome.ctx
+            );
+            return outcome.mappers.length > 0
+                ? this.applyMappers(finished, outcome.mappers)
+                : finished;
+        };
+
+        for (const key of HTTP_METHODS) {
+            const core = cores[key];
+            if (!core) {
+                out[key] = missing;
+                continue;
+            }
             const wrapped: NativeMethodHandler = async (request) => {
                 const outcome = await this.runOnRequest(request);
                 if (outcome.shortCircuit) return outcome.shortCircuit;
@@ -382,10 +418,15 @@ export class Router {
      * Wraps a non-API handler registered on the native routes map (pages,
      * static assets, `/openapi.json`, `/docs`) so global/plugin `onRequest`
      * hooks (CORS, logging, auth, rate limiting) apply to it exactly like
-     * API routes. Returned unchanged when no `onRequest` hooks exist.
+     * API routes. Also catches its errors for the global/plugin `onError`
+     * chain. Returned unchanged when no hooks exist.
      */
     wrapWithOnRequest<T extends (request: Request) => unknown>(handler: T): T {
-        if (this.onRequestHooks.length === 0 && !this.globalResponseActive) {
+        if (
+            this.onRequestHooks.length === 0 &&
+            !this.globalResponseActive &&
+            this.onErrorHooks.length === 0
+        ) {
             return handler;
         }
         const inner = handler as unknown as (
@@ -423,20 +464,61 @@ export class Router {
                     ? this.applyMappers(finished, outcome.mappers)
                     : finished;
             } catch (error) {
-                const rendered = this.renderUnhandled(request, error);
-                const finished = await this.finishNonRouteResponse(
-                    rendered,
+                // Page/asset/docs errors use the same onError chain as API
+                // routes, then the global response hooks.
+                const rendered = await this.renderNonRouteError(
+                    error,
                     request,
                     ctx,
                     env,
                     executionCtx
                 );
                 return outcome.mappers.length > 0
-                    ? this.applyMappers(finished, outcome.mappers)
-                    : finished;
+                    ? this.applyMappers(rendered, outcome.mappers)
+                    : rendered;
             }
         };
         return wrapped as unknown as T;
+    }
+
+    /**
+     * Runs the pre-routing `onError` chain (plugin + global) for a response
+     * source that has no matched route plan (page, asset, docs), then the
+     * global response hooks and `ctx.set` — the non-route equivalent of a
+     * route's error exit.
+     */
+    async renderNonRouteError(
+        error: unknown,
+        request: Request,
+        prebuilt?: BurgerContext,
+        env?: BurgerEnv,
+        executionCtx?: BurgerExecutionContext
+    ): Promise<Response> {
+        const ctx =
+            prebuilt ??
+            BurgerContext.create(
+                request,
+                undefined,
+                undefined,
+                this.appServices,
+                undefined,
+                env,
+                executionCtx,
+                this.ipHolder
+            );
+        const rendered = await dispatchOnError(
+            error,
+            this.onErrorHooks,
+            ctx,
+            this.debug
+        );
+        return this.finishNonRouteResponse(
+            rendered,
+            request,
+            ctx,
+            env,
+            executionCtx
+        );
     }
 
     /** Renders an error that escaped the pipeline; logs it when 5xx. */

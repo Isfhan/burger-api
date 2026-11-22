@@ -101,6 +101,21 @@ export default {
 };
 ```
 
+### Require roles
+
+```typescript
+// src/api/admin/config.ts
+export default {
+  auth: {
+    required: true,
+    roles: ["admin"],
+  },
+};
+```
+
+The token must carry at least one listed role in its `roles` claim (or the
+route responds `403`). A non-array claim counts as no roles.
+
 ## Context properties
 
 After successful validation, the verified token claims are available as
@@ -119,9 +134,18 @@ export async function GET(ctx: BurgerContext) {
 
 - **401 Unauthorized**: missing token, invalid signature, expired token, or
   invalid issuer/audience
+- **403 Forbidden**: the token lacks every role listed in the route's
+  `auth.roles`
 - **503 Service Unavailable**: OIDC discovery or JWKS could not be reached.
   The failure is logged with `console.error`; the client should retry (the
   token itself was not evaluated).
+
+## Key rotation
+
+JWKS are cached for `jwksCacheTtl` seconds. When a token names a `kid` that is
+not in the cache (the provider rotated keys early), the plugin forces one
+JWKS refetch and retries the token. Forced refetches are rate-limited to at
+most one every 30 seconds, so forged `kid` values cannot hammer the IdP.
 
 ## Security notes
 

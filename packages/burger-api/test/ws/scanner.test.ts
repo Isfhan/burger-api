@@ -230,3 +230,61 @@ describe('WebSocketScanner', () => {
         expect(result.routes[0]!.path).toBe('/ws/');
     });
 });
+
+describe('WebSocketScanner fail-loud folder rules', () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+        tempDir = mkdtempSync(join(tmpdir(), 'burger-ws-scanner-rules-'));
+    });
+
+    afterEach(() => {
+        rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    const wsAt = (...segments: string[]) => {
+        mkdirSync(join(tempDir, ...segments), { recursive: true });
+        writeFileSync(join(tempDir, ...segments, 'ws.ts'), 'export {};');
+    };
+
+    it('throws when two group folders resolve to the same path', async () => {
+        wsAt('(a)', 'chat');
+        wsAt('(b)', 'chat');
+        await expect(new WebSocketScanner(tempDir).scan()).rejects.toThrow(
+            'Duplicate route path registered: "/chat"'
+        );
+    });
+
+    it('throws when two dynamic folders in different groups share a level', async () => {
+        wsAt('(a)', '[x]');
+        wsAt('(b)', '[y]');
+        await expect(new WebSocketScanner(tempDir).scan()).rejects.toThrow(
+            'Duplicate route path registered'
+        );
+    });
+
+    it('throws on two dynamic folders at one level', async () => {
+        wsAt('[x]');
+        wsAt('[y]');
+        await expect(new WebSocketScanner(tempDir).scan()).rejects.toThrow(
+            'Multiple dynamic route folders found in the same directory'
+        );
+    });
+
+    it('throws on a named wildcard folder', async () => {
+        wsAt('files', '[...slug]');
+        await expect(new WebSocketScanner(tempDir).scan()).rejects.toThrow(
+            "Named wildcard folder '[...slug]' is not supported"
+        );
+    });
+
+    it('allows a dynamic and a wildcard folder side by side', async () => {
+        wsAt('rooms', '[id]');
+        wsAt('rooms', '[...]');
+        const result = await new WebSocketScanner(tempDir).scan();
+        expect(result.routes.map((r) => r.path).sort()).toEqual([
+            '/rooms/*',
+            '/rooms/:id',
+        ]);
+    });
+});

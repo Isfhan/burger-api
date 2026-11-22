@@ -1,5 +1,19 @@
 # Changelog: @burger-api/node-server
 
+## 0.1.1 (November 23, 2026)
+
+### Security
+
+- The `Host` header can no longer change which route runs. A request for
+  `/public` with `Host: example.com/admin?` used to run the `/admin` route. The
+  path now comes only from the request line, and an invalid `Host` gets `400`.
+
+### Fixes
+
+- When a client disconnects, `request.signal` aborts and the response stream
+  stops, so an SSE route no longer keeps running.
+- Absolute-form request targets (`GET http://host/path`) route correctly.
+
 ## 0.1.0 (November 2, 2026)
 
 First release: the official Node.js server for the new

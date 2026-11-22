@@ -52,10 +52,10 @@ export type NativeMethodHandler = (
 ) => Response | Promise<Response>;
 
 /**
- * A Bun `routes` method object: one specialized handler per defined method
- * (including the framework's derived `HEAD` and auto `OPTIONS`). A method
- * not present here falls through to the `fetch` fallback, where the
- * trie/static dispatcher answers 405 + Allow.
+ * A Bun `routes` method object: one specialized handler per HTTP method,
+ * including the framework's derived `HEAD`, auto `OPTIONS`, and a 405 +
+ * Allow for every method the route does not declare. Keeping every key
+ * present stops Bun from falling through to a less specific route.
  */
 export type NativeMethodHandlers = Partial<Record<HTTPMethod, NativeMethodHandler>>;
 

@@ -208,7 +208,18 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
             ctx.requestId = requestId;
         }
 
-        // Log once the response is ready.
+        // Log once the response is ready. Clone the request before the
+        // handler runs: once it reads the body, the original cannot be read
+        // again in the mapper. Only JSON is cloned — that is all the mapper
+        // logs, and cloning other types buffers uploads nobody reads.
+        const logContentType = ctx.headers.get('content-type');
+        const bodyForLog =
+            logBody &&
+            ['POST', 'PUT', 'PATCH'].includes(method) &&
+            logContentType?.includes('application/json')
+                ? ctx.clone()
+                : null;
+
         return async (response: Response): Promise<Response> => {
             const endTime = typeof Bun !== 'undefined' && Bun.nanoseconds
                 ? Bun.nanoseconds()
@@ -235,13 +246,11 @@ export function createLogger(options: LoggerOptions = {}): (ctx: BurgerContext) 
                 logInfo.headers = Object.fromEntries(ctx.headers as any);
             }
 
-            if (logBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
+            if (bodyForLog) {
                 try {
                     const contentType = ctx.headers.get('content-type');
                     if (contentType?.includes('application/json')) {
-                        // Clone the request so the handler can still read it.
-                        const clonedReq = ctx.clone();
-                        logInfo.body = await clonedReq.json();
+                        logInfo.body = await bodyForLog.json();
                     }
                 } catch {
                     // Ignore errors parsing body

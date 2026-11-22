@@ -145,8 +145,10 @@ export function cacheControl(options: CacheControlOptions = {}): (ctx: BurgerCon
             headers.set('Cache-Control', cacheControlValue);
 
             if (vary) {
-                const varyValue = Array.isArray(vary) ? vary.join(', ') : vary;
-                headers.set('Vary', varyValue);
+                const tokens = Array.isArray(vary) ? vary : vary.split(',');
+                for (const token of tokens) {
+                    appendVary(headers, token);
+                }
             }
 
             // ETag + conditional GET: only for successful GET/HEAD responses.
@@ -237,6 +239,35 @@ export function cdnCache(browserMaxAge: number = 300, cdnMaxAge: number = 3600):
         sMaxAge: cdnMaxAge,
         mustRevalidate: true,
     });
+}
+
+/**
+ * Append `token` to `Vary` without dropping tokens set by other hooks.
+ * De-duplicates case-insensitively; `Vary: *` already covers everything.
+ */
+function appendVary(headers: Headers, token: string): void {
+    const trimmed = token.trim();
+    if (!trimmed) {
+        return;
+    }
+
+    const vary = headers.get('Vary');
+    if (!vary) {
+        headers.set('Vary', trimmed);
+        return;
+    }
+
+    const tokens = vary
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const lower = tokens.map((value) => value.toLowerCase());
+
+    if (lower.includes('*') || lower.includes(trimmed.toLowerCase())) {
+        return;
+    }
+
+    headers.set('Vary', `${tokens.join(', ')}, ${trimmed}`);
 }
 
 /**

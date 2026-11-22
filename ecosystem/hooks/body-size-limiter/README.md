@@ -116,7 +116,9 @@ nothing. Use `onRequest` with stream mode.
 | `onError` | `(size, maxSize) => Response` | `413` JSON | Response for oversized bodies |
 | `includeLimit` | `boolean` | `true` | Include the received/maximum sizes in the default 413 body (`false` omits them) |
 
-`GET`, `HEAD`, `OPTIONS`, and `DELETE` requests are not checked.
+`GET`, `HEAD`, `OPTIONS`, and `DELETE` requests are checked whenever they
+carry a body; a request without a body is skipped. A `DELETE` (or any other
+method) with a body is limited in both modes.
 
 Default error body:
 

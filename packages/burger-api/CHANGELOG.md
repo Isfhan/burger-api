@@ -1,10 +1,65 @@
 # Changelog: burger-api
 
-## Unreleased
+## 1.0.0-beta.1 (November 23, 2026)
 
-- **Fix:** on Node (`@burger-api/node-server` / `createNodeWsBridge`), a
-  WebSocket `close` handler received the reason as a `Buffer` instead of a
-  string. It is now a string, as on Bun.
+### Security
+
+- **Errors:** a thrown error with a `status` of 500 or more that is not an
+  `HTTPError` (for example a database or SDK error) no longer shows its
+  message to clients in production. Your own `HTTPError` messages are
+  unchanged.
+- **Auth plugins:** `config.auth.roles` is now enforced by every auth plugin.
+  basic-auth and oidc check the user's `roles`; api-key and session have no
+  roles, so a route that lists roles answers `403`. jwt-auth no longer accepts
+  a `roles` string that merely contains a role name. An empty `roles: []`
+  means no role is required.
+
+### Fixes
+
+- **Bun and other runtimes agree:** a method a route does not define now gets
+  `405` on Bun too, instead of falling through to a less specific route (for
+  example a wildcard, or `/users/:id` for `/users/me`).
+- **`onError` for pages:** errors thrown by pages, assets and the docs routes
+  now go through your global and plugin `onError` hooks, like API routes.
+- **`ctx.set.status = 204` (or 205, 304):** the response body is dropped, so
+  Node no longer crashes and Bun no longer sends a body.
+- **HEAD and response validation:** HEAD requests follow the GET response
+  schema, so `responseValidation: 'enforce'` applies to them too.
+- **Params in `onRequest`:** response mappers returned by `onRequest` hooks see
+  `ctx.params` and `ctx.wildcardParams` on Bun, as on other runtimes.
+- **Malformed `%` escapes** in params decode the same on every runtime.
+- **Concurrent startup:** calling `fetchHandler()` or `serve()` twice at once
+  compiles routes once, instead of failing with a route collision.
+- **Convention files that apply to nothing:** a folder with `hooks.ts`,
+  `config.ts`, `schema.ts` or `openapi.ts` but no `route.ts` (for example a
+  `(group)` folder) now prints a startup warning, because routes do not
+  inherit from parent folders. WebSocket folders without `ws.ts` warn the
+  same way.
+- **Route names:** a route folder or path with characters that can never
+  match a request (spaces, non-ASCII) fails at startup with a clear message,
+  instead of silently returning 404.
+- **WebSocket:**
+  - On Cloudflare Workers, `open` handlers and `onOpen` hooks now run.
+  - On Node, a malformed frame from a client no longer crashes the process,
+    `ctx.ip` is set during the upgrade, and `maxPayloadLength` is applied.
+  - On Node, a `close` handler receives the reason as a string, as on Bun.
+  - A broken WebSocket route file, two folders that map to the same path,
+    two dynamic folders at one level, and a named `[...slug]` folder now fail
+    at startup.
+  - `rooms/[id]/[...]` wildcard routes match.
+  - `auth: true` requires a user, the same as `{ required: true }`.
+  - Response mappers from plugin `beforeRoute` hooks apply to rejected upgrades.
+- **Ecosystem hooks and plugins** (update copies with `burger-api add <name>
+  --force`):
+  - compression skips `text/event-stream` (SSE no longer hangs),
+    `Cache-Control: no-transform` and `206` responses.
+  - compression, cors and cache add to the `Vary` header instead of
+    replacing each other's values.
+  - body-size-limiter checks any request that has a body, including DELETE.
+  - basic-auth accepts UTF-8 usernames and passwords.
+  - logger's `logBody` now logs JSON bodies after the handler read them.
+  - oidc fetches the signing keys again (at most every 30 seconds) when a
+    token uses an unknown key, so key rotation no longer breaks login.
 
 ## 1.0.0-beta (November 2, 2026)
 

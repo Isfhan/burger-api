@@ -494,3 +494,64 @@ describe('WebSocket auth through the app wiring (fetchHandler)', () => {
         expect(await res.text()).toBe('blocked');
     });
 });
+
+describe('WebSocket auth: true and plugin beforeRoute mappers', () => {
+    const upgrade = (path = '/chat') =>
+        new Request(`http://localhost${path}`, {
+            headers: { upgrade: 'websocket' },
+        });
+
+    it('treats auth: true like auth.required (adapter level)', async () => {
+        const router = new WebSocketRouter();
+        router.addRoute({ path: '/chat', handlers: {}, config: { auth: true } });
+        const adapter = new WebSocketAdapter({ router, debug: false });
+        let upgraded = false;
+        const outcome = await adapter.handleUpgrade(upgrade(), {
+            upgrade: () => (upgraded = true),
+        });
+        expect(upgraded).toBe(false);
+        expect(
+            (outcome as { response?: Response }).response?.status
+        ).toBe(401);
+    });
+
+    it('treats auth: true like auth.required (app wiring, global roles kept)', async () => {
+        const burger = new Burger({
+            apiRoutes: [],
+            wsRoutes: [{ path: '/chat', handlers: {}, config: { auth: true } }],
+        });
+        burger.wsConfig({ auth: { roles: ['admin'] } });
+        const handler = await burger.fetchHandler();
+        const res = await handler(upgrade());
+        expect(res.status).toBe(401);
+    });
+
+    it('applies a plugin beforeRoute mapper to an upgrade rejection', async () => {
+        const router = new WebSocketRouter();
+        router.addRoute({
+            path: '/chat',
+            handlers: {},
+            config: { auth: { required: true } },
+        });
+        const adapter = new WebSocketAdapter({
+            router,
+            debug: false,
+            pluginBeforeRoute: [
+                async () => (res: Response) => {
+                    const headers = new Headers(res.headers);
+                    headers.set('x-plugin', '1');
+                    return new Response(res.body, {
+                        status: res.status,
+                        headers,
+                    });
+                },
+            ],
+        });
+        const outcome = await adapter.handleUpgrade(upgrade(), {
+            upgrade: () => true,
+        });
+        const res = (outcome as { response?: Response }).response!;
+        expect(res.status).toBe(401);
+        expect(res.headers.get('x-plugin')).toBe('1');
+    });
+});
