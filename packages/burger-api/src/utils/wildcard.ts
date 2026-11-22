@@ -29,3 +29,27 @@ export function extractPathnameFromUrl(url: string): string {
     }
     return url.slice(pathStart);
 }
+
+/**
+ * True when the pathname of a full URL string ends with `/`, without
+ * allocating the pathname. Needed where Bun's native wildcard handler does not
+ * expose `request.params['*']`.
+ */
+export function urlPathnameEndsWithSlash(url: string): boolean {
+    const authorityEnd =
+        url.charCodeAt(4) === 58 /* : */
+            ? 7
+            : url.charCodeAt(5) === 58 /* : */
+              ? 8
+              : url.indexOf('://') + 3;
+    const found = url.indexOf('/', authorityEnd);
+    const pathStart = found === -1 ? 0 : found;
+
+    for (let i = pathStart; i < url.length; i++) {
+        const code = url.charCodeAt(i);
+        if (code === 63 /* ? */ || code === 35 /* # */) {
+            return url.charCodeAt(i - 1) === 47;
+        }
+    }
+    return url.charCodeAt(url.length - 1) === 47;
+}

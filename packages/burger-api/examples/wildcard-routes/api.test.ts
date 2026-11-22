@@ -157,7 +157,10 @@ describe('Wildcard Routes API', () => {
             const response = await fetchAPI('/api/users/1/');
             expect(response.status).toBe(200);
             const data = await response.json();
-            expect(data.message).toBe('User wildcard route');
+            // The slash is removed before matching, so the `:userId` route
+            // wins over the nested wildcard.
+            expect(data.message).toBe('User details');
+            expect(data.userId).toBe('1');
         });
     });
 

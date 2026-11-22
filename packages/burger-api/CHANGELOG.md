@@ -19,6 +19,10 @@
 - **Bun and other runtimes agree:** a method a route does not define now gets
   `405` on Bun too, instead of falling through to a less specific route (for
   example a wildcard, or `/users/:id` for `/users/me`).
+- **Trailing slash:** the slash is now removed before matching, so
+  `/api/products/1/` reaches `/api/products/:id` even when a sibling `[...]`
+  wildcard exists, and `/api/files/` gives an empty `wildcardParams` (`[]`)
+  instead of `[""]`. Same on Bun and every other runtime.
 - **`onError` for pages:** errors thrown by pages, assets and the docs routes
   now go through your global and plugin `onError` hooks, like API routes.
 - **`ctx.set.status = 204` (or 205, 304):** the response body is dropped, so

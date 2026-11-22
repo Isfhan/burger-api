@@ -6,7 +6,10 @@ import {
     notFound,
     methodNotAllowed,
 } from '../utils/response.js';
-import { extractPathnameFromUrl } from '../utils/wildcard.js';
+import {
+    extractPathnameFromUrl,
+    urlPathnameEndsWithSlash,
+} from '../utils/wildcard.js';
 import { isThenable } from '../utils/thenable.js';
 import { RouterCompiler, buildGlobalResponsePlan } from './compiler.js';
 import {
@@ -269,15 +272,47 @@ export class Router {
 
     /**
      * Same method-object shape for `:param` / `*` routes: Bun matches the
-     * pattern natively and passes decoded `request.params`, so no URL
-     * re-parsing happens on the hot path. Every HTTP method key is present,
-     * matching the fetch path's 405 + Allow instead of falling through.
+     * pattern natively. Wildcard requests with a trailing slash are handed to
+     * the fetch dispatch (which strips the slash before matching); ordinary
+     * wildcard requests keep their native dispatch. Every HTTP method key is
+     * present, matching the fetch path's 405 + Allow instead of falling
+     * through.
      */
     nativeRoutes(): Record<string, NativeMethodHandlers> {
         if (this.cachedNativeRoutes) return this.cachedNativeRoutes;
         const out: Record<string, NativeMethodHandlers> = {};
         for (const pattern of this.nativeRoutesMap.keys()) {
-            out[pattern] = this.buildMethods(pattern);
+            const methods = this.buildMethods(pattern);
+            // Bun matches a native wildcard before the fetch fallback, so a
+            // trailing slash arrives here instead of `dispatchMatched`. Hand
+            // it to the fetch path, which removes the slash before matching.
+            if (pattern.includes('*')) {
+                for (const key of HTTP_METHODS) {
+                    const inner = methods[key]!;
+                    methods[key] = (request) => {
+                        // Newer Bun versions expose the wildcard remainder;
+                        // older ones leave `request.params` empty, so fall
+                        // back to the URL pathname (still allocation-free).
+                        const wildcard = (
+                            request as {
+                                params?: Record<string, string>;
+                            }
+                        ).params?.['*'];
+                        const trailing =
+                            wildcard !== undefined
+                                ? wildcard.endsWith('/')
+                                : urlPathnameEndsWithSlash(request.url);
+                        if (trailing) {
+                            return this.fetchWithPath(
+                                request,
+                                extractPathnameFromUrl(request.url)
+                            );
+                        }
+                        return inner(request);
+                    };
+                }
+            }
+            out[pattern] = methods;
         }
         this.cachedNativeRoutes = out;
         return out;
@@ -827,9 +862,10 @@ export class Router {
         env?: BurgerEnv,
         executionCtx?: BurgerExecutionContext
     ): Response | Promise<Response> {
-        // Collapse repeated slashes but PRESERVE a single trailing slash (the
-        // exact form is tried first; the slash-less form is the fallback).
-        // The regex runs only when the path actually carries `//`.
+        // Collapse repeated slashes but PRESERVE a single trailing slash (an
+        // explicitly registered static slash form is tried first; otherwise
+        // the slash is removed before dynamic matching). The regex runs only
+        // when the path actually carries `//`.
         const path = raw.indexOf('//') === -1 ? raw : raw.replace(/\/+/g, '/');
 
         // 1. Exact static route (slash-preserving — Bun already serves the exact
@@ -862,19 +898,15 @@ export class Router {
                 : applyToResponse(response, apply);
         }
 
-        // 2. Dynamic / wildcard routes (see matchDynamic). A `:param` never
-        // matches an empty segment (`/users/` is not `/users/:id` with id "");
-        // a trailing slash is retried without it, so `/users/1/` ≡ `/users/1`.
+        // 2. Loose trailing slash: remove it BEFORE matching so a sibling
+        // wildcard cannot steal a `:param` match (`/users/1/` ≡ `/users/1`,
+        // not the wildcard with `['1', '']`). The exact slash form of a
+        // static route was already tried above; `/` is never stripped.
         let routePath = path;
-        let match = this.matchDynamic(path);
-        if (!match && path.length > 1 && path.endsWith('/')) {
-            // 3. Loose trailing-slash fallback: `/foo/` ≡ `/foo`.
-            // `path` is already slash-collapsed, so stripping the trailing
-            // slash is exactly `normalizePath(raw)`.
+        let match: RegexMatch | import('./trie.js').TrieMatch | null = null;
+        if (path.length > 1 && path.endsWith('/')) {
             const normalized = path.slice(0, -1);
-            const loose =
-                this.staticMap.getEntry(normalized) ??
-                this.staticMap.getEntry(normalized + '/');
+            const loose = this.staticMap.getEntry(normalized);
             if (loose) {
                 const ctxInit: ContextInit = {
                     route: { path: normalized, pattern: normalized },
@@ -900,8 +932,13 @@ export class Router {
                     : applyToResponse(response, apply);
             }
             match = this.matchDynamic(normalized);
-            routePath = normalized;
+            if (match) routePath = normalized;
         }
+
+        // 3. Dynamic / wildcard routes in their exact form (see
+        // matchDynamic). A `:param` never matches an empty segment
+        // (`/users/` is not `/users/:id` with id "").
+        if (!match) match = this.matchDynamic(path);
         if (match) {
             // Auto-HEAD: a GET route implies HEAD is allowed.
             const method = request.method;
