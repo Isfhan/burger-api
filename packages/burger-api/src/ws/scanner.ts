@@ -5,6 +5,7 @@
 import { readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { resolveScanDir } from '../utils/fs.js';
+import { ROUTE_CONSTANTS } from '../utils/routing.js';
 import {
     splitConventionName,
     type ConventionFile,
@@ -94,6 +95,29 @@ export class WebSocketScanner {
         const routes: ScannedWebSocketRoute[] = [];
         await this.walk(this.wsDir, routes);
 
+        // Groups strip from the URL, so different folders can collide. Detect
+        // both exact duplicates and duplicate dynamic shapes (`/:x` vs `/:y`).
+        const seenPaths = new Set<string>();
+        for (const route of routes) {
+            const shape = route.path
+                .split('/')
+                .map((segment) =>
+                    segment.startsWith(
+                        ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX
+                    )
+                        ? ROUTE_CONSTANTS.DYNAMIC_SEGMENT_PREFIX
+                        : segment
+                )
+                .join('/');
+            if (seenPaths.has(shape)) {
+                throw new Error(
+                    `Duplicate route path registered: "${route.path}". ` +
+                        `Two route directories resolve to the same URL.`
+                );
+            }
+            seenPaths.add(shape);
+        }
+
         // Detect global hooks at the parent directory
         let globalHooks: string | undefined;
         const parentDir = path.dirname(this.wsDir);
@@ -133,6 +157,44 @@ export class WebSocketScanner {
 
         const entries = await readdir(dir, { withFileTypes: true });
         const subDirs: string[] = [];
+
+        // Validate folder-level conflicts before recursing, matching the
+        // HTTP scanner's fail-loud rules.
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const name = entry.name;
+            if (
+                name.startsWith(ROUTE_CONSTANTS.WILDCARD_START) &&
+                name !== ROUTE_CONSTANTS.WILDCARD_SIMPLE
+            ) {
+                throw new Error(
+                    `Named wildcard folder '${name}' is not supported — ` +
+                        `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
+                );
+            }
+            const isDynamic =
+                name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
+                name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&
+                !name.startsWith(ROUTE_CONSTANTS.WILDCARD_START);
+            const isWildcard = name === ROUTE_CONSTANTS.WILDCARD_SIMPLE;
+
+            // Dynamic + wildcard siblings are legal — the router resolves
+            // them by priority (static > `:param` > `*`).
+            if (isDynamic && dynamicFolderFound) {
+                throw new Error(
+                    `Multiple dynamic route folders found in the same directory: ` +
+                        `'${name}' conflicts with another dynamic folder in '${dir}'.`
+                );
+            }
+            if (isWildcard && wildcardFolderFound) {
+                throw new Error(
+                    `Multiple wildcard route folders found in the same directory: ` +
+                        `'${name}' conflicts with another wildcard folder in '${dir}'.`
+                );
+            }
+            if (isDynamic) dynamicFolderFound = true;
+            if (isWildcard) wildcardFolderFound = true;
+        }
 
         // Collect ws / hooks / config files across all accepted extensions.
         const wsFiles: Map<string, string> = new Map();
@@ -187,6 +249,20 @@ export class WebSocketScanner {
                 isGroup,
                 groupName,
             });
+        } else if (wsFiles.size > 0) {
+            // No `ws.ts`, so sibling hooks/config apply to nothing — routes
+            // never inherit from parent folders.
+            const relativeFolder = path
+                .relative(this.wsDir, dir)
+                .split(path.sep)
+                .join('/');
+            const fileNames = [...wsFiles.values()]
+                .map((file) => path.basename(file))
+                .sort();
+            console.warn(
+                `[burger-api] ${relativeFolder || '.'} has ${fileNames.join(', ')} but no ws.ts, so they apply to nothing. ` +
+                    `Convention files are not inherited by child routes: put hooks.ts/config.ts next to each ws.ts.`
+            );
         }
 
         // Process subdirectories. Group directories only affect the URL but

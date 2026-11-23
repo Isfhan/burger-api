@@ -101,6 +101,9 @@ Origin strings and arrays are matched case-insensitively.
   `production`.
 - For normal requests the hook returns a response transform, so the CORS
   headers are added to the handler's response.
+- `Vary: Origin` is appended rather than overwritten, so tokens added by other
+  hooks (such as compression's `Accept-Encoding`) survive. Existing tokens are
+  de-duplicated case-insensitively, and `Vary: *` is left as `*`.
 
 CORS headers are added to the responses the hook sees; a global `onRequest`
 hook sees every request the app handles.

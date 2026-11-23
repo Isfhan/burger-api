@@ -18,7 +18,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError, timingSafeEqual } from "burger-api";
+import { UnauthorizedError, ForbiddenError, timingSafeEqual } from "burger-api";
 
 declare module "burger-api" {
   interface BurgerContext {
@@ -320,7 +320,9 @@ export function session(options: SessionOptions = {}): Plugin {
       },
 
       beforeRoute: (ctx: BurgerContext): void => {
-        const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
+        const config = ctx.config as
+          | { auth?: boolean | { required?: boolean; roles?: string[] } }
+          | undefined;
 
         // Skip auth check if explicitly disabled
         if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
@@ -333,6 +335,14 @@ export function session(options: SessionOptions = {}): Plugin {
         // `ctx.session?.userId`) to require an authenticated user.
         if (!ctx.session) {
           throw new UnauthorizedError("Session required");
+        }
+
+        // A session has no roles concept: a route that lists roles must fail
+        // closed instead of silently allowing any session through.
+        const requiredRoles =
+          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+          throw new ForbiddenError("Insufficient permissions");
         }
       },
 

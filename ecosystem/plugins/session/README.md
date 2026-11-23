@@ -110,6 +110,13 @@ export async function GET(ctx: BurgerContext) {
 }
 ```
 
+### Roles
+
+Sessions have no roles concept. A route whose `config.auth` lists `roles`
+**fails closed**: after the session check the plugin responds `403`, never
+letting the request through. Enforce authorisation with a route hook that
+inspects fields your login handler put in `ctx.session`.
+
 ### With custom store
 
 ```typescript
@@ -180,6 +187,8 @@ plugin's `declare module "burger-api"` augmentation, so no casts are needed.
 
 - **401 Unauthorized**: `Session required`, no valid session on a route
   without `auth: false`
+- **403 Forbidden**: the route lists `auth.roles` (sessions have no roles, so
+  the plugin fails closed)
 
 ## Security notes
 

@@ -7,6 +7,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
+import net from 'node:net';
 import { Burger } from 'burger-api';
 import type { RouteDefinition } from 'burger-api';
 import { serve } from '../dist/src/index.js';
@@ -27,6 +28,24 @@ function listenOnFreePort(app: Burger): Promise<{
                         server.close((err) => (err ? rej(err) : res()));
                     }),
             });
+        });
+    });
+}
+
+/** Sends a raw HTTP/1.1 request and returns the full response text. */
+function rawRequest(port: number, request: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1', () =>
+            socket.write(request)
+        );
+        let data = '';
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk) => (data += chunk));
+        socket.on('end', () => resolve(data));
+        socket.on('error', reject);
+        socket.setTimeout(2000, () => {
+            socket.destroy();
+            resolve(data);
         });
     });
 }
@@ -80,6 +99,186 @@ describe('serve() — plain HTTP', () => {
             const res = await fetch(`${baseUrl}/api/hello`);
             assert.equal(res.status, 200);
         } finally {
+            await close();
+        }
+    });
+});
+
+describe('serve() — request target and Host validation', () => {
+    function makeProxyApp(): Burger {
+        return new Burger({
+            apiRoutes: [
+                {
+                    path: '/public',
+                    handlers: {
+                        GET: (ctx) =>
+                            Response.json({ route: 'public', url: ctx.url }),
+                    },
+                },
+                {
+                    path: '/admin',
+                    handlers: {
+                        GET: () => Response.json({ route: 'ADMIN' }),
+                    },
+                },
+            ],
+        });
+    }
+
+    test('a path in Host cannot override the request target', async () => {
+        const { baseUrl, close } = await listenOnFreePort(makeProxyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            const response = await rawRequest(
+                port,
+                'GET /public HTTP/1.1\r\nHost: example.com/admin?\r\nConnection: close\r\n\r\n'
+            );
+            assert.match(response, /^HTTP\/1\.1 400 /);
+            assert.ok(!response.includes('ADMIN'));
+        } finally {
+            await close();
+        }
+    });
+
+    test('absolute-form targets route by pathname, not the full URL', async () => {
+        const { baseUrl, close } = await listenOnFreePort(makeProxyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            const response = await rawRequest(
+                port,
+                'GET http://example.com/public HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n'
+            );
+            assert.match(response, /^HTTP\/1\.1 200 /);
+            assert.ok(response.includes('"route":"public"'));
+            assert.ok(response.includes('"url":"http://example.com/public"'));
+        } finally {
+            await close();
+        }
+    });
+
+    test('an invalid Host gets 400 instead of a thrown 500', async () => {
+        const { baseUrl, close } = await listenOnFreePort(makeProxyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            const response = await rawRequest(
+                port,
+                'GET /public HTTP/1.1\r\nHost: a b\r\nConnection: close\r\n\r\n'
+            );
+            assert.match(response, /^HTTP\/1\.1 400 /);
+        } finally {
+            await close();
+        }
+    });
+
+    test('accepts an IPv6 Host with a port', async () => {
+        const { baseUrl, close } = await listenOnFreePort(makeProxyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            const response = await rawRequest(
+                port,
+                'GET /public HTTP/1.1\r\nHost: [::1]:3000\r\nConnection: close\r\n\r\n'
+            );
+            assert.match(response, /^HTTP\/1\.1 200 /);
+            assert.ok(response.includes('"route":"public"'));
+        } finally {
+            await close();
+        }
+    });
+});
+
+describe('serve() — client disconnect', () => {
+    test('aborts the request and cancels the body stream', async () => {
+        let ticks = 0;
+        let aborted = false;
+        let cancelled = false;
+        let markAborted!: () => void;
+        let markCancelled!: () => void;
+        const abortSeen = new Promise<void>((resolve) => {
+            markAborted = resolve;
+        });
+        const cancelSeen = new Promise<void>((resolve) => {
+            markCancelled = resolve;
+        });
+
+        const app = new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/sse',
+                    handlers: {
+                        GET: (ctx) => {
+                            ctx.request.signal.addEventListener(
+                                'abort',
+                                () => {
+                                    aborted = true;
+                                    markAborted();
+                                },
+                                { once: true }
+                            );
+                            return new Response(
+                                new ReadableStream({
+                                    async pull(controller) {
+                                        ticks++;
+                                        await new Promise((r) =>
+                                            setTimeout(r, 10)
+                                        );
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                'data: x\n\n'
+                                            )
+                                        );
+                                    },
+                                    cancel() {
+                                        cancelled = true;
+                                        markCancelled();
+                                    },
+                                }),
+                                {
+                                    headers: {
+                                        'content-type': 'text/event-stream',
+                                    },
+                                }
+                            );
+                        },
+                    },
+                },
+            ],
+        });
+
+        const { baseUrl, close } = await listenOnFreePort(app);
+        const port = Number(new URL(baseUrl).port);
+        const socket = net.connect(port, '127.0.0.1', () => {
+            socket.write(
+                'GET /api/sse HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            );
+        });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                socket.once('data', () => resolve());
+                socket.once('error', reject);
+                setTimeout(resolve, 1000);
+            });
+            socket.destroy();
+
+            await Promise.race([
+                abortSeen,
+                new Promise((r) => setTimeout(r, 1000)),
+            ]);
+            assert.equal(aborted, true);
+
+            await Promise.race([
+                cancelSeen,
+                new Promise((r) => setTimeout(r, 1000)),
+            ]);
+            assert.equal(cancelled, true);
+
+            const after = ticks;
+            await new Promise((r) => setTimeout(r, 100));
+            assert.ok(
+                ticks <= after + 1,
+                `stream kept pulling after disconnect: ${after} -> ${ticks}`
+            );
+        } finally {
+            socket.destroy();
             await close();
         }
     });

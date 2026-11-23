@@ -168,31 +168,43 @@ describe('WebSocketCompiler', () => {
         expect(compiled).toHaveLength(3);
     });
 
-    it('should skip failed routes gracefully', async () => {
-        // Create a valid route
-        writeFileSync(
-            join(tempDir, 'valid.ts'),
-            `
- export const open = (ws) => {};
- `
-        );
+    it('fails loud naming the file when a route module throws on import', async () => {
+        writeFileSync(join(tempDir, 'ws.ts'), 'export const open = () => {};');
+        const badConfig = join(tempDir, 'config.ts');
+        writeFileSync(badConfig, "throw new Error('boom');");
 
         const routes = [
-            createScannedRoute({
-                path: '/',
-                wsFile: join(tempDir, 'valid.ts'),
-            }),
+            createScannedRoute({ path: '/', wsFile: join(tempDir, 'ws.ts') }),
             createScannedRoute({
                 path: '/bad',
-                wsFile: '/nonexistent/file.ts',
+                wsFile: join(tempDir, 'ws.ts'),
+                configFile: badConfig,
             }),
         ];
 
-        const compiled = await compiler.compileAll(routes);
+        const error = await compiler.compileAll(routes).then(
+            () => null,
+            (e: Error) => e
+        );
+        expect(error?.message).toContain('"/bad"');
+        expect(error?.message).toContain(badConfig);
+        expect(error?.message).toContain('boom');
+    });
 
-        // Should only include the valid route
-        expect(compiled).toHaveLength(1);
-        expect(compiled[0]!.path).toBe('/');
+    it('maps auth: true to auth.required', async () => {
+        writeFileSync(join(tempDir, 'ws.ts'), 'export const open = () => {};');
+        writeFileSync(
+            join(tempDir, 'config.ts'),
+            'export default { auth: true };'
+        );
+        compiler.setGlobalConfig({ auth: { roles: ['admin'] } });
+        const compiled = await compiler.compile(
+            createScannedRoute({ configFile: join(tempDir, 'config.ts') })
+        );
+        expect(compiled.config.auth).toEqual({
+            roles: ['admin'],
+            required: true,
+        });
     });
 
     it('should preserve route params', async () => {

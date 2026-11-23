@@ -189,3 +189,47 @@ describe('WebSocketRouter', () => {
         expect(router.match('/rooms/')).toBeNull();
     });
 });
+
+describe('WebSocketRouter wildcard routes with a param prefix', () => {
+    const createRoute = (path: string): CompiledWebSocketRoute => ({
+        path,
+        handlers: {},
+        config: {},
+    });
+
+    it('matches a wildcard whose prefix has a param, decoding like HTTP', () => {
+        const router = new WebSocketRouter();
+        router.addRoute(createRoute('/rooms/:id/*'));
+        const match = router.match('/rooms/a%20b/x/y%2Fz');
+        expect(match?.route.path).toBe('/rooms/:id/*');
+        expect(match?.params).toEqual({ id: 'a b', '*': 'x/y%2Fz' });
+        expect(match?.wildcardParams).toEqual(['x', 'y/z']);
+    });
+
+    it('never binds a param prefix to an empty segment', () => {
+        const router = new WebSocketRouter();
+        router.addRoute(createRoute('/rooms/:id/*'));
+        expect(router.match('/rooms//x')).toBeNull();
+    });
+
+    it('matches its own base path with no wildcard segments', () => {
+        const router = new WebSocketRouter();
+        router.addRoute(createRoute('/files/*'));
+        const match = router.match('/files');
+        expect(match?.route.path).toBe('/files/*');
+        expect(match?.wildcardParams).toEqual([]);
+        expect(router.match('/filesx')).toBeNull();
+    });
+
+    it('keeps static > param > wildcard at the first differing segment', () => {
+        const router = new WebSocketRouter();
+        router.addRoute(createRoute('/rooms/*'));
+        router.addRoute(createRoute('/rooms/:id/*'));
+        router.addRoute(createRoute('/rooms/lobby/*'));
+        expect(router.match('/rooms/lobby/x')?.route.path).toBe(
+            '/rooms/lobby/*'
+        );
+        expect(router.match('/rooms/7/x')?.route.path).toBe('/rooms/:id/*');
+        expect(router.match('/rooms')?.route.path).toBe('/rooms/*');
+    });
+});

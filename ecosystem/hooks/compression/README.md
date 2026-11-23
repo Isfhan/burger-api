@@ -8,8 +8,9 @@ Compresses response bodies with gzip or deflate when the client supports it.
 - Minimum-size threshold
 - Content-type include and exclude filters
 - Skips already compressed and bodiless responses
+- Skips event streams, `no-transform` responses, and `206` partial content
 - Only uses the compressed body when it is smaller
-- Sets `Content-Encoding` and `Vary: Accept-Encoding`
+- Sets `Content-Encoding` and appends `Vary: Accept-Encoding`
 
 ## Installation
 
@@ -60,13 +61,15 @@ export const beforeRoute = [
 1. Reads `Accept-Encoding` and picks the first configured encoding the client
    accepts.
 2. Skips responses that already have `Content-Encoding`, have no body, or are
-   `204`/`304`.
-3. Skips excluded content types, and non-matching types when `contentTypes`
+   `204`/`304`/`206`.
+3. Skips `text/event-stream` (live streams must pass through unbuffered) and
+   responses with `Cache-Control: no-transform`.
+4. Skips excluded content types, and non-matching types when `contentTypes`
    is set.
-4. Compresses the body and uses the result only if it is smaller than the
+5. Compresses the body and uses the result only if it is smaller than the
    original.
-5. On compression, sets `Content-Encoding`, adds `Vary: Accept-Encoding`, and
-   removes `Content-Length`.
+6. On compression, sets `Content-Encoding`, appends `Accept-Encoding` to
+   `Vary` (keeping tokens other hooks set), and removes `Content-Length`.
 
 ## Brotli
 

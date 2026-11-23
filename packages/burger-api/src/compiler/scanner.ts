@@ -112,6 +112,7 @@ export class DirectoryScanner {
                         `use '${ROUTE_CONSTANTS.WILDCARD_SIMPLE}' (anonymous) instead.`
                 );
             }
+            assertUsableFolderName(name, dir);
             const isDynamic =
                 name.startsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_START) &&
                 name.endsWith(ROUTE_CONSTANTS.DYNAMIC_FOLDER_END) &&
@@ -166,6 +167,20 @@ export class DirectoryScanner {
                     ROUTE_CONSTANTS.WILDCARD_SEGMENT_PREFIX
                 ),
             });
+        } else if (conventionByStem.size > 0) {
+            // No `route.ts`, so every sibling convention file applies to
+            // nothing — routes never inherit from parent folders.
+            const relativeFolder = path
+                .relative(this.routesDir, dir)
+                .split(path.sep)
+                .join('/');
+            const fileNames = [...conventionByStem.values()]
+                .map((file) => path.basename(file))
+                .sort();
+            console.warn(
+                `[burger-api] ${relativeFolder || '.'} has ${fileNames.join(', ')} but no route.ts, so they apply to nothing. ` +
+                    `Convention files are not inherited by child routes: put hooks.ts/config.ts next to each route.ts.`
+            );
         }
 
         // Recurse into subdirectories.
@@ -180,6 +195,34 @@ export class DirectoryScanner {
             }
             await this.walk(childPath, out);
         }
+    }
+}
+
+/**
+ * Route folder labels allow every RFC 3986 path character except `(` `)` `[`
+ * `]`, which stay reserved for the `(group)`, `[param]` and `[...]`
+ * conventions. Anything else can never match (or crashes `Bun.serve`), so it
+ * fails at startup instead of silently 404ing.
+ */
+const USABLE_FOLDER_CHARS = /^[A-Za-z0-9._~!$&'*+,;=:@-]+$/;
+
+function assertUsableFolderName(name: string, dir: string): void {
+    let label = name;
+    if (name.length >= 2 && name[0] === '(' && name[name.length - 1] === ')') {
+        label = name.slice(1, -1);
+    } else if (
+        name.length >= 2 &&
+        name[0] === '[' &&
+        name[name.length - 1] === ']'
+    ) {
+        label = name.slice(1, -1);
+        if (label === '...') return; // anonymous wildcard
+        if (label.startsWith('...')) label = label.slice(3);
+    }
+    if (label.length === 0 || !USABLE_FOLDER_CHARS.test(label)) {
+        throw new Error(
+            `Unusable route folder name '${name}' in '${dir}': use only letters, digits and - . _ ~ ! $ & ' * + , ; = : @ (spaces and non-ASCII characters can never match a request).`
+        );
     }
 }
 

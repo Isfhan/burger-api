@@ -21,7 +21,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError, renderHTTPError } from "burger-api";
+import { UnauthorizedError, ForbiddenError, renderHTTPError } from "burger-api";
 
 // All auth plugins merge their fields into `BurgerAuthUser`, the shared
 // augmentation point for `ctx.user` / `ws.user`, so they can be installed
@@ -91,14 +91,17 @@ export interface BasicAuthOptions {
 }
 
 /**
- * Decode Base64 string
+ * Decode Base64 credentials as UTF-8 (the charset the challenge advertises).
+ * Throws on malformed base64.
  */
 function base64Decode(str: string): string {
   // Add padding if needed
   const padded = str.replace(/-/g, "+").replace(/_/g, "/");
   const padding = padded.length % 4;
   const normalized = padding ? padded + "=".repeat(4 - padding) : padded;
-  return atob(normalized);
+  return new TextDecoder().decode(
+    Uint8Array.from(atob(normalized), (c) => c.charCodeAt(0))
+  );
 }
 
 /**
@@ -182,7 +185,9 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
       },
 
       beforeRoute: async (ctx: BurgerContext): Promise<Response | void> => {
-        const config = ctx.config as { auth?: boolean | { required?: boolean } } | undefined;
+        const config = ctx.config as
+          | { auth?: boolean | { required?: boolean; roles?: string[] } }
+          | undefined;
 
         // Skip auth check if explicitly disabled
         if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
@@ -192,6 +197,7 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         // Already validated in transform
         const user = ctx.user;
         if (user) {
+          assertRoles(config, user);
           return;
         }
 
@@ -204,6 +210,8 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
         if (!validatedUser) {
           return challenge("Invalid credentials");
         }
+
+        assertRoles(config, validatedUser);
 
         if (attachToContext) {
           ctx.user = validatedUser;
@@ -224,5 +232,29 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
       `Basic realm="${realm.replace(/["\\]/g, '\\$&')}", charset="UTF-8"`
     );
     return response;
+  }
+}
+
+/**
+ * Enforce a route's `config.auth.roles`. A non-array user `roles` value counts
+ * as no roles, so a string claim can never match by substring.
+ */
+function assertRoles(
+  config: { auth?: boolean | { required?: boolean; roles?: string[] } } | undefined,
+  user: unknown
+): void {
+  const requiredRoles = config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+
+  // An empty (or non-array) list means no role is required.
+  if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) {
+    return;
+  }
+
+  const claim = (user as { roles?: unknown } | undefined)?.roles;
+  const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
+  const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
+  if (!hasRole) {
+    throw new ForbiddenError("Insufficient permissions");
   }
 }

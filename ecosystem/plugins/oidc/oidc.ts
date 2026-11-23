@@ -19,7 +19,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { HTTPError, UnauthorizedError } from "burger-api";
+import { HTTPError, UnauthorizedError, ForbiddenError } from "burger-api";
 
 // All auth plugins merge their fields into `BurgerAuthUser`, the shared
 // augmentation point for `ctx.user` / `ws.user`, so they can be installed
@@ -171,22 +171,24 @@ function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
  *
  * The token's `alg` must be allowlisted, and the selected key must match the
  * algorithm family (`kty`) and be usable for signatures (`use`).
- * Import/verification failures return `false` — auth failures, not server
- * errors.
+ *
+ * Returns `'unknown-kid'` when no key with the token's `kid` exists, so the
+ * caller can refetch keys once after a rotation. Import/verification failures
+ * are `'invalid'` — auth failures, not server errors.
  */
 async function verifyToken(
   token: string,
   keys: JwksKey[],
   algorithms: string[]
-): Promise<boolean> {
+): Promise<"valid" | "invalid" | "unknown-kid"> {
   const parts = token.split(".");
   if (parts.length !== 3) {
-    return false;
+    return "invalid";
   }
 
   const [header, payload, signature] = parts;
   if (!header || !payload || !signature) {
-    return false;
+    return "invalid";
   }
 
   let headerDecoded: { alg?: unknown; kid?: unknown };
@@ -195,17 +197,17 @@ async function verifyToken(
       new TextDecoder().decode(base64UrlDecode(header))
     );
   } catch {
-    return false;
+    return "invalid";
   }
 
   const alg = headerDecoded.alg;
   if (typeof alg !== "string" || !algorithms.includes(alg)) {
-    return false;
+    return "invalid";
   }
 
   const kid = headerDecoded.kid;
   if (typeof kid !== "string" || !kid) {
-    return false;
+    return "invalid";
   }
 
   // Key must be usable for signatures and match the token's alg if declared.
@@ -216,26 +218,28 @@ async function verifyToken(
       (k.alg === undefined || k.alg === alg)
   );
   if (!key) {
-    return false;
+    // A rotated-out key is worth one refetch; a key that is present but
+    // unusable for this token is not.
+    return keys.some((k) => k.kid === kid) ? "invalid" : "unknown-kid";
   }
 
   let importAlgorithm: ImportKeyAlgorithm;
   let verifyAlgorithm: VerifyAlgorithm;
   if (alg === "RS256") {
     if (key.kty !== "RSA") {
-      return false;
+      return "invalid";
     }
     importAlgorithm = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
     verifyAlgorithm = "RSASSA-PKCS1-v1_5";
   } else if (alg === "ES256") {
     if (key.kty !== "EC") {
-      return false;
+      return "invalid";
     }
     importAlgorithm = { name: "ECDSA", namedCurve: "P-256" };
     verifyAlgorithm = { name: "ECDSA", hash: "SHA-256" };
   } else {
     // Allowlisted but unsupported here
-    return false;
+    return "invalid";
   }
 
   const data = new TextEncoder().encode(`${header}.${payload}`);
@@ -244,7 +248,7 @@ async function verifyToken(
   try {
     signatureBytes = base64UrlDecode(signature);
   } catch {
-    return false;
+    return "invalid";
   }
 
   let cryptoKey: CryptoKey;
@@ -257,15 +261,16 @@ async function verifyToken(
       ["verify"]
     );
   } catch {
-    return false;
+    return "invalid";
   }
 
-  return crypto.subtle.verify(
+  const valid = await crypto.subtle.verify(
     verifyAlgorithm,
     cryptoKey,
     signatureBytes,
     data
   );
+  return valid ? "valid" : "invalid";
 }
 
 /**
@@ -310,6 +315,11 @@ export function oidc(options: OidcOptions): Plugin {
     inflight: Promise<JwksKey[]> | null;
   } | null = null;
 
+  // At most one forced refetch per 30s: an unknown `kid` must not let forged
+  // tokens hammer the IdP.
+  const FORCED_REFRESH_MS = 30_000;
+  let lastForcedRefresh = 0;
+
   async function refreshJwks(jwksUri: string): Promise<JwksKey[]> {
     const keys = await fetchJwks(jwksUri);
     jwksCache = {
@@ -318,6 +328,20 @@ export function oidc(options: OidcOptions): Plugin {
       inflight: null,
     };
     return keys;
+  }
+
+  async function forceRefreshJwks(jwksUri: string): Promise<JwksKey[] | null> {
+    const now = Date.now();
+    if (now - lastForcedRefresh < FORCED_REFRESH_MS) {
+      return null;
+    }
+    // Count failed attempts too, so a failing IdP is not retried per request.
+    lastForcedRefresh = now;
+    try {
+      return await refreshJwks(jwksUri);
+    } catch {
+      return null;
+    }
   }
 
   async function getJwks(jwksUri: string): Promise<JwksKey[]> {
@@ -343,7 +367,7 @@ export function oidc(options: OidcOptions): Plugin {
     hooks: {
       beforeRoute: async (ctx: BurgerContext): Promise<void> => {
         const config = ctx.config as
-          | { auth?: boolean | { required?: boolean } }
+          | { auth?: boolean | { required?: boolean; roles?: string[] } }
           | undefined;
 
         // Skip auth check if explicitly disabled. The token is not parsed
@@ -384,8 +408,15 @@ export function oidc(options: OidcOptions): Plugin {
           throw new HTTPError(503, "Authentication provider unavailable");
         }
 
-        const isValid = await verifyToken(token, keys, algorithms);
-        if (!isValid) {
+        let verification = await verifyToken(token, keys, algorithms);
+        if (verification === "unknown-kid") {
+          // The provider may have rotated keys before the cache TTL expired.
+          const refreshed = await forceRefreshJwks(discovery.jwks_uri);
+          if (refreshed) {
+            verification = await verifyToken(token, refreshed, algorithms);
+          }
+        }
+        if (verification !== "valid") {
           throw new UnauthorizedError("Invalid token signature");
         }
 
@@ -439,6 +470,20 @@ export function oidc(options: OidcOptions): Plugin {
             : [user.aud];
           if (!audArray.includes(audience)) {
             throw new UnauthorizedError("Invalid audience");
+          }
+        }
+
+        const requiredRoles =
+          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+          // A non-array claim counts as no roles: `includes` on a string
+          // would match substrings.
+          const claim = user.roles;
+          const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
+          const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
+          if (!hasRole) {
+            throw new ForbiddenError("Insufficient permissions");
           }
         }
 

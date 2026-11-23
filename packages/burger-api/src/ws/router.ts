@@ -10,8 +10,7 @@ import type { CompiledWebSocketRoute } from './types.js';
 export class WebSocketRouter {
     private routes: CompiledWebSocketRoute[] = [];
     private staticRoutes: Map<string, CompiledWebSocketRoute> = new Map();
-    private paramRoutes: CompiledWebSocketRoute[] = [];
-    private wildcardRoutes: CompiledWebSocketRoute[] = [];
+    private dynamicRoutes: CompiledWebSocketRoute[] = [];
 
     /**
      * Add a compiled route to the router
@@ -19,16 +18,13 @@ export class WebSocketRouter {
     addRoute(route: CompiledWebSocketRoute): void {
         this.routes.push(route);
 
-        // Categorize routes. Param and wildcard routes are kept sorted by
-        // specificity (static segment > param > wildcard at the first
-        // differing segment; longer wildcard prefix first), matching HTTP
-        // dispatch. The sort is stable, so equal patterns keep insertion order.
-        if (route.path.includes('*')) {
-            this.wildcardRoutes.push(route);
-            this.wildcardRoutes.sort(compareWildcardSpecificity);
-        } else if (route.path.includes(':')) {
-            this.paramRoutes.push(route);
-            this.paramRoutes.sort(compareRouteSpecificity);
+        // Dynamic routes are kept sorted by specificity (static segment >
+        // param > wildcard at the first differing segment), matching HTTP
+        // dispatch. The sort is stable, so equal patterns keep insertion
+        // order.
+        if (route.path.includes('*') || route.path.includes(':')) {
+            this.dynamicRoutes.push(route);
+            this.dynamicRoutes.sort(compareRouteSpecificity);
         } else {
             this.staticRoutes.set(route.path, route);
         }
@@ -65,19 +61,22 @@ export class WebSocketRouter {
             return { route: staticRoute, params: {}, wildcardParams: [] };
         }
 
-        // Try parameterized routes
-        for (const route of this.paramRoutes) {
-            const params = this.matchParams(route.path, path);
-            if (params !== null) {
-                return { route, params, wildcardParams: [] };
-            }
-        }
-
-        // Try wildcard routes
-        for (const route of this.wildcardRoutes) {
-            const result = this.matchWildcard(route.path, path);
-            if (result !== null) {
-                return { route, params: result.params, wildcardParams: result.wildcardParams };
+        // Try dynamic routes in specificity order (params and wildcards mixed).
+        for (const route of this.dynamicRoutes) {
+            if (route.path.includes('*')) {
+                const result = this.matchWildcard(route.path, path);
+                if (result !== null) {
+                    return {
+                        route,
+                        params: result.params,
+                        wildcardParams: result.wildcardParams,
+                    };
+                }
+            } else {
+                const params = this.matchParams(route.path, path);
+                if (params !== null) {
+                    return { route, params, wildcardParams: [] };
+                }
             }
         }
 
@@ -148,24 +147,36 @@ export class WebSocketRouter {
         params: Record<string, string>;
         wildcardParams: string[];
     } | null {
-        // Remove trailing * for comparison
-        const basePattern = pattern.replace(/\*$/, '');
-        const basePath = path.slice(0, basePattern.length);
+        const patternParts = pattern.split('/');
+        const wildcardIndex = patternParts.indexOf('*');
+        if (wildcardIndex === -1) return null;
 
-        if (basePath !== basePattern) {
-            return null;
-        }
+        const pathParts = path.split('/');
+        if (pathParts.length < wildcardIndex) return null;
 
-        // Extract wildcard value
-        const wildcardValue = path.slice(basePattern.length);
-        const wildcardParams: string[] = [];
-        if (wildcardValue !== '') {
-            for (const segment of wildcardValue.split('/')) {
-                wildcardParams.push(decodeSegment(segment));
+        // Match the fixed prefix segment by segment, exactly like params.
+        const params: Record<string, string> = {};
+        for (let i = 0; i < wildcardIndex; i++) {
+            const patternPart = patternParts[i]!;
+            const pathPart = pathParts[i]!;
+
+            if (patternPart.startsWith(':')) {
+                if (pathPart === '') return null;
+                params[patternPart.slice(1)] = decodeSegment(pathPart);
+            } else if (patternPart !== pathPart) {
+                return null;
             }
         }
 
-        return { params: { '*': wildcardValue }, wildcardParams };
+        // The wildcard keeps the raw remainder plus decoded per-segment values.
+        const wildcardValue = pathParts.slice(wildcardIndex).join('/');
+        const wildcardParams =
+            wildcardValue === ''
+                ? []
+                : wildcardValue.split('/').map(decodeSegment);
+        params['*'] = wildcardValue;
+
+        return { params, wildcardParams };
     }
 }
 
@@ -200,12 +211,4 @@ function compareRouteSpecificity(
         if (diff !== 0) return diff;
     }
     return 0;
-}
-
-/** Longer wildcard prefix is more specific. */
-function compareWildcardSpecificity(
-    a: CompiledWebSocketRoute,
-    b: CompiledWebSocketRoute
-): number {
-    return b.path.replace(/\*$/, '').length - a.path.replace(/\*$/, '').length;
 }

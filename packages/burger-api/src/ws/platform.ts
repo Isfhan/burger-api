@@ -36,7 +36,7 @@ export type WsPlatformName = 'bun' | 'cloudflare' | 'deno' | 'node';
  */
 export interface NodeWsLike {
     on(
-        event: 'message' | 'close',
+        event: 'message' | 'close' | 'error',
         listener: (...args: any[]) => void
     ): void;
 }
@@ -52,7 +52,10 @@ export interface NodeWebSocketServerLike {
 }
 
 export interface NodeWsBridgeOptions {
-    WebSocketServer: new (opts: { noServer: true }) => NodeWebSocketServerLike;
+    WebSocketServer: new (opts: {
+        noServer: true;
+        maxPayload?: number;
+    }) => NodeWebSocketServerLike;
 }
 
 export interface NodeWsBridge {
@@ -160,8 +163,11 @@ export function acceptWsUpgrade(options: {
                 }) => void
             ): void;
         };
-        wirePushListeners(serverSide, data, events);
+        const fireOpen = wirePushListeners(serverSide, data, events);
         serverSide.accept();
+        // workerd never fires 'open' on the server side after accept(), so
+        // deliver it here. The guard keeps runtimes that do emit it to one.
+        fireOpen();
         // `webSocket` is the standard Workers/Deno response member; the
         // base TS lib's ResponseInit does not model it yet.
         return new Response(null, {
@@ -205,19 +211,24 @@ function wirePushListeners(
     socket: PushSocket,
     data: Record<string, unknown>,
     events: WsEventSink
-): void {
+): () => void {
     // Push-style sockets (Workers / Deno) need `data` attached explicitly,
     // or the adapter cannot find the matched route (open/message never fire).
     (socket as PushSocket & { data?: unknown }).data = data;
-    socket.addEventListener('open', () => {
+    let openFired = false;
+    const fireOpen = (): void => {
+        if (openFired) return;
+        openFired = true;
         void events.onOpen(socket);
-    });
+    };
+    socket.addEventListener('open', fireOpen);
     socket.addEventListener('message', (event) => {
         void events.onMessage(socket, normalizeWsMessage(event.data));
     });
     socket.addEventListener('close', (event) => {
         void events.onClose(socket, event.code ?? 1005, event.reason ?? '');
     });
+    return fireOpen;
 }
 
 /**

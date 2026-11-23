@@ -422,9 +422,13 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
           }
         }
 
-        if (config?.auth && typeof config.auth === "object" && config.auth.roles) {
-          const userRoles = (user as { roles?: string[] }).roles ?? [];
-          const requiredRoles = config.auth.roles;
+        const requiredRoles =
+          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+          // A non-array claim counts as no roles: `includes` on a string
+          // would match substrings.
+          const claim = (user as { roles?: unknown }).roles;
+          const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
           const hasRole = requiredRoles.some((role) => userRoles.includes(role));
 
           if (!hasRole) {

@@ -10,7 +10,7 @@ import type {
 } from './types.js';
 import { BurgerWSContext } from './types.js';
 import { HTTPError, renderHTTPError } from '../errors/http-error.js';
-import { BurgerContext } from '../context/context.js';
+import { BurgerContext, setRequestIP } from '../context/context.js';
 import type {
     BurgerEnv,
     BurgerExecutionContext,
@@ -24,6 +24,7 @@ import {
     normalizeWsMessage,
     type NodeWsBridge,
     type NodeWsBridgeOptions,
+    type NodeWsLike,
     type WsEventSink,
     type WsPlatformName,
     type WsUpgradeOutcome,
@@ -33,6 +34,13 @@ import { resolveDebug } from '../utils/env.js';
 
 /** Internal socket-data slot holding the route matched at upgrade. */
 const WS_ROUTE = Symbol('burger-api.ws.route');
+
+/**
+ * The runtime's server-side socket (Bun, Cloudflare/Deno, or `ws` on Node).
+ * The adapter only keys per-socket state on it and reads the `data` set at
+ * upgrade; `BurgerWSContext` probes the rest.
+ */
+export type RawWebSocket = { data?: unknown };
 
 interface WsMatch {
     route: CompiledWebSocketRoute;
@@ -117,12 +125,12 @@ export interface WebSocketAdapterOptions {
  * Framework handlers plus forwarded connection limits from `WebSocketConfig`.
  */
 export interface WebSocketServeOption {
-    open: (ws: any) => void | Promise<void>;
-    message: (ws: any, message: string | Buffer) => void | Promise<void>;
-    close: (ws: any, code: number, reason: string) => void | Promise<void>;
-    drain: (ws: any) => void | Promise<void>;
-    ping: (ws: any) => void | Promise<void>;
-    pong: (ws: any) => void | Promise<void>;
+    open: (ws: RawWebSocket) => void | Promise<void>;
+    message: (ws: RawWebSocket, message: string | Buffer) => void | Promise<void>;
+    close: (ws: RawWebSocket, code: number, reason: string) => void | Promise<void>;
+    drain: (ws: RawWebSocket) => void | Promise<void>;
+    ping: (ws: RawWebSocket) => void | Promise<void>;
+    pong: (ws: RawWebSocket) => void | Promise<void>;
     maxPayloadLength?: number;
     idleTimeout?: number;
     backpressureLimit?: number;
@@ -185,22 +193,22 @@ export class WebSocketAdapter {
 
         // Forward only defined connection limits; Bun's defaults apply otherwise.
         const option: WebSocketServeOption = {
-            open(ws: any) {
+            open(ws: RawWebSocket) {
                 return self.handleOpen(ws);
             },
-            message(ws: any, message: string | Buffer) {
+            message(ws: RawWebSocket, message: string | Buffer) {
                 return self.handleMessage(ws, message);
             },
-            close(ws: any, code: number, reason: string) {
+            close(ws: RawWebSocket, code: number, reason: string) {
                 return self.handleClose(ws, code, reason);
             },
-            drain(ws: any) {
+            drain(ws: RawWebSocket) {
                 return self.handleDrain(ws);
             },
-            ping(ws: any) {
+            ping(ws: RawWebSocket) {
                 return self.handlePing(ws);
             },
-            pong(ws: any) {
+            pong(ws: RawWebSocket) {
                 return self.handlePong(ws);
             },
         };
@@ -228,7 +236,7 @@ export class WebSocketAdapter {
      * sync handler keeps its immediate behavior); queued events run in order
      * after it. Handlers catch their own errors, so the chain never rejects.
      */
-    private enqueue<T>(ws: any, work: () => Promise<T>): Promise<T> {
+    private enqueue<T>(ws: RawWebSocket, work: () => Promise<T>): Promise<T> {
         const previous = this.wsChains.get(ws);
         if (previous === undefined) {
             const result = work();
@@ -240,11 +248,11 @@ export class WebSocketAdapter {
         return next;
     }
 
-    private handleOpen(ws: any): Promise<void> {
+    private handleOpen(ws: RawWebSocket): Promise<void> {
         return this.enqueue(ws, () => this.runOpen(ws));
     }
 
-    private async runOpen(ws: any): Promise<void> {
+    private async runOpen(ws: RawWebSocket): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) {
             console.warn(
@@ -275,14 +283,14 @@ export class WebSocketAdapter {
     }
 
     private handleMessage(
-        ws: any,
+        ws: RawWebSocket,
         message: string | Buffer
     ): Promise<void> {
         return this.enqueue(ws, () => this.runMessage(ws, message));
     }
 
     private async runMessage(
-        ws: any,
+        ws: RawWebSocket,
         message: string | Buffer
     ): Promise<void> {
         const route = this.getRouteFromWs(ws);
@@ -310,7 +318,7 @@ export class WebSocketAdapter {
     }
 
     private handleClose(
-        ws: any,
+        ws: RawWebSocket,
         code: number,
         reason: string
     ): Promise<void> {
@@ -318,7 +326,7 @@ export class WebSocketAdapter {
     }
 
     private async runClose(
-        ws: any,
+        ws: RawWebSocket,
         code: number,
         reason: string
     ): Promise<void> {
@@ -350,11 +358,11 @@ export class WebSocketAdapter {
         this.wsChains.delete(ws);
     }
 
-    private handleDrain(ws: any): Promise<void> {
+    private handleDrain(ws: RawWebSocket): Promise<void> {
         return this.enqueue(ws, () => this.runDrain(ws));
     }
 
-    private async runDrain(ws: any): Promise<void> {
+    private async runDrain(ws: RawWebSocket): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -369,11 +377,11 @@ export class WebSocketAdapter {
         }
     }
 
-    private handlePing(ws: any): Promise<void> {
+    private handlePing(ws: RawWebSocket): Promise<void> {
         return this.enqueue(ws, () => this.runPing(ws));
     }
 
-    private async runPing(ws: any): Promise<void> {
+    private async runPing(ws: RawWebSocket): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -388,11 +396,11 @@ export class WebSocketAdapter {
         }
     }
 
-    private handlePong(ws: any): Promise<void> {
+    private handlePong(ws: RawWebSocket): Promise<void> {
         return this.enqueue(ws, () => this.runPong(ws));
     }
 
-    private async runPong(ws: any): Promise<void> {
+    private async runPong(ws: RawWebSocket): Promise<void> {
         const route = this.getRouteFromWs(ws);
         if (!route) return;
 
@@ -555,13 +563,17 @@ export class WebSocketAdapter {
         };
     }
 
-    /** Shared event sink pushed into by non-Bun platforms. */
+    /**
+     * Shared event sink pushed into by non-Bun platforms. Their sockets get
+     * `data` attached before any event fires (see `wirePushListeners`).
+     */
     private eventSink(): WsEventSink {
         return {
-            onOpen: (raw) => this.handleOpen(raw),
-            onMessage: (raw, message) => this.handleMessage(raw, message),
+            onOpen: (raw) => this.handleOpen(raw as RawWebSocket),
+            onMessage: (raw, message) =>
+                this.handleMessage(raw as RawWebSocket, message),
             onClose: (raw, code, reason) =>
-                this.handleClose(raw, code, reason),
+                this.handleClose(raw as RawWebSocket, code, reason),
         };
     }
 
@@ -598,12 +610,37 @@ export class WebSocketAdapter {
      * ```
      */
     createNodeWsBridge(options: NodeWsBridgeOptions): NodeWsBridge {
-        const wss = new options.WebSocketServer({ noServer: true });
+        // `ws` exposes maxPayload (not maxPayloadLength); forward only that
+        // connection limit, which noServer mode otherwise leaves unbounded.
+        const serverOptions: { noServer: true; maxPayload?: number } = {
+            noServer: true,
+        };
+        if (this.config.maxPayloadLength !== undefined) {
+            serverOptions.maxPayload = this.config.maxPayloadLength;
+        }
+        const wss = new options.WebSocketServer(serverOptions);
         const adapter = this;
         return {
             async handleUpgrade(req, socket, head): Promise<void> {
-                const destroy = () =>
-                    (socket as { destroy?(): void }).destroy?.();
+                const rawSocket = socket as {
+                    destroy?(): void;
+                    on?(
+                        event: 'error',
+                        listener: (error?: unknown) => void
+                    ): void;
+                };
+                const destroy = () => rawSocket.destroy?.();
+
+                // A raw socket can error while the async auth chain is still
+                // running; without a listener Node would crash the process.
+                rawSocket.on?.('error', (error?: unknown) => {
+                    if (adapter.debug) {
+                        console.error(
+                            '[WebSocket] Upgrade socket error:',
+                            error
+                        );
+                    }
+                });
 
                 const raw = req as {
                     url?: string;
@@ -611,6 +648,7 @@ export class WebSocketAdapter {
                         string,
                         string | string[] | undefined
                     >;
+                    socket?: { remoteAddress?: string };
                 };
 
                 // Copy real headers, not just `host`: auth hooks may read
@@ -638,6 +676,11 @@ export class WebSocketAdapter {
                     return;
                 }
 
+                const remoteAddress = raw.socket?.remoteAddress;
+                if (remoteAddress !== undefined) {
+                    setRequestIP(request, remoteAddress);
+                }
+
                 const upgradeHeader = request.headers.get('upgrade');
                 if (upgradeHeader?.toLowerCase() !== 'websocket') {
                     destroy();
@@ -655,24 +698,33 @@ export class WebSocketAdapter {
                     return;
                 }
 
-                wss.handleUpgrade(req, socket, head, (ws) => {
+                wss.handleUpgrade(req, socket, head, (nodeWs) => {
                     // `ws` sockets do not carry `data` natively (Bun sets it via
                     // `server.upgrade`), so attach it for the handlers to find
                     // the matched route (and any resolved user).
-                    (ws as { data?: unknown }).data = result.data;
-                    ws.on('message', (...args: any[]) => {
+                    const ws = nodeWs as NodeWsLike & RawWebSocket;
+                    ws.data = result.data;
+                    // A malformed frame emits 'error'; without a listener the
+                    // `ws` socket crashes the Node process. It closes itself.
+                    ws.on('error', (error?: unknown) => {
+                        if (adapter.debug) {
+                            console.error('[WebSocket] Socket error:', error);
+                        }
+                    });
+                    // `ws`'s `'message'` event is `(data: Buffer, isBinary)`.
+                    ws.on('message', (data: unknown, isBinary?: boolean) => {
                         void adapter.handleMessage(
                             ws,
-                            // `ws`'s `'message'` event signature is
-                            // `(data: Buffer, isBinary: boolean)`.
-                            normalizeWsMessage(args[0], args[1] as boolean)
+                            normalizeWsMessage(data, isBinary)
                         );
                     });
-                    ws.on('close', (...args: any[]) => {
+                    // `ws` hands the close reason as a Buffer; handlers get a
+                    // string, as on Bun.
+                    ws.on('close', (code?: number, reason?: unknown) => {
                         void adapter.handleClose(
                             ws,
-                            (args[0] as unknown as number) ?? 1005,
-                            (args[1] as unknown as string) ?? ''
+                            code ?? 1005,
+                            reason === undefined ? '' : String(reason)
                         );
                     });
                     void adapter.handleOpen(ws);
@@ -684,7 +736,7 @@ export class WebSocketAdapter {
     /**
      * Get route from WebSocket data
      */
-    private getRouteFromWs(ws: any): CompiledWebSocketRoute | null {
+    private getRouteFromWs(ws: RawWebSocket): CompiledWebSocketRoute | null {
         return this.getMatch(ws)?.route ?? null;
     }
 
@@ -692,13 +744,14 @@ export class WebSocketAdapter {
      * The route + params matched at upgrade, cached per socket so a handler
      * replacing `ws.data` cannot orphan the connection from its route.
      */
-    private getMatch(ws: any): WsMatch | undefined {
+    private getMatch(ws: RawWebSocket): WsMatch | undefined {
         let match = this.wsMatches.get(ws);
         if (!match) {
-            match = ws?.data?.[WS_ROUTE] as WsMatch | undefined;
+            const data = ws?.data as Record<PropertyKey, unknown> | undefined;
+            match = data?.[WS_ROUTE] as WsMatch | undefined;
             // Hand-wired sockets (custom bridges, tests) may still carry the
             // `data.route` shape.
-            const legacy = ws?.data?.route as
+            const legacy = data?.route as
                 | (CompiledWebSocketRoute & { params?: Record<string, string> })
                 | undefined;
             if (!match && legacy?.handlers) {
@@ -717,7 +770,7 @@ export class WebSocketAdapter {
      * Creates (or reuses) the BurgerWS context for a connection: one per
      * connection, so `ws.data` mutations in one handler persist into the next.
      */
-    private createBurgerWS(ws: any): BurgerWS {
+    private createBurgerWS(ws: RawWebSocket): BurgerWS {
         let burgerWs = this.wsContexts.get(ws);
         if (!burgerWs) {
             const match = this.getMatch(ws);
@@ -790,6 +843,13 @@ export class WebSocketAdapter {
             for (const hook of this.pluginBeforeRoute ?? []) {
                 const result = await hook(ctx);
                 if (result instanceof Response) return reject(result);
+                if (typeof result === 'function') {
+                    mappers.push(
+                        result as (
+                            res: Response
+                        ) => Response | Promise<Response>
+                    );
+                }
             }
             for (const hook of this.globalBeforeRoute) {
                 const result = await hook(ctx);
@@ -798,13 +858,15 @@ export class WebSocketAdapter {
             }
 
             // Extract user from context (set by transform hooks)
-            const user = (ctx as any).user;
+            const user = ctx.user;
 
             const authConfig =
-                routeConfig?.auth !== undefined &&
-                typeof routeConfig.auth === 'object'
-                    ? routeConfig.auth
-                    : undefined;
+                routeConfig?.auth === true
+                    ? { required: true }
+                    : routeConfig?.auth !== undefined &&
+                        typeof routeConfig.auth === 'object'
+                      ? routeConfig.auth
+                      : undefined;
 
             // Auth is enforced regardless of whether any hook ran.
             if (authConfig?.required && !user) {

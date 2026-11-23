@@ -7,6 +7,7 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { pathToFileURL } from 'url';
 import type { Spinner } from '../utils/logger';
 import {
     spinner,
@@ -69,17 +70,69 @@ function defaultOutfile(
 }
 
 /**
- * Validate `--target`. `'browser'` is a passthrough for bundling client-side
- * code, not a deployment platform — it never reaches `RUNTIME_CAPABILITIES`
- * or the codegen branch.
+ * Validate a target value. `where` distinguishes the `--target` flag from a
+ * `burger.build.*` entry so the error points at the file the user must edit.
  */
-function validatePlatformTarget(raw: string | undefined): RuntimeTarget {
+function validatePlatformTarget(
+    raw: string | undefined,
+    where?: string
+): RuntimeTarget {
     if (!raw) return 'bun';
     if ((VALID_TARGETS as string[]).includes(raw)) return raw as RuntimeTarget;
     logError(
-        `Unknown --target "${raw}". Valid targets: ${VALID_TARGETS.join(', ')} (or "browser" to bundle client-side code as-is).`
+        where
+            ? `Unknown target "${raw}" in ${where}. Valid targets: ${VALID_TARGETS.join(', ')}.`
+            : `Unknown --target "${raw}". Valid targets: ${VALID_TARGETS.join(', ')} (or "browser" to bundle client-side code as-is).`
     );
     process.exit(1);
+}
+
+const BUILD_CONFIG_FILES = ['burger.build.ts', 'burger.build.js'];
+
+/**
+ * Read `target` straight from `burger.build.*`. `resolveBuildConfig` silently
+ * falls back to the default for an invalid value, but a build must fail loud
+ * instead of quietly producing the wrong platform's output.
+ */
+async function readConfiguredTarget(
+    cwd: string
+): Promise<{ file: string; target: unknown } | undefined> {
+    for (const name of BUILD_CONFIG_FILES) {
+        const file = resolve(cwd, name);
+        if (!existsSync(file)) continue;
+        try {
+            const mod = await import(pathToFileURL(file).href);
+            const config = mod.default ?? mod;
+            if (!config || typeof config !== 'object') return undefined;
+            return {
+                file: name,
+                target: (config as { target?: unknown }).target,
+            };
+        } catch {
+            // resolveBuildConfig reports unloadable configs; use the default.
+            return undefined;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Resolve the deployment target: `--target`, then `burger.build.*`'s
+ * `target`, then `bun`.
+ */
+async function resolvePlatformTarget(
+    cwd: string,
+    flagTarget: string | undefined
+): Promise<RuntimeTarget> {
+    if (flagTarget) return validatePlatformTarget(flagTarget);
+    const configured = await readConfiguredTarget(cwd);
+    if (configured?.target === undefined || configured.target === null) {
+        return 'bun';
+    }
+    return validatePlatformTarget(
+        String(configured.target),
+        configured.file
+    );
 }
 
 function ensureEntryFileExists(cwd: string, file: string): void {
@@ -187,14 +240,16 @@ export const buildCommand = new Command('build')
     .action(async (fileArg: string | undefined, options: BuildCommandOptions) => {
         const cwd = process.cwd();
         const file = resolveEntryFile(fileArg, cwd);
-        const platformTarget = validatePlatformTarget(
-            options.target === 'browser' ? undefined : options.target
-        );
         const isBrowserPassthrough = options.target === 'browser';
+        // A client-side passthrough stays a plain Bun-style bundle; only a
+        // deployment build consults burger.build.*'s target.
+        const platformTarget = isBrowserPassthrough
+            ? ('bun' as RuntimeTarget)
+            : await resolvePlatformTarget(cwd, options.target);
 
         if (options.compile && platformTarget !== 'bun') {
             logError(
-                `--compile only supports --target=bun (got --target=${options.target}). ` +
+                `--compile only supports --target=bun (resolved target: ${platformTarget}). ` +
                     'Compiling to a standalone binary is Bun-only.'
             );
             process.exit(1);
@@ -281,7 +336,7 @@ export const buildCommand = new Command('build')
                     dim(`Run: wrangler dev`);
                     dim(`Deploy: wrangler deploy`);
                 } else if (platformTarget === 'deno') {
-                    info('Deno Deploy — bundled by deno, not this CLI.');
+                    info('Deno — bundled by deno, not this CLI.');
                     dim(`Run: deno serve --port 4000 ${outfile}`);
                 } else if (platformTarget === 'vercel') {
                     info('Vercel — bundled by vercel, not this CLI.');

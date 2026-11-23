@@ -110,6 +110,22 @@ export default {
 };
 ```
 
+### Require roles
+
+```typescript
+// src/api/admin/config.ts
+export default {
+  auth: {
+    required: true,
+    roles: ["admin"],
+  },
+};
+```
+
+The user must have at least one listed role in its `roles` array (or the
+route responds `403`). A non-array `roles` value on the user counts as no
+roles, so a string claim never matches by substring.
+
 ## Context properties
 
 After successful validation, the user info is available as `ctx.user`:
@@ -131,6 +147,8 @@ augmentation (shared with jwt-auth and oidc).
   RFC 9457 `application/problem+json` body plus
   `WWW-Authenticate: Basic realm="<realm>", charset="UTF-8"`.
   Successful responses carry no `WWW-Authenticate` header.
+- **403 Forbidden**: the user lacks every role listed in the route's
+  `auth.roles`.
 
 ## Security notes
 

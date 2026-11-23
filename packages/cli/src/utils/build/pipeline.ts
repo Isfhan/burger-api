@@ -24,7 +24,11 @@ import {
 } from '../entry-options';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
-import { RUNTIME_CAPABILITIES, type RuntimeTarget } from '../../types/index';
+import {
+    RUNTIME_CAPABILITIES,
+    type RuntimeTarget,
+    type BuildConfig,
+} from '../../types/index';
 
 /** Import specifiers in any form: static, side-effect, export-from, dynamic. */
 const IMPORT_SPECIFIER_PATTERN =
@@ -72,6 +76,48 @@ const PORTABLE_TARGETS: ReadonlySet<RuntimeTarget> = new Set([
     'vercel',
     'node',
 ]);
+
+/** Source dir options that must never resolve to the build's output folder. */
+const SOURCE_DIR_OPTIONS = [
+    ['apiDir', 'api'],
+    ['pageDir', 'pages'],
+    ['wsDir', 'websocket'],
+] as const;
+
+/** Windows paths are case-insensitive; compare them the same way. */
+function samePath(a: string, b: string): boolean {
+    return process.platform === 'win32'
+        ? a.toLowerCase() === b.toLowerCase()
+        : a === b;
+}
+
+/**
+ * `--target=vercel` writes `api/index.ts` at the project root. When a source
+ * folder resolves to that same directory, every later scan (`inspect`,
+ * `build`, `dev`) reads the build output instead of the sources and the
+ * routes vanish. Refuse to write rather than break the project.
+ */
+function assertVercelOutputDoesNotShadowSources(
+    cwd: string,
+    outfile: string,
+    config: BuildConfig
+): void {
+    const outPath = resolve(cwd, outfile);
+    const outFolder = dirname(outPath);
+    for (const [option, suggestion] of SOURCE_DIR_OPTIONS) {
+        const dir = config[option];
+        if (!dir || !samePath(resolve(cwd, dir), outFolder)) continue;
+        throw new Error(
+            `Refusing to write the vercel entry to "${relative(cwd, outPath)
+                .split('\\')
+                .join('/')}": ${option} "${dir}" resolves to that same ` +
+                'folder, so later scans (build, dev, inspect) would read the ' +
+                'build output instead of your sources. ' +
+                `Set ${option}: './src/${suggestion}' in burger.build.ts ` +
+                '(or pass --outfile outside that folder).'
+        );
+    }
+}
 
 /** Files the Bun-only scan reads (source extensions only). */
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]s|tsx)$/;
@@ -280,6 +326,15 @@ export async function runVirtualEntryBuild(options: {
     const platformTarget: RuntimeTarget = options.compile
         ? 'bun'
         : (options.platformTarget ?? config.target ?? 'bun');
+    // Checked before any scanning or writing: an output folder that shadows
+    // the sources makes the scan itself see the wrong tree.
+    if (platformTarget === 'vercel') {
+        assertVercelOutputDoesNotShadowSources(
+            options.cwd,
+            options.outfile,
+            config
+        );
+    }
     const entryOptions = prepareEntryOptionsModule({
         cwd: options.cwd,
         entryFile: options.entryFile,

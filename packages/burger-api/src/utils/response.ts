@@ -141,6 +141,26 @@ export function hasSetMutations(set?: ContextSet): boolean {
 }
 
 /**
+ * Null-body statuses (1xx/204/205/304) reject a body on Node and would leak
+ * an unused stream elsewhere. Cancel it before dropping it.
+ */
+function bodyForStatus(
+    response: Response,
+    status: number
+): ReadableStream<Uint8Array> | null {
+    const nullBody =
+        status === 204 ||
+        status === 205 ||
+        status === 304 ||
+        (status >= 100 && status < 200);
+    if (!nullBody) return response.body;
+    if (response.body !== null) {
+        void response.body.cancel().catch(() => {});
+    }
+    return null;
+}
+
+/**
  * Merges a `ContextSet` (`ctx.set`) into the outgoing `Response`:
  * - `set.headers` is merged over the response's headers; explicitly set values
  *   win and other handler headers are kept.
@@ -153,6 +173,7 @@ export function applySet(response: Response, set?: ContextSet): Response {
     if (!set) return response;
     // Errors are authoritative: `ctx.set.status` may only restyle successes.
     const setStatus = response.status >= 400 ? undefined : set.status;
+    const finalStatus = setStatus ?? response.status;
 
     if (set instanceof TrackedContextSet) {
         const flags = set.flags;
@@ -161,8 +182,8 @@ export function applySet(response: Response, set?: ContextSet): Response {
             // Status-only mutation: the `Response` constructor copies the
             // header list itself, so no explicit `new Headers(...)` copy is
             // needed.
-            return new Response(response.body, {
-                status: setStatus ?? response.status,
+            return new Response(bodyForStatus(response, finalStatus), {
+                status: finalStatus,
                 statusText: response.statusText,
                 headers: response.headers,
             });
@@ -208,8 +229,8 @@ export function applySet(response: Response, set?: ContextSet): Response {
         }
     }
 
-    return new Response(response.body, {
-        status: setStatus ?? response.status,
+    return new Response(bodyForStatus(response, finalStatus), {
+        status: finalStatus,
         statusText: response.statusText,
         headers,
     });

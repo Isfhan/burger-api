@@ -25,11 +25,13 @@ function selectResponseValidator(
 ) {
     // The response map only has lowercase-method keys; the caller's runtime
     // method string may be any case, so index via the widened record.
-    const methodResponses = (
-        validators.response as
-            | Record<string, Record<string, CompiledValidator> | undefined>
-            | undefined
-    )?.[method];
+    const responses = validators.response as
+        | Record<string, Record<string, CompiledValidator> | undefined>
+        | undefined;
+    if (!responses) return undefined;
+    let methodResponses = responses[method];
+    // HEAD runs the GET handler, so it follows the GET contract.
+    if (!methodResponses && method === 'head') methodResponses = responses.get;
     if (!methodResponses) return undefined;
     if (methodResponses[String(status)]) return methodResponses[String(status)];
     const cls = `${Math.floor(status / 100)}xx`;

@@ -103,7 +103,9 @@ export function renderUncaught(
  * - Dev mode adds `stack` and the `cause` chain; production emits only
  *   `type`, `title`, `status`, `detail`.
  * - 500 responses always carry the fixed `Internal Server Error` detail — a
- *   thrown message is never echoed to clients.
+ *   thrown message is never echoed to clients. Other 5xx keep the message
+ *   only for real `HTTPError` instances; a plain object with a `status`
+ *   gets the bare status title.
  * - Non-HTTPError values are wrapped in `HTTPError(500)`.
  * - The status is clamped to 100-599 (integer); anything else renders as 500
  *   instead of escaping as a `RangeError`.
@@ -140,16 +142,24 @@ export function renderHTTPError(
             ? rawStatus
             : 500;
 
+    // Server-side failures never echo the thrown message to clients. A real
+    // HTTPError other than 500 is written by the developer, so it may; a
+    // thrown object that only carries a `status` (often a library error)
+    // may hold secrets, so its 5xx renders the bare status title.
+    const hide =
+        !isDev &&
+        status >= 500 &&
+        (status === 500 || !(error instanceof HTTPError));
+    const genericTitle = STATUS_TITLES[status] ?? 'Internal Server Error';
+
     const problem: Record<string, unknown> = {
         type: 'about:blank',
         // RFC 9457: the title is the status phrase, not the class name.
-        title: STATUS_TITLES[status] ?? httpError.name ?? 'Error',
+        title: hide
+            ? genericTitle
+            : (STATUS_TITLES[status] ?? httpError.name ?? 'Error'),
         status,
-        // Server-side failures never echo the thrown message to clients.
-        detail:
-            status === 500 && !isDev
-                ? 'Internal Server Error'
-                : httpError.message,
+        detail: hide ? genericTitle : httpError.message,
         ...extras,
     };
 

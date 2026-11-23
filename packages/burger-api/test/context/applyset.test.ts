@@ -158,6 +158,37 @@ describe('tracked ContextSet fast paths', () => {
     });
 });
 
+describe('applySet with a null-body status', () => {
+    // 204/205/304 must not carry a body: Node's Response throws on one and
+    // Bun would send it anyway.
+    for (const status of [204, 205, 304]) {
+        it(`drops and cancels the body when ctx.set.status = ${status}`, async () => {
+            let cancelled = false;
+            const body = new ReadableStream({
+                pull: (c) => c.enqueue(new TextEncoder().encode('x')),
+                cancel() {
+                    cancelled = true;
+                },
+            });
+            const statusOnly = new TrackedContextSet();
+            statusOnly.status = status;
+            const out = applySet(new Response(body), statusOnly);
+            expect(out.status).toBe(status);
+            expect(out.body).toBeNull();
+            await Promise.resolve();
+            expect(cancelled).toBe(true);
+
+            const withHeaders = new TrackedContextSet();
+            withHeaders.status = status;
+            withHeaders.headers = { 'x-a': '1' };
+            const out2 = applySet(Response.json({ x: 1 }), withHeaders);
+            expect(out2.status).toBe(status);
+            expect(out2.body).toBeNull();
+            expect(out2.headers.get('x-a')).toBe('1');
+        });
+    }
+});
+
 describe('lazy ctx.set allocation', () => {
     it('does not allocate until first access; hasSet() flips on write', async () => {
         let observed: { hasSet: boolean } | undefined;

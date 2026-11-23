@@ -79,9 +79,11 @@ export interface WebSocketConfig {
     compression?: boolean;
 
     /**
-     * Auth configuration. Set to `false` to disable auth for this route.
+     * Auth configuration. `true` requires an authenticated user; `false`
+     * disables auth for this route.
      */
     auth?:
+        | true
         | false
         | {
               required?: boolean;

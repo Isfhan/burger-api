@@ -108,6 +108,7 @@ export const devCommand = new Command('dev')
         // under this when not found at the project root) — also the root
         // watched for restarts.
         const watchRoot = dirname(resolve(file));
+        const projectRoot = process.cwd();
 
         let startedAt = 0;
         const spawnServer = () => {
@@ -124,7 +125,7 @@ export const devCommand = new Command('dev')
         let restarting = false;
         let shuttingDown = false;
         let restartTimer: ReturnType<typeof setTimeout> | undefined;
-        let watcher: FSWatcher | undefined;
+        let watchers: FSWatcher[] = [];
         // Set while the app is down after a crash: the next file change
         // resolves it and the loop below respawns the server.
         let wakeAfterCrash: (() => void) | undefined;
@@ -151,7 +152,7 @@ export const devCommand = new Command('dev')
             shuttingDown = true;
             newline();
             info('Shutting down server...');
-            watcher?.close();
+            for (const active of watchers) active.close();
             proc?.kill();
             process.exit(0);
         };
@@ -164,9 +165,31 @@ export const devCommand = new Command('dev')
             // graph, so a brand-new route directory stays invisible (and
             // 404s) until something else forces a restart. Watching
             // recursively for any fs event closes that gap.
-            watcher = watch(watchRoot, { recursive: true }, () => {
-                requestRestart();
-            });
+            const watchTargets: Array<{ path: string; recursive: boolean }> = [
+                { path: watchRoot, recursive: true },
+            ];
+            // `burger-api add` and `generate hook|plugin` put code users are
+            // told to edit in ecosystem/, outside the entry's directory.
+            const ecosystemDir = resolve(projectRoot, 'ecosystem');
+            if (existsSync(ecosystemDir)) {
+                watchTargets.push({ path: ecosystemDir, recursive: true });
+            }
+            // Build config is not imported at runtime but still drives builds.
+            for (const name of ['burger.build.ts', 'burger.build.js']) {
+                const configFile = resolve(projectRoot, name);
+                if (existsSync(configFile)) {
+                    watchTargets.push({ path: configFile, recursive: false });
+                }
+            }
+            watchers = watchTargets.map((target) =>
+                watch(
+                    target.path,
+                    { recursive: target.recursive },
+                    () => {
+                        requestRestart();
+                    }
+                )
+            );
 
             process.once('SIGINT', shutdown);
             process.once('SIGBREAK', shutdown);
@@ -197,7 +220,7 @@ export const devCommand = new Command('dev')
                 proc = spawnServer();
             }
         } catch (err) {
-            watcher?.close();
+            for (const active of watchers) active.close();
             logError(
                 err instanceof Error ? err.message : 'Failed to start server'
             );

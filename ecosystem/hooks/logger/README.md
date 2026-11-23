@@ -101,9 +101,11 @@ export const beforeRoute = [
 `LogInfo` fields: `method`, `url`, `path`, `status`, `duration`, `timestamp`,
 and optional `requestId`, `headers`, `query`, `body`.
 
-`logBody` clones the request (`ctx.clone()`) and parses it as JSON; the
-handler still reads the original body. Logging bodies or headers can expose
-tokens and passwords, so use them for debugging only.
+`logBody` clones JSON requests (`ctx.clone()`) before the handler runs and
+parses that clone as JSON in the response part of the hook, so the handler can
+still read the original body (whether via `ctx.json()` or
+`ctx.request.text()`). Logging bodies or headers can expose tokens and
+passwords, so use them for debugging only.
 
 The logger copies the request ID onto the context as `ctx.requestId` and types
 it through a `declare module 'burger-api'` augmentation, so routes read it
