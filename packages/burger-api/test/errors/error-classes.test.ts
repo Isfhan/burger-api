@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+import { Burger } from '../../src/index';
 import { HTTPError, renderHTTPError } from '../../src/errors/http-error';
 import { NotFoundError } from '../../src/errors/not-found';
 import { UnauthorizedError } from '../../src/errors/unauthorized';
@@ -321,6 +322,88 @@ describe('ValidationError', () => {
         expect(res.status).toBe(400);
         const body = await res.json();
         expect(body.status).toBe(400);
+    });
+});
+
+// ─────────────────────────────────────────────────────
+// HTTPError response headers
+// ─────────────────────────────────────────────────────
+
+describe('HTTPError response headers', () => {
+    async function fetchThrown(error: unknown): Promise<Response> {
+        const burger = new Burger({
+            debug: false,
+            apiRoutes: [
+                {
+                    path: '/api/throw',
+                    handlers: {
+                        GET: () => {
+                            throw error;
+                        },
+                    },
+                },
+            ],
+        });
+        const handler = await burger.fetchHandler();
+        return handler(new Request('http://localhost/api/throw'));
+    }
+
+    it('keeps headers passed to an HTTPError subclass', async () => {
+        const res = await fetchThrown(
+            new UnauthorizedError('x', {
+                headers: { 'WWW-Authenticate': 'Basic realm="R"' },
+            })
+        );
+        expect(res.status).toBe(401);
+        expect(res.headers.get('www-authenticate')).toBe('Basic realm="R"');
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
+    });
+
+    it('lets Content-Type win over a caller-supplied value', async () => {
+        const res = await fetchThrown(
+            new UnauthorizedError('x', {
+                headers: {
+                    'WWW-Authenticate': 'Basic realm="R"',
+                    'Content-Type': 'text/plain',
+                },
+            })
+        );
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
+        expect(res.headers.get('www-authenticate')).toBe('Basic realm="R"');
+    });
+
+    it('renders an error without headers exactly as before', async () => {
+        const res = await fetchThrown(new NotFoundError('User 42 not found'));
+        expect(res.status).toBe(404);
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
+        const headerNames: string[] = [];
+        res.headers.forEach((_value, name) => headerNames.push(name));
+        expect(headerNames).toEqual(['content-type']);
+
+        const body = await res.json();
+        expect(body.type).toBe('about:blank');
+        expect(body.title).toBe('Not Found');
+        expect(body.status).toBe(404);
+        expect(body.detail).toBe('User 42 not found');
+    });
+
+    it('does not copy headers from a duck-typed thrown object', async () => {
+        const duck = Object.assign(new Error('nope'), {
+            status: 401,
+            headers: { 'WWW-Authenticate': 'Basic realm="duck"' },
+        });
+        const res = await fetchThrown(duck);
+        expect(res.status).toBe(401);
+        expect(res.headers.get('www-authenticate')).toBeNull();
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
     });
 });
 

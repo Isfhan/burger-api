@@ -9,14 +9,30 @@ import { resolveDebug } from '../utils/env.js';
  * UnauthorizedError (401), ForbiddenError (403), MethodNotAllowedError (405).
  */
 
+/** Options accepted by `HTTPError` and its subclasses. */
+export type HTTPErrorOptions = ErrorOptions & {
+    /** Response headers rendered with the error (e.g. `WWW-Authenticate`). */
+    headers?: HeadersInit;
+};
+
 export class HTTPError extends Error {
     /** HTTP status code for this error. */
     readonly status: number;
 
-    constructor(status: number, message: string, options?: ErrorOptions) {
+    /** Response headers rendered with the error, when provided. */
+    declare readonly headers?: HeadersInit;
+
+    constructor(
+        status: number,
+        message: string,
+        options?: HTTPErrorOptions
+    ) {
         super(message, options);
         this.status = status;
         this.name = 'HTTPError';
+        if (options?.headers !== undefined) {
+            this.headers = options.headers;
+        }
     }
 }
 
@@ -178,8 +194,13 @@ export function renderHTTPError(
         }
     }
 
-    return new Response(JSON.stringify(problem), {
-        status,
-        headers: { 'Content-Type': 'application/problem+json' },
-    });
+    // Caller-supplied headers come from real HTTPError instances only; a
+    // duck-typed thrown object must not inject response headers.
+    const headers = new Headers(
+        error instanceof HTTPError ? error.headers : undefined
+    );
+    // RFC 9457 media type is set last so it always wins.
+    headers.set('Content-Type', 'application/problem+json');
+
+    return new Response(JSON.stringify(problem), { status, headers });
 }

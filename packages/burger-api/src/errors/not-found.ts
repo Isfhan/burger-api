@@ -1,4 +1,5 @@
 import { HTTPError } from './http-error.js';
+import type { HTTPErrorOptions } from './http-error.js';
 
 /**
  * 404 Not Found — thrown when a requested resource does not exist.
@@ -12,7 +13,7 @@ export class NotFoundError extends HTTPError {
     override readonly name = 'NotFoundError';
     override readonly status = 404 as const;
 
-    constructor(message?: string, options?: ErrorOptions) {
+    constructor(message?: string, options?: HTTPErrorOptions) {
         super(404, message ?? 'Not Found', options);
     }
 }

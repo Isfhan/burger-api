@@ -1,4 +1,5 @@
 import { HTTPError } from './http-error.js';
+import type { HTTPErrorOptions } from './http-error.js';
 
 /**
  * 401 Unauthorized — thrown when authentication is missing or invalid.
@@ -12,7 +13,7 @@ export class UnauthorizedError extends HTTPError {
     override readonly name = 'UnauthorizedError';
     override readonly status = 401 as const;
 
-    constructor(message?: string, options?: ErrorOptions) {
+    constructor(message?: string, options?: HTTPErrorOptions) {
         super(401, message ?? 'Unauthorized', options);
     }
 }
