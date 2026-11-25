@@ -66,6 +66,8 @@ function main(): void {
  compile: {
  target,
  outfile: outPath,
+ // The standalone binary must resolve the user's project packages (like burger-api) from disk, or doctor and inspect cannot load the project
+ autoloadPackageJson: true,
  },
  })
  .then((result) => {
