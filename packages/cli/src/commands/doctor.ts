@@ -117,13 +117,54 @@ function resolveDir(cwd: string, dir: string): string | undefined {
     return existsSync(fromSrc) ? fromSrc : undefined;
 }
 
-/** Import a module; returns the error message, or undefined when it loads. */
-async function tryImport(file: string): Promise<string | undefined> {
+/** Route handler exports the framework registers (uppercase only). */
+const HANDLER_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'DELETE',
+    'PATCH',
+    'HEAD',
+    'OPTIONS',
+] as const;
+
+/**
+ * Export mistakes the runtime warns about: a lowercase method name (`get`) or
+ * a non-function uppercase method (`const POST = {}`) is ignored, so the route
+ * answers 405.
+ */
+function handlerExportIssues(mod: Record<string, unknown>): string[] {
+    const issues: string[] = [];
+    for (const key of Object.keys(mod)) {
+        const upper = key.toUpperCase();
+        if (!(HANDLER_METHODS as readonly string[]).includes(upper)) continue;
+        if (key !== upper) {
+            issues.push(
+                `export "${key}" is ignored — handler exports must be uppercase: ${upper}`
+            );
+        } else if (typeof mod[key] !== 'function') {
+            issues.push(
+                `export "${key}" is not a function and is ignored — export a handler: export async function ${key}(ctx) { ... }`
+            );
+        }
+    }
+    return issues;
+}
+
+interface LoadedModule {
+    module?: Record<string, unknown>;
+    error?: string;
+}
+
+/** Import a module; returns it, or the error message when it does not load. */
+async function loadModule(file: string): Promise<LoadedModule> {
     try {
-        await import(pathToFileURL(file).href);
-        return undefined;
+        const mod = (await import(
+            pathToFileURL(file).href
+        )) as Record<string, unknown>;
+        return { module: mod };
     } catch (err) {
-        return err instanceof Error ? err.message : String(err);
+        return { error: err instanceof Error ? err.message : String(err) };
     }
 }
 
@@ -260,6 +301,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
             // Import every route and convention module to catch syntax
             // errors and broken imports before `dev`/`build` do.
             const broken: string[] = [];
+            const handlerWarnings: string[] = [];
             for (const r of routes) {
                 const files = [
                     r.importPath,
@@ -269,8 +311,22 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
                     r.hooksPath,
                 ].filter((f): f is string => !!f);
                 for (const file of files) {
-                    const err = await tryImport(file);
-                    if (err) broken.push(`${rel(file)}: ${err}`);
+                    const loaded = await loadModule(file);
+                    if (loaded.error) {
+                        broken.push(`${rel(file)}: ${loaded.error}`);
+                        continue;
+                    }
+                    // Only route modules export handlers; schema/openapi/
+                    // config/hooks exports are checked by their own rules.
+                    if (file !== r.importPath || !loaded.module) continue;
+                    const issues = handlerExportIssues(loaded.module);
+                    if (issues.length > 0) {
+                        handlerWarnings.push(
+                            issues
+                                .map((issue) => `${rel(file)}: ${issue}`)
+                                .join('\n')
+                        );
+                    }
                 }
             }
             results.push(
@@ -282,6 +338,11 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
                         : `Failed to load:\n${broken.map((b) => `      ${b}`).join('\n')}`
                 )
             );
+            for (const message of handlerWarnings) {
+                results.push(
+                    check('Route handler exports', true, message, 'warning')
+                );
+            }
         }
     }
 

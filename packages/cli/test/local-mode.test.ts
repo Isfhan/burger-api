@@ -408,7 +408,7 @@ describe('--force on non-TTY', () => {
         expect(existsSync(join(existing, 'stale.ts'))).toBe(false);
     });
 
-    it('skills install without --force exits 1 and mentions --force', async () => {
+    it('skills install without --force warns, exits 0, and mentions --force', async () => {
         const installed = join(project, '.agents', 'skills', 'demo');
         mkdirSync(installed, { recursive: true });
         writeFileSync(join(installed, 'SKILL.md'), '# mine\n');
@@ -418,8 +418,10 @@ describe('--force on non-TTY', () => {
             env: env(),
         });
 
-        expect(result.exitCode).toBe(1);
-        expect(result.stderr + result.stdout).toContain('--force');
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain('[!]');
+        expect(result.stdout).toContain('demo is already installed');
+        expect(result.stdout).toContain('--force');
         expect(readFileSync(join(installed, 'SKILL.md'), 'utf8')).toBe(
             '# mine\n'
         );
