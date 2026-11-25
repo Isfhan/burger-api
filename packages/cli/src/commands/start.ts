@@ -7,6 +7,7 @@ import {
     DEFAULT_ENTRY_FILES,
     validatePort,
 } from '../utils/build/project';
+import { installChildSignalHandlers } from '../utils/child-signals';
 import {
     error as logError,
     info,
@@ -117,21 +118,19 @@ export const startCommand = new Command('start')
                 },
             });
 
-            process.once('SIGINT', () => {
-                newline();
-                info('Shutting down server...');
-                proc.kill();
-                process.exit(0);
-            });
-
-            process.once('SIGBREAK', () => {
-                newline();
-                info('Shutting down server...');
-                proc.kill();
-                process.exit(0);
+            let stopping = false;
+            installChildSignalHandlers({
+                getChild: () => proc,
+                onSignal: () => {
+                    stopping = true;
+                    newline();
+                    info('Shutting down server...');
+                },
             });
 
             const exitCode = await proc.exited;
+            // The helper owns the exit (128 + signal) after a signal.
+            if (stopping) return;
             if (exitCode !== 0) {
                 logError('Server stopped unexpectedly');
                 process.exit(exitCode);
