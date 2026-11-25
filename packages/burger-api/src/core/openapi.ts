@@ -173,6 +173,10 @@ interface StandardJsonSchemaConverter {
 
 /**
  * Builds a request body object for OpenAPI based on a SchemaInput.
+ *
+ * A schema with no JSON Schema available (e.g. a Standard Schema with no
+ * configured converter) still emits a body with `schema: {}`, matching how
+ * parameters fall back — never a silent omission.
  */
 function buildRequestBody(
     zodSchema: unknown,
@@ -185,11 +189,10 @@ function buildRequestBody(
         mapJsonSchema,
         'input'
     );
-    if (!jsonSchema) return undefined;
     return {
         content: {
             'application/json': {
-                schema: jsonSchema,
+                schema: jsonSchema ?? {},
             },
         },
         description: 'Request body',
