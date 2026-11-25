@@ -17,7 +17,7 @@ import {
     prepareVirtualEntry,
 } from './entry';
 import { scaffoldPlatformConfig } from './platform-config';
-import { clearBuildDir } from './project';
+import { assertNodeServerInstalled, clearBuildDir } from './project';
 import {
     cleanupEntryOptionsModule,
     prepareEntryOptionsModule,
@@ -381,17 +381,10 @@ export async function runVirtualEntryBuild(options: {
             );
         }
 
+        // Also checked by `build` before it clears the output folder; kept
+        // here so direct callers of this pipeline fail the same way.
         if (platformTarget === 'node') {
-            try {
-                Bun.resolveSync('@burger-api/node-server', options.cwd);
-            } catch {
-                throw new Error(
-                    '--target=node requires the "@burger-api/node-server" ' +
-                        'package, which is not installed in this project. ' +
-                        'Run `bun add @burger-api/node-server` (or the npm/pnpm/yarn ' +
-                        'equivalent) and try again.'
-                );
-            }
+            assertNodeServerInstalled(options.cwd);
         }
 
         const appConventions: AppConventionPaths | undefined =

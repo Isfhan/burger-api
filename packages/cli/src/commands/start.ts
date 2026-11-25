@@ -100,7 +100,9 @@ export const startCommand = new Command('start')
                 );
             }
         } else {
-            info(`Entry: ${file} (no build found — running from source)`);
+            warning(
+                `No production build found, running ${file} from source. Run "burger-api build" first for production.`
+            );
         }
         info('Press Ctrl+C to stop');
         dim('No hot reload — production mode');
