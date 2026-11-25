@@ -6,7 +6,7 @@ or a route-level `api/**/hooks.ts`.
 
 ```typescript
 // src/hooks.ts
-export const beforeRoute = [logger(), securityHeaders()];
+export const onRequest = [logger(), securityHeaders()];
 ```
 
 Hooks receive the `BurgerContext` and drive the request lifecycle. There is no
@@ -18,9 +18,9 @@ separate middleware layer: hooks are the lifecycle.
 |---------|------------|-------------|
 | [**CORS**](./cors/) `cors(options)` | `onRequest` | Cross-Origin Resource Sharing |
 | [**Rate Limiter**](./rate-limiter/) `rateLimit(options)` | `onRequest` / `beforeRoute` | Request rate limiting |
-| [**Logger**](./logger/) `logger()` / `createLogger(options)` | `beforeRoute` | Request/response logging |
-| [**Compression**](./compression/) `compress(options)` | `beforeRoute` | gzip/deflate response compression |
-| [**Security Headers**](./security-headers/) `securityHeaders()` / `strictSecurity()` / `relaxedSecurity()` | `beforeRoute` | Security HTTP headers |
+| [**Logger**](./logger/) `logger()` / `createLogger(options)` | `onRequest` | Request/response logging |
+| [**Compression**](./compression/) `compress(options)` | `onRequest` | gzip/deflate response compression |
+| [**Security Headers**](./security-headers/) `securityHeaders()` / `strictSecurity()` / `relaxedSecurity()` | `onRequest` | Security HTTP headers |
 | [**Timeout**](./timeout/) `requestTimeout(options)` | `beforeRoute` | Replace slow responses with `408` |
 | [**Cache Control**](./cache/) `cacheControl()` / `noCache()` / `publicCache()` / `privateCache()` / `immutableCache()` / `cdnCache()` | `beforeRoute` | HTTP caching headers |
 | [**Body Size Limiter**](./body-size-limiter/) `bodySizeLimiter(options)` | `onRequest` / `beforeRoute` | Request body size limits |
@@ -46,10 +46,9 @@ import { cors } from '../ecosystem/hooks/cors/cors';
 import { rateLimit } from '../ecosystem/hooks/rate-limiter/rate-limiter';
 
 // CORS runs pre-routing so it can answer OPTIONS preflight requests.
-export const onRequest = [cors({ origin: '*' })];
+export const onRequest = [cors({ origin: '*' }), logger()];
 
 export const beforeRoute = [
-    logger(),
     rateLimit({ windowMs: 60000, maxRequests: 100 }),
 ];
 ```
@@ -91,16 +90,18 @@ Every hook receives `(ctx: BurgerContext)`:
 - `rateLimit()` and `bodySizeLimiter()` belong in `onRequest` when you want
   them to cover unmatched paths and run before body validation. They also
   work in `beforeRoute`.
-- `logger()`, `compress()`, `securityHeaders()`, cache presets, and
-  `requestTimeout()` return response transforms. Wire them into
-  `beforeRoute` so the response they receive is the handler's.
+- `logger()`, `compress()` and `securityHeaders()` belong in `onRequest`: it
+  runs for every request, so their response mappers also cover 404, 405,
+  validation errors and `onError` responses, and see the final status.
+- Cache presets and `requestTimeout()` return response transforms. Wire them
+  into `beforeRoute` so the response they receive is the handler's.
 
 ### Common patterns
 
 Global hooks, in `src/hooks.ts`:
 
 ```typescript
-export const beforeRoute = [logger(), securityHeaders()];
+export const onRequest = [logger(), securityHeaders()];
 ```
 
 Route-specific hooks, in `api/admin/hooks.ts`:
@@ -117,8 +118,9 @@ export const beforeRoute = [
 Conditional hooks:
 
 ```typescript
+export const onRequest = [logger()];
+
 export const beforeRoute = [
-    logger(),
     ...(process.env.NODE_ENV === 'production'
         ? [rateLimit({ windowMs: 60000, maxRequests: 100 })]
         : []),

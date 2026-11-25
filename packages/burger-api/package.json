@@ -50,7 +50,7 @@
     "prepare": "bun run build",
     "test": "bun run test:examples && bun run test:ecosystem && bun run test:lifecycle && bun run test:context && bun run test:utils && bun run test:chain && bun run test:plugin && bun run test:router && bun run test:core && bun run test:errors && bun run test:validation && bun run test:compiler && bun run test:adapter && bun run test:provider && bun run test:smoke && bun run test:ws",
     "test:examples": "bun test --timeout 30000 --max-concurrency 1 ./examples",
-    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-smoke.test.ts test/ecosystem/u16-hardening.test.ts test/ecosystem/correctness.test.ts test/ecosystem/auth-before-validation.test.ts",
+    "test:ecosystem": "bun test --timeout 60000 --max-concurrency 1 test/ecosystem-smoke.test.ts test/ecosystem/u16-hardening.test.ts test/ecosystem/correctness.test.ts test/ecosystem/auth-before-validation.test.ts test/ecosystem/onrequest-response-hooks.test.ts",
     "test:lifecycle": "bun test --timeout 30000 ./test/lifecycle",
     "test:context": "bun test --timeout 30000 ./test/context",
     "test:utils": "bun test --timeout 30000 ./test/utils",
