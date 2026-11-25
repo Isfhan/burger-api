@@ -37,8 +37,12 @@ export default function (burger: PluginRegistrar) {
 
 At least one of `keys` (non-empty) or `validate` is required:
 `apiKey()` with neither throws at startup instead of rejecting every
-request with `401`. The check runs in the plugin's `beforeRoute` hook;
-routes with `auth: false` skip it entirely.
+request with `401`. The check runs in the plugin's `transform` stage, which
+runs after routing (so `config.auth` is known) but before request validation
+and body parsing. Missing or invalid keys therefore produce `401` before a
+route can answer `422` for an invalid body or `400` for malformed JSON, and the
+body is never parsed for an unauthenticated request. Routes with `auth: false`
+skip the check entirely.
 
 ### Dynamic validation
 

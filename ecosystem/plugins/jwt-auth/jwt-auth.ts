@@ -327,117 +327,130 @@ export function jwtAuth(options: JwtAuthOptions = {}): Plugin {
     name: "jwt-auth",
 
     hooks: {
-      beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        const config = ctx.config as { auth?: boolean | { required?: boolean; roles?: string[] } } | undefined;
+      // Authentication runs in `transform`: after routing (so `ctx.config` is
+      // known) but before validation and body parsing. An unauthenticated
+      // request is rejected with 401 before it can receive a 422/400 that
+      // reveals the schema or parses its body. Rejections are thrown
+      // HTTPErrors, rendered by `onError` like any other error.
+      transform: {
+        user: async (ctx: BurgerContext): Promise<JwtPayload | undefined> => {
+          const config = ctx.config as
+            | { auth?: boolean | { required?: boolean; roles?: string[] } }
+            | undefined;
 
-        // Skip auth check if explicitly disabled. The token is not parsed
-        // here — unverified claims never reach auth-disabled routes.
-        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
-          return;
-        }
-
-        // The prefix must match exactly.
-        const authHeader = ctx.headers.get(header);
-        if (!authHeader?.startsWith(`${prefix} `)) {
-          throw new UnauthorizedError("Missing or invalid token");
-        }
-        const token = authHeader.slice(prefix.length + 1);
-
-        const parts = token.split(".");
-        if (parts.length !== 3) {
-          throw new UnauthorizedError("Malformed token");
-        }
-        // Destructure so noUncheckedIndexedAccess narrows the parts to strings.
-        const [encodedHeader, encodedPayload, signature] = parts;
-        if (!encodedHeader || !encodedPayload || !signature) {
-          throw new UnauthorizedError("Malformed token");
-        }
-
-        let user: JwtPayload;
-        try {
-          // Reject tokens whose `alg` differs from the configured one —
-          // never verify with the wrong key.
-          const headerDecoded = JSON.parse(
-            new TextDecoder().decode(base64UrlDecode(encodedHeader))
-          ) as { alg?: unknown };
-
-          if (headerDecoded.alg !== algorithm) {
-            throw new UnauthorizedError("Invalid token algorithm");
+          // Skip auth check if explicitly disabled. The token is not parsed
+          // here — unverified claims never reach auth-disabled routes.
+          if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
+            return undefined;
           }
 
-          const signatureValid = await verifySignature(token, verificationKey, algorithm);
-          if (!signatureValid) {
-            throw new UnauthorizedError("Invalid token signature");
+          // The prefix must match exactly.
+          const authHeader = ctx.headers.get(header);
+          if (!authHeader?.startsWith(`${prefix} `)) {
+            throw new UnauthorizedError("Missing or invalid token");
+          }
+          const token = authHeader.slice(prefix.length + 1);
+
+          const parts = token.split(".");
+          if (parts.length !== 3) {
+            throw new UnauthorizedError("Malformed token");
+          }
+          // Destructure so noUncheckedIndexedAccess narrows the parts to strings.
+          const [encodedHeader, encodedPayload, signature] = parts;
+          if (!encodedHeader || !encodedPayload || !signature) {
+            throw new UnauthorizedError("Malformed token");
           }
 
-          // Only after the signature verifies may the payload be trusted.
-          user = JSON.parse(
-            new TextDecoder().decode(base64UrlDecode(encodedPayload))
-          ) as JwtPayload;
-        } catch (error) {
-          if (error instanceof UnauthorizedError) {
-            throw error;
-          }
-          throw new UnauthorizedError("Malformed token");
-        }
+          let user: JwtPayload;
+          try {
+            // Reject tokens whose `alg` differs from the configured one —
+            // never verify with the wrong key.
+            const headerDecoded = JSON.parse(
+              new TextDecoder().decode(base64UrlDecode(encodedHeader))
+            ) as { alg?: unknown };
 
-        // Check expiration; reject non-finite values before comparing.
-        const now = Math.floor(Date.now() / 1000);
-        if (user.exp === undefined) {
-          if (requireExpiration) {
-            throw new UnauthorizedError("Token has no expiration");
-          }
-        } else {
-          if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
-            throw new UnauthorizedError("Token has invalid expiration");
-          }
-          // Strict: `exp == now` is already expired.
-          if (user.exp <= now - clockTolerance) {
-            throw new UnauthorizedError("Token expired");
-          }
-        }
+            if (headerDecoded.alg !== algorithm) {
+              throw new UnauthorizedError("Invalid token algorithm");
+            }
 
-        if (user.nbf !== undefined) {
-          if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
-            throw new UnauthorizedError("Token has invalid not-before claim");
-          }
-          if (user.nbf > now + clockTolerance) {
-            throw new UnauthorizedError("Token not yet valid");
-          }
-        }
+            const signatureValid = await verifySignature(
+              token,
+              verificationKey,
+              algorithm
+            );
+            if (!signatureValid) {
+              throw new UnauthorizedError("Invalid token signature");
+            }
 
-        // A configured issuer must match exactly.
-        if (issuer && user.iss !== issuer) {
-          throw new UnauthorizedError("Invalid issuer");
-        }
-
-        // A configured audience must be present and listed.
-        if (audience) {
-          if (!user.aud) {
-            throw new UnauthorizedError("Invalid audience");
+            // Only after the signature verifies may the payload be trusted.
+            user = JSON.parse(
+              new TextDecoder().decode(base64UrlDecode(encodedPayload))
+            ) as JwtPayload;
+          } catch (error) {
+            if (error instanceof UnauthorizedError) {
+              throw error;
+            }
+            throw new UnauthorizedError("Malformed token");
           }
-          const audArray = Array.isArray(user.aud) ? user.aud : [user.aud];
-          if (!audArray.includes(audience)) {
-            throw new UnauthorizedError("Invalid audience");
+
+          // Check expiration; reject non-finite values before comparing.
+          const now = Math.floor(Date.now() / 1000);
+          if (user.exp === undefined) {
+            if (requireExpiration) {
+              throw new UnauthorizedError("Token has no expiration");
+            }
+          } else {
+            if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
+              throw new UnauthorizedError("Token has invalid expiration");
+            }
+            // Strict: `exp == now` is already expired.
+            if (user.exp <= now - clockTolerance) {
+              throw new UnauthorizedError("Token expired");
+            }
           }
-        }
 
-        const requiredRoles =
-          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
-        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
-          // A non-array claim counts as no roles: `includes` on a string
-          // would match substrings.
-          const claim = (user as { roles?: unknown }).roles;
-          const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
-          const hasRole = requiredRoles.some((role) => userRoles.includes(role));
-
-          if (!hasRole) {
-            throw new ForbiddenError("Insufficient permissions");
+          if (user.nbf !== undefined) {
+            if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
+              throw new UnauthorizedError("Token has invalid not-before claim");
+            }
+            if (user.nbf > now + clockTolerance) {
+              throw new UnauthorizedError("Token not yet valid");
+            }
           }
-        }
 
-        // Attach verified claims only, so handlers can trust ctx.user.
-        (ctx as { user?: JwtPayload }).user = user;
+          // A configured issuer must match exactly.
+          if (issuer && user.iss !== issuer) {
+            throw new UnauthorizedError("Invalid issuer");
+          }
+
+          // A configured audience must be present and listed.
+          if (audience) {
+            if (!user.aud) {
+              throw new UnauthorizedError("Invalid audience");
+            }
+            const audArray = Array.isArray(user.aud) ? user.aud : [user.aud];
+            if (!audArray.includes(audience)) {
+              throw new UnauthorizedError("Invalid audience");
+            }
+          }
+
+          const requiredRoles =
+            config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+          if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+            // A non-array claim counts as no roles: `includes` on a string
+            // would match substrings.
+            const claim = (user as { roles?: unknown }).roles;
+            const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
+            const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
+            if (!hasRole) {
+              throw new ForbiddenError("Insufficient permissions");
+            }
+          }
+
+          // Return verified claims only, so handlers can trust ctx.user.
+          return user;
+        },
       },
     },
   };
