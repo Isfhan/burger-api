@@ -47,6 +47,12 @@ their `config.ts`). Without valid credentials the plugin responds `401` with
 `WWW-Authenticate: Basic realm="Restricted"`, so browsers show their login
 prompt. `validate` is required: `basicAuth()` without it throws at startup.
 
+Authentication runs in the plugin's `transform` stage: after routing (so the
+route's `config.auth` is known) but **before validation and body parsing**. An
+unauthenticated request therefore gets `401` instead of a `422` that lists the
+expected schema fields or a `400` from parsing its body — the request is
+rejected before it can reach either.
+
 ### With custom realm
 
 ```typescript

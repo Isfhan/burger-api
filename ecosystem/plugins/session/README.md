@@ -53,8 +53,8 @@ export default function (burger: PluginRegistrar) {
 ### Login / logout / protected route
 
 By default **every route requires an existing session** (the plugin's
-`beforeRoute` throws `401 Session required` when there is none). Mark routes
-that must work without a session (at least the login route) with
+`transform` stage throws `401 Session required` when there is none). Mark
+routes that must work without a session (at least the login route) with
 `auth: false`:
 
 ```typescript
@@ -116,6 +116,15 @@ Sessions have no roles concept. A route whose `config.auth` lists `roles`
 **fails closed**: after the session check the plugin responds `403`, never
 letting the request through. Enforce authorisation with a route hook that
 inspects fields your login handler put in `ctx.session`.
+
+### When the check runs
+
+The session is loaded and required in the plugin's `transform` stage: after
+routing (so the route's `config.auth` is known) but **before validation and
+body parsing**. An unauthenticated request therefore gets `401` instead of a
+`422` that lists the expected schema fields or a `400` from parsing its body —
+the request is rejected before it can reach either. `auth: false` routes skip
+the check but still get `ctx.session` when a valid session cookie is present.
 
 ### With custom store
 

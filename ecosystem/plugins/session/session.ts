@@ -282,8 +282,22 @@ export function session(options: SessionOptions = {}): Plugin {
     name: "session",
 
     hooks: {
+      // Authentication runs in `transform`: after routing (so `ctx.config` is
+      // known) but before validation and body parsing. An unauthenticated
+      // request is rejected with 401 before it can receive a 422/400 that
+      // reveals the schema or parses its body. Rejections are thrown
+      // HTTPErrors, rendered by `onError` like any other error.
       transform: {
         session: async (ctx: BurgerContext): Promise<Record<string, unknown> | undefined> => {
+          const config = ctx.config as
+            | { auth?: boolean | { required?: boolean; roles?: string[] } }
+            | undefined;
+
+          // Skip auth check if explicitly disabled
+          const authDisabled =
+            config?.auth === false ||
+            (typeof config?.auth === "object" && config.auth.required === false);
+
           const sessionCtx = ctx as unknown as {
             _sessionId?: string;
             _sessionSnapshot?: Record<string, unknown>;
@@ -301,13 +315,35 @@ export function session(options: SessionOptions = {}): Plugin {
             }
           }
 
-          if (!sessionId) {
+          // Load the session before the auth check: the check is about the
+          // session that was loaded, not the cookie.
+          let sessionData: Record<string, unknown> | null = null;
+          if (sessionId) {
+            const loaded = await store.get(sessionId);
+            if (loaded) {
+              sessionData = loaded;
+            } else {
+              sessionId = undefined;
+            }
+          }
+
+          // Routes require an existing session unless `auth: false`. This
+          // only proves the client holds a valid session cookie — NOT that a
+          // user is logged in. Check a field your login handler sets (e.g.
+          // `ctx.session?.userId`) to require an authenticated user.
+          if (!sessionData) {
+            if (!authDisabled) {
+              throw new UnauthorizedError("Session required");
+            }
             return undefined;
           }
 
-          const sessionData = await store.get(sessionId);
-          if (!sessionData) {
-            return undefined;
+          // A session has no roles concept: a route that lists roles must fail
+          // closed instead of silently allowing any session through.
+          const requiredRoles =
+            config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+          if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+            throw new ForbiddenError("Insufficient permissions");
           }
 
           // Stash the ID and a copy of the data for mapResponse, so handler
@@ -317,33 +353,6 @@ export function session(options: SessionOptions = {}): Plugin {
 
           return sessionData;
         },
-      },
-
-      beforeRoute: (ctx: BurgerContext): void => {
-        const config = ctx.config as
-          | { auth?: boolean | { required?: boolean; roles?: string[] } }
-          | undefined;
-
-        // Skip auth check if explicitly disabled
-        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
-          return;
-        }
-
-        // Routes require an existing session unless `auth: false`. This
-        // only proves the client holds a valid session cookie — NOT that a
-        // user is logged in. Check a field your login handler sets (e.g.
-        // `ctx.session?.userId`) to require an authenticated user.
-        if (!ctx.session) {
-          throw new UnauthorizedError("Session required");
-        }
-
-        // A session has no roles concept: a route that lists roles must fail
-        // closed instead of silently allowing any session through.
-        const requiredRoles =
-          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
-        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
-          throw new ForbiddenError("Insufficient permissions");
-        }
       },
 
       mapResponse: (ctx: BurgerContext): ((response: Response) => Promise<Response>) => {

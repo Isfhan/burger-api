@@ -365,130 +365,139 @@ export function oidc(options: OidcOptions): Plugin {
     name: "oidc",
 
     hooks: {
-      beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        const config = ctx.config as
-          | { auth?: boolean | { required?: boolean; roles?: string[] } }
-          | undefined;
+      // Authentication runs in `transform`: after routing (so `ctx.config` is
+      // known) but before validation and body parsing. An unauthenticated
+      // request is rejected with 401 before it can receive a 422/400 that
+      // reveals the schema or parses its body. Rejections are thrown
+      // HTTPErrors, rendered by `onError` like any other error.
+      transform: {
+        user: async (
+          ctx: BurgerContext
+        ): Promise<Record<string, unknown> | undefined> => {
+          const config = ctx.config as
+            | { auth?: boolean | { required?: boolean; roles?: string[] } }
+            | undefined;
 
-        // Skip auth check if explicitly disabled. The token is not parsed
-        // here — unverified claims never reach auth-disabled routes.
-        if (
-          config?.auth === false ||
-          (typeof config?.auth === "object" && config.auth.required === false)
-        ) {
-          return;
-        }
+          // Skip auth check if explicitly disabled. The token is not parsed
+          // here — unverified claims never reach auth-disabled routes.
+          if (
+            config?.auth === false ||
+            (typeof config?.auth === "object" && config.auth.required === false)
+          ) {
+            return undefined;
+          }
 
-        // The prefix must match exactly.
-        const authHeader = ctx.headers.get(header);
-        if (!authHeader?.startsWith(`${prefix} `)) {
-          throw new UnauthorizedError("Missing or invalid token");
-        }
-        const token = authHeader.slice(prefix.length + 1);
+          // The prefix must match exactly.
+          const authHeader = ctx.headers.get(header);
+          if (!authHeader?.startsWith(`${prefix} `)) {
+            throw new UnauthorizedError("Missing or invalid token");
+          }
+          const token = authHeader.slice(prefix.length + 1);
 
-        // Resolve discovery and keys lazily, only when a token must be verified.
-        let keys: JwksKey[];
-        try {
-          if (!discovery) {
-            try {
-              discovery = await (discoveryPromise ??= fetchDiscovery(issuer));
-            } catch (error) {
-              discoveryPromise = null;
-              throw error;
+          // Resolve discovery and keys lazily, only when a token must be verified.
+          let keys: JwksKey[];
+          try {
+            if (!discovery) {
+              try {
+                discovery = await (discoveryPromise ??= fetchDiscovery(issuer));
+              } catch (error) {
+                discoveryPromise = null;
+                throw error;
+              }
+            }
+            keys = await getJwks(discovery.jwks_uri);
+          } catch (error) {
+            // Provider failure, not a bad token: log server-side and tell the
+            // client to retry.
+            console.error(
+              `[burger-api/plugin-oidc] Failed to load discovery/JWKS for issuer "${issuer}":`,
+              error
+            );
+            throw new HTTPError(503, "Authentication provider unavailable");
+          }
+
+          let verification = await verifyToken(token, keys, algorithms);
+          if (verification === "unknown-kid") {
+            // The provider may have rotated keys before the cache TTL expired.
+            const refreshed = await forceRefreshJwks(discovery.jwks_uri);
+            if (refreshed) {
+              verification = await verifyToken(token, refreshed, algorithms);
             }
           }
-          keys = await getJwks(discovery.jwks_uri);
-        } catch (error) {
-          // Provider failure, not a bad token: log server-side and tell the
-          // client to retry.
-          console.error(
-            `[burger-api/plugin-oidc] Failed to load discovery/JWKS for issuer "${issuer}":`,
-            error
-          );
-          throw new HTTPError(503, "Authentication provider unavailable");
-        }
-
-        let verification = await verifyToken(token, keys, algorithms);
-        if (verification === "unknown-kid") {
-          // The provider may have rotated keys before the cache TTL expired.
-          const refreshed = await forceRefreshJwks(discovery.jwks_uri);
-          if (refreshed) {
-            verification = await verifyToken(token, refreshed, algorithms);
+          if (verification !== "valid") {
+            throw new UnauthorizedError("Invalid token signature");
           }
-        }
-        if (verification !== "valid") {
-          throw new UnauthorizedError("Invalid token signature");
-        }
 
-        // Only after the signature verifies may the payload be trusted.
-        let user: Record<string, unknown>;
-        try {
-          const parts = token.split(".");
-          user = JSON.parse(
-            new TextDecoder().decode(base64UrlDecode(parts[1]!))
-          ) as Record<string, unknown>;
-        } catch {
-          throw new UnauthorizedError("Malformed token");
-        }
+          // Only after the signature verifies may the payload be trusted.
+          let user: Record<string, unknown>;
+          try {
+            const parts = token.split(".");
+            user = JSON.parse(
+              new TextDecoder().decode(base64UrlDecode(parts[1]!))
+            ) as Record<string, unknown>;
+          } catch {
+            throw new UnauthorizedError("Malformed token");
+          }
 
-        const now = Math.floor(Date.now() / 1000);
-        if (user.exp === undefined) {
-          if (requireExpiration) {
-            throw new UnauthorizedError("Token has no expiration");
+          const now = Math.floor(Date.now() / 1000);
+          if (user.exp === undefined) {
+            if (requireExpiration) {
+              throw new UnauthorizedError("Token has no expiration");
+            }
+          } else {
+            if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
+              throw new UnauthorizedError("Token has invalid expiration");
+            }
+            // Strict: `exp == now` is already expired.
+            if (user.exp <= now - clockTolerance) {
+              throw new UnauthorizedError("Token expired");
+            }
           }
-        } else {
-          if (typeof user.exp !== "number" || !Number.isFinite(user.exp)) {
-            throw new UnauthorizedError("Token has invalid expiration");
-          }
-          // Strict: `exp == now` is already expired.
-          if (user.exp <= now - clockTolerance) {
-            throw new UnauthorizedError("Token expired");
-          }
-        }
 
-        if (user.nbf !== undefined) {
-          if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
-            throw new UnauthorizedError("Token has invalid not-before claim");
+          if (user.nbf !== undefined) {
+            if (typeof user.nbf !== "number" || !Number.isFinite(user.nbf)) {
+              throw new UnauthorizedError("Token has invalid not-before claim");
+            }
+            if (user.nbf > now + clockTolerance) {
+              throw new UnauthorizedError("Token not yet valid");
+            }
           }
-          if (user.nbf > now + clockTolerance) {
-            throw new UnauthorizedError("Token not yet valid");
+
+          // The issuer must match exactly.
+          if (user.iss !== issuer) {
+            throw new UnauthorizedError("Invalid issuer");
           }
-        }
 
-        // The issuer must match exactly.
-        if (user.iss !== issuer) {
-          throw new UnauthorizedError("Invalid issuer");
-        }
-
-        // A configured audience must be present and listed.
-        if (audience) {
-          if (!user.aud) {
-            throw new UnauthorizedError("Invalid audience");
+          // A configured audience must be present and listed.
+          if (audience) {
+            if (!user.aud) {
+              throw new UnauthorizedError("Invalid audience");
+            }
+            const audArray = Array.isArray(user.aud)
+              ? user.aud
+              : [user.aud];
+            if (!audArray.includes(audience)) {
+              throw new UnauthorizedError("Invalid audience");
+            }
           }
-          const audArray = Array.isArray(user.aud)
-            ? user.aud
-            : [user.aud];
-          if (!audArray.includes(audience)) {
-            throw new UnauthorizedError("Invalid audience");
+
+          const requiredRoles =
+            config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+          if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+            // A non-array claim counts as no roles: `includes` on a string
+            // would match substrings.
+            const claim = user.roles;
+            const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
+            const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+
+            if (!hasRole) {
+              throw new ForbiddenError("Insufficient permissions");
+            }
           }
-        }
 
-        const requiredRoles =
-          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
-        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
-          // A non-array claim counts as no roles: `includes` on a string
-          // would match substrings.
-          const claim = user.roles;
-          const userRoles: unknown[] = Array.isArray(claim) ? claim : [];
-          const hasRole = requiredRoles.some((role) => userRoles.includes(role));
-
-          if (!hasRole) {
-            throw new ForbiddenError("Insufficient permissions");
-          }
-        }
-
-        // Attach verified claims only.
-        (ctx as { user?: Record<string, unknown> }).user = user;
+          // Return verified claims only, so handlers can trust ctx.user.
+          return user;
+        },
       },
     },
   };

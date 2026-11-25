@@ -405,6 +405,27 @@ describe('HTTPError response headers', () => {
             'application/problem+json'
         );
     });
+
+    it('copies headers from an HTTPError created by another package copy', async () => {
+        // `Symbol.for` is registry-global, so a second installed copy brands
+        // its errors with the same symbol while `instanceof` stays false.
+        const brand = Symbol.for('burger-api.http-error');
+        const foreign = Object.assign(new Error('missing'), {
+            status: 401,
+            headers: { 'WWW-Authenticate': 'Basic realm="copy"' },
+            [brand]: true,
+        });
+        expect(foreign).not.toBeInstanceOf(HTTPError);
+
+        const res = renderHTTPError(foreign, false);
+        expect(res.status).toBe(401);
+        expect(res.headers.get('www-authenticate')).toBe(
+            'Basic realm="copy"'
+        );
+        expect(res.headers.get('content-type')).toBe(
+            'application/problem+json'
+        );
+    });
 });
 
 // ─────────────────────────────────────────────────────

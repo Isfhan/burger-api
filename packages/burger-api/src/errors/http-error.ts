@@ -15,6 +15,24 @@ export type HTTPErrorOptions = ErrorOptions & {
     headers?: HeadersInit;
 };
 
+/**
+ * Cross-copy brand. A second installed copy of this package has a different
+ * `HTTPError` class, so `instanceof` is false even for a genuine error —
+ * ecosystem plugins import `burger-api` themselves and can resolve to another
+ * copy of the framework. `Symbol.for` is registry-global, so the brand still
+ * identifies the error on both sides.
+ */
+const HTTP_ERROR_BRAND = Symbol.for('burger-api.http-error');
+
+/** True for an `HTTPError` from any copy of this package. */
+function isHTTPError(value: unknown): value is HTTPError {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        (value as Record<symbol, unknown>)[HTTP_ERROR_BRAND] === true
+    );
+}
+
 export class HTTPError extends Error {
     /** HTTP status code for this error. */
     readonly status: number;
@@ -30,6 +48,8 @@ export class HTTPError extends Error {
         super(message, options);
         this.status = status;
         this.name = 'HTTPError';
+        // Non-enumerable own brand (see HTTP_ERROR_BRAND).
+        Object.defineProperty(this, HTTP_ERROR_BRAND, { value: true });
         if (options?.headers !== undefined) {
             this.headers = options.headers;
         }
@@ -138,7 +158,7 @@ export function renderHTTPError(
     extras?: Record<string, unknown>
 ): Response {
     const httpError =
-        error instanceof HTTPError ||
+        isHTTPError(error) ||
         (error !== null &&
             typeof error === 'object' &&
             'status' in (error as object) &&
@@ -165,7 +185,7 @@ export function renderHTTPError(
     const hide =
         !isDev &&
         status >= 500 &&
-        (status === 500 || !(error instanceof HTTPError));
+        (status === 500 || !isHTTPError(error));
     const genericTitle = STATUS_TITLES[status] ?? 'Internal Server Error';
 
     const problem: Record<string, unknown> = {
@@ -195,9 +215,10 @@ export function renderHTTPError(
     }
 
     // Caller-supplied headers come from real HTTPError instances only; a
-    // duck-typed thrown object must not inject response headers.
+    // duck-typed thrown object must not inject response headers. The brand
+    // makes this work across copies of the package.
     const headers = new Headers(
-        error instanceof HTTPError ? error.headers : undefined
+        isHTTPError(error) ? error.headers : undefined
     );
     // RFC 9457 media type is set last so it always wins.
     headers.set('Content-Type', 'application/problem+json');
