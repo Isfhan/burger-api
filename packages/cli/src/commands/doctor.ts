@@ -11,6 +11,10 @@ import {
 } from '../utils/config';
 import { scanApiRoutes, ensureAppDirEnv } from '../utils/scanner';
 import { PROJECT_HINT } from '../utils/build/project';
+import {
+    ECOSYSTEM_VERSIONS,
+    SECURITY_FIXES,
+} from '../utils/ecosystem-versions';
 import type { BuildConfig } from '../types/index';
 import {
     success,
@@ -388,7 +392,10 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
         );
     }
 
-    // 9. Optional files (info only)
+    // 9. Copied official hooks and plugins
+    results.push(...ecosystemChecks(cwd));
+
+    // 10. Optional files (info only)
     for (const stem of ['hooks', 'plugins', 'providers', 'openapi.config']) {
         const ext = findExisting(join(cwd, 'src'), stem, CONVENTION_EXTS);
         results.push(
@@ -399,6 +406,77 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
     }
 
     return results;
+}
+
+/**
+ * Official hooks and plugins copied into `ecosystem/`. A copy with a known
+ * security problem fails; an older copy is a warning. Copies made before
+ * version markers existed are judged by their code. Unknown add-ons
+ * (your own) are skipped.
+ */
+export function ecosystemChecks(cwd: string): CheckResult[] {
+    const results: CheckResult[] = [];
+    for (const kind of ['hooks', 'plugins']) {
+        for (const name of Object.keys(ECOSYSTEM_VERSIONS)) {
+            const dir = join(cwd, 'ecosystem', kind, name);
+            const ext = findExisting(dir, name, CONVENTION_EXTS);
+            if (!ext) continue;
+
+            const label = `ecosystem/${kind}/${name}`;
+            const fix = `burger-api add ${name} --force`;
+            const version = readAddonVersion(dir);
+            const latest = ECOSYSTEM_VERSIONS[name]!;
+            const security = SECURITY_FIXES[name];
+
+            if (
+                security &&
+                (!version ||
+                    Bun.semver.order(version, security.fixedIn) < 0) &&
+                security.marker.test(readFileSync(join(dir, name + ext), 'utf-8'))
+            ) {
+                results.push(
+                    check(
+                        label,
+                        false,
+                        `Security issue: ${security.problem}. Fix: ${fix}`
+                    )
+                );
+            } else if (!version) {
+                results.push(
+                    check(
+                        label,
+                        true,
+                        `No version marker (copied before markers existed). Update: ${fix}`,
+                        'warning'
+                    )
+                );
+            } else if (Bun.semver.order(version, latest) < 0) {
+                results.push(
+                    check(
+                        label,
+                        true,
+                        `Version ${version} is older than ${latest}. Update: ${fix}`,
+                        'warning'
+                    )
+                );
+            } else {
+                results.push(check(label, true, `Up to date (${version})`));
+            }
+        }
+    }
+    return results;
+}
+
+/** The `version` from an add-on's copied package.json, if any. */
+function readAddonVersion(dir: string): string | undefined {
+    try {
+        const pkg = JSON.parse(
+            readFileSync(join(dir, 'package.json'), 'utf-8')
+        ) as { version?: unknown };
+        return typeof pkg.version === 'string' ? pkg.version : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/plugin-jwt-auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "JWT authentication plugin for BurgerAPI",
   "main": "jwt-auth.ts",
   "type": "module",

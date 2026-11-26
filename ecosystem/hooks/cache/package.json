@@ -1,0 +1,16 @@
+{
+  "name": "@burger-api/hook-cache",
+  "version": "0.1.0",
+  "description": "Cache-Control header hook for BurgerAPI",
+  "main": "cache.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=1.0.0-beta"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/hooks/cache"
+  }
+}

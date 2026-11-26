@@ -1,5 +1,17 @@
 # Changelog: @burger-api/cli
 
+## Unreleased
+
+- **`doctor` checks the hooks and plugins in `ecosystem/`.** An auth plugin
+  (jwt-auth, api-key, basic-auth, session, oidc) copied before 1.0.0-beta.3
+  still checks credentials after validation. `doctor` now reports it as a
+  security issue and exits `1`, with the fix:
+  `burger-api add <name> --force`. An older copy of any other add-on is a
+  warning. Your own hooks and plugins are not checked.
+- Every official hook and plugin now ships a `package.json` with its version,
+  so `doctor` can tell old copies from new ones. The auth plugins are at
+  `0.2.0`.
+
 ## 1.0.0-beta.3 (November 26, 2026)
 
 - `dev` and `start` pass `SIGTERM` and `SIGHUP` (and `SIGINT`) to the server
