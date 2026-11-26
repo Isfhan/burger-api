@@ -125,6 +125,10 @@ Available via `burger-api add <name>`: these are **hook factories** wired into `
 | cache | HTTP caching headers |
 | body-size-limiter | Request body size limits |
 
+Register `logger`, `security-headers` and `compression` in `onRequest`: it runs
+for every request, so their response mappers also cover 404, 405, validation
+errors and `onError` responses, and see the final status.
+
 ## Ecosystem Plugins
 
 Also available via `burger-api add <name>`, but these are **plugins** (`burger.usePlugin(...)` in `src/plugins.ts`), not hooks: they need app-level registration, not a `hooks.ts` export. Auth in particular is plugin-only in v1: there is no `hooks.ts`-based auth hook.

@@ -10,6 +10,7 @@
  */
 
 import { HTTPError, renderHTTPError } from '../errors/http-error.js';
+import type { HTTPErrorOptions } from '../errors/http-error.js';
 import type {
     ValidationIssue,
     ValidationResult,
@@ -40,7 +41,7 @@ export class ValidationError extends HTTPError {
     constructor(
         slot: ValidationSlot | 'response',
         issues: ValidationIssue[],
-        options?: ErrorOptions & {
+        options?: HTTPErrorOptions & {
             errorsBySlot?: Record<string, ValidationIssue[]>;
             /** Custom status code; defaults to 422 (ValidatorConfig.status). */
             status?: number;

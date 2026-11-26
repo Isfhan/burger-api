@@ -58,9 +58,10 @@ export const USAGE_HINTS: Record<
     // Must run before body validation reads the whole body.
     'body-size-limiter': { stage: 'onRequest', call: 'bodySizeLimiter()' },
     cache: { stage: 'beforeRoute', call: 'cacheControl()' },
-    compression: { stage: 'beforeRoute', call: 'compress()' },
-    logger: { stage: 'beforeRoute', call: 'logger()' },
-    'security-headers': { stage: 'beforeRoute', call: 'securityHeaders()' },
+    // Response mappers here also cover 404, 405, validation and onError responses.
+    compression: { stage: 'onRequest', call: 'compress()' },
+    logger: { stage: 'onRequest', call: 'logger()' },
+    'security-headers': { stage: 'onRequest', call: 'securityHeaders()' },
     timeout: { stage: 'beforeRoute', call: 'requestTimeout()' },
     'api-key': {
         call: "apiKey({ keys: (process.env.API_KEYS ?? '').split(',') })",

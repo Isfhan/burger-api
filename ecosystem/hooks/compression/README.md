@@ -20,19 +20,21 @@ burger-api add compression
 
 ## Usage
 
-The hook returns a response transform, so wire it into `beforeRoute`.
+The hook returns a response transform, so wire it into `onRequest`. `onRequest`
+runs for every request, so compression also covers 404, 405, validation and
+`onError` responses, and sees the final status.
 
 ```typescript
 // src/hooks.ts
 import { compress } from '../ecosystem/hooks/compression/compression';
 
-export const beforeRoute = [compress()];
+export const onRequest = [compress()];
 ```
 
 ### Custom threshold
 
 ```typescript
-export const beforeRoute = [
+export const onRequest = [
     compress({ threshold: 2048 }), // only responses larger than 2KB
 ];
 ```
@@ -40,7 +42,7 @@ export const beforeRoute = [
 ### Restrict content types
 
 ```typescript
-export const beforeRoute = [
+export const onRequest = [
     compress({
         contentTypes: /^(text\/|application\/(json|javascript|xml))/,
     }),

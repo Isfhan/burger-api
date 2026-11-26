@@ -23,7 +23,12 @@ import {
     runVirtualEntryBuild,
     type VirtualBuildResult,
 } from '../utils/build/pipeline';
-import { clearBuildDir, getProjectName, resolveEntryFile } from '../utils/build/project';
+import {
+    assertNodeServerInstalled,
+    clearBuildDir,
+    getProjectName,
+    resolveEntryFile,
+} from '../utils/build/project';
 import { ensureAppDirEnv } from '../utils/scanner';
 import { VALID_TARGETS } from '../utils/config';
 import type { RuntimeTarget } from '../types/index';
@@ -262,6 +267,17 @@ export const buildCommand = new Command('build')
         const outfile =
             options.outfile ??
             defaultOutfile(platformTarget, Boolean(options.compile), cwd);
+
+        // Fail before the output folder is cleared: a missing node-server
+        // package must not destroy the previous production build.
+        if (platformTarget === 'node') {
+            try {
+                assertNodeServerInstalled(cwd);
+            } catch (err) {
+                logError(err instanceof Error ? err.message : String(err));
+                process.exit(1);
+            }
+        }
 
         // bun and node builds share the default .build/bundle/ — clear it so
         // stale pages/chunks from an earlier build never ship. Only the

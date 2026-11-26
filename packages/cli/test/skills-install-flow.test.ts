@@ -146,7 +146,7 @@ describe('skills install command (mocked GitHub, non-TTY)', () => {
         expect(existsSync(join(dirs.claude, 'demo', 'SKILL.md'))).toBe(true);
     });
 
-    it('refuses to overwrite without a terminal', async () => {
+    it('warns and exits 0 without a terminal when already installed', async () => {
         const installed = join(dir, '.agents', 'skills', 'demo');
         await Bun.write(join(installed, 'SKILL.md'), '# mine');
 
@@ -155,14 +155,33 @@ describe('skills install command (mocked GitHub, non-TTY)', () => {
             () => runCommandInProcess(skillsCommand, ['install', 'demo'], dir)
         );
 
-        expect(result.exitCode).toBe(1);
+        expect(result.exitCode).toBe(0);
+        expect(result.output).toContain('[!]');
         expect(result.output).toContain(
             'demo is already installed in .agents/skills/ or .claude/skills/'
         );
+        expect(result.output).toContain('pass --force to overwrite');
         expect(readFileSync(join(installed, 'SKILL.md'), 'utf8')).toBe(
             '# mine'
         );
         expect(existsSync(join(dir, '.claude', 'skills', 'demo'))).toBe(false);
+    });
+
+    it('warns and leaves a .claude-only install untouched without a terminal', async () => {
+        const installed = join(dir, '.claude', 'skills', 'demo');
+        await Bun.write(join(installed, 'SKILL.md'), '# mine');
+
+        const result = await withMockedFetch(
+            skillGithubMock('demo', DEMO_SKILL),
+            () => runCommandInProcess(skillsCommand, ['install', 'demo'], dir)
+        );
+
+        expect(result.exitCode).toBe(0);
+        expect(result.output).toContain('pass --force to overwrite');
+        expect(readFileSync(join(installed, 'SKILL.md'), 'utf8')).toBe(
+            '# mine'
+        );
+        expect(existsSync(join(dir, '.agents', 'skills', 'demo'))).toBe(false);
     });
 
     it(

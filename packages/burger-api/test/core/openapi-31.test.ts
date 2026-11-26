@@ -123,6 +123,27 @@ describe('OpenAPI 3.1 document', () => {
         expect(trace).toBeDefined();
     });
 
+    it('emits a standard-schema request body with an empty schema', () => {
+        const routes: RouteDefinition[] = [
+            makeRoute({
+                path: '/api/users',
+                handlers: { POST: () => Response.json({}) },
+                schema: {
+                    post: {
+                        body: v.object({ name: v.string() }),
+                    },
+                } as never,
+            }),
+        ];
+        const doc = generateOpenAPIDocument(routes, baseOptions);
+        const post = (doc.paths['/api/users'] as any).post;
+        expect(post.requestBody).toBeDefined();
+        expect(
+            post.requestBody.content['application/json'].schema
+        ).toEqual({});
+        expect(post.requestBody.required).toBe(true);
+    });
+
     it('uses a configured converter for standard-schema parameters', () => {
         const routes: RouteDefinition[] = [
             makeRoute({

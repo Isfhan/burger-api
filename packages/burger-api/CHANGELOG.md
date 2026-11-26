@@ -1,5 +1,31 @@
 # Changelog: burger-api
 
+## Unreleased
+
+### Security
+
+- **Auth plugins check credentials before validation.** jwt-auth, api-key,
+  basic-auth, session and oidc now authenticate in `transform` instead of
+  `beforeRoute`. A request without valid credentials gets `401` even when its
+  body or query is invalid. Before, it got `422` with the validation details,
+  which told anonymous clients about the route's schema. `ctx.user`,
+  `ctx.apiKey` and `ctx.session` are still set for your hooks and handlers.
+  Update your copies with `burger-api add <name> --force`.
+
+### Changes
+
+- **`HTTPError` can carry response headers:**
+  `new UnauthorizedError('...', { headers: { 'WWW-Authenticate': '...' } })`.
+  Every `HTTPError` subclass takes the option. The error response keeps
+  `Content-Type: application/problem+json`. The check also works when a
+  plugin imports its own copy of `burger-api`.
+- **OpenAPI:** a route body schema the converter cannot turn into JSON Schema
+  now shows as a `requestBody` with `schema: {}`, instead of having no
+  `requestBody` at all.
+- **Ecosystem:** the logger, security-headers and compression READMEs now
+  register the hook in `onRequest`, so it also covers `404`, `405`,
+  validation errors and `onError` responses, and logs the final status.
+
 ## 1.0.0-beta.1 (November 23, 2026)
 
 ### Security

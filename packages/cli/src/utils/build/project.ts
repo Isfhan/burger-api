@@ -74,6 +74,26 @@ export function clearBuildDir(dir: string, rm: typeof rmSync = rmSync): void {
 }
 
 /**
+ * A `--target=node` build imports `@burger-api/node-server`, so the project
+ * must have it installed. Throws before any destructive build step — a
+ * missing package must not remove an existing production build.
+ */
+export function assertNodeServerInstalled(
+    cwd: string = process.cwd()
+): void {
+    try {
+        Bun.resolveSync('@burger-api/node-server', cwd);
+    } catch {
+        throw new Error(
+            '--target=node requires the "@burger-api/node-server" ' +
+                'package, which is not installed in this project. ' +
+                'Run `bun add @burger-api/node-server` (or the npm/pnpm/yarn ' +
+                'equivalent) and try again.'
+        );
+    }
+}
+
+/**
  * Why `cwd` is not a BurgerAPI project, or undefined when it is: needs a
  * package.json listing `burger-api`.
  */

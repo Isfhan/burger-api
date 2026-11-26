@@ -1,4 +1,5 @@
 import { HTTPError } from './http-error.js';
+import type { HTTPErrorOptions } from './http-error.js';
 
 /**
  * 405 Method Not Allowed — thrown when the HTTP method is not supported.
@@ -11,7 +12,7 @@ export class MethodNotAllowedError extends HTTPError {
     override readonly name = 'MethodNotAllowedError';
     override readonly status = 405 as const;
 
-    constructor(message?: string, options?: ErrorOptions) {
+    constructor(message?: string, options?: HTTPErrorOptions) {
         super(405, message ?? 'Method Not Allowed', options);
     }
 }

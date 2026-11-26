@@ -159,6 +159,10 @@ assets, `/docs`, `/openapi.json`. Route-level response hooks run only for
 their matched route. `ctx.set.headers` is always defined; array values (and
 `set-cookie`) append.
 
+Register `logger`, `security-headers` and `compression` in `onRequest`: it runs
+for every request, so their response mappers also cover 404, 405, validation
+errors and `onError` responses, and see the final status.
+
 ## Plugins vs hooks
 
 - Hooks: when code runs on a request  

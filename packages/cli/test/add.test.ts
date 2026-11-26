@@ -61,8 +61,25 @@ describe('resolveExportName', () => {
 });
 
 describe('USAGE_HINTS', () => {
-    it('wires body-size-limiter into onRequest (before body validation)', () => {
-        expect(USAGE_HINTS['body-size-limiter']?.stage).toBe('onRequest');
+    // Response mappers must run in onRequest so they also cover 404, 405,
+    // validation and onError responses.
+    it('wires every-response and pre-routing hooks into onRequest', () => {
+        for (const name of [
+            'cors',
+            'rate-limiter',
+            'body-size-limiter',
+            'logger',
+            'security-headers',
+            'compression',
+        ]) {
+            expect(USAGE_HINTS[name]?.stage, name).toBe('onRequest');
+        }
+    });
+
+    it('keeps route-scoped hooks in beforeRoute', () => {
+        for (const name of ['cache', 'timeout']) {
+            expect(USAGE_HINTS[name]?.stage, name).toBe('beforeRoute');
+        }
     });
 
     // Regression: the logger hint called `logger()` but imported

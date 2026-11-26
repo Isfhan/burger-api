@@ -19,13 +19,15 @@ burger-api add logger
 
 ## Usage
 
-The hook returns a response transform, so wire it into `beforeRoute`.
+The hook returns a response transform, so wire it into `onRequest`. `onRequest`
+runs for every request, so the logger also records 404, 405, validation and
+`onError` responses, and logs the final status.
 
 ```typescript
 // src/hooks.ts
 import { logger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeRoute = [logger()];
+export const onRequest = [logger()];
 ```
 
 Output:
@@ -39,7 +41,7 @@ Output:
 ```typescript
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeRoute = [createLogger({ format: 'json' })];
+export const onRequest = [createLogger({ format: 'json' })];
 ```
 
 ```json
@@ -50,17 +52,17 @@ export const beforeRoute = [createLogger({ format: 'json' })];
 
 ```typescript
 // String: skipped when the pathname contains it
-export const beforeRoute = [
+export const onRequest = [
     createLogger({ skip: '/health' }),
 ];
 
 // RegExp: tested against the pathname
-export const beforeRoute = [
+export const onRequest = [
     createLogger({ skip: /^\/health/ }),
 ];
 
 // Function
-export const beforeRoute = [
+export const onRequest = [
     createLogger({ skip: (ctx) => ctx.method === 'OPTIONS' }),
 ];
 ```
@@ -73,7 +75,7 @@ so the host, port, and query string never affect it.
 ```typescript
 import { createLogger } from '../ecosystem/hooks/logger/logger';
 
-export const beforeRoute = [
+export const onRequest = [
     createLogger({
         formatter: (info) =>
             `[${info.timestamp}] ${info.method} ${info.path} ${info.status} ${info.duration}ms`,

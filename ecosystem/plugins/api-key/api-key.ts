@@ -139,8 +139,22 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
     name: "api-key",
 
     hooks: {
+      // Authentication runs in `transform`: after routing (so `ctx.config` is
+      // known) but before validation and body parsing. An unauthenticated
+      // request is rejected with 401 before it can receive a 422/400 that
+      // reveals the schema or parses its body. Rejections are thrown
+      // HTTPErrors, rendered by `onError` like any other error.
       transform: {
         apiKey: async (ctx: BurgerContext): Promise<string | undefined> => {
+          const config = ctx.config as
+            | { auth?: boolean | { required?: boolean; roles?: string[] } }
+            | undefined;
+
+          // Skip auth check if explicitly disabled.
+          if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
+            return undefined;
+          }
+
           let apiKey: string | null;
 
           if (extract) {
@@ -150,7 +164,7 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
           }
 
           if (!apiKey) {
-            return undefined;
+            throw new UnauthorizedError("Missing API key");
           }
 
           // Compare against every stored digest with no short-circuit.
@@ -160,53 +174,36 @@ export function apiKey(options: ApiKeyOptions = {}): Plugin {
             matches += timingSafeEqual(candidateDigest, digest) ? 1 : 0;
           }
 
+          let keyToAttach: string | undefined;
+
           if (matches > 0) {
-            return apiKey;
-          }
+            // Static-list keys always attach, even with attachToContext off.
+            keyToAttach = apiKey;
+          } else {
+            if (!validate) {
+              // No validator configured: the static list did not match.
+              throw new UnauthorizedError("Invalid API key");
+            }
 
-          // Mark as needing async validation
-          (ctx as { _apiKeyToValidate?: string })._apiKeyToValidate = apiKey;
-          return undefined;
-        },
-      },
-
-      beforeRoute: async (ctx: BurgerContext): Promise<void> => {
-        const config = ctx.config as
-          | { auth?: boolean | { required?: boolean; roles?: string[] } }
-          | undefined;
-
-        // Skip auth check if explicitly disabled
-        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
-          return;
-        }
-
-        if (!ctx.apiKey) {
-          const keyToValidate = (ctx as { _apiKeyToValidate?: string })._apiKeyToValidate;
-          if (!keyToValidate) {
-            throw new UnauthorizedError("Missing API key");
-          }
-
-          if (validate) {
-            const isValid = await validate(keyToValidate);
+            const isValid = await validate(apiKey);
             if (!isValid) {
               throw new UnauthorizedError("Invalid API key");
             }
 
             if (attachToContext) {
-              ctx.apiKey = keyToValidate;
+              keyToAttach = apiKey;
             }
-          } else {
-            // No validator configured: the static list did not match.
-            throw new UnauthorizedError("Invalid API key");
           }
-        }
 
-        // An API key has no roles: a route that lists roles must fail closed.
-        const requiredRoles =
-          config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
-        if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
-          throw new ForbiddenError("Insufficient permissions");
-        }
+          // An API key has no roles: a route that lists roles must fail closed.
+          const requiredRoles =
+            config?.auth && typeof config.auth === "object" ? config.auth.roles : undefined;
+          if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+            throw new ForbiddenError("Insufficient permissions");
+          }
+
+          return keyToAttach;
+        },
       },
     },
   };

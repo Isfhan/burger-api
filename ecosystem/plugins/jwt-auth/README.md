@@ -140,9 +140,12 @@ burger.usePlugin(jwtAuth({
 }));
 ```
 
-The token is verified in the plugin's `beforeRoute` hook, so `401`/`403`
-responses are produced before the route handler runs. Routes with
-`auth: false` skip verification entirely.
+The token is verified in the plugin's `transform` stage, which runs after
+routing (so `config.auth` is known) but before request validation and body
+parsing. Missing or invalid credentials therefore produce `401`/`403` before a
+route can answer `422` for an invalid body or `400` for malformed JSON, and the
+body is never parsed for an unauthenticated request. Routes with `auth: false`
+skip verification entirely.
 
 ## Route configuration
 

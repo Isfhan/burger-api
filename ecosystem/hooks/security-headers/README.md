@@ -19,13 +19,15 @@ burger-api add security-headers
 
 ## Usage
 
-The hook returns a response transform, so wire it into `beforeRoute`.
+The hook returns a response transform, so wire it into `onRequest`. `onRequest`
+runs for every request, so the headers also cover 404, 405, validation and
+`onError` responses, and see the final status.
 
 ```typescript
 // src/hooks.ts
 import { securityHeaders } from '../ecosystem/hooks/security-headers/security-headers';
 
-export const beforeRoute = [securityHeaders()];
+export const onRequest = [securityHeaders()];
 ```
 
 ### Presets
@@ -35,7 +37,7 @@ import { strictSecurity, relaxedSecurity } from '../ecosystem/hooks/security-hea
 
 const isDev = process.env.NODE_ENV === 'development';
 
-export const beforeRoute = [
+export const onRequest = [
     isDev ? relaxedSecurity() : strictSecurity(),
 ];
 ```
@@ -53,7 +55,7 @@ Directive keys are camelCase and become kebab-case directives
 (`defaultSrc` becomes `default-src`):
 
 ```typescript
-export const beforeRoute = [
+export const onRequest = [
     securityHeaders({
         contentSecurityPolicy: {
             defaultSrc: ["'self'"],
@@ -69,7 +71,7 @@ export const beforeRoute = [
 ### Disable specific headers
 
 ```typescript
-export const beforeRoute = [
+export const onRequest = [
     securityHeaders({
         contentSecurityPolicy: false, // no CSP
         xssProtection: false,

@@ -86,10 +86,10 @@ async function doInstall(skillName: string, force = false): Promise<void> {
         spin.stop();
         if (!process.stdin.isTTY) {
             // No terminal to answer the prompt (CI, pipes) — never hang.
-            logError(
-                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — pass --force to overwrite, run in a terminal to confirm, or remove those folders first.`
+            warning(
+                `${skillName} is already installed in .agents/skills/ or .claude/skills/ — pass --force to overwrite.`
             );
-            process.exit(1);
+            process.exit(0);
         }
         const shouldOverwrite = await clack.confirm({
             message: `${skillName} already exists. Overwrite?`,

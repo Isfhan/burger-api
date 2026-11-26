@@ -1,5 +1,29 @@
 # Changelog: @burger-api/cli
 
+## Unreleased
+
+- `dev` and `start` pass `SIGTERM` and `SIGHUP` (and `SIGINT`) to the server
+  and wait for it to stop, so a stopped CLI no longer leaves the server
+  running and holding its port. If the server does not stop within 5
+  seconds it is killed; a second signal kills it at once. **Exit codes
+  changed:** Ctrl+C now exits `130`, `SIGTERM` `143`, `SIGHUP` `129`.
+- `create --no-api` without `--pages` or `--ws` stops with an error before
+  writing anything, because the project would serve nothing.
+- The standalone executable (install script and GitHub Releases) finds the
+  project's own packages, so `doctor` no longer reports `burger-api` as
+  missing in a project that has it.
+- `build --target=node` checks that `@burger-api/node-server` is installed
+  before it removes the old build, so a failed build keeps your last one.
+- `start` without a build says it is running from source and suggests
+  `burger-api build`.
+- **Exit code changed:** `skills install` for a skill that is already
+  installed, with no terminal and no `--force`, skips it with a warning and
+  exits `0`, the same as `add`.
+- `doctor` warns about route files that export lowercase methods (`get`
+  instead of `GET`) or an uppercase method that is not a function.
+- `add` prints `onRequest` as the place for logger, security-headers and
+  compression, so they cover every response.
+
 ## 1.0.0-beta.2 (November 23, 2026)
 
 - `build` works when the entry uses `export const app = new Burger({...})`.

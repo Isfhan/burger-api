@@ -75,9 +75,12 @@ export default function (burger: PluginRegistrar) {
 | `algorithms` | `string[]` | `["RS256", "ES256"]` | Allowed token `alg` values |
 | `requireExpiration` | `boolean` | `true` | Reject tokens without an `exp` claim |
 
-Tokens are verified in the plugin's `beforeRoute` hook, so `401`/`503`
-responses are produced before the route handler runs. Routes with
-`auth: false` skip verification entirely.
+Tokens are verified in the plugin's `transform` stage: after routing (so the
+route's `config.auth` is known) but **before validation and body parsing**. An
+unauthenticated request therefore gets `401`/`503` instead of a `422` that
+lists the expected schema fields or a `400` from parsing its body — the request
+is rejected before it can reach either. Routes with `auth: false` skip
+verification entirely.
 
 ## Route configuration
 

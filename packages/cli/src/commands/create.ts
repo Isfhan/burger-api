@@ -167,6 +167,20 @@ export const createCommand = new Command('create')
                 lang: options.lang as 'ts' | 'js',
             };
 
+            // A project must serve something; reject before writing anything.
+            if (
+                !optionsWithLang.useApi &&
+                !optionsWithLang.usePages &&
+                !optionsWithLang.useWs
+            ) {
+                clack.outro('Nothing to serve');
+                logError(
+                    'Nothing to serve: --no-api needs --pages and/or --ws ' +
+                        '(a project must have API routes, pages or WebSocket routes).'
+                );
+                process.exit(1);
+            }
+
             if (optionsWithLang.useApi) {
                 const apiDirError = validateDirUnderSrc(
                     targetDir,

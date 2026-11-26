@@ -21,7 +21,7 @@
  */
 
 import type { Plugin, BurgerContext } from "burger-api";
-import { UnauthorizedError, ForbiddenError, renderHTTPError } from "burger-api";
+import { UnauthorizedError, ForbiddenError } from "burger-api";
 
 // All auth plugins merge their fields into `BurgerAuthUser`, the shared
 // augmentation point for `ctx.user` / `ws.user`, so they can be installed
@@ -146,93 +146,88 @@ export function basicAuth(options: BasicAuthOptions): Plugin {
     name: "basic-auth",
 
     hooks: {
+      // Authentication runs in `transform`: after routing (so `ctx.config` is
+      // known) but before validation and body parsing. An unauthenticated
+      // request is rejected with 401 before it can receive a 422/400 that
+      // reveals the schema or parses its body. Rejections are thrown
+      // HTTPErrors, rendered by `onError` like any other error.
       transform: {
-        user: (ctx: BurgerContext): BasicAuthUser | undefined => {
-          const authHeader = ctx.headers.get(header);
-          if (!authHeader) {
+        user: async (ctx: BurgerContext): Promise<BasicAuthUser | undefined> => {
+          const config = ctx.config as
+            | { auth?: boolean | { required?: boolean; roles?: string[] } }
+            | undefined;
+
+          // Skip auth check if explicitly disabled.
+          if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
             return undefined;
           }
+
+          const authHeader = ctx.headers.get(header);
 
           // Scheme is case-insensitive (RFC 7617)
-          if (!/^basic\s/i.test(authHeader)) {
-            return undefined;
+          const credentials =
+            authHeader && /^basic\s/i.test(authHeader)
+              ? parseCredentials(authHeader)
+              : undefined;
+
+          if (!credentials) {
+            throw challenge("Missing Basic authentication");
           }
 
-          const encoded = authHeader.slice(6).trim();
-          let decoded: string;
-          try {
-            decoded = base64Decode(encoded);
-          } catch {
-            return undefined;
+          const validatedUser = await validate(
+            credentials.username,
+            credentials.password
+          );
+          if (!validatedUser) {
+            throw challenge("Invalid credentials");
           }
 
-          const colonIndex = decoded.indexOf(":");
-          if (colonIndex === -1) {
-            return undefined;
-          }
+          assertRoles(config, validatedUser);
 
-          const username = decoded.slice(0, colonIndex);
-          const password = decoded.slice(colonIndex + 1);
-
-          // Mark for async validation
-          (ctx as { _basicAuth?: { username: string; password: string } })._basicAuth = {
-            username,
-            password,
-          };
-
-          return undefined;
+          return attachToContext ? validatedUser : undefined;
         },
-      },
-
-      beforeRoute: async (ctx: BurgerContext): Promise<Response | void> => {
-        const config = ctx.config as
-          | { auth?: boolean | { required?: boolean; roles?: string[] } }
-          | undefined;
-
-        // Skip auth check if explicitly disabled
-        if (config?.auth === false || (typeof config?.auth === "object" && config.auth.required === false)) {
-          return;
-        }
-
-        // Already validated in transform
-        const user = ctx.user;
-        if (user) {
-          assertRoles(config, user);
-          return;
-        }
-
-        const credentials = (ctx as { _basicAuth?: { username: string; password: string } })._basicAuth;
-        if (!credentials) {
-          return challenge("Missing Basic authentication");
-        }
-
-        const validatedUser = await validate(credentials.username, credentials.password);
-        if (!validatedUser) {
-          return challenge("Invalid credentials");
-        }
-
-        assertRoles(config, validatedUser);
-
-        if (attachToContext) {
-          ctx.user = validatedUser;
-        }
       },
     },
   };
 
   /**
-   * 401 with `WWW-Authenticate` so browsers show their login prompt. Returned
-   * (not thrown) because thrown errors skip response hooks. Body is RFC 9457
-   * problem+json, like the framework's own 401s.
+   * 401 with `WWW-Authenticate` so browsers show their login prompt. Thrown
+   * (not returned) so the framework renders it as RFC 9457 problem+json and
+   * still runs the response hooks (`onError` etc.).
    */
-  function challenge(detail: string): Response {
-    const response = renderHTTPError(new UnauthorizedError(detail), false);
-    response.headers.set(
-      "WWW-Authenticate",
-      `Basic realm="${realm.replace(/["\\]/g, '\\$&')}", charset="UTF-8"`
-    );
-    return response;
+  function challenge(detail: string): UnauthorizedError {
+    return new UnauthorizedError(detail, {
+      headers: {
+        "WWW-Authenticate": `Basic realm="${realm.replace(/["\\]/g, '\\$&')}", charset="UTF-8"`,
+      },
+    });
   }
+}
+
+/**
+ * Decode `Basic <base64>` into credentials. Returns `undefined` for malformed
+ * base64 or a decoded value without a colon.
+ */
+function parseCredentials(
+  authHeader: string
+): { username: string; password: string } | undefined {
+  const encoded = authHeader.slice(6).trim();
+  let decoded: string;
+  try {
+    decoded = base64Decode(encoded);
+  } catch {
+    return undefined;
+  }
+
+  const colonIndex = decoded.indexOf(":");
+  if (colonIndex === -1) {
+    return undefined;
+  }
+
+  return {
+    username: decoded.slice(0, colonIndex),
+    password: decoded.slice(colonIndex + 1),
+  };
 }
 
 /**

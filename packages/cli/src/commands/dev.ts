@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { existsSync, watch, type FSWatcher } from 'fs';
 import { dirname, resolve } from 'path';
 import { resolveEntryFile, validatePort } from '../utils/build/project';
+import { installChildSignalHandlers } from '../utils/child-signals';
 import {
     error as logError,
     info,
@@ -152,10 +153,17 @@ export const devCommand = new Command('dev')
             shuttingDown = true;
             newline();
             info('Shutting down server...');
+            if (restartTimer) clearTimeout(restartTimer);
             for (const active of watchers) active.close();
-            proc?.kill();
-            process.exit(0);
         };
+
+        // Installed before the first spawn: a signal can never leave a child
+        // behind, and `shuttingDown` blocks the restart path. The helper
+        // signals whatever `proc` currently is and exits `128 + signal`.
+        installChildSignalHandlers({
+            getChild: () => proc,
+            onSignal: shutdown,
+        });
 
         try {
             proc = spawnServer();
@@ -190,9 +198,6 @@ export const devCommand = new Command('dev')
                     }
                 )
             );
-
-            process.once('SIGINT', shutdown);
-            process.once('SIGBREAK', shutdown);
 
             for (;;) {
                 const exitCode = await proc.exited;
