@@ -1,6 +1,6 @@
 # Changelog: @burger-api/node-server
 
-## Unreleased
+## 0.1.2 (November 27, 2026)
 
 ### Fixes
 

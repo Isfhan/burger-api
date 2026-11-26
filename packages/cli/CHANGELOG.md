@@ -1,6 +1,6 @@
 # Changelog: @burger-api/cli
 
-## Unreleased
+## 1.0.0-beta.4 (November 27, 2026)
 
 - **`doctor` checks the hooks and plugins in `ecosystem/`.** An auth plugin
   (jwt-auth, api-key, basic-auth, session, oidc) copied before 1.0.0-beta.3
