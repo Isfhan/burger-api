@@ -11,6 +11,9 @@
 - Every official hook and plugin now ships a `package.json` with its version,
   so `doctor` can tell old copies from new ones. The auth plugins are at
   `0.2.0`.
+- `start` warns when `.build/bundle/app.js` is older than any file in `src/`,
+  `ecosystem/` or `burger.build.ts`. Before, it only looked at `src/`, so a
+  bundle built before `burger-api add --force` ran without a warning.
 
 ## 1.0.0-beta.3 (November 26, 2026)
 

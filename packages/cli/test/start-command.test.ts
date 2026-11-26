@@ -79,6 +79,55 @@ describe('start command', () => {
         );
     });
 
+    for (const changed of [
+        'ecosystem/hooks/logger/logger.ts',
+        'burger.build.ts',
+    ]) {
+        it(`warns when ${changed} is newer than the bundle`, async () => {
+            const bundle = join(dir, '.build', 'bundle', 'app.js');
+            await Bun.write(bundle, "console.log('fake-bundle-booted');\n");
+            const past = Date.now() / 1000 - 3600;
+            utimesSync(bundle, past, past);
+            await Bun.write(join(dir, changed), 'export {};\n');
+
+            const port = await getAvailablePort();
+            const result = await runCli(['start', '--port', String(port)], {
+                cwd: dir,
+            });
+
+            expect(result.exitCode).toBe(0);
+            expect(result.stdout).toContain(
+                'The build is older than your source files'
+            );
+            expect(result.stdout).toContain('Run "burger-api build"');
+        });
+    }
+
+    it('does not warn when the bundle is newer than every source file', async () => {
+        const past = Date.now() / 1000 - 3600;
+        for (const file of [
+            'src/index.ts',
+            'ecosystem/hooks/logger/logger.ts',
+            'burger.build.ts',
+        ]) {
+            await Bun.write(join(dir, file), 'export {};\n');
+            utimesSync(join(dir, file), past, past);
+        }
+        await Bun.write(
+            join(dir, '.build', 'bundle', 'app.js'),
+            "console.log('fake-bundle-booted');\n"
+        );
+
+        const port = await getAvailablePort();
+        const result = await runCli(['start', '--port', String(port)], {
+            cwd: dir,
+        });
+
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain('fake-bundle-booted');
+        expect(result.stdout).not.toContain('older than your source');
+    });
+
     it('propagates the child exit code', async () => {
         await Bun.write(
             join(dir, '.build', 'bundle', 'app.js'),

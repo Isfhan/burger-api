@@ -46,10 +46,21 @@ export function newestMtime(dir: string): number {
     for (const entry of entries) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) {
+            if (entry.name === 'node_modules') continue;
             newest = Math.max(newest, newestMtime(full));
         } else if (entry.isFile()) {
             newest = Math.max(newest, statSync(full).mtimeMs);
         }
+    }
+    return newest;
+}
+
+/** Newest modification time (ms) of anything the build reads, or 0. */
+export function newestSourceMtime(): number {
+    let newest = Math.max(newestMtime('src'), newestMtime('ecosystem'));
+    for (const ext of ['.ts', '.js', '.mjs']) {
+        const file = `burger.build${ext}`;
+        if (existsSync(file)) newest = Math.max(newest, statSync(file).mtimeMs);
     }
     return newest;
 }
@@ -94,9 +105,9 @@ export const startCommand = new Command('start')
         );
         if (file === BUNDLE) {
             info(`Entry: ${file} (production build)`);
-            if (newestMtime('src') > statSync(BUNDLE).mtimeMs) {
+            if (newestSourceMtime() > statSync(BUNDLE).mtimeMs) {
                 warning(
-                    'The build is older than your source files in src/ — run "bun run build" (or "burger-api build") to include recent changes.'
+                    'The build is older than your source files (src/, ecosystem/ or burger.build.ts). Run "burger-api build" to include recent changes.'
                 );
             }
         } else {
