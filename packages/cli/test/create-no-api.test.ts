@@ -1,7 +1,8 @@
 /**
  * `create` must reject a project that would have nothing to serve. The success
- * cases run the command in-process with a fake `bun` on PATH so `bun install`
- * is a no-op (no network), and `--no-skills` avoids the skills download.
+ * cases run the command in-process with `installDependencies` stubbed out so
+ * `bun install` never runs against the network, and `--no-skills` avoids the
+ * skills download.
  */
 import {
     afterAll,
@@ -10,10 +11,12 @@ import {
     describe,
     expect,
     it,
+    spyOn,
 } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { delimiter, join } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { createCommand } from '../src/commands/create';
+import * as templates from '../src/utils/templates';
 import {
     makeTempDir,
     removeDir,
@@ -26,12 +29,17 @@ const NOTHING_TO_SERVE =
     '(a project must have API routes, pages or WebSocket routes).';
 
 let dir = '';
+let installSpy: ReturnType<typeof stubInstall> | undefined;
 
 beforeEach(() => {
     dir = makeTempDir('burger-create-no-api-');
 });
 
 afterEach(() => {
+    if (installSpy) {
+        installSpy.mockRestore();
+        installSpy = undefined;
+    }
     if (dir) {
         removeDir(dir);
         dir = '';
@@ -51,35 +59,16 @@ function resetCreateOptions(): void {
     }
 }
 
-/** A fake `bun` that succeeds, so create's install step never hits the network. */
-function makeFakeBunBin(): string {
-    const bin = join(dir, 'fake-bin');
-    mkdirSync(bin, { recursive: true });
-    if (process.platform === 'win32') {
-        writeFileSync(join(bin, 'bun.cmd'), '@echo off\r\nexit /b 0\r\n');
-    } else {
-        writeFileSync(join(bin, 'bun'), '#!/bin/sh\nexit 0\n', {
-            mode: 0o755,
-        });
-    }
-    return bin;
+/** Stubs the real `bun install` step; restored in afterEach. */
+function stubInstall() {
+    return spyOn(templates, 'installDependencies').mockResolvedValue(undefined);
 }
 
-/** Runs create in-process with the fake install shim on PATH. */
+/** Runs create in-process with dependency installation stubbed out. */
 async function createInProcess(args: string[]) {
     resetCreateOptions();
-    const originalPath = process.env.PATH;
-    const bin = makeFakeBunBin();
-    process.env.PATH = originalPath ? `${bin}${delimiter}${originalPath}` : bin;
-    try {
-        return await runCommandInProcess(createCommand, args, dir);
-    } finally {
-        if (originalPath === undefined) {
-            delete process.env.PATH;
-        } else {
-            process.env.PATH = originalPath;
-        }
-    }
+    installSpy = stubInstall();
+    return await runCommandInProcess(createCommand, args, dir);
 }
 
 function indexFile(project: string): string {
@@ -119,6 +108,7 @@ describe('create --no-api with pages and/or WebSocket routes', () => {
         ]);
 
         expect(result.exitCode).toBeNull();
+        expect(installSpy).toHaveBeenCalledTimes(1);
         expect(existsSync(join(dir, 'demo', 'src', 'pages', 'index.html'))).toBe(
             true
         );
@@ -139,6 +129,7 @@ describe('create --no-api with pages and/or WebSocket routes', () => {
         ]);
 
         expect(result.exitCode).toBeNull();
+        expect(installSpy).toHaveBeenCalledTimes(1);
         expect(
             existsSync(join(dir, 'demo', 'src', 'websocket', 'echo'))
         ).toBe(true);
@@ -161,6 +152,7 @@ describe('create --no-api with pages and/or WebSocket routes', () => {
         ]);
 
         expect(result.exitCode).toBeNull();
+        expect(installSpy).toHaveBeenCalledTimes(1);
         expect(existsSync(join(dir, 'demo', 'src', 'pages', 'index.html'))).toBe(
             true
         );

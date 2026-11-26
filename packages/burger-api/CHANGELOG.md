@@ -1,6 +1,6 @@
 # Changelog: burger-api
 
-## Unreleased
+## 1.0.0-beta.2 (November 26, 2026)
 
 ### Security
 
