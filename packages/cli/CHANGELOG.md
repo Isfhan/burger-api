@@ -14,6 +14,8 @@
 - `start` warns when `.build/bundle/app.js` is older than any file in `src/`,
   `ecosystem/` or `burger.build.ts`. Before, it only looked at `src/`, so a
   bundle built before `burger-api add --force` ran without a warning.
+- `dev` restarts on edits in `ecosystem/` even when the folder was created
+  after `dev` started (for example by `burger-api add` in another terminal).
 
 ## 1.0.0-beta.3 (November 26, 2026)
 
