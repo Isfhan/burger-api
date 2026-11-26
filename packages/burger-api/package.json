@@ -1,6 +1,6 @@
 {
   "name": "burger-api",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Fast, file-based API framework for Bun with hooks, Standard Schema validation, OpenAPI and WebSockets. Runs on Bun, Node, Cloudflare Workers, Deno and Vercel.",
   "author": "Isfhan Ahmed",
   "type": "module",

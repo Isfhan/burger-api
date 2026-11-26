@@ -1,6 +1,6 @@
 # Changelog: @burger-api/cli
 
-## Unreleased
+## 1.0.0-beta.3 (November 26, 2026)
 
 - `dev` and `start` pass `SIGTERM` and `SIGHUP` (and `SIGINT`) to the server
   and wait for it to stop, so a stopped CLI no longer leaves the server
