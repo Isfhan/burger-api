@@ -1,5 +1,16 @@
 # Changelog: @burger-api/node-server
 
+## Unreleased
+
+### Fixes
+
+- A request without a body now reaches the app with `request.body === null`,
+  the same as on Bun. This covers POST, PUT, DELETE and OPTIONS with no
+  `Content-Length` (or `Content-Length: 0`) and no `Transfer-Encoding`. Before,
+  these requests had an empty body stream, so body-size-limiter answered
+  `411 Length Required` to a bodiless POST, PUT or DELETE on Node. Requests
+  with a sized or chunked body are unchanged.
+
 ## 0.1.1 (November 23, 2026)
 
 ### Security

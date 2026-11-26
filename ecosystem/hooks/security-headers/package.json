@@ -1,0 +1,16 @@
+{
+  "name": "@burger-api/hook-security-headers",
+  "version": "0.1.0",
+  "description": "Security headers hook for BurgerAPI",
+  "main": "security-headers.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=1.0.0-beta"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/hooks/security-headers"
+  }
+}

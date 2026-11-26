@@ -284,6 +284,89 @@ describe('serve() — client disconnect', () => {
     });
 });
 
+describe('serve() — request body', () => {
+    // Reports what the app sees: whether the body is null, and its text.
+    const probe = async (ctx: { request: Request }) => {
+        const body = ctx.request.body;
+        const text = body === null ? null : await ctx.request.text();
+        return Response.json({ bodyNull: body === null, text });
+    };
+    const bodyApp = () =>
+        new Burger({
+            apiRoutes: [
+                {
+                    path: '/api/body',
+                    handlers: {
+                        POST: probe,
+                        PUT: probe,
+                        DELETE: probe,
+                        OPTIONS: probe,
+                    },
+                },
+            ],
+        });
+
+    async function send(
+        port: number,
+        head: string,
+        payload = ''
+    ): Promise<{ bodyNull: boolean; text: string | null }> {
+        const raw = await rawRequest(
+            port,
+            `${head}\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n${payload}`
+        );
+        const json = raw.match(/\{.*\}/);
+        assert.ok(json, `no JSON in response:\n${raw}`);
+        return JSON.parse(json[0]);
+    }
+
+    test('a request without a body has a null body', async () => {
+        const { baseUrl, close } = await listenOnFreePort(bodyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+                assert.deepEqual(
+                    await send(port, `${method} /api/body HTTP/1.1`),
+                    { bodyNull: true, text: null },
+                    `${method} without a body`
+                );
+            }
+            assert.deepEqual(
+                await send(port, 'POST /api/body HTTP/1.1\r\nContent-Length: 0'),
+                { bodyNull: true, text: null },
+                'POST with Content-Length: 0'
+            );
+        } finally {
+            await close();
+        }
+    });
+
+    test('a request with a body keeps it, sized or chunked', async () => {
+        const { baseUrl, close } = await listenOnFreePort(bodyApp());
+        const port = Number(new URL(baseUrl).port);
+        try {
+            assert.deepEqual(
+                await send(
+                    port,
+                    'POST /api/body HTTP/1.1\r\nContent-Length: 3',
+                    'abc'
+                ),
+                { bodyNull: false, text: 'abc' }
+            );
+            assert.deepEqual(
+                await send(
+                    port,
+                    'POST /api/body HTTP/1.1\r\nTransfer-Encoding: chunked',
+                    '3\r\nabc\r\n0\r\n\r\n'
+                ),
+                { bodyNull: false, text: 'abc' }
+            );
+        } finally {
+            await close();
+        }
+    });
+});
+
 describe('serve() — WebSocket bridge', () => {
     test('wires WebSocket routes automatically via createNodeWsBridge', async () => {
         const clients = new Set<{ send(data: string): void }>();

@@ -69,7 +69,13 @@ export function toWebRequest(
     }
 
     const method = req.method ?? 'GET';
-    const hasBody = method !== 'GET' && method !== 'HEAD';
+    // A body exists only when the client framed one: a positive
+    // Content-Length or any Transfer-Encoding. Otherwise `body` stays null.
+    const hasBody =
+        method !== 'GET' &&
+        method !== 'HEAD' &&
+        (req.headers['transfer-encoding'] !== undefined ||
+            Number(req.headers['content-length']) > 0);
 
     return new Request(url, {
         method,

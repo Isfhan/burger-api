@@ -186,3 +186,103 @@ describe('dev command — extra watch targets', () => {
         DEV_TIMEOUT
     );
 });
+
+/** Runs `burger-api dev` in `dir` and exposes its output as it arrives. */
+function startDev(dir: string, port: number) {
+    const proc = Bun.spawn(['bun', CLI_ENTRY, 'dev', '--port', String(port)], {
+        cwd: dir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        ...treeKillSpawnOptions(),
+    });
+    let output = '';
+    const decoder = new TextDecoder();
+    const pumps = [proc.stdout, proc.stderr].map(async (stream) => {
+        const reader = stream.getReader();
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            output += decoder.decode(value, { stream: true });
+        }
+    });
+    return {
+        restartCount: () => output.split(RESTART_MESSAGE).length - 1,
+        stop: async () => {
+            await killTree(proc);
+            await Promise.all(pumps);
+        },
+    };
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (predicate()) return true;
+        await Bun.sleep(100);
+    }
+    return predicate();
+}
+
+describe('dev command — ecosystem/ created after start', () => {
+    it(
+        'watches ecosystem/ once it appears, and ignores node_modules/ and .build/',
+        async () => {
+            const dir = makeTempDir('burger-dev-ecosystem-late-');
+            try {
+                mkdirSync(join(dir, 'node_modules'), { recursive: true });
+                symlinkSync(
+                    BURGER_API_PKG,
+                    join(dir, 'node_modules', 'burger-api'),
+                    process.platform === 'win32' ? 'junction' : 'dir'
+                );
+                writeFileSync(join(dir, 'package.json'), '{"name":"late"}');
+                mkdirSync(join(dir, 'src', 'api', 'hello'), { recursive: true });
+                writeFileSync(
+                    join(dir, 'src', 'index.ts'),
+                    "import { Burger } from 'burger-api';\n" +
+                        "new Burger({ apiDir: './src/api', apiPrefix: '/api' })" +
+                        '.serve(Number(process.env.PORT) || 4000);\n'
+                );
+                writeFileSync(
+                    join(dir, 'src', 'api', 'hello', 'route.ts'),
+                    'export const GET = () => Response.json({ ok: true });\n'
+                );
+
+                const port = await getAvailablePort();
+                const dev = startDev(dir, port);
+                try {
+                    await waitForServer(`http://127.0.0.1:${port}/api/hello`, 30_000);
+                    await Bun.sleep(2000);
+
+                    // What `burger-api add logger` does: create ecosystem/.
+                    const logger = join(dir, 'ecosystem', 'hooks', 'logger', 'logger.ts');
+                    mkdirSync(join(logger, '..'), { recursive: true });
+                    writeFileSync(logger, "export const v = 'v1';\n");
+                    await Bun.sleep(1500);
+
+                    // Editing the new add-on must restart the server.
+                    const beforeEdit = dev.restartCount();
+                    writeFileSync(logger, "export const v = 'v2';\n");
+                    expect(
+                        await waitFor(() => dev.restartCount() > beforeEdit, 10_000)
+                    ).toBe(true);
+                    await waitForServer(`http://127.0.0.1:${port}/api/hello`, 20_000);
+                    await Bun.sleep(1500);
+
+                    // Build output and dependencies never restart the server.
+                    const beforeNoise = dev.restartCount();
+                    mkdirSync(join(dir, '.build', 'bundle'), { recursive: true });
+                    writeFileSync(join(dir, '.build', 'bundle', 'app.js'), '//\n');
+                    writeFileSync(join(dir, 'node_modules', 'x.js'), '//\n');
+                    await Bun.sleep(2000);
+                    expect(dev.restartCount()).toBe(beforeNoise);
+                } finally {
+                    await dev.stop();
+                }
+            } finally {
+                removeDir(dir);
+            }
+        },
+        DEV_TIMEOUT
+    );
+});

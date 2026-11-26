@@ -1,0 +1,16 @@
+{
+  "name": "@burger-api/hook-logger",
+  "version": "0.1.0",
+  "description": "Request logging hook for BurgerAPI",
+  "main": "logger.ts",
+  "type": "module",
+  "peerDependencies": {
+    "burger-api": ">=1.0.0-beta"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burger-api/burger-api",
+    "directory": "ecosystem/hooks/logger"
+  }
+}

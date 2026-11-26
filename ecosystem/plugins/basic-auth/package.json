@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/plugin-basic-auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "HTTP Basic authentication plugin for BurgerAPI",
   "main": "basic-auth.ts",
   "type": "module",

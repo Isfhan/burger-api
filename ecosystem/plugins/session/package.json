@@ -1,6 +1,6 @@
 {
   "name": "@burger-api/plugin-session",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Session management plugin for BurgerAPI",
   "main": "session.ts",
   "type": "module",

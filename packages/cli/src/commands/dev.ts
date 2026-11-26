@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { existsSync, watch, type FSWatcher } from 'fs';
-import { dirname, resolve } from 'path';
+import { dirname, relative, resolve } from 'path';
 import { resolveEntryFile, validatePort } from '../utils/build/project';
 import { installChildSignalHandlers } from '../utils/child-signals';
 import {
@@ -179,6 +179,8 @@ export const devCommand = new Command('dev')
             // `burger-api add` and `generate hook|plugin` put code users are
             // told to edit in ecosystem/, outside the entry's directory.
             const ecosystemDir = resolve(projectRoot, 'ecosystem');
+            const ecosystemWatched = (): boolean =>
+                !relative(watchRoot, ecosystemDir).startsWith('..');
             if (existsSync(ecosystemDir)) {
                 watchTargets.push({ path: ecosystemDir, recursive: true });
             }
@@ -198,6 +200,21 @@ export const devCommand = new Command('dev')
                     }
                 )
             );
+            // ecosystem/ may appear later (`burger-api add` in another
+            // terminal). Watch only the top level of the project root for it,
+            // so node_modules/ and .build/ never trigger anything.
+            if (!existsSync(ecosystemDir) && !ecosystemWatched()) {
+                const rootWatcher = watch(projectRoot, (_event, name) => {
+                    if (name !== 'ecosystem' || !existsSync(ecosystemDir)) return;
+                    rootWatcher.close();
+                    watchers.push(
+                        watch(ecosystemDir, { recursive: true }, () => {
+                            requestRestart();
+                        })
+                    );
+                });
+                watchers.push(rootWatcher);
+            }
 
             for (;;) {
                 const exitCode = await proc.exited;
