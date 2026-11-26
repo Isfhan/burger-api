@@ -1,5 +1,11 @@
 # Changelog: @burger-api/cli
 
+## Unreleased
+
+- `dev` keeps restarting on `burger.build.ts` changes after an editor saves
+  it by writing a new file and renaming it over the old one. Before, on Linux,
+  `dev` stopped seeing changes to the file after the first such save.
+
 ## 1.0.0-beta.4 (November 27, 2026)
 
 - **`doctor` checks the hooks and plugins in `ecosystem/`.** An auth plugin
