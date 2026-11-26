@@ -181,15 +181,10 @@ export const devCommand = new Command('dev')
             const ecosystemDir = resolve(projectRoot, 'ecosystem');
             const ecosystemWatched = (): boolean =>
                 !relative(watchRoot, ecosystemDir).startsWith('..');
-            if (existsSync(ecosystemDir)) {
+            let watchingEcosystem = ecosystemWatched();
+            if (!watchingEcosystem && existsSync(ecosystemDir)) {
                 watchTargets.push({ path: ecosystemDir, recursive: true });
-            }
-            // Build config is not imported at runtime but still drives builds.
-            for (const name of ['burger.build.ts', 'burger.build.js']) {
-                const configFile = resolve(projectRoot, name);
-                if (existsSync(configFile)) {
-                    watchTargets.push({ path: configFile, recursive: false });
-                }
+                watchingEcosystem = true;
             }
             watchers = watchTargets.map((target) =>
                 watch(
@@ -200,21 +195,30 @@ export const devCommand = new Command('dev')
                     }
                 )
             );
-            // ecosystem/ may appear later (`burger-api add` in another
-            // terminal). Watch only the top level of the project root for it,
-            // so node_modules/ and .build/ never trigger anything.
-            if (!existsSync(ecosystemDir) && !ecosystemWatched()) {
-                const rootWatcher = watch(projectRoot, (_event, name) => {
-                    if (name !== 'ecosystem' || !existsSync(ecosystemDir)) return;
-                    rootWatcher.close();
-                    watchers.push(
-                        watch(ecosystemDir, { recursive: true }, () => {
-                            requestRestart();
-                        })
-                    );
-                });
-                watchers.push(rootWatcher);
-            }
+            // The top level of the project root, never recursive, so
+            // node_modules/ and .build/ never trigger anything. It catches:
+            // - burger.build.*: not imported at runtime but drives builds.
+            //   Watched through its folder because an editor that saves by
+            //   renaming a new file over it ends a watch on the file itself.
+            // - ecosystem/ created later (`burger-api add` in another terminal).
+            watchers.push(
+                watch(projectRoot, (_event, name) => {
+                    if (name === 'burger.build.ts' || name === 'burger.build.js') {
+                        requestRestart();
+                    } else if (
+                        name === 'ecosystem' &&
+                        !watchingEcosystem &&
+                        existsSync(ecosystemDir)
+                    ) {
+                        watchingEcosystem = true;
+                        watchers.push(
+                            watch(ecosystemDir, { recursive: true }, () => {
+                                requestRestart();
+                            })
+                        );
+                    }
+                })
+            );
 
             for (;;) {
                 const exitCode = await proc.exited;

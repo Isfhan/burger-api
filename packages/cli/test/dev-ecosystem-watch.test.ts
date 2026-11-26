@@ -4,7 +4,7 @@
  * `ecosystem/` has to restart the server so the new code is served.
  */
 import { afterAll, describe, expect, it } from 'bun:test';
-import { mkdirSync, symlinkSync, writeFileSync } from 'fs';
+import { mkdirSync, renameSync, symlinkSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import {
     getAvailablePort,
@@ -281,6 +281,43 @@ describe('dev command — ecosystem/ created after start', () => {
                 }
             } finally {
                 removeDir(dir);
+            }
+        },
+        DEV_TIMEOUT
+    );
+});
+
+describe('dev command — burger.build.ts saved by rename', () => {
+    it(
+        'keeps restarting after an editor replaces the file',
+        async () => {
+            const dir = makeProject();
+            const port = await getAvailablePort();
+            const dev = startDev(dir, port);
+            const config = join(dir, 'burger.build.ts');
+            // Many editors write a temp file and rename it over the original.
+            const renameSave = (source: string) => {
+                writeFileSync(`${config}.tmp`, source);
+                renameSync(`${config}.tmp`, config);
+            };
+            try {
+                await waitForServer(`http://127.0.0.1:${port}/api/hello`, 30_000);
+                await Bun.sleep(2000);
+
+                for (const source of [
+                    'export default { a: 1 };\n',
+                    'export default { a: 2 };\n',
+                ]) {
+                    const before = dev.restartCount();
+                    renameSave(source);
+                    expect(
+                        await waitFor(() => dev.restartCount() > before, 10_000)
+                    ).toBe(true);
+                    await waitForServer(`http://127.0.0.1:${port}/api/hello`, 20_000);
+                    await Bun.sleep(1000);
+                }
+            } finally {
+                await dev.stop();
             }
         },
         DEV_TIMEOUT
