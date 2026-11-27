@@ -408,7 +408,7 @@ export const buildExecutableCommand = new Command('build:exec')
         '--target <platform>',
         'Target platform (bun-windows-x64, bun-linux-x64, bun-darwin-arm64)'
     )
-    .option('--minify', 'Minify the output (enabled by default)', true)
+    .option('--no-minify', 'Do not minify the output (minified by default)')
     .option('--no-bytecode', 'Disable bytecode compilation')
     .action(async (fileArg: string | undefined, options: BuildExecutableOptions) => {
         const cwd = process.cwd();

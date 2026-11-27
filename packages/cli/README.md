@@ -133,6 +133,7 @@ from `burger.build.ts` (or `.js`) when present.
 | --- | --- |
 | `--target <target>` | `bun-windows-x64`, `bun-linux-x64`, `bun-linux-arm64`, `bun-darwin-x64`, `bun-darwin-arm64` |
 | `--outfile <path>` | Output file (`.exe` is added for Windows) |
+| `--no-minify` | Turn off minifying (on by default) |
 | `--no-bytecode` | Turn off bytecode compilation |
 
 An executable runs on a server with no Bun or Node installed. For an app with
