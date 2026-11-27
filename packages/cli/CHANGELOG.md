@@ -1,6 +1,6 @@
 # Changelog: @burger-api/cli
 
-## Unreleased
+## 1.0.0-beta.5 (November 27, 2026)
 
 - `dev` keeps restarting on `burger.build.ts` changes after an editor saves
   it by writing a new file and renaming it over the old one. Before, on Linux,
