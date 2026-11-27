@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
+import { freePort } from '../free-port';
 
 const addHeader =
     (name: string, value: string) => () => (res: Response) => {
@@ -218,7 +219,7 @@ describe('global/plugin response hooks on every response', () => {
             ],
             globalHooks: { mapResponse: addHeader('x-global', 'yes') },
         });
-        const port = 45000 + Math.floor(Math.random() * 500);
+        const port = freePort();
         await burger.serve(port, () => {});
         try {
             const res = await fetch(`http://127.0.0.1:${port}/nope`);

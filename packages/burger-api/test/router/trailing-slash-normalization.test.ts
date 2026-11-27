@@ -8,6 +8,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Burger, toFetchHandler } from '../../src/index';
 import type { BurgerContext } from '../../src/context/context';
+import { freePort } from '../free-port';
 
 type Engine = 'trie' | 'regex';
 
@@ -125,7 +126,7 @@ describe('Bun serve() — native wildcard trailing slash uses the fetch dispatch
             it(`engine=${engine} hooks=${withHooks}`, async () => {
                 const app = makeApp(engine, withHooks);
                 apps.push(app);
-                const port = 45000 + Math.floor(Math.random() * 5000);
+                const port = freePort();
                 await app.serve(port, () => {});
                 const base = `http://127.0.0.1:${port}`;
 

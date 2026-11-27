@@ -7,8 +7,9 @@
 import { describe, it, expect, beforeAll, afterAll, spyOn } from 'bun:test';
 import { Burger } from '../../src/index';
 import type { BurgerContext } from '../../src/context/context';
+import { freePort } from '../free-port';
 
-const PORT = 43200 + Math.floor(Math.random() * 300);
+const PORT = freePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let burger: Burger;

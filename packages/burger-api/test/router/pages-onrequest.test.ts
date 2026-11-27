@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'bun:test';
 import { Burger } from '../../src/index';
+import { freePort } from '../free-port';
 
 describe('onRequest machinery without API routes', () => {
     it('runs a plugin onRequest hook once per page and per asset request', async () => {
@@ -87,7 +88,7 @@ describe('onRequest machinery without API routes', () => {
                 },
             });
 
-        const port = 44000 + Math.floor(Math.random() * 1000);
+        const port = freePort();
         await burger.serve(port, () => {});
         try {
             const res = await fetch(`http://127.0.0.1:${port}/user/ana`);

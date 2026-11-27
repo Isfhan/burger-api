@@ -14,6 +14,7 @@ import { Router } from '../../src/router/router';
 import { PluginRegistry } from '../../src/plugin/registry';
 import { buildPlan, apply } from '../../src/validation/coerce';
 import type { ErrorHook } from '../../src/lifecycle/types';
+import { freePort } from '../free-port';
 
 type Ctx = BurgerContext & { order?: string[] };
 
@@ -609,7 +610,7 @@ describe('ctx.ip', () => {
             ],
         });
         expect(await (await fetchVia(burger, '/api/ip')).json()).toEqual({ ip: null });
-        const port = 43000 + Math.floor(Math.random() * 1000);
+        const port = freePort();
         await burger.serve(port, () => {});
         try {
             for (const p of ['/api/ip', '/api/ip/1']) {
