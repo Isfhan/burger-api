@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Burger } from '../../src/index';
+import { freePort } from '../free-port';
 
 const apps: Burger[] = [];
 
@@ -29,7 +30,7 @@ function makeApp(): Burger {
 describe('malformed percent escapes in native params', () => {
     it('keeps the raw segment on Bun native routes', async () => {
         const app = makeApp();
-        const port = 44000 + Math.floor(Math.random() * 5000);
+        const port = freePort();
         await app.serve(port, () => {});
         const res = await fetch(`http://127.0.0.1:${port}/api/c/%ZZ`);
         expect(await res.json()).toEqual({ id: '%ZZ' });

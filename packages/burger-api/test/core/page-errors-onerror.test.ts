@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, afterEach, spyOn } from 'bun:test';
 import { Burger } from '../../src/index';
+import { freePort } from '../free-port';
 
 const apps: Burger[] = [];
 let quiet: { mockRestore(): void };
@@ -74,7 +75,7 @@ describe('page and asset errors use onError', () => {
     it('page errors reach onError on Bun serve() too', async () => {
         quiet = spyOn(console, 'error').mockImplementation(() => {});
         const app = makeApp(true);
-        const port = 44000 + Math.floor(Math.random() * 5000);
+        const port = freePort();
         await app.serve(port, () => {});
         const res = await fetch(`http://127.0.0.1:${port}/page`);
         expect(res.status).toBe(503);

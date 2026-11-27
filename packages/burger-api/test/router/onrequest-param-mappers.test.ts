@@ -6,6 +6,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Burger } from '../../src/index';
 import type { BurgerContext } from '../../src/context/context';
+import { freePort } from '../free-port';
 
 const apps: Burger[] = [];
 
@@ -67,7 +68,7 @@ describe('onRequest mappers see params on both dispatch paths', () => {
     it('global and plugin mappers receive params via Bun native routes', async () => {
         const seen: Record<string, unknown> = {};
         const app = makeApp(seen);
-        const port = 44000 + Math.floor(Math.random() * 5000);
+        const port = freePort();
         await app.serve(port, () => {});
         const base = `http://127.0.0.1:${port}`;
 

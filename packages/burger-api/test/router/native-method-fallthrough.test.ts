@@ -6,6 +6,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { Burger } from '../../src/index';
 import type { BurgerContext } from '../../src/context/context';
+import { freePort } from '../free-port';
 
 const apps: Burger[] = [];
 
@@ -50,7 +51,7 @@ function makeApp(withHooks: boolean): Burger {
 }
 
 async function serve(app: Burger): Promise<string> {
-    const port = 44000 + Math.floor(Math.random() * 5000);
+    const port = freePort();
     await app.serve(port, () => {});
     return `http://127.0.0.1:${port}`;
 }
