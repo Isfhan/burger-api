@@ -1,5 +1,10 @@
 # Changelog: @burger-api/cli
 
+## Unreleased
+
+- `build:exec` has `--no-minify` to turn minifying off. Its `--minify` flag is
+  removed: output was already minified by default, so the flag did nothing.
+
 ## 1.0.0-beta.5 (November 27, 2026)
 
 - `dev` keeps restarting on `burger.build.ts` changes after an editor saves
