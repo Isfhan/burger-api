@@ -89,7 +89,7 @@ describe('doctor handler export warnings', () => {
         expect(warnings).toHaveLength(1);
         expect(warnings[0]!.message).toContain('export "get"');
         expect(warnings[0]!.message).toContain(
-            'handler exports must be uppercase: GET'
+            'Handler exports must be uppercase: GET'
         );
         expect(results.filter((r) => !r.pass)).toEqual([]);
     });
@@ -146,7 +146,7 @@ describe('doctor handler export warnings', () => {
         expect(warnings).toHaveLength(1);
         expect(warnings[0].message).toContain('export "get"');
         expect(warnings[0].message).toContain(
-            'handler exports must be uppercase: GET'
+            'Handler exports must be uppercase: GET'
         );
     });
 });

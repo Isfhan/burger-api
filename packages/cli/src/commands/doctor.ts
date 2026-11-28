@@ -67,7 +67,7 @@ export function runtimeChecks(
             bunOk,
             bunOk
                 ? bunVersion
-                : `${bunVersion} is older than ${MIN_BUN} and misses security fixes — run: bun upgrade`
+                : `${bunVersion} is older than ${MIN_BUN} and misses security fixes. Run: bun upgrade`
         )
     );
     if (nodeVersion) {
@@ -83,7 +83,7 @@ export function runtimeChecks(
                 : check(
                       'Node version',
                       true,
-                      `${version} misses security fixes — use Node ${MIN_NODE[24]}+ or ${MIN_NODE[26]}+ for the node target`,
+                      `${version} misses security fixes. Use Node ${MIN_NODE[24]}+ or ${MIN_NODE[26]}+ for the node target`,
                       'warning'
                   )
         );
@@ -144,11 +144,11 @@ function handlerExportIssues(mod: Record<string, unknown>): string[] {
         if (!(HANDLER_METHODS as readonly string[]).includes(upper)) continue;
         if (key !== upper) {
             issues.push(
-                `export "${key}" is ignored — handler exports must be uppercase: ${upper}`
+                `export "${key}" is ignored. Handler exports must be uppercase: ${upper}`
             );
         } else if (typeof mod[key] !== 'function') {
             issues.push(
-                `export "${key}" is not a function and is ignored — export a handler: export async function ${key}(ctx) { ... }`
+                `export "${key}" is not a function and is ignored. Export a handler: export async function ${key}(ctx) { ... }`
             );
         }
     }
@@ -186,7 +186,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
             hasPkg,
             hasPkg
                 ? 'Found'
-                : 'Not found — run this from a BurgerAPI project directory'
+                : 'Not found. Run this from a BurgerAPI project directory'
         )
     );
 
@@ -212,10 +212,10 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
                 'burger-api installed',
                 !!depVersion && installed,
                 !depVersion
-                    ? 'Not found in package.json dependencies — run: bun add burger-api'
+                    ? 'Not found in package.json dependencies. Run: bun add burger-api'
                     : installed
                       ? `Found (${depVersion})`
-                      : `Listed in package.json (${depVersion}) but not installed — run: bun install`
+                      : `Listed in package.json (${depVersion}) but not installed. Run: bun install`
             )
         );
     } catch {
@@ -278,8 +278,8 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
                 `apiDir (${config.apiDir})`,
                 isDefault,
                 isDefault
-                    ? 'Not found — no API routes (fine for pages-only apps)'
-                    : 'Directory does not exist — check apiDir in burger.build',
+                    ? 'Not found. No API routes (fine for pages-only apps)'
+                    : 'Directory does not exist. Check apiDir in burger.build',
                 isDefault ? 'info' : undefined
             )
         );
@@ -372,7 +372,7 @@ export async function runChecks(cwd: string): Promise<CheckResult[]> {
             check(
                 'No legacy config',
                 false,
-                'burger.config.ts found — rename to burger.build.ts'
+                'burger.config.ts found. Rename to burger.build.ts'
             )
         );
     }
@@ -547,7 +547,7 @@ export const doctorCommand = new Command('doctor')
             success(
                 warningCount === 0
                     ? 'All checks passed! Project is ready.'
-                    : `No errors, ${warningCount} warning(s) — see above.`
+                    : `No errors, ${warningCount} warning(s). See above.`
             );
         } else {
             warning(`${errorCount} issue(s) found.`);
