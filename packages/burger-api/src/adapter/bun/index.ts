@@ -46,6 +46,10 @@ export class BunAdapter implements RuntimeAdapter {
             serverOptions.maxRequestBodySize = opts.maxRequestBodySize;
         }
 
+        if (opts.tls) {
+            serverOptions.tls = opts.tls;
+        }
+
         // Add WebSocket handlers if provided
         if (opts.websocket) {
             serverOptions.websocket = opts.websocket;
@@ -75,7 +79,7 @@ export class BunAdapter implements RuntimeAdapter {
             opts.onListen();
         } else {
             console.log(
-                `🍔 BurgerAPI is running at: http://${
+                `🍔 BurgerAPI is running at: ${opts.tls ? 'https' : 'http'}://${
                     opts.hostname || 'localhost'
                 }:${opts.port}`
             );

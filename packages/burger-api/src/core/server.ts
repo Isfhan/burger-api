@@ -47,6 +47,7 @@ export class Server {
             debug: opts.debug ?? this.options.debug,
             maxRequestBodySize:
                 opts.maxRequestBodySize ?? this.options.maxRequestBodySize,
+            tls: opts.tls ?? this.options.tls,
         });
     }
 

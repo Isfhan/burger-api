@@ -174,6 +174,13 @@ export interface ServerOptions {
     maxRequestBodySize?: number;
 
     /**
+     * Serve HTTPS (and WSS) from `serve()` on Bun. Pass the certificate and
+     * private key as PEM strings or files (`Bun.file('cert.pem')`).
+     * Ignored by `fetchHandler()`: on other platforms the host handles HTTPS.
+     */
+    tls?: TLSOptions;
+
+    /**
      * Optional runtime adapter override (test/embed seam). Defaults to the Bun
      * adapter, loaded lazily on first `serve()` so non-Bun bundles never
      * import it.
@@ -189,6 +196,23 @@ export interface ServerOptions {
      * detection cannot. See `runtime/capabilities.ts`.
      */
     runtimeTarget?: RuntimeTarget;
+}
+
+/** A PEM value: text, a file (`Bun.file(...)`), or raw bytes. */
+export type TLSValue = string | Blob | ArrayBuffer | ArrayBufferView;
+
+/** TLS settings for `serve()`, passed to `Bun.serve` as `tls`. */
+export interface TLSOptions {
+    /** Certificate chain (PEM). */
+    cert: TLSValue | TLSValue[];
+    /** Private key (PEM). */
+    key: TLSValue | TLSValue[];
+    /** Passphrase for an encrypted private key. */
+    passphrase?: string;
+    /** Extra CA certificates (PEM). */
+    ca?: TLSValue | TLSValue[];
+    /** Host name this certificate is for (SNI). */
+    serverName?: string;
 }
 
 /**

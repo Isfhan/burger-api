@@ -410,9 +410,13 @@ export function generateVirtualEntrySource(
         lines.push('console.log(`Server running on http://localhost:${port}`);');
     } else {
         lines.push('const port = Number(process.env.PORT) || 4000;');
+        // `tls` in the entry options makes `serve()` speak HTTPS.
+        const scheme = optionsImportPath
+            ? "${__burgerOptions.tls ? 'https' : 'http'}"
+            : 'http';
         lines.push('app.serve(port, () => {');
         lines.push(
-            ' console.log(`Server running on http://localhost:${port}`);'
+            ` console.log(\`Server running on ${scheme}://localhost:\${port}\`);`
         );
         lines.push('});');
     }
