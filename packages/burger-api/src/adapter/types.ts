@@ -2,7 +2,11 @@ import type {
     CompiledHandler,
     NativeMethodHandlers,
 } from '../router/types.js';
-import type { FetchHandler, RequestHandler } from '../types/index.js';
+import type {
+    FetchHandler,
+    RequestHandler,
+    TLSOptions,
+} from '../types/index.js';
 
 /**
  * Options the runtime passes to an adapter to boot the server.
@@ -30,6 +34,8 @@ export interface AdapterStartOptions {
     debug?: boolean;
     /** Maximum request body size in bytes (runtime default when unset). */
     maxRequestBodySize?: number;
+    /** TLS certificate and key; the server speaks HTTPS when set. */
+    tls?: TLSOptions;
     /** Optional callback invoked once the server is listening. */
     onListen?: () => void;
     /**

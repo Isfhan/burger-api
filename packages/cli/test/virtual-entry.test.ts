@@ -378,3 +378,18 @@ describe('generateVirtualEntrySource: --target codegen', () => {
         );
     });
 });
+
+describe('bun entry start message', () => {
+    const api = [{ importPath: '/tmp/api/route.ts', routePath: '/api', isWildcard: false }];
+
+    it('says https when the entry options set tls', () => {
+        const source = generateVirtualEntrySource(config, api, [], '/tmp/options.ts');
+        expect(source).toContain("__burgerOptions.tls ? 'https' : 'http'");
+    });
+
+    it('says http when there are no entry options', () => {
+        const source = generateVirtualEntrySource(config, api, []);
+        expect(source).not.toContain('__burgerOptions.tls');
+        expect(source).toContain('http://localhost:${port}');
+    });
+});

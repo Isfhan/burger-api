@@ -1055,6 +1055,12 @@ export class Burger {
      * ```
      */
     public async fetchHandler(): Promise<EnvFetchHandler> {
+        if (this.options.tls) {
+            console.warn(
+                '[burger-api] The tls option only applies to serve() on Bun. ' +
+                    'With fetchHandler()/toFetchHandler(), set up HTTPS on your host or proxy.'
+            );
+        }
         await this.processApiRoutesOnce();
         await this.processPageRoutesOnce();
 
@@ -1476,7 +1482,7 @@ export type {
     ServerHandle,
 } from './adapter/types.js';
 export type { BunAdapterStartOptions } from './adapter/bun/types.js';
-export type { ServerInfo } from './types/index.js';
+export type { ServerInfo, TLSOptions, TLSValue } from './types/index.js';
 
 // Export public types
 export type {

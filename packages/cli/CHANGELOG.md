@@ -4,6 +4,8 @@
 
 - `build:exec` has `--no-minify` to turn minifying off. Its `--minify` flag is
   removed: output was already minified by default, so the flag did nothing.
+- A `build` for Bun prints an `https://` address when the app sets the `tls`
+  option.
 
 ## 1.0.0-beta.5 (November 27, 2026)
 

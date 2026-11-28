@@ -1,5 +1,23 @@
 # Changelog: burger-api
 
+## Unreleased
+
+- **HTTPS from `serve()`.** Pass a certificate and key with the new `tls`
+  option and the server speaks HTTPS. WebSocket routes then use `wss://`.
+  It works with `serve()` on Bun. `fetchHandler()` (Node, Workers, Deno,
+  Vercel) ignores it with a warning, because the platform handles HTTPS
+  there.
+
+  ```ts
+  const burger = new Burger({
+      apiDir: 'src/api',
+      tls: {
+          cert: Bun.file('/etc/certs/cert.pem'),
+          key: Bun.file('/etc/certs/key.pem'),
+      },
+  });
+  ```
+
 ## 1.0.0-beta.2 (November 26, 2026)
 
 ### Security
