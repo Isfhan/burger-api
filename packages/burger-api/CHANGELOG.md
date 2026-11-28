@@ -1,6 +1,6 @@
 # Changelog: burger-api
 
-## Unreleased
+## 1.0.0-beta.3 (November 28, 2026)
 
 - **HTTPS from `serve()`.** Pass a certificate and key with the new `tls`
   option and the server speaks HTTPS. WebSocket routes then use `wss://`.
